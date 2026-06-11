@@ -9,3 +9,5 @@ firebase-debug.log
 
 skills/generated/*.js
 memory-*.json
+.playwright-mcp/
+*.png
