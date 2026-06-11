@@ -180,7 +180,7 @@ export async function refineSkill(name: string, errorMessage: string): Promise<b
     options: { temperature: 0.2, num_predict: 4096 },
   });
 
-  let code = response.message.content
+  const code = response.message.content
     .trim()
     .replace(/^```[a-z]*\n?/i, "")
     .replace(/\n?```$/i, "")
