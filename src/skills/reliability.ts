@@ -11,6 +11,7 @@
  */
 
 import { getAllMemoryStores } from "../bot/memory-registry.js";
+import { PRECONDITION_KEYWORDS } from "../bot/memory.js";
 
 export interface SkillStats {
   attempts: number;
@@ -26,10 +27,19 @@ const CACHE_TTL_MS = 60_000;
 let cache: Map<string, SkillStats> | null = null;
 let cacheAt = 0;
 
+function isPreconditionFailure(notes: string): boolean {
+  const lower = (notes || "").toLowerCase();
+  return PRECONDITION_KEYWORDS.some((k) => lower.includes(k.toLowerCase()));
+}
+
 function computeStats(): Map<string, SkillStats> {
   const m = new Map<string, SkillStats>();
   for (const store of getAllMemoryStores()) {
     for (const attempt of store.getSkillHistory()) {
+      // Precondition failures (missing materials, wrong location) say nothing
+      // about whether the skill WORKS — don't let yesterday's wood shortage
+      // permanently retire a fixable skill. Successes always count.
+      if (!attempt.success && isPreconditionFailure(attempt.notes)) continue;
       const cur = m.get(attempt.skill) ?? { attempts: 0, successes: 0, rate: 0 };
       cur.attempts++;
       if (attempt.success) cur.successes++;

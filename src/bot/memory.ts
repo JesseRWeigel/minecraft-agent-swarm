@@ -61,7 +61,7 @@ const defaultMemory: BotMemory = {
   seasonGoal: undefined,
 };
 
-const PRECONDITION_KEYWORDS = [
+export const PRECONDITION_KEYWORDS = [
   "No trees found",
   "need wood",
   "Need a pickaxe",
