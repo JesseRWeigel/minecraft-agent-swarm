@@ -233,21 +233,23 @@ export async function executeAction(bot: Bot, action: string, params: Record<str
  */
 export async function collectNearbyDrops(bot: Bot, radius = 8, maxMs = 8000): Promise<void> {
   const start = Date.now();
-  let lastTargetId = -1;
+  await new Promise((r) => setTimeout(r, 800)); // let drops finish falling
+  const tried = new Set<number>();
   while (Date.now() - start < maxMs) {
-    const drops = Object.values(bot.entities)
-      .filter((e) => e.name === "item" && e.position.distanceTo(bot.entity.position) < radius)
-      .sort((a, b) => a.position.distanceTo(bot.entity.position) - b.position.distanceTo(bot.entity.position));
-    const drop = drops[0];
+    const drop = Object.values(bot.entities)
+      .filter((e) => e.name === "item" && !tried.has(e.id) && e.position.distanceTo(bot.entity.position) < radius)
+      .sort((a, b) => a.position.distanceTo(bot.entity.position) - b.position.distanceTo(bot.entity.position))[0];
     if (!drop) break;
-    if (drop.id === lastTargetId) break; // already tried this one — unreachable
-    lastTargetId = drop.id;
+    tried.add(drop.id);
     try {
-      await safeGoto(bot, new goals.GoalNear(drop.position.x, drop.position.y, drop.position.z, 1), 6000);
+      // Stand exactly on the drop's block — GoalNear(r=1) can stop just outside
+      // the pickup radius. An unreachable drop falls through to the next one.
+      const p = drop.position.floored();
+      await safeGoto(bot, new goals.GoalBlock(p.x, p.y, p.z), 6000);
+      await new Promise((r) => setTimeout(r, 400)); // pickup tick
     } catch {
-      break;
+      continue; // stuck in leaves or a hole — try the next drop
     }
-    await new Promise((r) => setTimeout(r, 400)); // pickup tick
   }
 }
 

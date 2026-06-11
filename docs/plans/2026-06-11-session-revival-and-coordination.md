@@ -73,4 +73,28 @@ Observed a full 5-bot session before changing anything. Failure patterns:
   *"Build a village at The Stash (286, 70, -314): stash chests, a wood house,
   a wheat farm, torches at night, stock the stash, defend the site."*
 
+- **Run 3 result (~15 min)**: net team assets were 3 logs + 12 dirt. Bots
+  role-played beautifully but produced almost nothing. Ground-truth inventory
+  check via RCON (`data get entity <bot> Inventory`) exposed the root cause:
+
+### 6. THE big one — bots never picked up their drops
+`gather_wood` / `mine_block` / build-skill material gathering all did
+`bot.dig(block)` and reported success immediately. The drop stayed on the
+ground. Bots "gathered 5 logs" with empty inventories, then every craft
+failed, and the LLM reasoned correctly from false observations — which looks
+exactly like "the bot is dumb." Fixed with `collectNearbyDrops()` (walk to
+item entities after digging) + inventory-delta verification in gather_wood.
+`mineflayer-collectblock` was in package.json all along but never loaded.
+
+- **Run 4**: started with drop collection fixed. Watching for confirmed
+  wood→planks→chests→stash chain.
+
+## Recommendations for Jesse
+- Upgrade Ollama (needs sudo): `curl -fsSL https://ollama.com/install.sh | sh`
+  (0.20.2 → 0.30.x). Then re-test JSON-schema outputs; if fixed, constrain
+  `action` to each bot's allowlist enum and delete a whole class of prompt
+  nudging.
+- ComfyUI was stopped this session to free 21 GB VRAM — restart it if needed,
+  but don't leave it running while bots stream.
+
 (continued below as the session progresses)
