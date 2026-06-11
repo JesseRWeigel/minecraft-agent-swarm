@@ -507,6 +507,9 @@ export async function chatWithLLM(prompt: string, context: string, roleConfig?: 
   try {
     const response = await ollama.chat({
       model: config.ollama.fastModel,
+      // think:false is load-bearing: without it qwen3.6 spends the entire
+      // token budget inside <think> and returns empty content ("Hmm...").
+      think: false,
       messages: [
         {
           role: "system",
@@ -516,7 +519,7 @@ export async function chatWithLLM(prompt: string, context: string, roleConfig?: 
       ],
       options: {
         temperature: 0.9,
-        num_predict: 100,
+        num_predict: 150,
       },
     });
     // Strip <think> tokens that qwen3 models sometimes leak

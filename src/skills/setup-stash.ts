@@ -89,17 +89,39 @@ export const setupStashSkill: Skill = {
     });
 
     if (existingChest) {
+      // A stash exists — check whether it still has room. If it's full,
+      // fall through and place an additional chest (stash expansion).
+      let hasRoom = true;
+      try {
+        const chest = await bot.openContainer(existingChest);
+        const containerSlots = chest.inventoryStart;
+        const used = chest.containerItems().length;
+        hasRoom = used < containerSlots;
+        chest.close();
+      } catch {
+        /* can't open — assume it has room to avoid pointless expansion */
+      }
+
+      if (hasRoom) {
+        onProgress({
+          skillName: "setup_stash",
+          phase: "Done",
+          progress: 1.0,
+          message: "Stash already set up!",
+          active: false,
+        });
+        return {
+          success: true,
+          message: `Stash already exists — chest found at ${existingChest.position.x}, ${existingChest.position.y}, ${existingChest.position.z}.`,
+        };
+      }
       onProgress({
         skillName: "setup_stash",
-        phase: "Done",
-        progress: 1.0,
-        message: "Stash already set up!",
-        active: false,
+        phase: "Expanding stash",
+        progress: 0.2,
+        message: "Stash is full — placing an additional chest...",
+        active: true,
       });
-      return {
-        success: true,
-        message: `Stash already exists — chest found at ${existingChest.position.x}, ${existingChest.position.y}, ${existingChest.position.z}.`,
-      };
     }
 
     // --- Step 3: Ensure we have 2 chests ---
