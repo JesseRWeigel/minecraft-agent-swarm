@@ -1,0 +1,19 @@
+async function collectBamboo(bot) {
+  const { goals } = require('mineflayer-pathfinder');
+  const mcData = require('minecraft-data');
+  const ironSword = bot.inventory.findInventoryItem(mcData.itemsByName.iron_sword.id);
+  if (ironSword) await bot.equip(ironSword, "hand");
+  const bambooPlants = await exploreUntil(bot, new Vec3(1, 0, 1), 60, () => {
+    const blocks = bot.findBlocks({ matching: block => block.name === "bamboo", maxDistance: 32, count: 10 });
+    return blocks.length >= 10 ? blocks : null;
+  });
+  if (!bambooPlants) throw new Error("Could not find enough bamboo plants nearby");
+  for (const pos of bambooPlants) {
+    const block = bot.blockAt(pos);
+    if (block) await bot.dig(block);
+  }
+  for (const pos of bambooPlants) {
+    await bot.pathfinder.goto(new goals.GoalNear(pos.x, pos.y, pos.z, 1));
+  }
+  bot.chat("Collected 10 bamboo.");
+}

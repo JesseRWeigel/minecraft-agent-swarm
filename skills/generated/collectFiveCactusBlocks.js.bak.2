@@ -1,0 +1,18 @@
+async function collectFiveCactusBlocks(bot) {
+  const { goals } = require('mineflayer-pathfinder');
+  const mcData = require('minecraft-data');
+  const ironPickaxe = bot.inventory.findInventoryItem(mcData.itemsByName.iron_pickaxe.id);
+  if (ironPickaxe) await bot.equip(ironPickaxe, "hand");
+  const cactusBlocks = bot.findBlocks({
+    matching: block => block.name === "cactus",
+    maxDistance: 32,
+    count: 5
+  });
+  if (cactusBlocks.length < 5) throw new Error("Not enough cactus blocks");
+  for (const block of cactusBlocks) {
+    await bot.pathfinder.goto(new goals.GoalNear(block.x, block.y, block.z, 1));
+    await bot.dig(block);
+    await bot.pathfinder.goto(new goals.GoalBlock(block.x, block.y, block.z));
+  }
+  bot.chat("5 cactus blocks mined and collected.");
+}

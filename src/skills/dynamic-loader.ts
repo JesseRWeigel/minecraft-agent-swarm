@@ -140,6 +140,39 @@ function safeRequire(mod: string) {
   }
 }
 
+/**
+ * Forgiving minecraft-data for skill sandboxes. LLM-written skills routinely
+ * forget the factory call — `require('minecraft-data').blocksByName` instead
+ * of `require('minecraft-data')(bot.version).blocksByName` — and crash with
+ * "Cannot read properties of undefined". This proxy works both ways: callable
+ * like the factory AND with the bot-version data available directly.
+ */
+function makeForgivingMcData(version: string): any {
+  const factory = safeRequire("minecraft-data");
+  if (typeof factory !== "function") return factory;
+  let versionData: any;
+  try {
+    versionData = factory(version);
+  } catch {
+    return factory;
+  }
+  return new Proxy(factory, {
+    get(target, prop, receiver) {
+      if (versionData && prop in versionData) return versionData[prop as keyof typeof versionData];
+      return Reflect.get(target, prop, receiver);
+    },
+    apply(target, thisArg, args) {
+      return Reflect.apply(target, thisArg, args);
+    },
+  });
+}
+
+/** Per-bot require that hands skills the forgiving minecraft-data. */
+function makeSandboxRequire(version: string) {
+  const forgiving = makeForgivingMcData(version);
+  return (mod: string) => (mod === "minecraft-data" ? forgiving : safeRequire(mod));
+}
+
 export function loadDynamicSkills(): void {
   let loaded = 0;
 
@@ -206,7 +239,7 @@ function buildDynamicSkill(name: string, filePath: string): Skill {
           bot,
           Vec3,
           mcData,
-          require: safeRequire,
+          require: makeSandboxRequire(bot.version),
           console,
           setTimeout,
           clearTimeout,
