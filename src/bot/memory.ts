@@ -437,6 +437,10 @@ export class BotMemoryStore {
    * wool count). "No trees found" is intentionally excluded — the bot may have
    * moved to a new forest area since the last session.
    */
+  getSkillHistory(): SkillAttempt[] {
+    return this.memory.skillHistory;
+  }
+
   getSessionPreconditionBlocks(): Map<string, string> {
     const result = new Map<string, string>();
     const skills = [...new Set(this.memory.skillHistory.map((s) => s.skill))];

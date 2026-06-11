@@ -11,6 +11,7 @@
 
 import { getSkillPromptLines } from "../skills/registry.js";
 import { getDynamicSkillNames } from "../skills/dynamic-loader.js";
+import { rankSkills, annotateSkill } from "../skills/reliability.js";
 
 export interface RoleContext {
   name: string;
@@ -65,10 +66,15 @@ export function buildStrategicPrompt(role: RoleContext): string {
   const builtinSkills = role.allowedSkills?.length ? role.allowedSkills.join(", ") : "";
   const skillLines = !role.allowedSkills?.length ? getSkillPromptLines() : "";
 
-  const dynamicSkills = getDynamicSkillNames();
+  // Ranked by team-wide success rate: proven first, untried next (exploration),
+  // strugglers last, retired skills excluded entirely.
+  const dynamicSkills = rankSkills(getDynamicSkillNames());
   const dynamicLine =
     dynamicSkills.length > 0
-      ? `\nDynamic skills (use invoke_skill): ${dynamicSkills.slice(0, 8).join(", ")}${dynamicSkills.length > 8 ? ` (+${dynamicSkills.length - 8} more)` : ""}`
+      ? `\nDynamic skills (use invoke_skill; % = team success rate): ${dynamicSkills
+          .slice(0, 10)
+          .map(annotateSkill)
+          .join(", ")}${dynamicSkills.length > 10 ? ` (+${dynamicSkills.length - 10} more)` : ""}`
       : "";
 
   const missionLine = role.seasonGoal

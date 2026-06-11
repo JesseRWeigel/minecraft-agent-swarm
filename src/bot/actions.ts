@@ -5,6 +5,7 @@ import { Vec3 } from "vec3";
 import { isHostile } from "./perception.js";
 import { skillRegistry } from "../skills/registry.js";
 import { runSkill } from "../skills/executor.js";
+import { isRetired, getSkillStats } from "../skills/reliability.js";
 import { runNeuralCombat } from "../neural/combat.js";
 import { LOG_TYPES } from "../skills/materials.js";
 import { depositStash, withdrawStash } from "../skills/stash.js";
@@ -84,6 +85,10 @@ export async function executeAction(bot: Bot, action: string, params: Record<str
       case "invoke_skill": {
         const name = params.skill as string;
         if (!name) return "invoke_skill needs a 'skill' param.";
+        if (isRetired(name)) {
+          const st = getSkillStats(name);
+          return `Skill '${name}' is RETIRED (${st?.successes}/${st?.attempts} success rate — it doesn't work). Use generate_skill to create a better version, or do it with basic actions.`;
+        }
         const skill = skillRegistry.get(name);
         if (!skill) {
           // Fallback: if the skill name is actually a built-in action, execute it directly
