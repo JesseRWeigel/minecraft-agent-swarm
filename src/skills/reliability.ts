@@ -63,10 +63,34 @@ export function getSkillStats(name: string): SkillStats | undefined {
   return statsMap().get(name);
 }
 
-/** True when the team has thoroughly proven this skill doesn't work. */
+/** Blocked-invocation counters for parole (see isRetired). */
+const blockedCounts = new Map<string, number>();
+const PAROLE_EVERY = 10;
+
+/** True when the team has thoroughly proven this skill doesn't work. Pure — no side effects. */
 export function isRetired(name: string): boolean {
   const s = statsMap().get(name);
   return !!s && s.attempts >= RETIRE_MIN_ATTEMPTS && s.rate < RETIRE_RATE;
+}
+
+/**
+ * Invocation-gate variant with parole: every 10th blocked invocation lets
+ * one attempt through. Without this, a retired skill could never demonstrate
+ * that an underlying fix (sandbox improvement, refinement, library update)
+ * repaired it — new successes would lift its rate, but it could never earn
+ * them. Only call this from the actual invocation path, never from prompt
+ * rendering (which would inflate the counter).
+ */
+export function checkRetiredWithParole(name: string): boolean {
+  if (!isRetired(name)) return false;
+  const blocked = (blockedCounts.get(name) ?? 0) + 1;
+  blockedCounts.set(name, blocked);
+  if (blocked % PAROLE_EVERY === 0) {
+    console.log(`[Reliability] Parole attempt for retired skill '${name}' (block #${blocked})`);
+    cache = null; // pick up the parole attempt's result promptly
+    return false;
+  }
+  return true;
 }
 
 /**
