@@ -48,10 +48,11 @@ test("executeAction: chat sends message and returns confirmation", async () => {
   assert.equal(bot._chatLog[0], "Hello world");
 });
 
-test("executeAction: chat with no message sends ellipsis", async () => {
+test("executeAction: chat with no message says nothing and reports the error", async () => {
   const bot = mockBot();
-  await executeAction(bot, "chat", {});
-  assert.equal(bot._chatLog[0], "...");
+  const result = await executeAction(bot, "chat", {});
+  assert.equal(bot._chatLog.length, 0);
+  assert.match(result, /needs a 'message' param/);
 });
 
 test("executeAction: respond_to_chat sends message", async () => {

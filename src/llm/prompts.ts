@@ -26,14 +26,40 @@ export interface RoleContext {
  * Strategic prompt — goal-setting and planning decisions.
  * Used with the strong model (32b). Called every ~10s or on goal complete/fail.
  */
+/** Compact param signatures — shown next to each action so the LLM sends usable params. */
+const ACTION_SIGNATURES: Record<string, string> = {
+  gather_wood: 'gather_wood {"count":5}',
+  mine_block: 'mine_block {"blockType":"stone"}',
+  go_to: 'go_to {"x":0,"y":64,"z":0}',
+  explore: 'explore {"direction":"north"}',
+  craft: 'craft {"item":"oak_planks","count":4}',
+  eat: "eat {}",
+  attack: "attack {}",
+  flee: "flee {}",
+  place_block: 'place_block {"blockType":"oak_planks"}',
+  sleep: "sleep {}",
+  idle: "idle {}",
+  chat: 'chat {"message":"..."}',
+  respond_to_chat: 'respond_to_chat {"message":"..."}',
+  invoke_skill: 'invoke_skill {"skill":"exact_skill_name"}',
+  generate_skill: 'generate_skill {"task":"description"}',
+  neural_combat: 'neural_combat {"duration":5}',
+  deposit_stash: "deposit_stash {}",
+  withdraw_stash: 'withdraw_stash {"item":"oak_log","count":8}',
+};
+
+function renderActions(names: string[]): string {
+  return names.map((a) => ACTION_SIGNATURES[a] ?? a).join(", ");
+}
+
 export function buildStrategicPrompt(role: RoleContext): string {
   const name = role.name;
 
   // Build action list — role-specific if configured, otherwise full list
-  const universalActions = "idle, respond_to_chat, invoke_skill, deposit_stash, withdraw_stash";
+  const universalNames = ["idle", "respond_to_chat", "invoke_skill", "deposit_stash", "withdraw_stash"];
   const actions = role.allowedActions?.length
-    ? role.allowedActions.join(", ") + ", " + universalActions
-    : "gather_wood, mine_block, go_to, explore, craft, eat, attack, flee, place_block, sleep, idle, chat, respond_to_chat, invoke_skill, generate_skill, neural_combat, deposit_stash, withdraw_stash";
+    ? renderActions([...role.allowedActions, ...universalNames.filter((u) => !role.allowedActions!.includes(u))])
+    : renderActions(Object.keys(ACTION_SIGNATURES));
 
   // Skills list
   const builtinSkills = role.allowedSkills?.length ? role.allowedSkills.join(", ") : "";

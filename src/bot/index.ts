@@ -206,10 +206,22 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
 
   // ── Event handlers ────────────────────────────────────────────────────────
 
-  // In-game chat — ignore messages from self and other bots to prevent feedback loops
+  // In-game chat — ignore self. Other bots are heard ONLY when they address this
+  // bot by name, and at most once per sender per cooldown window. This enables
+  // team coordination ("Mason! Craft a chest!") without runaway feedback loops.
   const BOT_USERNAMES = new Set(["Atlas", "Flora", "Forge", "Mason", "Blade"]);
+  const BOT_CHAT_COOLDOWN_MS = 45_000;
+  const lastBotChatHeard = new Map<string, number>();
   bot.on("chat", async (username, message) => {
-    if (!username || username === bot.username || BOT_USERNAMES.has(username)) return;
+    if (!username || username === bot.username) return;
+    if (BOT_USERNAMES.has(username)) {
+      const mentionsMe = message.toLowerCase().includes(roleConfig.name.toLowerCase());
+      const last = lastBotChatHeard.get(username) ?? 0;
+      if (!mentionsMe || Date.now() - last < BOT_CHAT_COOLDOWN_MS) return;
+      lastBotChatHeard.set(username, Date.now());
+      brain.queueChat({ source: "minecraft", username, message, timestamp: Date.now() });
+      return;
+    }
     // Ignore server system messages (gamerule results, TP confirmations, etc.)
     if (message.startsWith("Gamerule ") || message.startsWith("Set spawn") || message.startsWith("Teleported ")) return;
     console.log(`[MC Chat] ${username}: ${message}`);

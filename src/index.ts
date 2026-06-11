@@ -53,7 +53,7 @@ async function startBot(
     config.ollama.fastModel !== config.ollama.model ? ` (fast decisions: ${config.ollama.fastModel})` : "";
   console.log(`LLM: ${config.ollama.model}${fastLabel} @ ${config.ollama.host}`);
   console.log(`Server: ${config.mc.host}:${config.mc.port} (MC ${config.mc.version})`);
-  console.log(`Decision interval: ${config.bot.decisionIntervalMs}ms`);
+  console.log(`Idle re-plan interval: ${config.bot.idleIntervalMs}ms`);
   console.log("");
 
   // Start overlay only once per bot (persists across restarts)

@@ -102,7 +102,7 @@ export async function executeAction(bot: Bot, action: string, params: Record<str
       case "gather_wood":
         return await gatherWood(bot, params.count || 5);
       case "mine_block":
-        return await mineBlock(bot, params.blockType || "stone");
+        return await mineBlock(bot, params.blockType || "stone", params.protectPos);
       case "go_to":
       case "navigate":
       case "navigate_to":
@@ -147,12 +147,18 @@ export async function executeAction(bot: Bot, action: string, params: Record<str
         return await sleepInBed(bot);
       case "idle":
         return "Just vibing.";
-      case "chat":
-        bot.chat(params.message || "...");
-        return `Said: ${params.message}`;
-      case "respond_to_chat":
-        bot.chat(params.message || "Hey!");
-        return `Replied: ${params.message}`;
+      case "chat": {
+        const msg = typeof params.message === "string" ? params.message.trim() : "";
+        if (!msg) return "chat needs a 'message' param — nothing was said.";
+        bot.chat(msg);
+        return `Said: ${msg}`;
+      }
+      case "respond_to_chat": {
+        const msg = typeof params.message === "string" ? params.message.trim() : "";
+        if (!msg) return "respond_to_chat needs a 'message' param — nothing was said.";
+        bot.chat(msg);
+        return `Replied: ${msg}`;
+      }
       case "generate_skill": {
         if (!params.task || !String(params.task).trim()) return "generate_skill needs a non-empty 'task' param.";
         const { generateSkill } = await import("../skills/generator.js");
@@ -220,6 +226,33 @@ export async function executeAction(bot: Bot, action: string, params: Record<str
   }
 }
 
+/**
+ * Walk over nearby dropped items so they enter the inventory. Digging a block
+ * only spawns a drop — without this, bots "gather" wood that stays on the
+ * ground (the root cause of phantom inventory reports).
+ */
+export async function collectNearbyDrops(bot: Bot, radius = 8, maxMs = 8000): Promise<void> {
+  const start = Date.now();
+  await new Promise((r) => setTimeout(r, 800)); // let drops finish falling
+  const tried = new Set<number>();
+  while (Date.now() - start < maxMs) {
+    const drop = Object.values(bot.entities)
+      .filter((e) => e.name === "item" && !tried.has(e.id) && e.position.distanceTo(bot.entity.position) < radius)
+      .sort((a, b) => a.position.distanceTo(bot.entity.position) - b.position.distanceTo(bot.entity.position))[0];
+    if (!drop) break;
+    tried.add(drop.id);
+    try {
+      // Stand exactly on the drop's block — GoalNear(r=1) can stop just outside
+      // the pickup radius. An unreachable drop falls through to the next one.
+      const p = drop.position.floored();
+      await safeGoto(bot, new goals.GoalBlock(p.x, p.y, p.z), 6000);
+      await new Promise((r) => setTimeout(r, 400)); // pickup tick
+    } catch {
+      continue; // stuck in leaves or a hole — try the next drop
+    }
+  }
+}
+
 async function gatherWood(bot: Bot, count: number): Promise<string> {
   // Use shared LOG_TYPES so pale_oak_log (MC 1.21.4) and future wood types are included
   const logTypes = LOG_TYPES as readonly string[];
@@ -249,6 +282,13 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
     bot.pathfinder.setMovements(explorerMoves(bot));
   }
 
+  const countLogsInInventory = () =>
+    bot.inventory
+      .items()
+      .filter((i) => (logTypes as readonly string[]).includes(i.name))
+      .reduce((s, i) => s + i.count, 0);
+  const logsBefore = countLogsInInventory();
+
   let gathered = 0;
   let tried = 0;
   for (const pos of allLogs) {
@@ -275,6 +315,9 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
         await safeGoto(bot, new goals.GoalNear(pos.x, pos.y, pos.z, 3), 90000, 32000);
         await bot.dig(log);
         gathered++;
+        // Walk over the drop — digging alone leaves the item on the ground
+        await new Promise((r) => setTimeout(r, 400));
+        await collectNearbyDrops(bot, 6, 6000);
       } finally {
         clearInterval(yGuard);
         bot.pathfinder.thinkTimeout = prevThinkTimeout;
@@ -285,18 +328,36 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
     if (tried >= 4 && gathered === 0) break; // give up after 4 failed attempts (360s max)
   }
 
-  return gathered > 0
-    ? `Gathered ${gathered} logs. Inventory now has wood!`
-    : "Couldn't reach any trees within 128 blocks (pathfinding failed). Try exploring south toward Z=-200.";
+  const collected = countLogsInInventory() - logsBefore;
+  if (collected > 0) return `Gathered ${collected} logs. Inventory now has wood!`;
+  if (gathered > 0)
+    return `Chopped ${gathered} logs but couldn't pick up the drops — they may be stuck in leaves or a hole.`;
+  return "Couldn't reach any trees within 128 blocks (pathfinding failed). Try exploring south toward Z=-200.";
 }
 
-async function mineBlock(bot: Bot, blockType: string): Promise<string> {
+async function mineBlock(
+  bot: Bot,
+  blockType: string,
+  protectPos?: { x: number; y: number; z: number },
+): Promise<string> {
+  // Keep the village/stash site intact — bots kept strip-mining the base and
+  // other bots fell into the pits and got stuck.
+  const PROTECT_RADIUS = 12;
   const block = bot.findBlock({
     matching: (b) => b.name === blockType,
     maxDistance: 32,
+    useExtraInfo: (b) => {
+      if (!protectPos) return true;
+      const dx = b.position.x - protectPos.x;
+      const dz = b.position.z - protectPos.z;
+      return dx * dx + dz * dz > PROTECT_RADIUS * PROTECT_RADIUS;
+    },
   });
 
-  if (!block) return `No ${blockType} found nearby.`;
+  if (!block)
+    return protectPos
+      ? `No ${blockType} found nearby (the ${PROTECT_RADIUS}-block zone around The Stash is protected — mine elsewhere).`
+      : `No ${blockType} found nearby.`;
 
   // Allow digging so pathfinder can reach underground ores through stone
   const { Movements } = (await import("mineflayer-pathfinder")).default;
@@ -305,6 +366,9 @@ async function mineBlock(bot: Bot, blockType: string): Promise<string> {
   bot.pathfinder.setMovements(digMoves);
   await safeGoto(bot, new goals.GoalNear(block.position.x, block.position.y, block.position.z, 2));
   await bot.dig(block);
+  // Walk over the drop — digging alone leaves the item on the ground
+  await new Promise((r) => setTimeout(r, 400));
+  await collectNearbyDrops(bot, 6, 5000);
   bot.pathfinder.setMovements(safeMoves(bot)); // restore safe moves
   return `Mined ${blockType}.`;
 }
@@ -321,7 +385,22 @@ async function goTo(bot: Bot, x: number, y: number, z: number): Promise<string> 
   if (dist < 2) return "Already here!";
 
   bot.pathfinder.setMovements(safeMoves(bot));
-  await safeGoto(bot, new goals.GoalNear(cx, cy, cz, 2));
+  try {
+    await safeGoto(bot, new goals.GoalNear(cx, cy, cz, 2));
+  } catch (err) {
+    // Rescue mode: safe movements can't dig or tower, so a bot standing in a
+    // pit (or behind one block of dirt) is permanently stuck. Retry once with
+    // digging + 1x1 towers enabled before giving up.
+    const rescue = new Movements(bot);
+    rescue.canDig = true;
+    rescue.allow1by1towers = true;
+    bot.pathfinder.setMovements(rescue);
+    try {
+      await safeGoto(bot, new goals.GoalNear(cx, cy, cz, 2), 30000);
+    } finally {
+      bot.pathfinder.setMovements(safeMoves(bot));
+    }
+  }
   return `Arrived at ${cx.toFixed(0)}, ${cy.toFixed(0)}, ${cz.toFixed(0)}.`;
 }
 
@@ -551,9 +630,14 @@ async function craftItem(bot: Bot, itemName: string, count: number): Promise<str
           const ingId = typeof ing === "object" ? (ing.id ?? ing) : ing;
           return mcData.items[ingId]?.name ?? String(ingId);
         });
-      const uniqueNeeded = [...new Set(needed)].filter((n) => n && n !== "null");
-      if (uniqueNeeded.length) {
-        return `Can't craft ${resolvedName} — need: ${uniqueNeeded.join(", ")}. Gather those first.`;
+      const uniqueNeeded = [...new Set(needed)]
+        .filter((n) => n && n !== "null")
+        // Recipe variant 0 is an arbitrary wood family — don't tell the bot it
+        // specifically needs pale_oak_planks when any planks work.
+        .map((n) => (String(n).endsWith("_planks") ? "planks (any wood — craft from your logs)" : n));
+      const dedup = [...new Set(uniqueNeeded)];
+      if (dedup.length) {
+        return `Can't craft ${resolvedName} — need: ${dedup.join(", ")}. Gather those first.`;
       }
     }
     return `Can't craft ${resolvedName} — missing materials or need a crafting table.`;

@@ -218,9 +218,10 @@ export async function queryStrategic(
       model: config.ollama.model, // Strong model for strategic decisions
       messages,
       think: false,
+      format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.8,
-        num_predict: 512,
+        num_predict: 768,
       },
     });
 
@@ -257,9 +258,10 @@ export async function queryReactive(
       model: config.ollama.fastModel,
       messages,
       think: false,
+      format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.5, // Lower temp for urgent decisions — be reliable, not creative
-        num_predict: 256,
+        num_predict: 384,
       },
     });
 
@@ -301,9 +303,10 @@ export async function queryCritic(
       model: config.ollama.fastModel,
       messages,
       think: false,
+      format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.4, // Low temp — critic should be analytical
-        num_predict: 256,
+        num_predict: 384,
       },
     });
 
@@ -460,6 +463,7 @@ export async function queryLLM(
       model: config.ollama.fastModel,
       messages,
       think: false,
+      format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.85,
         num_predict: 1024,
