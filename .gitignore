@@ -11,3 +11,7 @@ skills/generated/*.js
 memory-*.json
 .playwright-mcp/
 *.png
+finetune/.venv/
+finetune/dataset.jsonl
+finetune/*-lora*/
+finetune/*.gguf

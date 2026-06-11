@@ -34,6 +34,8 @@ import { updateBulletin, formatTeamBulletin } from "./bulletin.js";
 import { createLogger } from "../util/logger.js";
 import { recordAction, recordSkillResult, checkInventoryMilestones } from "./scoreboard.js";
 import { getTechTreeLine } from "./curriculum.js";
+import { recordTrajectory } from "./trajectory.js";
+import { buildStrategicPrompt } from "../llm/prompts.js";
 
 export interface ChatMessage {
   source: "minecraft" | "twitch" | "youtube";
@@ -579,6 +581,17 @@ export class BotBrain {
 
     const decision = await queryStrategic(context, this.recentHistory, memoryCtx, role);
     await this.executeDecision(decision);
+
+    // Capture the trajectory for fine-tuning: exact prompt -> decision -> outcome
+    recordTrajectory({
+      bot: this.roleConfig.name,
+      system: buildStrategicPrompt(role),
+      context: memoryCtx ? `YOUR MEMORY:\n${memoryCtx}\n${context}` : context,
+      decision: { thought: decision.thought, action: decision.action, params: decision.params, goal: decision.goal },
+      result: this.lastResult,
+      success: this.lastActionWasSuccess,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   private async handleCritic(event: BrainEvent): Promise<void> {
