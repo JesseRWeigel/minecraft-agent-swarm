@@ -110,7 +110,33 @@ item entities after digging) + inventory-delta verification in gather_wood.
 - Remaining LLM weakness: Mason never chose setup_stash on his own (placed
   chests by hand instead). Added a deterministic stash-bootstrap override in
   the brain — same pattern as the leash override.
-- **Run 7**: all fixes live; merged to main and pushed (CI green).
+- **Run 7 (~3.5 hours unattended)**: the longest stable run ever for this
+  project. Ground-truth census at the end:
+  - **Working stash economy**: dozens of deposit/withdraw cycles (deposits of
+    40, 21, 20, 18, 17, 14... items; withdrawals of logs, planks, even a
+    crafting table). The stash chest **filled to capacity** — the team
+    out-produced its own storage.
+  - 3 chests + house structure at the village; tools crafted repeatedly.
+  - Real bot-to-bot trade negotiation in chat (Blade demanding planks from
+    Atlas for "Stash defense", Flora coordinating pickaxe crafting).
+  - One bot death in ~3.5h; auto-respawn worked; zero process crashes.
+  - Comedy finding: the team hoarded **46 sticks** — LLM crafting loops
+    over-produce intermediate goods. Strategy targeting, not mechanics, is
+    now the weakest layer.
+- **Run 7 defects fixed for run 8**:
+  - `chatWithLLM` was missing `think:false` — qwen3.6 spent its whole token
+    budget thinking and every conversational reply was empty ("Hmm...").
+  - `setup_stash` no-opped when a chest existed even if full; bots spammed
+    it while deposits reported "stash needs expansion". Now it checks
+    fullness and places an additional chest.
+- **Run 8**: running with all fixes; Flora directed to the lake for the
+  wheat farm, Mason directed to finish the house.
+
+## Final state of the codebase (all pushed to main, CI green)
+13 commits this session. Highlights: working drop collection, stash economy,
+rescue pathfinding, protected village zone, deterministic stash bootstrap,
+single-MoE model config, phantom-dep fix, bot-to-bot chat, JSON-constrained
+decisions, honest action reporting.
 
 ## Recommendations for Jesse
 - Upgrade Ollama (needs sudo): `curl -fsSL https://ollama.com/install.sh | sh`
