@@ -897,6 +897,13 @@ export class BotBrain {
       return;
     }
 
+    // Retired skills — put them straight into the do-NOT-retry prompt list
+    // so the LLM stops re-picking them from conversation history.
+    if (result.includes("is RETIRED")) {
+      this.recentFailures.set(actionKey, "Retired — proven broken, use basic actions instead");
+      return;
+    }
+
     const isSkillAction =
       skillRegistry.has(decision.action) ||
       decision.action === "invoke_skill" ||
