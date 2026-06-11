@@ -221,7 +221,7 @@ export async function queryStrategic(
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.8,
-        num_predict: 512,
+        num_predict: 768,
       },
     });
 
@@ -261,7 +261,7 @@ export async function queryReactive(
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.5, // Lower temp for urgent decisions — be reliable, not creative
-        num_predict: 256,
+        num_predict: 384,
       },
     });
 
@@ -306,7 +306,7 @@ export async function queryCritic(
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.4, // Low temp — critic should be analytical
-        num_predict: 256,
+        num_predict: 384,
       },
     });
 
