@@ -30,8 +30,16 @@ function tmpStore(): { store: BotMemoryStore; file: string; cleanup: () => void 
     store,
     file,
     cleanup: () => {
-      try { fs.unlinkSync(file); } catch { /* ignore cleanup errors */ }
-      try { fs.rmdirSync(dir); } catch { /* ignore cleanup errors */ }
+      try {
+        fs.unlinkSync(file);
+      } catch {
+        /* ignore cleanup errors */
+      }
+      try {
+        fs.rmdirSync(dir);
+      } catch {
+        /* ignore cleanup errors */
+      }
     },
   };
 }

@@ -5,7 +5,10 @@ import net from "node:net";
 function startMockServer(port: number, response: string): Promise<net.Server> {
   return new Promise((resolve) => {
     const server = net.createServer((conn) => {
-      conn.once("data", () => { conn.write(response + "\n"); conn.end(); });
+      conn.once("data", () => {
+        conn.write(response + "\n");
+        conn.end();
+      });
     });
     server.listen(port, () => resolve(server));
   });
@@ -14,7 +17,8 @@ function startMockServer(port: number, response: string): Promise<net.Server> {
 test("buildObservation: formats bot state into structured obs", async () => {
   const { buildObservation } = await import("./bridge.js");
   const mockBot = {
-    health: 18, food: 16,
+    health: 18,
+    food: 16,
     entity: { position: { x: 0, y: 64, z: 0, distanceTo: () => 0 }, yaw: 0 },
     inventory: { items: () => [{ name: "iron_sword" }, { name: "shield" }] },
     entities: {},
@@ -33,9 +37,14 @@ test("queryNeural: sends obs and parses action response", async () => {
   try {
     const { queryNeural } = await import("./bridge.js");
     const mockObs = {
-      bot_health: 18, bot_food: 16, bot_pos: [0,64,0] as [number,number,number],
-      nearest_hostile: null, all_entities: [],
-      has_sword: true, has_shield: false, has_bow: false,
+      bot_health: 18,
+      bot_food: 16,
+      bot_pos: [0, 64, 0] as [number, number, number],
+      nearest_hostile: null,
+      all_entities: [],
+      has_sword: true,
+      has_shield: false,
+      has_bow: false,
     };
     const result = await queryNeural(mockObs, TEST_PORT);
     assert.equal(result.action, "attack");
@@ -48,9 +57,14 @@ test("queryNeural: sends obs and parses action response", async () => {
 test("queryNeural: rejects on connection refused (timeout/error path)", async () => {
   const { queryNeural } = await import("./bridge.js");
   const mockObs = {
-    bot_health: 20, bot_food: 20, bot_pos: [0,64,0] as [number,number,number],
-    nearest_hostile: null, all_entities: [],
-    has_sword: false, has_shield: false, has_bow: false,
+    bot_health: 20,
+    bot_food: 20,
+    bot_pos: [0, 64, 0] as [number, number, number],
+    nearest_hostile: null,
+    all_entities: [],
+    has_sword: false,
+    has_shield: false,
+    has_bow: false,
   };
   // Port 19997 should have nothing listening
   await assert.rejects(() => queryNeural(mockObs, 19997), /timeout|ECONNREFUSED/i);
@@ -61,9 +75,10 @@ test("buildObservation: computes correct angle for entity directly south", async
   // Bot facing South (yaw=0), entity is directly south (+Z direction)
   // Relative angle should be ~0 degrees (entity is directly in front)
   const mockBot = {
-    health: 20, food: 20,
+    health: 20,
+    food: 20,
     entity: {
-      position: { x: 0, y: 64, z: 0, distanceTo: (p: any) => Math.sqrt(p.x**2 + p.z**2) },
+      position: { x: 0, y: 64, z: 0, distanceTo: (p: any) => Math.sqrt(p.x ** 2 + p.z ** 2) },
       yaw: 0, // facing South
     },
     inventory: { items: () => [] },

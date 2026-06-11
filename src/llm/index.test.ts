@@ -23,9 +23,18 @@ function extractJSON(raw: string): string | null {
   let escaped = false;
   for (let i = startIdx; i < content.length; i++) {
     const ch = content[i];
-    if (escaped) { escaped = false; continue; }
-    if (ch === "\\" && inString) { escaped = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\" && inString) {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
     if (inString) continue;
     if (ch === "{") depth++;
     else if (ch === "}") {
@@ -40,29 +49,53 @@ function extractJSON(raw: string): string | null {
   const opens = (s.match(/\{/g) || []).length;
   const closes = (s.match(/\}/g) || []).length;
   s += "}".repeat(Math.max(0, opens - closes));
-  try { JSON.parse(s); return s; } catch { return null; }
+  try {
+    JSON.parse(s);
+    return s;
+  } catch {
+    return null;
+  }
 }
 
 const ACTION_ALIASES: Record<string, string> = {
-  "go to": "go_to", "goto": "go_to",
-  "move": "explore", "walk": "explore", "travel": "explore",
-  "teleport": "go_to",
-  "mine": "mine_block", "mine block": "mine_block", "mine_blocks": "mine_block",
-  "gather": "gather_wood", "gather wood": "gather_wood", "gatherwood": "gather_wood", "chop": "gather_wood",
-  "place block": "place_block", "placeblock": "place_block",
-  "message": "chat", "say": "chat", "speak": "chat",
+  "go to": "go_to",
+  goto: "go_to",
+  move: "explore",
+  walk: "explore",
+  travel: "explore",
+  teleport: "go_to",
+  mine: "mine_block",
+  "mine block": "mine_block",
+  mine_blocks: "mine_block",
+  gather: "gather_wood",
+  "gather wood": "gather_wood",
+  gatherwood: "gather_wood",
+  chop: "gather_wood",
+  "place block": "place_block",
+  placeblock: "place_block",
+  message: "chat",
+  say: "chat",
+  speak: "chat",
   "respond to chat": "respond_to_chat",
-  "invoke skill": "invoke_skill", "invokeskill": "invoke_skill",
-  "generate skill": "generate_skill", "generateskill": "generate_skill",
+  "invoke skill": "invoke_skill",
+  invokeskill: "invoke_skill",
+  "generate skill": "generate_skill",
+  generateskill: "generate_skill",
   "neural combat": "neural_combat",
-  "build house": "build_house", "build farm": "build_farm",
-  "craft gear": "craft_gear", "strip mine": "strip_mine",
-  "craft_item": "craft", "crafting": "craft",
+  "build house": "build_house",
+  "build farm": "build_farm",
+  "craft gear": "craft_gear",
+  "strip mine": "strip_mine",
+  craft_item: "craft",
+  crafting: "craft",
 };
 
 function parseDecision(raw: string): {
-  thought: string; action: string; params: Record<string, any>;
-  goal?: string; goalSteps?: number;
+  thought: string;
+  action: string;
+  params: Record<string, any>;
+  goal?: string;
+  goalSteps?: number;
 } {
   const jsonStr = extractJSON(raw);
   if (!jsonStr) {
@@ -111,7 +144,11 @@ function parseDecision(raw: string): {
   }
 
   let thought = String(parsed.thought || parsed.reason || parsed.reasoning || "...");
-  thought = thought.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/<think>[\s\S]*/g, "").trim() || "...";
+  thought =
+    thought
+      .replace(/<think>[\s\S]*?<\/think>/g, "")
+      .replace(/<think>[\s\S]*/g, "")
+      .trim() || "...";
 
   return { thought, action, params, goal: parsed.goal, goalSteps: parsed.goalSteps };
 }

@@ -19,12 +19,7 @@ function mockBot(overrides: Record<string, any> = {}) {
           y: pos.y + dy,
           z: pos.z + dz,
         }),
-        distanceTo: (other: any) =>
-          Math.sqrt(
-            (pos.x - other.x) ** 2 +
-            (pos.y - other.y) ** 2 +
-            (pos.z - other.z) ** 2
-          ),
+        distanceTo: (other: any) => Math.sqrt((pos.x - other.x) ** 2 + (pos.y - other.y) ** 2 + (pos.z - other.z) ** 2),
       },
     },
     inventory: {
