@@ -19,6 +19,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { isNeuralServerRunning } from "../neural/bridge.js";
 import { BotBrain, type ChatMessage, type BrainEvents } from "./brain.js";
+import { recordDeath, startScoreboard } from "./scoreboard.js";
 
 // Re-export types used by src/index.ts
 export type { ChatMessage, BrainEvents as BotEvents };
@@ -45,6 +46,7 @@ async function ensureNeuralServer(): Promise<void> {
 }
 
 export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig = ATLAS_CONFIG) {
+  startScoreboard();
   ensureNeuralServer().catch((e) => console.warn("[Bot] Neural spawn error:", e));
 
   // Load memory — register with executor so skill results go to this bot's file.
@@ -274,6 +276,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
   bot.on("death", () => {
     const pos = bot.entity.position;
     memStore.recordDeath(pos.x, pos.y, pos.z, "unknown");
+    recordDeath(roleConfig.name);
     console.log("[Bot] I died! Respawning...");
     abortActiveSkill(bot);
   });

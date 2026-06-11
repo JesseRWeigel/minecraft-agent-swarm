@@ -32,6 +32,7 @@ import { skillRegistry } from "../skills/registry.js";
 import { BotMemoryStore } from "./memory.js";
 import { updateBulletin, formatTeamBulletin } from "./bulletin.js";
 import { createLogger } from "../util/logger.js";
+import { recordAction, recordSkillResult, checkInventoryMilestones } from "./scoreboard.js";
 
 export interface ChatMessage {
   source: "minecraft" | "twitch" | "youtube";
@@ -790,12 +791,18 @@ export class BotBrain {
       this.goalStepsLeft = decision.goalSteps || 5;
     }
 
-    // ── Track success/failure ──
+    // ── Scoreboard ──
+    // (isSuccess computed below — record after it)
     const isSuccess =
       /complet|harvest|built|planted|smelted|crafted|arriv|gather|mined|caught|lit|bridg|chop|killed|ate|explored|placed|fished|sleep|zzz/i.test(
         result,
       );
     this.lastActionWasSuccess = isSuccess;
+    recordAction(this.roleConfig.name, decision.action, result, isSuccess);
+    if (decision.action === "invoke_skill" || skillRegistry.has(decision.action)) {
+      recordSkillResult(this.roleConfig.name, isSuccess);
+    }
+    checkInventoryMilestones(this.bot, this.roleConfig.name);
 
     // Track repeats
     if (decision.action !== "idle") {
