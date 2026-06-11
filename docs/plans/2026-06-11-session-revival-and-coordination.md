@@ -132,6 +132,37 @@ item entities after digging) + inventory-delta verification in gather_wood.
 - **Run 8**: running with all fixes; Flora directed to the lake for the
   wheat farm, Mason directed to finish the house.
 
+## Self-improvement assessment (honest)
+**Infrastructure exists, loop is open.** Memory tracks 354 skill attempts
+with success rates and the Voyager-style generate_skill/dynamic-loader
+pipeline works (63 generated skills). But nothing CONSUMES the stats:
+craftWoodenPickaxe is 1/56 across the team and keeps being retried;
+craft_gear (built-in) is 0/36. "Broken-skill" detection excludes
+precondition failures, so material-starved skills retry forever — many of
+those preconditions were caused by the now-fixed drop-collection bug, so
+rates should improve. No curriculum, no skill refinement on failure, no
+retrieval beyond "first 8 names in the prompt".
+
+## Roadmap from external research (Voyager / mindcraft / MineCollab)
+1. **Close the skill loop (Voyager)**: on skill failure, feed the error +
+   code back to the LLM to REFINE the skill (iterative prompting); only
+   library successful versions. Add semantic retrieval over the library
+   instead of listing 8 names.
+2. **Skill curation from existing stats**: weekly prune/repair pass driven
+   by memory skillHistory; surface per-skill success rates into the
+   strategic prompt so bots prefer what works.
+3. **Automatic curriculum (Voyager)**: propose next tasks from inventory +
+   discoveries instead of a fixed priority list — measurable progression
+   (wood age → stone → iron → diamond) is also perfect stream content.
+4. **Self-improvement metric**: track tech-tree milestones per session
+   (time-to-first-tool, time-to-iron, deaths/hour, stash throughput) in a
+   session scoreboard file; plot across sessions to SHOW improvement.
+5. **mindcraft (kolbytn) techniques**: profile-driven agents, MineCollab
+   collaboration benchmark; Sweaterdog's Andy models prove local-model
+   fine-tuning on bot trajectories works — Jesse's RTX 5090 could LoRA a
+   small model on this team's own successful action sequences (the
+   stated long-term goal).
+
 ## Final state of the codebase (all pushed to main, CI green)
 13 commits this session. Highlights: working drop collection, stash economy,
 rescue pathfinding, protected village zone, deterministic stash bootstrap,
