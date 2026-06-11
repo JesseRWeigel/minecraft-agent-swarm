@@ -94,7 +94,23 @@ item entities after digging) + inventory-delta verification in gather_wood.
 - **Drop collection v2**: per-drop retry with a tried-set, 800ms settle
   delay, GoalBlock (stand ON the drop) instead of GoalNear r=1. Verified
   live with a probe bot + RCON-summoned drops: **5/6 collected** (v1: 0/6).
-- **Run 5**: launched with verified pickup.
+- **Run 5**: wood pickup confirmed live ("Atlas: Gathered 5 logs" → 16
+  oak_planks in real inventory). New problem class exposed: **Forge
+  strip-mined the village site into pits and Mason fell in and was
+  permanently stuck** — safeMoves can neither dig nor tower, so every go_to
+  failed forever.
+- **Fixes**: go_to rescue retry (dig + 1x1 towers when safe movement finds
+  no path); mine_block refuses blocks within 12 of The Stash; RCON-filled
+  the existing pits.
+- **Run 6 — the breakthrough run**: full economy chain worked end to end:
+  logs → planks → sticks → crafting table → **wooden pickaxe + axe**
+  (first tools ever), house built to 76/174 blocks ("It has... character"),
+  and Mason **deposited 17 items at the stash chest**. Bot-to-bot name
+  mentions and viewer steering (Director chat) both functioned.
+- Remaining LLM weakness: Mason never chose setup_stash on his own (placed
+  chests by hand instead). Added a deterministic stash-bootstrap override in
+  the brain — same pattern as the leash override.
+- **Run 7**: all fixes live; merged to main and pushed (CI green).
 
 ## Recommendations for Jesse
 - Upgrade Ollama (needs sudo): `curl -fsSL https://ollama.com/install.sh | sh`
