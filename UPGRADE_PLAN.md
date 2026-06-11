@@ -1,3 +1,5 @@
+> **Historical document** — this was the original 2026-02 upgrade plan. It has been largely implemented (and exceeded); see README.md for the current architecture and `docs/plans/` for session logs.
+
 # Mineflayer AI Bot - Upgrade Plan
 
 ## Vision
