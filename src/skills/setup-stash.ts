@@ -55,6 +55,25 @@ export const setupStashSkill: Skill = {
       return { success: false, message: "Interrupted while navigating to stash." };
     }
 
+    // Ground-snap Y: the configured stash Y is approximate — find the actual
+    // surface at (x, z) so chest placement doesn't end up floating or buried.
+    for (let y = stashY + 20; y >= stashY - 20; y--) {
+      const block = bot.blockAt(new Vec3(stashX, y, stashZ));
+      const above = bot.blockAt(new Vec3(stashX, y + 1, stashZ));
+      if (
+        block &&
+        block.name !== "air" &&
+        block.name !== "cave_air" &&
+        block.name !== "water" &&
+        !block.name.includes("leaves") &&
+        above &&
+        (above.name === "air" || above.name === "short_grass" || above.name === "tall_grass")
+      ) {
+        stashPos.y = y + 1;
+        break;
+      }
+    }
+
     // --- Step 2: Check if chests already exist nearby ---
     onProgress({
       skillName: "setup_stash",

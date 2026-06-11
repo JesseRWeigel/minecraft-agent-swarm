@@ -106,27 +106,6 @@
   ],
   "skillHistory": [
     {
-      "skill": "build_house",
-      "success": true,
-      "durationSeconds": 0,
-      "notes": "House already built at (9, 64, -333). Use go_to 9 64 -333 to visit the existing home.",
-      "timestamp": "2026-02-24T17:13:07.723Z"
-    },
-    {
-      "skill": "light_area",
-      "success": false,
-      "durationSeconds": 0,
-      "notes": "No torches in inventory! Craft some first (coal + sticks).",
-      "timestamp": "2026-02-24T17:13:32.910Z"
-    },
-    {
-      "skill": "craftWoodenPickaxe",
-      "success": false,
-      "durationSeconds": 0.071,
-      "notes": "craftWoodenPickaxe failed: Cannot find oak_log nearby",
-      "timestamp": "2026-02-24T17:13:58.553Z"
-    },
-    {
       "skill": "light_area",
       "success": false,
       "durationSeconds": 0.001,
@@ -804,10 +783,31 @@
       "durationSeconds": 0.001,
       "notes": "craftWoodenPickaxe failed: Not enough wood to craft a crafting table — gather wood first",
       "timestamp": "2026-02-24T18:07:29.435Z"
+    },
+    {
+      "skill": "craftWoodenPlanksFromAvailableLogs",
+      "success": true,
+      "durationSeconds": 0.013,
+      "notes": "craftWoodenPlanksFromAvailableLogs completed.",
+      "timestamp": "2026-06-11T14:15:35.313Z"
+    },
+    {
+      "skill": "craftWoodenPlanksFromAvailableLogs",
+      "success": true,
+      "durationSeconds": 0.003,
+      "notes": "craftWoodenPlanksFromAvailableLogs completed.",
+      "timestamp": "2026-06-11T14:15:36.311Z"
+    },
+    {
+      "skill": "craftTorch",
+      "success": true,
+      "durationSeconds": 0.027,
+      "notes": "craftTorch completed.",
+      "timestamp": "2026-06-11T14:17:39.075Z"
     }
   ],
   "lessons": [],
-  "lastUpdated": "2026-02-24T18:07:29.435Z",
+  "lastUpdated": "2026-06-11T14:17:39.075Z",
   "brokenSkillNames": [
     "findNearbySheepAndShearThemToCollectWool",
     "craftABedUsing3WoolAnd3Planks",

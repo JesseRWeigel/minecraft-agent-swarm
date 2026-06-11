@@ -1,0 +1,67 @@
+{
+  "structures": [],
+  "deaths": [],
+  "oreDiscoveries": [
+    {
+      "type": "coal_ore",
+      "x": 218,
+      "y": 59,
+      "z": -384,
+      "timestamp": "2026-06-11T14:14:59.749Z"
+    },
+    {
+      "type": "lapis_ore",
+      "x": 226,
+      "y": 59,
+      "z": -386,
+      "timestamp": "2026-06-11T14:14:59.749Z"
+    },
+    {
+      "type": "coal_ore",
+      "x": 278,
+      "y": 62,
+      "z": -315,
+      "timestamp": "2026-06-11T14:15:09.742Z"
+    },
+    {
+      "type": "coal_ore",
+      "x": 284,
+      "y": 60,
+      "z": -319,
+      "timestamp": "2026-06-11T14:15:09.742Z"
+    },
+    {
+      "type": "coal_ore",
+      "x": 275,
+      "y": 37,
+      "z": -332,
+      "timestamp": "2026-06-11T14:16:28.087Z"
+    }
+  ],
+  "skillHistory": [
+    {
+      "skill": "setup_stash",
+      "success": false,
+      "durationSeconds": 0,
+      "notes": "Invalid stash position — x, y, z must be numbers.",
+      "timestamp": "2026-06-11T14:13:37.811Z"
+    },
+    {
+      "skill": "setup_stash",
+      "success": false,
+      "durationSeconds": 0.017,
+      "notes": "Not enough materials for chests. Need 16 planks (have 0) or 4 logs (have 0). Gather wood first!",
+      "timestamp": "2026-06-11T14:13:50.498Z"
+    },
+    {
+      "skill": "craftWoodenPickaxe",
+      "success": false,
+      "durationSeconds": 0.001,
+      "notes": "craftWoodenPickaxe failed: Not enough wood to craft a crafting table — gather wood first",
+      "timestamp": "2026-06-11T14:16:37.023Z"
+    }
+  ],
+  "lessons": [],
+  "lastUpdated": "2026-06-11T14:16:37.023Z",
+  "brokenSkillNames": []
+}

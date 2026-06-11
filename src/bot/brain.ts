@@ -631,6 +631,14 @@ export class BotBrain {
       })
       .catch(() => {});
 
+    // Unwrap invoke_skill aliasing a built-in action (e.g. {"skill":"deposit_stash"})
+    // so gating and param injection below see the real action.
+    const BUILTIN_VIA_SKILL = new Set(["deposit_stash", "withdraw_stash", "gather_wood", "eat", "flee", "explore"]);
+    if (decision.action === "invoke_skill" && BUILTIN_VIA_SKILL.has(decision.params?.skill)) {
+      decision.action = decision.params.skill;
+      delete decision.params.skill;
+    }
+
     // ── Action gating ──
     const UNIVERSAL_ACTIONS = new Set([
       "idle",
@@ -679,6 +687,16 @@ export class BotBrain {
     if ((decision.action === "deposit_stash" || decision.action === "withdraw_stash") && this.roleConfig.stashPos) {
       normalizedParams.stashPos = this.roleConfig.stashPos;
       normalizedParams.keepItems = this.roleConfig.keepItems;
+    }
+
+    // Inject stash coordinates into setup_stash — the LLM invents garbage coords otherwise
+    const isSetupStash =
+      decision.action === "setup_stash" ||
+      (decision.action === "invoke_skill" && normalizedParams.skill === "setup_stash");
+    if (isSetupStash && this.roleConfig.stashPos) {
+      normalizedParams.x = this.roleConfig.stashPos.x;
+      normalizedParams.y = this.roleConfig.stashPos.y;
+      normalizedParams.z = this.roleConfig.stashPos.z;
     }
 
     // ── Execute ──

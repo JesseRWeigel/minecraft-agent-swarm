@@ -147,12 +147,18 @@ export async function executeAction(bot: Bot, action: string, params: Record<str
         return await sleepInBed(bot);
       case "idle":
         return "Just vibing.";
-      case "chat":
-        bot.chat(params.message || "...");
-        return `Said: ${params.message}`;
-      case "respond_to_chat":
-        bot.chat(params.message || "Hey!");
-        return `Replied: ${params.message}`;
+      case "chat": {
+        const msg = typeof params.message === "string" ? params.message.trim() : "";
+        if (!msg) return "chat needs a 'message' param — nothing was said.";
+        bot.chat(msg);
+        return `Said: ${msg}`;
+      }
+      case "respond_to_chat": {
+        const msg = typeof params.message === "string" ? params.message.trim() : "";
+        if (!msg) return "respond_to_chat needs a 'message' param — nothing was said.";
+        bot.chat(msg);
+        return `Replied: ${msg}`;
+      }
       case "generate_skill": {
         if (!params.task || !String(params.task).trim()) return "generate_skill needs a non-empty 'task' param.";
         const { generateSkill } = await import("../skills/generator.js");

@@ -44,6 +44,13 @@ export interface BotRoleConfig {
   priorities: string;
 }
 
+/**
+ * Shared stash position — a few blocks from the team safeSpawn so every bot
+ * agrees where "The Stash" is. setup_stash ground-snaps the Y at runtime,
+ * so this Y only needs to be close enough for pathfinding.
+ */
+export const STASH_POS = { x: 286, y: 70, z: -314 };
+
 /** Atlas: Explorer and miner. Roams widely, finds ores, scouts terrain. */
 export const ATLAS_CONFIG: BotRoleConfig = {
   name: "Atlas",
@@ -54,7 +61,7 @@ export const ATLAS_CONFIG: BotRoleConfig = {
   role: "Explorer / Miner",
   personality: `You are Atlas, a fearless explorer and miner who names every cave system and mountain you discover. You get emotionally attached to ore veins and mourn when they run out. You narrate every adventure like a nature documentary.`,
   leashRadius: 500,
-  stashPos: undefined,
+  stashPos: STASH_POS,
   // Moved east to fresh forested territory — the X=30 area was fully stripped by previous sessions.
   // Ore discoveries at X=254-550 confirm this zone is explorable and away from the bare highland.
   safeSpawn: { x: 280, y: 0, z: -320 },
@@ -84,7 +91,7 @@ export const FLORA_CONFIG: BotRoleConfig = {
   role: "Farmer / Crafter",
   personality: `You are Flora, a nurturing farmer and craftsperson who names every animal and crop. You're obsessed with efficiency — a perfect farm layout makes you genuinely happy. You scold the other bots when they forget to eat their vegetables.`,
   leashRadius: 150,
-  stashPos: undefined,
+  stashPos: STASH_POS,
   // Matches Atlas safeSpawn — moved east to fresh territory away from the stripped X=30 zone
   safeSpawn: { x: 280, y: 0, z: -320 },
   allowedActions: ["craft", "eat", "sleep", "go_to", "place_block", "chat"],
@@ -115,7 +122,7 @@ export const FORGE_CONFIG: BotRoleConfig = {
   role: "Miner / Smelter",
   personality: `You are Forge, a gruff dwarf-like miner who talks to rocks and ore veins like old friends. You're deeply respectful of the underground — every cave is sacred ground. You judge surface-dwellers for wasting daylight. The sound of pickaxes is your favorite music.`,
   leashRadius: 250,
-  stashPos: undefined,
+  stashPos: STASH_POS,
   safeSpawn: { x: 280, y: 0, z: -320 },
   allowedActions: ["mine_block", "go_to", "eat", "sleep", "craft", "chat", "flee"],
   allowedSkills: ["strip_mine", "smelt_ores", "craft_gear"],
@@ -145,9 +152,9 @@ export const MASON_CONFIG: BotRoleConfig = {
   role: "Builder",
   personality: `You are Mason, a meticulous architect who critiques every structure for symmetry and proportion. You measure twice and place once. Asymmetry genuinely upsets you. Your dream is to build a cathedral worthy of the server. You compliment teammates who bring you good building materials.`,
   leashRadius: 150,
-  stashPos: undefined,
+  stashPos: STASH_POS,
   safeSpawn: { x: 280, y: 0, z: -320 },
-  allowedActions: ["go_to", "place_block", "craft", "eat", "sleep", "chat"],
+  allowedActions: ["go_to", "place_block", "craft", "gather_wood", "eat", "sleep", "chat"],
   allowedSkills: ["build_house", "build_bridge", "light_area", "build_farm", "setup_stash"],
   keepItems: [
     { name: "axe", minCount: 1 },
@@ -176,7 +183,7 @@ export const BLADE_CONFIG: BotRoleConfig = {
   role: "Combat / Guard",
   personality: `You are Blade, a stoic warrior who speaks in short, direct sentences. You constantly scan for threats. You're protective of your teammates — if one is in danger, you head toward them. You respect worthy opponents and give fallen enemies brief acknowledgment.`,
   leashRadius: 300,
-  stashPos: undefined,
+  stashPos: STASH_POS,
   safeSpawn: { x: 280, y: 0, z: -320 },
   allowedActions: ["attack", "flee", "go_to", "eat", "sleep", "chat"],
   allowedSkills: ["neural_combat", "craft_gear"],

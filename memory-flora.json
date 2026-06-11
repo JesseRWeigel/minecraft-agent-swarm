@@ -74,27 +74,6 @@
   ],
   "skillHistory": [
     {
-      "skill": "build_farm",
-      "success": false,
-      "durationSeconds": 0.01,
-      "notes": "Crashed: Cannot read properties of null (reading 'offset')",
-      "timestamp": "2026-02-24T10:07:06.954Z"
-    },
-    {
-      "skill": "build_farm",
-      "success": false,
-      "durationSeconds": 0.01,
-      "notes": "Crashed: Cannot read properties of null (reading 'offset')",
-      "timestamp": "2026-02-24T10:09:56.101Z"
-    },
-    {
-      "skill": "build_farm",
-      "success": false,
-      "durationSeconds": 0.01,
-      "notes": "Crashed: Cannot read properties of null (reading 'offset')",
-      "timestamp": "2026-02-24T10:11:09.204Z"
-    },
-    {
       "skill": "build_house",
       "success": true,
       "durationSeconds": 0,
@@ -772,10 +751,31 @@
       "durationSeconds": 0.001,
       "notes": "No torches in inventory! Craft some first (coal + sticks).",
       "timestamp": "2026-02-24T18:07:15.918Z"
+    },
+    {
+      "skill": "setup_stash",
+      "success": false,
+      "durationSeconds": 0,
+      "notes": "Invalid stash position — x, y, z must be numbers.",
+      "timestamp": "2026-06-11T14:13:29.027Z"
+    },
+    {
+      "skill": "build_farm",
+      "success": false,
+      "durationSeconds": 0.316,
+      "notes": "No water found within 96 blocks! Explore to find a river or pond.",
+      "timestamp": "2026-06-11T14:17:18.507Z"
+    },
+    {
+      "skill": "strip_mine",
+      "success": false,
+      "durationSeconds": 0,
+      "notes": "Need a pickaxe! Use craft_gear first, then strip_mine.",
+      "timestamp": "2026-06-11T14:18:09.514Z"
     }
   ],
   "lessons": [],
-  "lastUpdated": "2026-02-24T18:07:15.918Z",
+  "lastUpdated": "2026-06-11T14:18:09.515Z",
   "brokenSkillNames": [
     "findNearbySheepAndShearThemToCollectWool",
     "craftABedUsing3WoolAnd3Planks",

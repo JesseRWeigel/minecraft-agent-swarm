@@ -1,0 +1,24 @@
+{
+  "structures": [],
+  "deaths": [],
+  "oreDiscoveries": [],
+  "skillHistory": [
+    {
+      "skill": "setup_stash",
+      "success": false,
+      "durationSeconds": 0,
+      "notes": "Invalid stash position — x, y, z must be numbers.",
+      "timestamp": "2026-06-11T14:13:37.811Z"
+    },
+    {
+      "skill": "setup_stash",
+      "success": false,
+      "durationSeconds": 0.017,
+      "notes": "Not enough materials for chests. Need 16 planks (have 0) or 4 logs (have 0). Gather wood first!",
+      "timestamp": "2026-06-11T14:13:50.498Z"
+    }
+  ],
+  "lessons": [],
+  "lastUpdated": "2026-06-11T14:13:50.498Z",
+  "brokenSkillNames": []
+}

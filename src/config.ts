@@ -10,8 +10,11 @@ export const config = {
   },
   ollama: {
     host: process.env.OLLAMA_HOST || "http://localhost:11434",
-    model: process.env.OLLAMA_MODEL || "qwen3:32b",
-    fastModel: process.env.OLLAMA_FAST_MODEL || process.env.OLLAMA_MODEL || "qwen3:32b",
+    // qwen3.6:35b-a3b is an MoE (~3B active params): 35B-class quality at ~150 tok/s
+    // on a single 32GB GPU. One model for both strategic and fast paths avoids
+    // VRAM eviction thrash between two resident models.
+    model: process.env.OLLAMA_MODEL || "qwen3.6:35b-a3b",
+    fastModel: process.env.OLLAMA_FAST_MODEL || process.env.OLLAMA_MODEL || "qwen3.6:35b-a3b",
   },
   twitch: {
     channel: process.env.TWITCH_CHANNEL || "",
