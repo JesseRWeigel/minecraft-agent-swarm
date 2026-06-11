@@ -212,6 +212,9 @@ export async function gatherMaterials(
         );
         await bot.dig(block);
         gathered++;
+        // Walk over the drop — digging alone leaves the item on the ground
+        await new Promise((r) => setTimeout(r, 400));
+        await collectNearbyDrops(bot, 6, 5000);
         onProgress(`Mined ${item} (${countItem(bot, item)}/${needed[item]})`, gathered / totalNeeded);
       } catch {
         // Failed to reach or mine, try next block

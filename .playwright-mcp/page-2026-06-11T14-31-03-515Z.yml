@@ -1,0 +1,27 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - heading "MISSION CONTROL" [level=1] [ref=e3]
+    - generic [ref=e4]:
+      - button "MANUAL" [ref=e5] [cursor=pointer]
+      - generic [ref=e6]: Day --
+  - generic [ref=e8]:
+    - iframe [ref=e10]:
+      
+    - generic [ref=e11]:
+      - heading "STASH STATUS" [level=3] [ref=e12]
+      - generic [ref=e13]:
+        - generic [ref=e14]: Bldg
+        - generic [ref=e15]: "--"
+      - generic [ref=e16]:
+        - generic [ref=e17]: Metal
+        - generic [ref=e18]: "--"
+      - generic [ref=e19]:
+        - generic [ref=e20]: Food
+        - generic [ref=e21]: "--"
+      - generic [ref=e22]:
+        - generic [ref=e23]: Tool
+        - generic [ref=e24]: "--"
+      - generic [ref=e25]:
+        - generic [ref=e26]: Free
+        - generic [ref=e27]: "--"
+  - generic [ref=e28]: Keys 1-5 select bots · C toggles auto-cycle

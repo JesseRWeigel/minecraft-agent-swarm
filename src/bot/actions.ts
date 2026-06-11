@@ -226,6 +226,31 @@ export async function executeAction(bot: Bot, action: string, params: Record<str
   }
 }
 
+/**
+ * Walk over nearby dropped items so they enter the inventory. Digging a block
+ * only spawns a drop — without this, bots "gather" wood that stays on the
+ * ground (the root cause of phantom inventory reports).
+ */
+export async function collectNearbyDrops(bot: Bot, radius = 8, maxMs = 8000): Promise<void> {
+  const start = Date.now();
+  let lastTargetId = -1;
+  while (Date.now() - start < maxMs) {
+    const drops = Object.values(bot.entities)
+      .filter((e) => e.name === "item" && e.position.distanceTo(bot.entity.position) < radius)
+      .sort((a, b) => a.position.distanceTo(bot.entity.position) - b.position.distanceTo(bot.entity.position));
+    const drop = drops[0];
+    if (!drop) break;
+    if (drop.id === lastTargetId) break; // already tried this one — unreachable
+    lastTargetId = drop.id;
+    try {
+      await safeGoto(bot, new goals.GoalNear(drop.position.x, drop.position.y, drop.position.z, 1), 6000);
+    } catch {
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 400)); // pickup tick
+  }
+}
+
 async function gatherWood(bot: Bot, count: number): Promise<string> {
   // Use shared LOG_TYPES so pale_oak_log (MC 1.21.4) and future wood types are included
   const logTypes = LOG_TYPES as readonly string[];
@@ -255,6 +280,13 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
     bot.pathfinder.setMovements(explorerMoves(bot));
   }
 
+  const countLogsInInventory = () =>
+    bot.inventory
+      .items()
+      .filter((i) => (logTypes as readonly string[]).includes(i.name))
+      .reduce((s, i) => s + i.count, 0);
+  const logsBefore = countLogsInInventory();
+
   let gathered = 0;
   let tried = 0;
   for (const pos of allLogs) {
@@ -281,6 +313,9 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
         await safeGoto(bot, new goals.GoalNear(pos.x, pos.y, pos.z, 3), 90000, 32000);
         await bot.dig(log);
         gathered++;
+        // Walk over the drop — digging alone leaves the item on the ground
+        await new Promise((r) => setTimeout(r, 400));
+        await collectNearbyDrops(bot, 6, 6000);
       } finally {
         clearInterval(yGuard);
         bot.pathfinder.thinkTimeout = prevThinkTimeout;
@@ -291,9 +326,11 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
     if (tried >= 4 && gathered === 0) break; // give up after 4 failed attempts (360s max)
   }
 
-  return gathered > 0
-    ? `Gathered ${gathered} logs. Inventory now has wood!`
-    : "Couldn't reach any trees within 128 blocks (pathfinding failed). Try exploring south toward Z=-200.";
+  const collected = countLogsInInventory() - logsBefore;
+  if (collected > 0) return `Gathered ${collected} logs. Inventory now has wood!`;
+  if (gathered > 0)
+    return `Chopped ${gathered} logs but couldn't pick up the drops — they may be stuck in leaves or a hole.`;
+  return "Couldn't reach any trees within 128 blocks (pathfinding failed). Try exploring south toward Z=-200.";
 }
 
 async function mineBlock(bot: Bot, blockType: string): Promise<string> {
@@ -311,6 +348,9 @@ async function mineBlock(bot: Bot, blockType: string): Promise<string> {
   bot.pathfinder.setMovements(digMoves);
   await safeGoto(bot, new goals.GoalNear(block.position.x, block.position.y, block.position.z, 2));
   await bot.dig(block);
+  // Walk over the drop — digging alone leaves the item on the ground
+  await new Promise((r) => setTimeout(r, 400));
+  await collectNearbyDrops(bot, 6, 5000);
   bot.pathfinder.setMovements(safeMoves(bot)); // restore safe moves
   return `Mined ${blockType}.`;
 }
