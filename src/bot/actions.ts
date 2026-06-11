@@ -597,9 +597,14 @@ async function craftItem(bot: Bot, itemName: string, count: number): Promise<str
           const ingId = typeof ing === "object" ? (ing.id ?? ing) : ing;
           return mcData.items[ingId]?.name ?? String(ingId);
         });
-      const uniqueNeeded = [...new Set(needed)].filter((n) => n && n !== "null");
-      if (uniqueNeeded.length) {
-        return `Can't craft ${resolvedName} — need: ${uniqueNeeded.join(", ")}. Gather those first.`;
+      const uniqueNeeded = [...new Set(needed)]
+        .filter((n) => n && n !== "null")
+        // Recipe variant 0 is an arbitrary wood family — don't tell the bot it
+        // specifically needs pale_oak_planks when any planks work.
+        .map((n) => (String(n).endsWith("_planks") ? "planks (any wood — craft from your logs)" : n));
+      const dedup = [...new Set(uniqueNeeded)];
+      if (dedup.length) {
+        return `Can't craft ${resolvedName} — need: ${dedup.join(", ")}. Gather those first.`;
       }
     }
     return `Can't craft ${resolvedName} — missing materials or need a crafting table.`;

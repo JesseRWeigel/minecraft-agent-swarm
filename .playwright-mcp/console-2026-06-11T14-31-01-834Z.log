@@ -917,3 +917,25 @@
     at u.onevent (http://localhost:3000/index.js:2:782372)
     at u.onpacket (http://localhost:3000/index.js:2:781942)
     at n.emit (http://localhost:3000/index.js:2:792618) @ http://localhost:3000/index.js:1
+[  644097ms] [LOG] Error: Unknown entity item
+    at new t.exports (http://localhost:3000/index.js:2:711428)
+    at http://localhost:3000/index.js:2:707299
+    at Entities.update (http://localhost:3000/index.js:2:707838)
+    at Viewer.updateEntity (http://localhost:3000/index.js:2:717058)
+    at u.<anonymous> (http://localhost:3000/index.js:2:717339)
+    at n.emit (http://localhost:3000/index.js:2:792618)
+    at u.emitEvent (http://localhost:3000/index.js:2:782569)
+    at u.onevent (http://localhost:3000/index.js:2:782372)
+    at u.onpacket (http://localhost:3000/index.js:2:781942)
+    at n.emit (http://localhost:3000/index.js:2:792618) @ http://localhost:3000/index.js:1
+[  644447ms] [LOG] Error: Unknown entity glow_squid
+    at new t.exports (http://localhost:3000/index.js:2:711428)
+    at http://localhost:3000/index.js:2:707299
+    at Entities.update (http://localhost:3000/index.js:2:707838)
+    at Viewer.updateEntity (http://localhost:3000/index.js:2:717058)
+    at u.<anonymous> (http://localhost:3000/index.js:2:717339)
+    at n.emit (http://localhost:3000/index.js:2:792618)
+    at u.emitEvent (http://localhost:3000/index.js:2:782569)
+    at u.onevent (http://localhost:3000/index.js:2:782372)
+    at u.onpacket (http://localhost:3000/index.js:2:781942)
+    at n.emit (http://localhost:3000/index.js:2:792618) @ http://localhost:3000/index.js:1
