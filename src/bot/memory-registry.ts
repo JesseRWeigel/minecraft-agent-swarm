@@ -19,3 +19,13 @@ export function registerBotMemory(bot: Bot, store: BotMemoryStore): void {
 export function getBotMemoryStore(bot: Bot): BotMemoryStore | undefined {
   return memStoreMap.get(bot);
 }
+
+/**
+ * All registered bot memory stores. Used for TEAM-wide queries — e.g.
+ * "did ANY bot build a house near here?" Per-bot structure memory caused
+ * each bot to start its own overlapping shell because it couldn't see
+ * what teammates had already built.
+ */
+export function getAllMemoryStores(): BotMemoryStore[] {
+  return [...new Set(memStoreMap.values())];
+}

@@ -7,7 +7,8 @@ import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
 import mcDataLoader from "minecraft-data";
 import { hasStructureNearby, addStructure, getNearestStructure } from "../bot/memory.js";
-import { getBotMemoryStore } from "../bot/memory-registry.js";
+import { getBotMemoryStore, getAllMemoryStores } from "../bot/memory-registry.js";
+import { collectNearbyDrops } from "../bot/navigation.js";
 
 /** All door types — any wood's door works interchangeably */
 const DOOR_TYPES = [
@@ -49,29 +50,40 @@ export const buildHouseSkill: Skill = {
       active: true,
     });
 
-    // Reuse last build site if it's within 50 blocks (bot is finishing the same house)
+    // Site selection — TEAM-aware. Check every bot's memory, not just our own:
+    // per-bot structure memory made each bot start its own overlapping shell
+    // one block apart because it couldn't see what teammates had built.
     let origin: Vec3 | null = null;
     if (lastBuildSite && bot.entity.position.distanceTo(lastBuildSite) < 50) {
       origin = lastBuildSite;
       console.log(`[Skill] Reusing previous build site at ${origin.x}, ${origin.y}, ${origin.z}`);
     } else {
-      // Check if there's already a house nearby before finding a new site
       const botPos = bot.entity.position;
-      const _memStore = getBotMemoryStore(bot);
-      const _hasHouse = _memStore
-        ? _memStore.hasStructureNearby("house", botPos.x, botPos.y, botPos.z, 80)
-        : hasStructureNearby("house", botPos.x, botPos.y, botPos.z, 80);
-      if (_hasHouse) {
-        const nearest = _memStore
-          ? _memStore.getNearestStructure("house", botPos.x, botPos.z)
-          : getNearestStructure("house", botPos.x, botPos.z);
-        const loc = nearest ? `at (${nearest.x}, ${nearest.y}, ${nearest.z})` : "nearby";
+      const candidates = getAllMemoryStores()
+        .map((s) => s.getNearestStructure("house", botPos.x, botPos.z))
+        .filter((st): st is NonNullable<typeof st> => !!st)
+        .filter((st) => Math.hypot(st.x - botPos.x, st.z - botPos.z) < 80)
+        .sort((a, b) => Math.hypot(a.x - botPos.x, a.z - botPos.z) - Math.hypot(b.x - botPos.x, b.z - botPos.z));
+      const nearest =
+        candidates[0] ??
+        (hasStructureNearby("house", botPos.x, botPos.y, botPos.z, 80)
+          ? getNearestStructure("house", botPos.x, botPos.z)
+          : null);
+
+      if (nearest && !(nearest.notes ?? "").includes("partial")) {
         return {
           success: true, // Treat as success so it doesn't get blacklisted — house already built!
-          message: `House already built ${loc}. Use go_to ${nearest?.x ?? ""} ${nearest?.y ?? ""} ${nearest?.z ?? ""} to visit the existing home.`,
+          message: `House already built at (${nearest.x}, ${nearest.y}, ${nearest.z}). Use go_to ${nearest.x} ${nearest.y} ${nearest.z} to visit the existing home.`,
         };
       }
-      origin = findBuildSite(bot, 7, 7);
+      if (nearest) {
+        // Partial house — RESUME it. The placement loop counts already-placed
+        // blocks as done, so re-running at the same origin fills the gaps.
+        origin = new Vec3(nearest.x, nearest.y, nearest.z);
+        console.log(`[Skill] Resuming partial house at ${origin.x}, ${origin.y}, ${origin.z}`);
+      } else {
+        origin = findBuildSite(bot, 7, 7);
+      }
     }
     if (!origin) {
       return {
@@ -133,6 +145,8 @@ export const buildHouseSkill: Skill = {
           ]);
           await bot.dig(block);
           mined++;
+          // Walk over the drop — digging alone leaves the log on the ground
+          await collectNearbyDrops(bot, 6, 5000);
           onProgress({
             skillName: "build_house",
             phase: "Chopping trees",
@@ -165,6 +179,17 @@ export const buildHouseSkill: Skill = {
 
     // Craft ALL log types into their respective planks
     await craftAllLogsToPlanks(bot, signal);
+
+    // Material gate: starting a 174-block build with a handful of planks
+    // produces roofless 35-block shells. Precondition-style failure message
+    // (matches the brain's non-blacklisting patterns) so the bot gathers more.
+    const planksNow = countAllPlanks(bot);
+    if (planksNow < totalPlanksNeeded * 0.7) {
+      return {
+        success: false,
+        message: `Not enough planks to build a real house — need ~${totalPlanksTarget}, have ${planksNow}. Use gather_wood to get more logs first.`,
+      };
+    }
 
     // Craft sticks (just enough for torches — recipe uses any plank type via tags)
     const torchesNeeded = bp.materials["torch"] || 0;

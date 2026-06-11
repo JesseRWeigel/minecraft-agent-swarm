@@ -153,7 +153,15 @@ export class BotMemoryStore {
       (s) => s.type === type && Math.abs(s.x - x) < 10 && Math.abs(s.z - z) < 10,
     );
     if (existing) {
-      console.log(`[Memory] Structure already exists nearby at ${existing.x}, ${existing.y}, ${existing.z}`);
+      // Upgrade the record (e.g. "Oak House (partial)" → "Oak House" once
+      // a resumed build completes) instead of silently keeping stale notes.
+      if (notes && existing.notes !== notes) {
+        existing.notes = notes;
+        this.save();
+        console.log(`[Memory] Structure at ${existing.x}, ${existing.y}, ${existing.z} updated: ${notes}`);
+      } else {
+        console.log(`[Memory] Structure already exists nearby at ${existing.x}, ${existing.y}, ${existing.z}`);
+      }
       return false;
     }
     this.memory.structures.push({

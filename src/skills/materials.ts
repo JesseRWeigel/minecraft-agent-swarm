@@ -2,6 +2,7 @@ import type { Bot } from "mineflayer";
 import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
 import mcDataLoader from "minecraft-data";
+import { collectNearbyDrops } from "../bot/navigation.js";
 
 /** Crafting dependency tree: item → { inputs needed, yield per craft } */
 const CRAFT_TREE: Record<string, { inputs: Record<string, number>; yields: number }> = {
