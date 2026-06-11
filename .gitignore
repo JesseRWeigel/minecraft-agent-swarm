@@ -8,3 +8,4 @@ memory.json
 firebase-debug.log
 
 skills/generated/*.js
+memory-*.json
