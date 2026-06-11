@@ -131,6 +131,9 @@ taking only \`bot\`). Follow these API rules strictly:
 - navigation: const { goals } = require('mineflayer-pathfinder'); await bot.pathfinder.goto(new goals.GoalNear(x,y,z,2))
 - placement: await bot.placeBlock(referenceBlock, faceVector) — bot.place/bot.build do NOT exist
 - after bot.dig(block), walk to the block position to pick up the drop
+- if the error is a TIMEOUT: add an early existence check (bot.findBlock /
+  bot.nearestEntity) and throw new Error("Cannot find <resource> nearby")
+  immediately when the target resource is absent — never wander on a timer
 - all require() calls INSIDE the function body; no try/catch; no infinite loops; under 60 lines
 
 NO markdown, NO backticks, NO explanation — output ONLY the fixed JavaScript function:`;
