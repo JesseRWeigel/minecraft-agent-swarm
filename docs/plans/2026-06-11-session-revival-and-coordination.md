@@ -86,8 +86,15 @@ exactly like "the bot is dumb." Fixed with `collectNearbyDrops()` (walk to
 item entities after digging) + inventory-delta verification in gather_wood.
 `mineflayer-collectblock` was in package.json all along but never loaded.
 
-- **Run 4**: started with drop collection fixed. Watching for confirmed
-  wood→planks→chests→stash chain.
+- **Run 4**: drop collection v1 still failed ("Chopped 5 logs but couldn't
+  pick up the drops") — the collector gave up on ALL drops at the first
+  unreachable one, and chased drops that were still falling. The new honest
+  result message made the failure visible immediately, which v1's
+  predecessor ("Gathered 5 logs!") had been hiding all along.
+- **Drop collection v2**: per-drop retry with a tried-set, 800ms settle
+  delay, GoalBlock (stand ON the drop) instead of GoalNear r=1. Verified
+  live with a probe bot + RCON-summoned drops: **5/6 collected** (v1: 0/6).
+- **Run 5**: launched with verified pickup.
 
 ## Recommendations for Jesse
 - Upgrade Ollama (needs sudo): `curl -fsSL https://ollama.com/install.sh | sh`

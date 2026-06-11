@@ -102,7 +102,7 @@ export async function executeAction(bot: Bot, action: string, params: Record<str
       case "gather_wood":
         return await gatherWood(bot, params.count || 5);
       case "mine_block":
-        return await mineBlock(bot, params.blockType || "stone");
+        return await mineBlock(bot, params.blockType || "stone", params.protectPos);
       case "go_to":
       case "navigate":
       case "navigate_to":
@@ -335,13 +335,29 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
   return "Couldn't reach any trees within 128 blocks (pathfinding failed). Try exploring south toward Z=-200.";
 }
 
-async function mineBlock(bot: Bot, blockType: string): Promise<string> {
+async function mineBlock(
+  bot: Bot,
+  blockType: string,
+  protectPos?: { x: number; y: number; z: number },
+): Promise<string> {
+  // Keep the village/stash site intact — bots kept strip-mining the base and
+  // other bots fell into the pits and got stuck.
+  const PROTECT_RADIUS = 12;
   const block = bot.findBlock({
     matching: (b) => b.name === blockType,
     maxDistance: 32,
+    useExtraInfo: (b) => {
+      if (!protectPos) return true;
+      const dx = b.position.x - protectPos.x;
+      const dz = b.position.z - protectPos.z;
+      return dx * dx + dz * dz > PROTECT_RADIUS * PROTECT_RADIUS;
+    },
   });
 
-  if (!block) return `No ${blockType} found nearby.`;
+  if (!block)
+    return protectPos
+      ? `No ${blockType} found nearby (the ${PROTECT_RADIUS}-block zone around The Stash is protected — mine elsewhere).`
+      : `No ${blockType} found nearby.`;
 
   // Allow digging so pathfinder can reach underground ores through stone
   const { Movements } = (await import("mineflayer-pathfinder")).default;
@@ -369,7 +385,22 @@ async function goTo(bot: Bot, x: number, y: number, z: number): Promise<string> 
   if (dist < 2) return "Already here!";
 
   bot.pathfinder.setMovements(safeMoves(bot));
-  await safeGoto(bot, new goals.GoalNear(cx, cy, cz, 2));
+  try {
+    await safeGoto(bot, new goals.GoalNear(cx, cy, cz, 2));
+  } catch (err) {
+    // Rescue mode: safe movements can't dig or tower, so a bot standing in a
+    // pit (or behind one block of dirt) is permanently stuck. Retry once with
+    // digging + 1x1 towers enabled before giving up.
+    const rescue = new Movements(bot);
+    rescue.canDig = true;
+    rescue.allow1by1towers = true;
+    bot.pathfinder.setMovements(rescue);
+    try {
+      await safeGoto(bot, new goals.GoalNear(cx, cy, cz, 2), 30000);
+    } finally {
+      bot.pathfinder.setMovements(safeMoves(bot));
+    }
+  }
   return `Arrived at ${cx.toFixed(0)}, ${cy.toFixed(0)}, ${cz.toFixed(0)}.`;
 }
 

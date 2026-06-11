@@ -689,6 +689,11 @@ export class BotBrain {
       normalizedParams.keepItems = this.roleConfig.keepItems;
     }
 
+    // Protect the village site from being strip-mined into bot-trapping pits
+    if (decision.action === "mine_block" && this.roleConfig.stashPos) {
+      normalizedParams.protectPos = this.roleConfig.stashPos;
+    }
+
     // Inject stash coordinates into setup_stash — the LLM invents garbage coords otherwise
     const isSetupStash =
       decision.action === "setup_stash" ||
