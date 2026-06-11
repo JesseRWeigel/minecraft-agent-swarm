@@ -174,10 +174,13 @@
           viewer.setVersion(version);
           versionInitialized = true;
         } else {
-          // Subsequent switches with same version: just reset world geometry.
-          // setVersion calls resetWorld internally, which is what we need.
-          // If version differs (shouldn't happen), full re-init.
-          viewer.world.resetWorld();
+          // Subsequent switches: world.setVersion (NOT resetWorld) — resetWorld
+          // posts {type:'reset'} to the mesher workers which nulls their world
+          // state, and only a 'version' message recreates it. Without this the
+          // workers throw "Cannot read properties of null (reading 'getColumn'/
+          // 'setBlockStateId')" for every chunk after a bot switch, and the
+          // scene shows entities but no blocks.
+          viewer.world.setVersion(version);
           viewer.world.active = true;
           viewer.entities.clear();
           viewer.primitives.clear();
