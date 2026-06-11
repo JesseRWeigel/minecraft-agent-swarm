@@ -6,6 +6,7 @@ import { isHostile } from "./perception.js";
 import { skillRegistry } from "../skills/registry.js";
 import { runSkill } from "../skills/executor.js";
 import { isRetired, getSkillStats } from "../skills/reliability.js";
+import { getDynamicSkillNames } from "../skills/dynamic-loader.js";
 import { runNeuralCombat } from "../neural/combat.js";
 import { LOG_TYPES } from "../skills/materials.js";
 import { depositStash, withdrawStash } from "../skills/stash.js";
@@ -112,7 +113,21 @@ export async function executeAction(bot: Bot, action: string, params: Record<str
           }
           return `Skill '${name}' not found. Try generate_skill to create it.`;
         }
-        return await runSkill(bot, skill, params);
+        const skillResult = await runSkill(bot, skill, params);
+        // Voyager-style refinement: a dynamic skill that failed with a CODE
+        // error (not a precondition) gets its source + error fed back to the
+        // LLM for a fix. Fire-and-forget — the bot keeps playing meanwhile.
+        const looksLikeCodeBug =
+          /is not a function|Cannot read|ReferenceError|TypeError|is not defined|timed out after/i.test(skillResult);
+        const looksLikePrecondition = /need|missing|not enough|no trees|no water|gather|explore first/i.test(
+          skillResult,
+        );
+        if (looksLikeCodeBug && !looksLikePrecondition && getDynamicSkillNames().includes(name)) {
+          import("../skills/generator.js")
+            .then(({ refineSkill }) => refineSkill(name, skillResult))
+            .catch((e) => console.warn(`[Refine] ${name}:`, e.message));
+        }
+        return skillResult;
       }
       case "neural_combat":
       case "neural_navigation": {

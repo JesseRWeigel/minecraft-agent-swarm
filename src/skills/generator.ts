@@ -113,3 +113,89 @@ export async function generateSkill(task: string): Promise<string> {
   loadDynamicSkills();
   return skillName;
 }
+
+const REFINEMENT_PROMPT = `You are fixing a buggy Mineflayer bot skill written in JavaScript.
+
+THE CURRENT CODE:
+\`\`\`
+CURRENT_CODE
+\`\`\`
+
+IT FAILED WITH THIS ERROR:
+ERROR_MESSAGE
+
+Fix the bug. Keep the SAME function name and signature (one async function
+taking only \`bot\`). Follow these API rules strictly:
+- bot.inventory.items() is a FUNCTION — always call with ()
+- crafting: const recipes = bot.recipesFor(item.id, null, 1, table); await bot.craft(recipes[0], 1, table)
+- navigation: const { goals } = require('mineflayer-pathfinder'); await bot.pathfinder.goto(new goals.GoalNear(x,y,z,2))
+- placement: await bot.placeBlock(referenceBlock, faceVector) — bot.place/bot.build do NOT exist
+- after bot.dig(block), walk to the block position to pick up the drop
+- all require() calls INSIDE the function body; no try/catch; no infinite loops; under 60 lines
+
+NO markdown, NO backticks, NO explanation — output ONLY the fixed JavaScript function:`;
+
+/** Per-session refinement attempt caps — don't burn the GPU re-fixing the same skill. */
+const refinementAttempts = new Map<string, number>();
+const MAX_REFINEMENTS_PER_SKILL = 2;
+
+/**
+ * Voyager-style skill refinement: feed the failing skill's source + error
+ * back to the LLM and replace it with the fixed version (old code kept as
+ * .bak.N). Returns true when a refined version was installed.
+ */
+export async function refineSkill(name: string, errorMessage: string): Promise<boolean> {
+  const attempts = refinementAttempts.get(name) ?? 0;
+  if (attempts >= MAX_REFINEMENTS_PER_SKILL) return false;
+  refinementAttempts.set(name, attempts + 1);
+
+  // Locate the skill source (generated dir first, then voyager library)
+  const { readFile, copyFile } = await import("node:fs/promises");
+  const candidates = [
+    path.join(GENERATED_DIR, `${name}.js`),
+    path.resolve(__dirname, "../../skills/voyager", `${name}.js`),
+  ];
+  let sourcePath: string | null = null;
+  let source = "";
+  for (const p of candidates) {
+    try {
+      source = await readFile(p, "utf-8");
+      sourcePath = p;
+      break;
+    } catch {
+      /* try next */
+    }
+  }
+  if (!sourcePath) return false;
+
+  console.log(
+    `[Generator] Refining '${name}' (attempt ${attempts + 1}/${MAX_REFINEMENTS_PER_SKILL}): ${errorMessage.slice(0, 120)}`,
+  );
+
+  const prompt = REFINEMENT_PROMPT.replace("CURRENT_CODE", source).replace("ERROR_MESSAGE", errorMessage.slice(0, 500));
+  const response = await ollama.chat({
+    model: config.ollama.model,
+    think: false,
+    messages: [{ role: "user", content: prompt }],
+    options: { temperature: 0.2, num_predict: 4096 },
+  });
+
+  let code = response.message.content
+    .trim()
+    .replace(/^```[a-z]*\n?/i, "")
+    .replace(/\n?```$/i, "")
+    .trim();
+
+  if (!code.includes(`async function ${name}`)) {
+    console.warn(`[Generator] Refinement of '${name}' didn't produce a valid function — keeping original`);
+    return false;
+  }
+
+  // Back up the failing version, install the fix (always into generated/ so
+  // voyager library files are never mutated in place)
+  await copyFile(sourcePath, `${sourcePath}.bak.${attempts + 1}`).catch(() => {});
+  await saveGeneratedSkill(name, code);
+  loadDynamicSkills();
+  console.log(`[Generator] Installed refined '${name}'`);
+  return true;
+}
