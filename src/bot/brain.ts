@@ -16,6 +16,7 @@
  */
 
 import type { Bot } from "mineflayer";
+import { Vec3 } from "vec3";
 import type { Entity } from "prismarine-entity";
 import { config } from "../config.js";
 import { BotRoleConfig } from "./role.js";
@@ -511,6 +512,49 @@ export class BotBrain {
         this.log.info("Brain", `LEASH: ${dist.toFixed(0)} blocks away — forcing return home`);
         const result = await executeAction(this.bot, "go_to", this.homePos);
         this.events.onAction("go_to", result);
+        return;
+      }
+    }
+
+    // Stash bootstrap override — deterministic, like the leash. The LLM
+    // reliably circles this goal (hand-placing chests, re-gathering wood)
+    // without ever picking setup_stash, so when the preconditions are met
+    // we just run it.
+    if (
+      this.roleConfig.allowedSkills.includes("setup_stash") &&
+      this.roleConfig.stashPos &&
+      !this.recentFailures.has("skill:setup_stash")
+    ) {
+      const { x, y, z } = this.roleConfig.stashPos;
+      const nearStash = this.bot.entity.position.distanceTo(new Vec3(x, y, z)) < 64;
+      const chestAtStash = this.bot.findBlock({
+        matching: (b) => b.name === "chest" || b.name === "trapped_chest",
+        maxDistance: 16,
+        point: new Vec3(x, y, z),
+      });
+      const logsAndPlanks = this.bot.inventory
+        .items()
+        .reduce(
+          (s, i) => s + (i.name.endsWith("_log") ? i.count * 4 : 0) + (i.name.endsWith("_planks") ? i.count : 0),
+          0,
+        );
+      const chestsHeld = this.bot.inventory
+        .items()
+        .filter((i) => i.name === "chest")
+        .reduce((s, i) => s + i.count, 0);
+      if (nearStash && !chestAtStash && (logsAndPlanks >= 16 || chestsHeld >= 2)) {
+        this.log.info("Brain", "OVERRIDE: materials ready and no stash chest — running setup_stash");
+        this.events.onThought("The Stash must rise. I have the materials. No more excuses.");
+        const result = await executeAction(this.bot, "invoke_skill", { skill: "setup_stash", x, y, z });
+        this.events.onAction("setup_stash", result);
+        this.lastAction = "setup_stash";
+        this.lastResult = result;
+        this.trackFailure(
+          "skill:setup_stash",
+          { action: "setup_stash", params: {} },
+          result,
+          /bootstrapped|already/i.test(result),
+        );
         return;
       }
     }
