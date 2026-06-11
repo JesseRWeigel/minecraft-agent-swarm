@@ -33,6 +33,7 @@ import { BotMemoryStore } from "./memory.js";
 import { updateBulletin, formatTeamBulletin } from "./bulletin.js";
 import { createLogger } from "../util/logger.js";
 import { recordAction, recordSkillResult, checkInventoryMilestones } from "./scoreboard.js";
+import { getTechTreeLine } from "./curriculum.js";
 
 export interface ChatMessage {
   source: "minecraft" | "twitch" | "youtube";
@@ -390,6 +391,10 @@ export class BotBrain {
       ctx += `\n\nMESSAGES FROM PLAYERS/VIEWERS:\n${chatStr}`;
       this.pendingChatMessages.length = 0;
     }
+
+    // Tech-tree curriculum — deterministic "what's next" from inventory
+    const techLine = getTechTreeLine(this.bot);
+    if (techLine) ctx += `\n\n${techLine}`;
 
     // Current goal
     if (this.currentGoal && this.goalStepsLeft > 0) {
