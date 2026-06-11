@@ -178,3 +178,17 @@ decisions, honest action reporting.
   but don't leave it running while bots stream.
 
 (continued below as the session progresses)
+
+## Self-improvement implementation (evening session)
+All five roadmap items implemented, each as its own commit (revert any one
+independently if scoreboards regress):
+1. `scoreboard.ts` — per-session metrics + tech milestones (logs/sessions/)
+2. `reliability.ts` — team-wide skill stats; retire ≥8-attempt <10% skills;
+   prompt list ranked/annotated by success rate
+3. `curriculum.ts` — TECH TREE next-milestone injection (first session
+   milestones: first_planks 27s, first_log/table/tool 38s)
+4. `refineSkill()` — Voyager loop: code-error failures send source+error
+   back to the LLM for a fix (.bak kept, 2 attempts/session cap)
+5. `trajectory.ts` + `finetune/` — training data accumulates passively;
+   overnight LoRA recipe in finetune/README.md with scoreboard-based A/B.
+Viewer bot-switch bug also fixed (worker world-reset race; 195 errors → 0).
