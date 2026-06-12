@@ -92,6 +92,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
       console.log(`[Bot] safeSpawn configured — teleporting to ${x},80,${z}`);
       const preTpX = bot.entity.position.x;
       const preTpZ = bot.entity.position.z;
+      bot.chat(`/effect give ${roleConfig.username} slow_falling 30 1`);
       bot.chat(`/tp ${x} 80 ${z}`);
       const moveDeadline = Date.now() + 5_000;
       while (Date.now() < moveDeadline) {
@@ -132,6 +133,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
       if (!bot.entity.onGround) {
         const px = Math.floor(bot.entity.position.x);
         const pz = Math.floor(bot.entity.position.z);
+        bot.chat(`/effect give ${roleConfig.username} slow_falling 30 1`);
         bot.chat(`/tp ${px} 80 ${pz}`);
         await new Promise((r) => setTimeout(r, 3000));
       }
@@ -154,6 +156,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
         [-300, 0],
         [300, 300],
       ]) {
+        bot.chat(`/effect give ${roleConfig.username} slow_falling 30 1`);
         bot.chat(`/tp ${sx + dx} 80 ${sz + dz}`);
         await new Promise((r) => setTimeout(r, 3000));
         const fb = bot.blockAt(bot.entity.position);
