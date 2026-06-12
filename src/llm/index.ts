@@ -124,7 +124,7 @@ function parseDecision(
 } {
   const jsonStr = extractJSON(raw);
   if (!jsonStr) {
-    llmLog.warn("LLM", `No JSON found in response: "${raw.slice(0, 200)}"`);
+    llmLog.warn("LLM", `No JSON found in response (${raw.length} chars): "${raw.slice(0, 800)}"`);
     llmLog.debug("LLM", "Full raw response:", raw);
     return { thought: "Brain buffering...", action: "idle", params: {} };
   }
