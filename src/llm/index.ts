@@ -161,6 +161,12 @@ function parseDecision(
     }
   }
 
+  // look_around / scan / scan_for_trees / observe / survey → explore
+  // (the 8B invents a new observation verb every cycle; alias the family)
+  if (/^(look|scan|observe|survey|search_for|check_surroundings)/.test(action)) {
+    action = "explore";
+  }
+
   // mine_BLOCKTYPE → mine_block
   if (action !== "mine_block" && /^mine_\w+$/.test(action)) {
     params.blockType = params.blockType || action.slice(5);
