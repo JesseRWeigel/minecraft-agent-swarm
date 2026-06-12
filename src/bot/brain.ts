@@ -362,8 +362,9 @@ export class BotBrain {
       if (this.roleConfig.safeSpawn) {
         const { x, z } = this.roleConfig.safeSpawn;
         this.log.debug("Brain", `In water — TPing to safeSpawn (${x},80,${z})`);
-        this.bot.chat(`/effect give ${this.bot.username} slow_falling 30 1`);
-        this.bot.chat(`/tp ${x} 80 ${z}`);
+        // spreadplayers lands on the topmost safe block — a raw /tp X 80 Z
+        // materialized bots inside hills taller than Y=80 (suffocation deaths)
+        this.bot.chat(`/spreadplayers ${x} ${z} 0 2 false ${this.bot.username}`);
         await new Promise((r) => setTimeout(r, 4000));
         return true;
       }
@@ -382,8 +383,7 @@ export class BotBrain {
       const tx = Math.floor(pos.x);
       const tz = Math.floor(pos.z);
       this.log.debug("Brain", `Buried in ${feetBlock?.name} at Y=${pos.y.toFixed(1)} — escaping`);
-      this.bot.chat(`/effect give ${this.bot.username} slow_falling 30 1`);
-      this.bot.chat(`/tp ${tx} 80 ${tz}`);
+      this.bot.chat(`/spreadplayers ${tx} ${tz} 0 2 false ${this.bot.username}`);
       await new Promise((r) => setTimeout(r, 2000));
       return true;
     }

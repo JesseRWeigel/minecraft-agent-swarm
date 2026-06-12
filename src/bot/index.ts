@@ -92,8 +92,8 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
       console.log(`[Bot] safeSpawn configured — teleporting to ${x},80,${z}`);
       const preTpX = bot.entity.position.x;
       const preTpZ = bot.entity.position.z;
-      bot.chat(`/effect give ${roleConfig.username} slow_falling 30 1`);
-      bot.chat(`/tp ${x} 80 ${z}`);
+      // spreadplayers lands on the topmost safe block (no suffocation, no falls)
+      bot.chat(`/spreadplayers ${x} ${z} 0 2 false ${roleConfig.username}`);
       const moveDeadline = Date.now() + 5_000;
       while (Date.now() < moveDeadline) {
         await new Promise((r) => setTimeout(r, 200));
@@ -133,8 +133,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
       if (!bot.entity.onGround) {
         const px = Math.floor(bot.entity.position.x);
         const pz = Math.floor(bot.entity.position.z);
-        bot.chat(`/effect give ${roleConfig.username} slow_falling 30 1`);
-        bot.chat(`/tp ${px} 80 ${pz}`);
+        bot.chat(`/spreadplayers ${px} ${pz} 0 2 false ${roleConfig.username}`);
         await new Promise((r) => setTimeout(r, 3000));
       }
     }
@@ -156,8 +155,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
         [-300, 0],
         [300, 300],
       ]) {
-        bot.chat(`/effect give ${roleConfig.username} slow_falling 30 1`);
-        bot.chat(`/tp ${sx + dx} 80 ${sz + dz}`);
+        bot.chat(`/spreadplayers ${sx + dx} ${sz + dz} 0 2 false ${roleConfig.username}`);
         await new Promise((r) => setTimeout(r, 3000));
         const fb = bot.blockAt(bot.entity.position);
         if (fb && fb.name !== "water" && fb.name !== "air") {
