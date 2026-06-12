@@ -241,15 +241,29 @@ function switchClientToBot(socket: any, botName: string, WorldView: any, viewDis
     (bot as any).viewer?.emit("blockClicked", block, face, button);
   });
 
-  // Position updates
+  // Position updates. The viewed bot isn't in its own entity list, so we
+  // also emit a synthetic player entity for it — prismarine-viewer renders
+  // it with the real Steve model instead of the old light-blue fallback box.
+  const SELF_ENTITY_ID = `self:${botName}`;
   function botPosition() {
     socket.emit("position", {
       pos: bot.entity.position,
       yaw: bot.entity.yaw,
-      addMesh: true,
+      addMesh: false, // suppress the client's blue-box fallback
+    });
+    socket.emit("entity", {
+      id: SELF_ENTITY_ID,
+      name: "player",
+      pos: bot.entity.position,
+      width: 0.6,
+      height: 1.8,
+      yaw: bot.entity.yaw,
+      pitch: bot.entity.pitch,
+      username: botName,
     });
     worldView.updatePosition(bot.entity.position);
   }
+  botPosition(); // render immediately, not only on first move
 
   bot.on("move", botPosition);
   worldView.listenToBot(bot);
@@ -259,6 +273,7 @@ function switchClientToBot(socket: any, botName: string, WorldView: any, viewDis
     cleanup: () => {
       bot.removeListener("move", botPosition);
       worldView.removeListenersFromBot(bot);
+      socket.emit("entity", { id: SELF_ENTITY_ID, delete: true });
       socket.leave(`bot:${botName}`);
     },
     botName,
