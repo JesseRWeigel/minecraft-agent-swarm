@@ -30,6 +30,7 @@ import { filterContent, filterChatMessage, filterViewerMessage } from "../safety
 import { abortActiveSkill, isSkillRunning, getActiveSkillName } from "../skills/executor.js";
 import { skillRegistry } from "../skills/registry.js";
 import { BotMemoryStore } from "./memory.js";
+import { getAllMemoryStores } from "./memory-registry.js";
 import { updateBulletin, formatTeamBulletin } from "./bulletin.js";
 import { createLogger } from "../util/logger.js";
 import { recordAction, recordSkillResult, checkInventoryMilestones } from "./scoreboard.js";
@@ -569,6 +570,43 @@ export class BotBrain {
           { action: "setup_stash", params: {} },
           result,
           /bootstrapped|already/i.test(result),
+        );
+        return;
+      }
+    }
+
+    // Farm bootstrap override — deterministic, like the stash. Flora spent
+    // 45 minutes in the wood-acquisition layer without once invoking
+    // build_farm; the skill is now fully self-sufficient (travels to the
+    // lake, chops its own logs, crafts the hoe), so when there's no farm
+    // yet we just run it.
+    if (
+      this.roleConfig.allowedSkills.includes("build_farm") &&
+      !this.recentFailures.has("skill:build_farm") &&
+      !isSkillRunning(this.bot)
+    ) {
+      const hasFarm = getAllMemoryStores().some((st) =>
+        st.hasStructureNearby(
+          "farm",
+          this.bot.entity.position.x,
+          this.bot.entity.position.y,
+          this.bot.entity.position.z,
+          300,
+        ),
+      );
+      const isDay = this.bot.time.timeOfDay < 13000;
+      if (!hasFarm && isDay) {
+        this.log.info("Brain", "OVERRIDE: no farm exists — running build_farm (self-sufficient)");
+        this.events.onThought("The fields call to me. Today the farm gets BUILT — no more excuses.");
+        const result = await executeAction(this.bot, "invoke_skill", { skill: "build_farm", x: 284, y: 64, z: -405 });
+        this.events.onAction("build_farm", result);
+        this.lastAction = "build_farm";
+        this.lastResult = result;
+        this.trackFailure(
+          "skill:build_farm",
+          { action: "build_farm", params: {} },
+          result,
+          /complete|harvest|planted/i.test(result),
         );
         return;
       }
