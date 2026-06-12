@@ -724,6 +724,13 @@ export class BotBrain {
       this.log.debug("Brain", `GATED: ${gateMsg}`);
       this.events.onAction(decision.action, gateMsg);
       this.lastResult = gateMsg;
+      // Blacklist it so the RECENTLY FAILED prompt section stops the bot from
+      // re-picking it — the fine-tuned model especially leaks other roles'
+      // actions (trained on all five bots' decisions mixed together).
+      this.recentFailures.set(
+        decision.action,
+        `Not in YOUR toolkit — use: ${this.roleConfig.allowedActions.join(", ")}`,
+      );
       return;
     }
 
