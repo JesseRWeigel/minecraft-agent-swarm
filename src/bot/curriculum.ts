@@ -62,12 +62,62 @@ const TECH_LADDER: TechStage[] = [
   },
 ];
 
+/** Flora's ladder — farming progression, not mining. */
+const FARM_LADDER: TechStage[] = [
+  {
+    name: "wood for the hoe",
+    reached: (inv) => [...inv].some((n) => n.endsWith("_log") || n.endsWith("_planks")),
+    suggestion: "gather_wood (or ask a teammate to give_item planks)",
+  },
+  {
+    name: "a hoe",
+    reached: (inv) => [...inv].some((n) => n.endsWith("_hoe")),
+    suggestion: 'craft {"item":"wooden_hoe"} (2 planks + 2 sticks)',
+  },
+  {
+    name: "seeds",
+    reached: (inv) => [...inv].some((n) => n.includes("seeds")),
+    suggestion: "break tall grass near the lake for wheat seeds (build_farm also collects them)",
+  },
+  {
+    name: "the farm",
+    reached: () => false, // completion is recorded by the skill itself; keep pushing
+    suggestion: "go_to the lake shore at (284, 64, -405), then invoke_skill build_farm — it needs water in sight",
+  },
+];
+
+/** Blade's ladder — fighting kit, not pickaxes. */
+const COMBAT_LADDER: TechStage[] = [
+  {
+    name: "a sword",
+    reached: (inv) => [...inv].some((n) => n.endsWith("_sword")),
+    suggestion: 'craft {"item":"wooden_sword"} (2 planks + 1 stick) — upgrade to stone/iron when possible',
+  },
+  {
+    name: "armor",
+    reached: (inv) => [...inv].some((n) => n.includes("chestplate") || n.includes("helmet")),
+    suggestion: "withdraw_stash iron, or hunt mobs while Forge smelts armor materials",
+  },
+  {
+    name: "patrol duty",
+    reached: () => false,
+    suggestion: "patrol the village perimeter at The Stash; hunt food animals; neural_combat on hostiles",
+  },
+];
+
+const ROLE_LADDERS: Record<string, TechStage[]> = {
+  "Farmer / Crafter": FARM_LADDER,
+  "Combat / Guard": COMBAT_LADDER,
+};
+
 /**
  * One-line tech status for the strategic context, e.g.:
  * "TECH TREE: reached [wood, crafting table]. NEXT: wooden tools — craft {...}"
+ * Role-aware: the farmer gets a farming ladder, the guard a combat ladder —
+ * the generic mining ladder was steering Flora toward copper ore.
  * Returns "" when the ladder is complete.
  */
-export function getTechTreeLine(bot: Bot): string {
+export function getTechTreeLine(bot: Bot, role?: string): string {
   let inv: Set<string>;
   const counts = new Map<string, number>();
   try {
@@ -77,9 +127,10 @@ export function getTechTreeLine(bot: Bot): string {
     return "";
   }
 
+  const ladder = (role && ROLE_LADDERS[role]) || TECH_LADDER;
   const reached: string[] = [];
   let next: TechStage | null = null;
-  for (const stage of TECH_LADDER) {
+  for (const stage of ladder) {
     if (stage.reached(inv, counts)) {
       reached.push(stage.name);
     } else if (!next) {

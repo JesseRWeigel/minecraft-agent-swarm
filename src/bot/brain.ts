@@ -402,7 +402,7 @@ export class BotBrain {
     }
 
     // Tech-tree curriculum — deterministic "what's next" from inventory
-    const techLine = getTechTreeLine(this.bot);
+    const techLine = getTechTreeLine(this.bot, this.roleConfig.role);
     if (techLine) ctx += `\n\n${techLine}`;
 
     // Current goal
