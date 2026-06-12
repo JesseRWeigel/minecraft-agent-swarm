@@ -19,7 +19,7 @@ import type { Bot } from "mineflayer";
 import { Vec3 } from "vec3";
 import type { Entity } from "prismarine-entity";
 import { config } from "../config.js";
-import { BotRoleConfig } from "./role.js";
+import { BotRoleConfig, FARM_SITE } from "./role.js";
 import { queryStrategic, queryReactive, queryCritic, chatWithLLM, type LLMMessage } from "../llm/index.js";
 import type { RoleContext } from "../llm/prompts.js";
 import { getWorldContext, isHostile } from "./perception.js";
@@ -603,7 +603,7 @@ export class BotBrain {
         this.lastFarmOverrideMs = Date.now();
         this.log.info("Brain", "OVERRIDE: no farm exists — running build_farm (self-sufficient)");
         this.events.onThought("The fields call to me. Today the farm gets BUILT — no more excuses.");
-        const result = await executeAction(this.bot, "invoke_skill", { skill: "build_farm", x: 284, y: 64, z: -405 });
+        const result = await executeAction(this.bot, "invoke_skill", { skill: "build_farm", ...FARM_SITE });
         this.events.onAction("build_farm", result);
         this.lastAction = "build_farm";
         this.lastResult = result;
@@ -835,9 +835,9 @@ export class BotBrain {
       decision.action === "build_farm" ||
       (decision.action === "invoke_skill" && normalizedParams.skill === "build_farm");
     if (isBuildFarm && normalizedParams.x === undefined) {
-      normalizedParams.x = 284;
-      normalizedParams.y = 64;
-      normalizedParams.z = -405;
+      normalizedParams.x = FARM_SITE.x;
+      normalizedParams.y = FARM_SITE.y;
+      normalizedParams.z = FARM_SITE.z;
     }
 
     // Inject stash coordinates into setup_stash — the LLM invents garbage coords otherwise

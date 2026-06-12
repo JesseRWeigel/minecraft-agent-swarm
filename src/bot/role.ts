@@ -51,6 +51,13 @@ export interface BotRoleConfig {
  */
 export const STASH_POS = { x: 286, y: 70, z: -314 };
 
+/**
+ * The farm site — on the river nearest the village (located via
+ * `locate biome minecraft:river`; the earlier "lake" coords were wrong).
+ * build_farm travels here first; rivers sit at sea level, hence y=63.
+ */
+export const FARM_SITE = { x: 318, y: 63, z: -378 };
+
 /** Atlas: Explorer and miner. Roams widely, finds ores, scouts terrain. */
 export const ATLAS_CONFIG: BotRoleConfig = {
   name: "Atlas",
@@ -105,7 +112,7 @@ export const FLORA_CONFIG: BotRoleConfig = {
 1. If health < 6 and hostile mob nearby: flee
 2. If hungry (food < 14): eat
 3. NO FARM YET? This is your #1 job and it MUST be near water. The village
-   has no water — the lake shore is at (284, 64, -405). go_to the lake,
+   has no water — the river is at (318, 63, -378). go_to the river,
    THEN invoke_skill build_farm. It crafts the hoe and finds seeds itself.
 4. If the farm exists and wheat is mature: build_farm again (harvests + replants).
 5. If inventory has raw ore: smelt_ores
