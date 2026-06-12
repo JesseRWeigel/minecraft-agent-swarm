@@ -22,7 +22,7 @@ OUTPUT_DIR = "finetune/qwen3-8b-minecraft-lora"
 
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name=BASE_MODEL,
-    max_seq_length=4096,
+    max_seq_length=3072,  # our examples are <2.5k tokens; smaller = less VRAM
     load_in_4bit=True,
 )
 
@@ -32,6 +32,9 @@ model = FastLanguageModel.get_peft_model(
     lora_alpha=32,
     lora_dropout=0.0,
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+    # Without this, activations overflow 32GB and CUDA spills into WSL2
+    # shared memory — training ran 100x slow (42-700s/step at 39C).
+    use_gradient_checkpointing="unsloth",
 )
 
 dataset = load_dataset("json", data_files=DATASET, split="train")
@@ -53,8 +56,8 @@ trainer = SFTTrainer(
     train_dataset=dataset,
     args=SFTConfig(
         output_dir=OUTPUT_DIR,
-        per_device_train_batch_size=2,
-        gradient_accumulation_steps=8,
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=16,
         num_train_epochs=2,
         learning_rate=2e-4,
         logging_steps=10,
