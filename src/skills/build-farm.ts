@@ -27,6 +27,32 @@ export const buildFarmSkill: Skill = {
       };
     }
 
+    // --- Step 0: Get to the farm site FIRST ---
+    // Tree-gathering and water-finding both only see loaded chunks; from the
+    // village the lake (and its forest) are ~100 blocks away and invisible.
+    // Travel before doing anything else.
+    const fx0 = Number(params.x);
+    const fz0 = Number(params.z);
+    if (
+      isFinite(fx0) &&
+      isFinite(fz0) &&
+      bot.entity.position.distanceTo(new Vec3(fx0, bot.entity.position.y, fz0)) > 24
+    ) {
+      onProgress({
+        skillName: "build_farm",
+        phase: "Traveling",
+        progress: 0.01,
+        message: `Heading to the farm site (${fx0}, ${fz0})...`,
+        active: true,
+      });
+      try {
+        await safeGoto(bot, new goals.GoalNear(fx0, Number(params.y) || 64, fz0, 8), 120000);
+      } catch {
+        /* best effort — proceed with whatever is loaded here */
+      }
+      if (signal.aborted) return { success: false, message: "Interrupted while traveling to the farm site." };
+    }
+
     // --- Step 1: Ensure we have a hoe ---
     onProgress({
       skillName: "build_farm",
