@@ -38,8 +38,23 @@ succeeded (`src/bot/trajectory.ts`). Just let the bots play.
    git clone --depth 1 https://github.com/ggml-org/llama.cpp /tmp/llama.cpp
    python /tmp/llama.cpp/convert_hf_to_gguf.py finetune/qwen3-8b-minecraft-lora-merged \
      --outfile finetune/qwen3-8b-minecraft.gguf --outtype q8_0
-   printf 'FROM ./qwen3-8b-minecraft.gguf\n' > finetune/Modelfile
-   ollama create qwen3-minecraft:8b -f finetune/Modelfile
+   # IMPORTANT: a bare FROM line makes ollama fall back to raw concatenation
+   # (the model echoes the prompt). The TEMPLATE must replicate the exact
+   # training render: ChatML with an empty <think> block before the assistant.
+   cat > finetune/Modelfile <<'MF'
+   FROM ./qwen3-8b-minecraft.gguf
+   TEMPLATE """{{- range .Messages }}<|im_start|>{{ .Role }}
+   {{ .Content }}<|im_end|>
+   {{ end -}}<|im_start|>assistant
+   <think>
+
+   </think>
+
+   """
+   PARAMETER stop <|im_end|>
+   PARAMETER stop <|im_start|>
+   MF
+   (cd finetune && ollama create qwen3-minecraft:8b -f Modelfile)
    ```
 6. A/B test it as the strategic model:
    ```bash
