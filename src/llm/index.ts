@@ -221,7 +221,7 @@ export async function queryStrategic(
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.8,
-        num_predict: 768,
+        num_predict: 1024,
       },
     });
 
