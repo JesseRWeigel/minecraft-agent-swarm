@@ -134,6 +134,9 @@ export async function executeAction(bot: Bot, action: string, params: Record<str
         const duration = (params.duration as number) || 5;
         return await runNeuralCombat(bot, duration);
       }
+      case "give_item": {
+        return await giveItem(bot, params.to, params.item, params.count || 1);
+      }
       case "deposit_stash": {
         const stashPos = params.stashPos;
         const keepItems = params.keepItems;
@@ -311,6 +314,43 @@ async function goTo(bot: Bot, x: number, y: number, z: number): Promise<string> 
     }
   }
   return `Arrived at ${cx.toFixed(0)}, ${cy.toFixed(0)}, ${cz.toFixed(0)}.`;
+}
+
+/**
+ * Hand items to a teammate by walking up and tossing them at their feet.
+ * Bots kept negotiating handoffs in chat ("give me the logs!" / "take
+ * them!") with no mechanism to actually do it — this is that mechanism.
+ */
+async function giveItem(bot: Bot, to: string, itemName: string, count: number): Promise<string> {
+  if (!to) return "give_item needs a 'to' param (teammate name).";
+  if (!itemName) return "give_item needs an 'item' param.";
+
+  const item = bot.inventory.items().find((i) => i.name === itemName || i.name.includes(itemName));
+  if (!item) return `You don't have any ${itemName} to give.`;
+
+  const target = bot.players[to]?.entity;
+  if (!target) {
+    const { getBotStatus } = await import("./bulletin.js");
+    const status = getBotStatus(to);
+    if (!status) return `Can't find ${to} nearby. Ask them to come to you, or go_to their position first.`;
+    const { x, y, z } = status.position;
+    const dist = bot.entity.position.distanceTo(new Vec3(x, y, z));
+    if (dist > 64)
+      return `${to} is ${dist.toFixed(0)} blocks away at (${Math.round(x)}, ${Math.round(y)}, ${Math.round(z)}) — go_to them first.`;
+    bot.pathfinder.setMovements(explorerMoves(bot));
+    await safeGoto(bot, new goals.GoalNear(x, y, z, 2), 30000);
+  } else {
+    if (bot.entity.position.distanceTo(target.position) > 3) {
+      bot.pathfinder.setMovements(explorerMoves(bot));
+      await safeGoto(bot, new goals.GoalNear(target.position.x, target.position.y, target.position.z, 2), 30000);
+    }
+  }
+
+  const tgt = bot.players[to]?.entity;
+  if (tgt) await bot.lookAt(tgt.position.offset(0, 1, 0));
+  const toGive = Math.min(count, item.count);
+  await bot.toss(item.type, null, toGive);
+  return `Gave ${toGive}x ${item.name} to ${to} (tossed at their feet — they'll pick it up).`;
 }
 
 async function explore(bot: Bot, direction: string): Promise<string> {

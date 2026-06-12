@@ -1,0 +1,13 @@
+FROM ./qwen3-8b-minecraft.gguf
+# Replicates the exact training render: ChatML with an empty <think> block
+# before each assistant response (unsloth Qwen3 template, enable_thinking=False).
+TEMPLATE """{{- range .Messages }}<|im_start|>{{ .Role }}
+{{ .Content }}<|im_end|>
+{{ end -}}<|im_start|>assistant
+<think>
+
+</think>
+
+"""
+PARAMETER stop <|im_end|>
+PARAMETER stop <|im_start|>

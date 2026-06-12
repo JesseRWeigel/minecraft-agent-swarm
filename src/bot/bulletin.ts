@@ -10,6 +10,10 @@ export interface BotStatus {
   health: number;
   food: number;
   timestamp: number;
+  /** Current multi-step goal, if any */
+  goal?: string;
+  /** Result of the last action */
+  lastResult?: string;
 }
 
 const bulletin = new Map<string, BotStatus>();
@@ -17,6 +21,11 @@ const bulletin = new Map<string, BotStatus>();
 /** Update this bot's entry after every decision cycle. */
 export function updateBulletin(status: BotStatus): void {
   bulletin.set(status.name, status);
+}
+
+/** Get one bot's status — used by the viewer HUD. */
+export function getBotStatus(name: string): BotStatus | undefined {
+  return bulletin.get(name);
 }
 
 /** Get all teammates' statuses (excludes the requester). */

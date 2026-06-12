@@ -1,424 +1,561 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <title>Bot Viewer</title>
-  <style>
-    html { overflow: hidden; }
-    html, body { height: 100%; margin: 0; padding: 0; }
-    canvas { height: 100%; width: 100%; font-size: 0; margin: 0; padding: 0; }
-    #hud {
-      position: fixed; top: 10px; left: 10px;
-      color: #fff; font: bold 14px monospace;
-      z-index: 100; text-shadow: 1px 1px 3px #000;
-      pointer-events: none; line-height: 1.6;
-      white-space: pre;
-    }
-    #cam-btn {
-      position: fixed; bottom: 16px; right: 16px;
-      background: rgba(0,0,0,0.55); color: #fff;
-      border: 1px solid rgba(255,255,255,0.3); border-radius: 6px;
-      padding: 8px 16px; font: bold 13px monospace; cursor: pointer;
-      z-index: 100;
-    }
-    #cam-btn:hover { background: rgba(0,0,0,0.8); }
-    #bot-bar {
-      position: fixed; top: 0; left: 0; right: 0;
-      display: flex; gap: 4px; padding: 6px 10px;
-      background: rgba(0,0,0,0.7); z-index: 150;
-      font: bold 13px monospace;
-    }
-    .bot-btn {
-      padding: 4px 14px; border: 2px solid #555; border-radius: 4px;
-      background: rgba(30,30,50,0.8); color: #ccc; cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    .bot-btn:hover { background: rgba(60,60,90,0.9); }
-    .bot-btn.active { border-color: #4fc3f7; color: #fff; background: rgba(40,80,120,0.9); }
-    #switch-overlay {
-      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: rgba(0,0,0,0.7); color: #fff; font: bold 18px monospace;
-      padding: 16px 32px; border-radius: 10px; z-index: 200;
-      pointer-events: none; opacity: 0; transition: opacity 0.3s;
-    }
-    #switch-overlay.show { opacity: 1; }
-  </style>
-</head>
-<body>
-  <div id="bot-bar"></div>
-  <div id="hud" style="top:42px;"></div>
-  <button id="cam-btn">Camera: Follow</button>
-  <div id="switch-overlay"></div>
+  <head>
+    <title>Bot Viewer</title>
+    <style>
+      html {
+        overflow: hidden;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      canvas {
+        height: 100%;
+        width: 100%;
+        font-size: 0;
+        margin: 0;
+        padding: 0;
+      }
+      #hud {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        color: #fff;
+        font: bold 14px monospace;
+        z-index: 100;
+        text-shadow: 1px 1px 3px #000;
+        pointer-events: none;
+        line-height: 1.6;
+        white-space: pre;
+      }
+      #cam-btn {
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 6px;
+        padding: 8px 16px;
+        font: bold 13px monospace;
+        cursor: pointer;
+        z-index: 100;
+      }
+      #cam-btn:hover {
+        background: rgba(0, 0, 0, 0.8);
+      }
+      #bot-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        gap: 4px;
+        padding: 6px 10px;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 150;
+        font: bold 13px monospace;
+      }
+      .bot-btn {
+        padding: 4px 14px;
+        border: 2px solid #555;
+        border-radius: 4px;
+        background: rgba(30, 30, 50, 0.8);
+        color: #ccc;
+        cursor: pointer;
+        transition:
+          border-color 0.2s,
+          background 0.2s;
+      }
+      .bot-btn:hover {
+        background: rgba(60, 60, 90, 0.9);
+      }
+      .bot-btn.active {
+        border-color: #4fc3f7;
+        color: #fff;
+        background: rgba(40, 80, 120, 0.9);
+      }
+      #switch-overlay {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        font: bold 18px monospace;
+        padding: 16px 32px;
+        border-radius: 10px;
+        z-index: 200;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      #switch-overlay.show {
+        opacity: 1;
+      }
+      #status-panel {
+        position: fixed;
+        bottom: 16px;
+        left: 16px;
+        max-width: 46%;
+        background: rgba(10, 14, 26, 0.82);
+        color: #e8e8f0;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 8px;
+        padding: 10px 14px;
+        font: 13px monospace;
+        z-index: 140;
+        pointer-events: none;
+        line-height: 1.5;
+      }
+      #status-panel .sp-name {
+        font-weight: bold;
+        color: #4fc3f7;
+        font-size: 14px;
+      }
+      #status-panel .sp-vitals {
+        color: #9fdc9f;
+      }
+      #status-panel .sp-thought {
+        color: #ffd97a;
+        font-style: italic;
+        margin-top: 4px;
+        white-space: normal;
+      }
+      #status-panel .sp-line {
+        color: #b9c3d8;
+        margin-top: 2px;
+        white-space: normal;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bot-bar"></div>
+    <div id="hud" style="top: 42px"></div>
+    <button id="cam-btn">Camera: Follow</button>
+    <div id="switch-overlay"></div>
+    <div id="status-panel" style="display: none"></div>
 
-  <!-- Pre-bundle: intercept THREE.OrbitControls -->
-  <script>
-    var capturedControls = null;
-    var capturedCamera = null;
-    var lastBotPos = null;
-    var lastBotYaw = 0;
-    var cameraMode = 'follow'; // 'follow' | 'first' | 'free'
-    var currentBotName = null;
+    <!-- Pre-bundle: intercept THREE.OrbitControls -->
+    <script>
+      var capturedControls = null;
+      var capturedCamera = null;
+      var lastBotPos = null;
+      var lastBotYaw = 0;
+      var cameraMode = "follow"; // 'follow' | 'first' | 'free'
+      var currentBotName = null;
 
-    // Intercept THREE global then intercept OrbitControls constructor
-    Object.defineProperty(window, 'THREE', {
-      configurable: true,
-      enumerable: true,
-      set: function(val) {
-        // Replace with normal writable property
-        Object.defineProperty(window, 'THREE', {
-          value: val, writable: true, configurable: true, enumerable: true
-        });
-        // Watch for OrbitControls being added to THREE
-        var _pending = null;
-        Object.defineProperty(val, 'OrbitControls', {
-          configurable: true,
-          enumerable: true,
-          set: function(oc) {
-            _pending = oc;
-            // Replace with wrapper that captures instance
-            Object.defineProperty(val, 'OrbitControls', {
-              value: function PatchedOC(camera, domElement) {
-                capturedCamera = camera;
-                var ctrl = new oc(camera, domElement);
-                capturedControls = ctrl;
-                ctrl.minDistance = 3;
-                ctrl.maxDistance = 120;
-                ctrl.enableDamping = true;
-                ctrl.dampingFactor = 0.12;
-                return ctrl;
-              },
-              writable: true,
-              configurable: true
-            });
-          },
-          get: function() { return _pending; }
-        });
-      },
-      get: function() { return undefined; }
-    });
-  </script>
+      // Intercept THREE global then intercept OrbitControls constructor
+      Object.defineProperty(window, "THREE", {
+        configurable: true,
+        enumerable: true,
+        set: function (val) {
+          // Replace with normal writable property
+          Object.defineProperty(window, "THREE", {
+            value: val,
+            writable: true,
+            configurable: true,
+            enumerable: true,
+          });
+          // Watch for OrbitControls being added to THREE
+          var _pending = null;
+          Object.defineProperty(val, "OrbitControls", {
+            configurable: true,
+            enumerable: true,
+            set: function (oc) {
+              _pending = oc;
+              // Replace with wrapper that captures instance
+              Object.defineProperty(val, "OrbitControls", {
+                value: function PatchedOC(camera, domElement) {
+                  capturedCamera = camera;
+                  var ctrl = new oc(camera, domElement);
+                  capturedControls = ctrl;
+                  ctrl.minDistance = 3;
+                  ctrl.maxDistance = 120;
+                  ctrl.enableDamping = true;
+                  ctrl.dampingFactor = 0.12;
+                  return ctrl;
+                },
+                writable: true,
+                configurable: true,
+              });
+            },
+            get: function () {
+              return _pending;
+            },
+          });
+        },
+        get: function () {
+          return undefined;
+        },
+      });
+    </script>
 
-  <!-- Load the PATCHED prismarine-viewer webpack bundle.
+    <!-- Load the PATCHED prismarine-viewer webpack bundle.
        The patch removes the bundle's version/position handlers and exposes:
        - window.__pvSocket  (the socket.io client connection)
        - window.__pvViewer  (the prismarine Viewer instance)
        - window.__pvViewerReady (boolean flag)
   -->
-  <script type="text/javascript" src="index.js"></script>
+    <script type="text/javascript" src="index.js"></script>
 
-  <!-- Post-bundle: bot switching + follow camera logic -->
-  <script>
-    (function() {
-      var FOLLOW_OFFSET_Y = 14;
-      var FOLLOW_OFFSET_BACK = 16;
-      var LERP_SPEED = 0.06;
-      var hud = document.getElementById('hud');
-      var camBtn = document.getElementById('cam-btn');
-      var switchOverlay = document.getElementById('switch-overlay');
+    <!-- Post-bundle: bot switching + follow camera logic -->
+    <script>
+      (function () {
+        var FOLLOW_OFFSET_Y = 14;
+        var FOLLOW_OFFSET_BACK = 16;
+        var LERP_SPEED = 0.06;
+        var hud = document.getElementById("hud");
+        var camBtn = document.getElementById("cam-btn");
+        var switchOverlay = document.getElementById("switch-overlay");
 
-      // References to patched bundle exports
-      var socket = window.__pvSocket;
-      var viewer = window.__pvViewer;
-      var botMesh = null;
-      var firstPositionUpdate = true;
-      var versionInitialized = false;
+        // References to patched bundle exports
+        var socket = window.__pvSocket;
+        var viewer = window.__pvViewer;
+        var botMesh = null;
+        var firstPositionUpdate = true;
+        var versionInitialized = false;
 
-      if (!socket || !viewer) {
-        console.error('[Viewer] Bundle patch failed — __pvSocket or __pvViewer not found');
-        // Fallback: try to work without patching (won't support switching)
-      }
-
-      // ----------------------------------------------------------------
-      // Camera mode cycling
-      // ----------------------------------------------------------------
-      var modes = ['follow', 'first', 'free'];
-      var modeLabels = { follow: 'Follow', first: 'First Person', free: 'Free Orbit' };
-      camBtn.onclick = function() {
-        var idx = modes.indexOf(cameraMode);
-        cameraMode = modes[(idx + 1) % modes.length];
-        camBtn.textContent = 'Camera: ' + modeLabels[cameraMode];
-      };
-
-      var autoCycle = false;
-      var cycleInterval = null;
-      document.addEventListener('keydown', function(e) {
-        if (e.key === 'c' || e.key === 'C') {
-          autoCycle = !autoCycle;
-          if (autoCycle) {
-            cycleInterval = setInterval(function() {
-              camBtn.click();
-            }, 20000);
-          } else {
-            clearInterval(cycleInterval);
-          }
-        }
-      });
-
-      // ----------------------------------------------------------------
-      // Version handler — called when server sends "version" during switch.
-      // Unlike the original bundle handler, we properly clean up before
-      // re-initializing, preventing duplicate listeners and mesh leaks.
-      // ----------------------------------------------------------------
-      socket.on('version', function(version) {
-        // Reset the 3D scene: remove all chunks, entities, primitives
-        viewer.resetAll();
-
-        // Remove old bot mesh
-        if (botMesh) {
-          viewer.scene.remove(botMesh);
-          botMesh = null;
+        if (!socket || !viewer) {
+          console.error("[Viewer] Bundle patch failed — __pvSocket or __pvViewer not found");
+          // Fallback: try to work without patching (won't support switching)
         }
 
-        // Set version (loads textures, block states — idempotent if same version)
-        if (!versionInitialized) {
-          // First time: full setVersion (loads textures + block states)
-          viewer.setVersion(version);
-          versionInitialized = true;
-        } else {
-          // Subsequent switches: world.setVersion (NOT resetWorld) — resetWorld
-          // posts {type:'reset'} to the mesher workers which nulls their world
-          // state, and only a 'version' message recreates it. Without this the
-          // workers throw "Cannot read properties of null (reading 'getColumn'/
-          // 'setBlockStateId')" for every chunk after a bot switch, and the
-          // scene shows entities but no blocks.
-          viewer.world.setVersion(version);
-          viewer.world.active = true;
-          viewer.entities.clear();
-          viewer.primitives.clear();
-        }
+        // ----------------------------------------------------------------
+        // Camera mode cycling
+        // ----------------------------------------------------------------
+        var modes = ["follow", "first", "free"];
+        var modeLabels = { follow: "Follow", first: "First Person", free: "Free Orbit" };
+        camBtn.onclick = function () {
+          var idx = modes.indexOf(cameraMode);
+          cameraMode = modes[(idx + 1) % modes.length];
+          camBtn.textContent = "Camera: " + modeLabels[cameraMode];
+        };
 
-        firstPositionUpdate = true;
-      });
-
-      // ----------------------------------------------------------------
-      // Chunk + entity + primitive handlers (set up ONCE, not per-switch).
-      // These use the Viewer's built-in methods via viewer.listen().
-      // We call listen() only once to avoid duplicate handlers.
-      // ----------------------------------------------------------------
-      viewer.listen(socket);
-
-      // ----------------------------------------------------------------
-      // Position handler — also set up once.
-      // ----------------------------------------------------------------
-      socket.on('position', function(data) {
-        var pos = data.pos;
-        var yaw = data.yaw;
-        var addMesh = data.addMesh;
-
-        lastBotPos = pos;
-        lastBotYaw = yaw || 0;
-
-        if (pos.y > 0 && firstPositionUpdate && capturedControls) {
-          capturedControls.target.set(pos.x, pos.y, pos.z);
-          capturedCamera.position.set(pos.x, pos.y + 20, pos.z + 20);
-          capturedControls.update();
-          firstPositionUpdate = false;
-        }
-
-        if (addMesh) {
-          if (!botMesh) {
-            // Dynamically access Entity from the bundle.
-            // The patched bundle doesn't export Entity directly, but we can
-            // create a simple box mesh as a fallback, or find Entity via the viewer's scene.
-            try {
-              // The bundle exposes THREE globally; create a simple bot indicator
-              var geometry = new THREE.BoxGeometry(0.6, 1.8, 0.6);
-              geometry.translate(0, 0.9, 0);
-              var material = new THREE.MeshLambertMaterial({ color: 0x4fc3f7 });
-              botMesh = new THREE.Mesh(geometry, material);
-              viewer.scene.add(botMesh);
-            } catch (ex) {
-              console.warn('[Viewer] Could not create bot mesh:', ex);
+        var autoCycle = false;
+        var cycleInterval = null;
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "c" || e.key === "C") {
+            autoCycle = !autoCycle;
+            if (autoCycle) {
+              cycleInterval = setInterval(function () {
+                camBtn.click();
+              }, 20000);
+            } else {
+              clearInterval(cycleInterval);
             }
           }
-          if (botMesh) {
-            // Smooth position/rotation using lerp (same as TWEEN but simpler)
-            botMesh.position.x += (pos.x - botMesh.position.x) * 0.3;
-            botMesh.position.y += (pos.y - botMesh.position.y) * 0.3;
-            botMesh.position.z += (pos.z - botMesh.position.z) * 0.3;
-            if (yaw !== undefined) {
-              botMesh.rotation.y = yaw;
-            }
-          }
-        }
-      });
-
-      // ----------------------------------------------------------------
-      // switchBot(name) — tell the server to switch this client's WorldView
-      // ----------------------------------------------------------------
-      var switchInProgress = false;
-
-      // pendingBotName tracks what we're trying to connect to (set before confirmation)
-      // currentBotName tracks what we're actually connected to (set on switchDone)
-      var pendingBotName = null;
-
-      window.switchBot = function(botName) {
-        if (!socket) return;
-        if (switchInProgress) return;
-        // Allow retries: check against confirmed currentBotName, not pending
-        if (currentBotName === botName) return;
-
-        switchInProgress = true;
-        pendingBotName = botName;
-        switchOverlay.textContent = 'Switching to ' + botName + '...';
-        switchOverlay.classList.add('show');
-
-        // Reset local state before switch
-        lastBotPos = null;
-        lastBotYaw = 0;
-
-        socket.emit('switchBot', botName);
-      };
-
-      socket.on('switchDone', function(botName) {
-        switchInProgress = false;
-        currentBotName = botName;
-        pendingBotName = null;
-        updateBotBar();
-        setTimeout(function() {
-          switchOverlay.classList.remove('show');
-        }, 300);
-      });
-
-      socket.on('switchError', function(msg) {
-        switchInProgress = false;
-        // Don't set currentBotName — we failed, so it stays as previous value
-        // This allows retries to go through
-        pendingBotName = null;
-        switchOverlay.textContent = msg;
-        setTimeout(function() {
-          switchOverlay.classList.remove('show');
-        }, 2000);
-      });
-
-      // ----------------------------------------------------------------
-      // Listen for postMessage from parent (dashboard) to switch bots
-      // ----------------------------------------------------------------
-      window.addEventListener('message', function(e) {
-        if (e.data && e.data.type === 'switchBot' && e.data.botName) {
-          window.switchBot(e.data.botName);
-        }
-      });
-
-      // ----------------------------------------------------------------
-      // Bot selector bar — shows registered bots, click to switch
-      // ----------------------------------------------------------------
-      var COLORS = { Atlas:'#4fc3f7', Flora:'#81c784', Forge:'#ffb74d', Mason:'#ce93d8', Blade:'#ef5350' };
-      var botBar = document.getElementById('bot-bar');
-      var knownBots = [];
-
-      function updateBotBar() {
-        botBar.textContent = '';
-        knownBots.forEach(function(name) {
-          var btn = document.createElement('div');
-          btn.className = 'bot-btn' + (name === currentBotName ? ' active' : '');
-          btn.textContent = name;
-          btn.style.borderColor = COLORS[name] || '#555';
-          if (name === currentBotName) btn.style.borderColor = COLORS[name] || '#4fc3f7';
-          btn.onclick = function() { window.switchBot(name); };
-          botBar.appendChild(btn);
         });
-      }
 
-      // Poll for available bots every 5s to keep the bar updated
-      function refreshBotBar() {
-        fetch('/api/viewer-bots')
-          .then(function(r) { return r.json(); })
-          .then(function(bots) {
-            if (JSON.stringify(bots) !== JSON.stringify(knownBots)) {
-              knownBots = bots;
-              updateBotBar();
-            }
-          })
-          .catch(function() {});
-      }
-      refreshBotBar();
-      setInterval(refreshBotBar, 5000);
+        // ----------------------------------------------------------------
+        // Version handler — called when server sends "version" during switch.
+        // Unlike the original bundle handler, we properly clean up before
+        // re-initializing, preventing duplicate listeners and mesh leaks.
+        // ----------------------------------------------------------------
+        socket.on("version", function (version) {
+          // Reset the 3D scene: remove all chunks, entities, primitives
+          viewer.resetAll();
 
-      // ----------------------------------------------------------------
-      // Follow camera loop
-      // ----------------------------------------------------------------
-      var _tmpVec = null;
-      function followTick() {
-        requestAnimationFrame(followTick);
-        if (!capturedControls || !capturedCamera || !lastBotPos) return;
-        if (!_tmpVec) _tmpVec = new THREE.Vector3();
-
-        var displayName = currentBotName || 'Bot';
-
-        if (cameraMode === 'follow') {
-          _tmpVec.set(lastBotPos.x, lastBotPos.y + 1.6, lastBotPos.z);
-          capturedControls.target.lerp(_tmpVec, LERP_SPEED);
-
-          var yaw = lastBotYaw || 0;
-          var desiredX = lastBotPos.x - Math.sin(yaw) * FOLLOW_OFFSET_BACK;
-          var desiredY = lastBotPos.y + FOLLOW_OFFSET_Y;
-          var desiredZ = lastBotPos.z - Math.cos(yaw) * FOLLOW_OFFSET_BACK;
-          _tmpVec.set(desiredX, desiredY, desiredZ);
-          capturedCamera.position.lerp(_tmpVec, LERP_SPEED);
-
-          if (!capturedControls.enabled) capturedControls.enabled = true;
-
-        } else if (cameraMode === 'first') {
-          var eyeY = lastBotPos.y + 1.62;
-          capturedCamera.position.set(lastBotPos.x, eyeY, lastBotPos.z);
-          var lookX = lastBotPos.x - Math.sin(lastBotYaw);
-          var lookZ = lastBotPos.z - Math.cos(lastBotYaw);
-          _tmpVec.set(lookX, eyeY, lookZ);
-          capturedControls.target.copy(_tmpVec);
-
-        } else if (cameraMode === 'free') {
-          _tmpVec.set(lastBotPos.x, lastBotPos.y + 1.6, lastBotPos.z);
-          capturedControls.target.lerp(_tmpVec, 0.02);
-        }
-
-        hud.textContent =
-          displayName + ' @ ' + Math.round(lastBotPos.x) + ', ' +
-          Math.round(lastBotPos.y) + ', ' + Math.round(lastBotPos.z) +
-          '\nCamera: ' + modeLabels[cameraMode] +
-          (autoCycle ? ' [auto-cycle]' : '');
-      }
-      followTick();
-
-      // ----------------------------------------------------------------
-      // Auto-connect on load (with retry for bots that haven't spawned yet)
-      // ----------------------------------------------------------------
-      (function autoConnect() {
-        var targetBot = location.hash.replace('#', '') || null;
-
-        function tryConnect() {
-          if (targetBot) {
-            window.switchBot(targetBot);
-            return;
+          // Remove old bot mesh
+          if (botMesh) {
+            viewer.scene.remove(botMesh);
+            botMesh = null;
           }
 
-          // Fetch available bots and connect to the first one
-          fetch('/api/viewer-bots')
-            .then(function(r) { return r.json(); })
-            .then(function(bots) {
-              if (bots.length > 0) {
-                targetBot = bots[0];
-                window.switchBot(bots[0]);
-              } else {
-                // No bots registered yet — retry in 3 seconds
-                setTimeout(tryConnect, 3000);
+          // Set version (loads textures, block states — idempotent if same version)
+          if (!versionInitialized) {
+            // First time: full setVersion (loads textures + block states)
+            viewer.setVersion(version);
+            versionInitialized = true;
+          } else {
+            // Subsequent switches: world.setVersion (NOT resetWorld) — resetWorld
+            // posts {type:'reset'} to the mesher workers which nulls their world
+            // state, and only a 'version' message recreates it. Without this the
+            // workers throw "Cannot read properties of null (reading 'getColumn'/
+            // 'setBlockStateId')" for every chunk after a bot switch, and the
+            // scene shows entities but no blocks.
+            viewer.world.setVersion(version);
+            viewer.world.active = true;
+            viewer.entities.clear();
+            viewer.primitives.clear();
+          }
+
+          firstPositionUpdate = true;
+        });
+
+        // ----------------------------------------------------------------
+        // Chunk + entity + primitive handlers (set up ONCE, not per-switch).
+        // These use the Viewer's built-in methods via viewer.listen().
+        // We call listen() only once to avoid duplicate handlers.
+        // ----------------------------------------------------------------
+        viewer.listen(socket);
+
+        // HUD status panel — live thought/action/goal from the server bulletin
+        var statusPanel = document.getElementById("status-panel");
+        socket.on("botStatus", function (st) {
+          if (!st || st.name !== currentBotName) return;
+          var esc = function (t) {
+            var d = document.createElement("div");
+            d.textContent = t || "";
+            return d.innerHTML;
+          };
+          var hearts = Math.round((st.health || 0) / 2),
+            drums = Math.round((st.food || 0) / 2);
+          statusPanel.innerHTML =
+            '<div class="sp-name">' +
+            esc(st.name) +
+            ' <span class="sp-vitals">❤' +
+            hearts +
+            " 🍗" +
+            drums +
+            "</span></div>" +
+            '<div class="sp-thought">💭 ' +
+            esc(st.thought) +
+            "</div>" +
+            '<div class="sp-line">🎮 ' +
+            esc(st.action) +
+            (st.lastResult ? " → " + esc(st.lastResult) : "") +
+            "</div>" +
+            (st.goal ? '<div class="sp-line">🎯 ' + esc(st.goal) + "</div>" : "");
+          statusPanel.style.display = "block";
+        });
+
+        // ----------------------------------------------------------------
+        // Position handler — also set up once.
+        // ----------------------------------------------------------------
+        socket.on("position", function (data) {
+          var pos = data.pos;
+          var yaw = data.yaw;
+          var addMesh = data.addMesh;
+
+          lastBotPos = pos;
+          lastBotYaw = yaw || 0;
+
+          if (pos.y > 0 && firstPositionUpdate && capturedControls) {
+            capturedControls.target.set(pos.x, pos.y, pos.z);
+            capturedCamera.position.set(pos.x, pos.y + 20, pos.z + 20);
+            capturedControls.update();
+            firstPositionUpdate = false;
+          }
+
+          if (addMesh) {
+            if (!botMesh) {
+              // Dynamically access Entity from the bundle.
+              // The patched bundle doesn't export Entity directly, but we can
+              // create a simple box mesh as a fallback, or find Entity via the viewer's scene.
+              try {
+                // The bundle exposes THREE globally; create a simple bot indicator
+                var geometry = new THREE.BoxGeometry(0.6, 1.8, 0.6);
+                geometry.translate(0, 0.9, 0);
+                var material = new THREE.MeshLambertMaterial({ color: 0x4fc3f7 });
+                botMesh = new THREE.Mesh(geometry, material);
+                viewer.scene.add(botMesh);
+              } catch (ex) {
+                console.warn("[Viewer] Could not create bot mesh:", ex);
+              }
+            }
+            if (botMesh) {
+              // Smooth position/rotation using lerp (same as TWEEN but simpler)
+              botMesh.position.x += (pos.x - botMesh.position.x) * 0.3;
+              botMesh.position.y += (pos.y - botMesh.position.y) * 0.3;
+              botMesh.position.z += (pos.z - botMesh.position.z) * 0.3;
+              if (yaw !== undefined) {
+                botMesh.rotation.y = yaw;
+              }
+            }
+          }
+        });
+
+        // ----------------------------------------------------------------
+        // switchBot(name) — tell the server to switch this client's WorldView
+        // ----------------------------------------------------------------
+        var switchInProgress = false;
+
+        // pendingBotName tracks what we're trying to connect to (set before confirmation)
+        // currentBotName tracks what we're actually connected to (set on switchDone)
+        var pendingBotName = null;
+
+        window.switchBot = function (botName) {
+          if (!socket) return;
+          if (switchInProgress) return;
+          // Allow retries: check against confirmed currentBotName, not pending
+          if (currentBotName === botName) return;
+
+          switchInProgress = true;
+          pendingBotName = botName;
+          switchOverlay.textContent = "Switching to " + botName + "...";
+          switchOverlay.classList.add("show");
+
+          // Reset local state before switch
+          lastBotPos = null;
+          lastBotYaw = 0;
+
+          socket.emit("switchBot", botName);
+        };
+
+        socket.on("switchDone", function (botName) {
+          switchInProgress = false;
+          currentBotName = botName;
+          pendingBotName = null;
+          updateBotBar();
+          setTimeout(function () {
+            switchOverlay.classList.remove("show");
+          }, 300);
+        });
+
+        socket.on("switchError", function (msg) {
+          switchInProgress = false;
+          // Don't set currentBotName — we failed, so it stays as previous value
+          // This allows retries to go through
+          pendingBotName = null;
+          switchOverlay.textContent = msg;
+          setTimeout(function () {
+            switchOverlay.classList.remove("show");
+          }, 2000);
+        });
+
+        // ----------------------------------------------------------------
+        // Listen for postMessage from parent (dashboard) to switch bots
+        // ----------------------------------------------------------------
+        window.addEventListener("message", function (e) {
+          if (e.data && e.data.type === "switchBot" && e.data.botName) {
+            window.switchBot(e.data.botName);
+          }
+        });
+
+        // ----------------------------------------------------------------
+        // Bot selector bar — shows registered bots, click to switch
+        // ----------------------------------------------------------------
+        var COLORS = { Atlas: "#4fc3f7", Flora: "#81c784", Forge: "#ffb74d", Mason: "#ce93d8", Blade: "#ef5350" };
+        var botBar = document.getElementById("bot-bar");
+        var knownBots = [];
+
+        function updateBotBar() {
+          botBar.textContent = "";
+          knownBots.forEach(function (name) {
+            var btn = document.createElement("div");
+            btn.className = "bot-btn" + (name === currentBotName ? " active" : "");
+            btn.textContent = name;
+            btn.style.borderColor = COLORS[name] || "#555";
+            if (name === currentBotName) btn.style.borderColor = COLORS[name] || "#4fc3f7";
+            btn.onclick = function () {
+              window.switchBot(name);
+            };
+            botBar.appendChild(btn);
+          });
+        }
+
+        // Poll for available bots every 5s to keep the bar updated
+        function refreshBotBar() {
+          fetch("/api/viewer-bots")
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (bots) {
+              if (JSON.stringify(bots) !== JSON.stringify(knownBots)) {
+                knownBots = bots;
+                updateBotBar();
               }
             })
-            .catch(function() {
-              // Server not ready — retry
-              setTimeout(tryConnect, 3000);
-            });
+            .catch(function () {});
         }
+        refreshBotBar();
+        setInterval(refreshBotBar, 5000);
 
-        // Retry on switchError (bot not yet registered)
-        socket.on('switchError', function() {
-          if (!currentBotName || currentBotName === targetBot) {
-            setTimeout(tryConnect, 3000);
+        // ----------------------------------------------------------------
+        // Follow camera loop
+        // ----------------------------------------------------------------
+        var _tmpVec = null;
+        function followTick() {
+          requestAnimationFrame(followTick);
+          if (!capturedControls || !capturedCamera || !lastBotPos) return;
+          if (!_tmpVec) _tmpVec = new THREE.Vector3();
+
+          var displayName = currentBotName || "Bot";
+
+          if (cameraMode === "follow") {
+            _tmpVec.set(lastBotPos.x, lastBotPos.y + 1.6, lastBotPos.z);
+            capturedControls.target.lerp(_tmpVec, LERP_SPEED);
+
+            var yaw = lastBotYaw || 0;
+            var desiredX = lastBotPos.x - Math.sin(yaw) * FOLLOW_OFFSET_BACK;
+            var desiredY = lastBotPos.y + FOLLOW_OFFSET_Y;
+            var desiredZ = lastBotPos.z - Math.cos(yaw) * FOLLOW_OFFSET_BACK;
+            _tmpVec.set(desiredX, desiredY, desiredZ);
+            capturedCamera.position.lerp(_tmpVec, LERP_SPEED);
+
+            if (!capturedControls.enabled) capturedControls.enabled = true;
+          } else if (cameraMode === "first") {
+            var eyeY = lastBotPos.y + 1.62;
+            capturedCamera.position.set(lastBotPos.x, eyeY, lastBotPos.z);
+            var lookX = lastBotPos.x - Math.sin(lastBotYaw);
+            var lookZ = lastBotPos.z - Math.cos(lastBotYaw);
+            _tmpVec.set(lookX, eyeY, lookZ);
+            capturedControls.target.copy(_tmpVec);
+          } else if (cameraMode === "free") {
+            _tmpVec.set(lastBotPos.x, lastBotPos.y + 1.6, lastBotPos.z);
+            capturedControls.target.lerp(_tmpVec, 0.02);
           }
-        });
 
-        tryConnect();
+          hud.textContent =
+            displayName +
+            " @ " +
+            Math.round(lastBotPos.x) +
+            ", " +
+            Math.round(lastBotPos.y) +
+            ", " +
+            Math.round(lastBotPos.z) +
+            "\nCamera: " +
+            modeLabels[cameraMode] +
+            (autoCycle ? " [auto-cycle]" : "");
+        }
+        followTick();
+
+        // ----------------------------------------------------------------
+        // Auto-connect on load (with retry for bots that haven't spawned yet)
+        // ----------------------------------------------------------------
+        (function autoConnect() {
+          var targetBot = location.hash.replace("#", "") || null;
+
+          function tryConnect() {
+            if (targetBot) {
+              window.switchBot(targetBot);
+              return;
+            }
+
+            // Fetch available bots and connect to the first one
+            fetch("/api/viewer-bots")
+              .then(function (r) {
+                return r.json();
+              })
+              .then(function (bots) {
+                if (bots.length > 0) {
+                  targetBot = bots[0];
+                  window.switchBot(bots[0]);
+                } else {
+                  // No bots registered yet — retry in 3 seconds
+                  setTimeout(tryConnect, 3000);
+                }
+              })
+              .catch(function () {
+                // Server not ready — retry
+                setTimeout(tryConnect, 3000);
+              });
+          }
+
+          // Retry on switchError (bot not yet registered)
+          socket.on("switchError", function () {
+            if (!currentBotName || currentBotName === targetBot) {
+              setTimeout(tryConnect, 3000);
+            }
+          });
+
+          tryConnect();
+        })();
       })();
-    })();
-  </script>
-</body>
+    </script>
+  </body>
 </html>

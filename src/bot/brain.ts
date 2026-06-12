@@ -706,6 +706,7 @@ export class BotBrain {
 
     // ── Action gating ──
     const UNIVERSAL_ACTIONS = new Set([
+      "give_item",
       "idle",
       "respond_to_chat",
       "invoke_skill",
@@ -796,6 +797,8 @@ export class BotBrain {
       health: this.bot.health,
       food: this.bot.food,
       timestamp: Date.now(),
+      goal: this.currentGoal || decision.goal,
+      lastResult: result.slice(0, 120),
     });
 
     // Update overlay with result

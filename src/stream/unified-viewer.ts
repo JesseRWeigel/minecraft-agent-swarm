@@ -18,6 +18,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
 import { EventEmitter } from "events";
+import { getBotStatus } from "../bot/bulletin.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -268,9 +269,17 @@ function switchClientToBot(socket: any, botName: string, WorldView: any, viewDis
   bot.on("move", botPosition);
   worldView.listenToBot(bot);
 
+  // HUD: relay the viewed bot's bulletin status (thought, action, goal,
+  // vitals) so the viewer shows what the bot is doing, not just where it is.
+  const statusInterval = setInterval(() => {
+    const status = getBotStatus(botName);
+    if (status) socket.emit("botStatus", status);
+  }, 2000);
+
   // Store cleanup function for this client
   clientState.set(socket.id, {
     cleanup: () => {
+      clearInterval(statusInterval);
       bot.removeListener("move", botPosition);
       worldView.removeListenersFromBot(bot);
       socket.emit("entity", { id: SELF_ENTITY_ID, delete: true });

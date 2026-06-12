@@ -45,6 +45,7 @@ const ACTION_SIGNATURES: Record<string, string> = {
   invoke_skill: 'invoke_skill {"skill":"exact_skill_name"}',
   generate_skill: 'generate_skill {"task":"description"}',
   neural_combat: 'neural_combat {"duration":5}',
+  give_item: 'give_item {"to":"Flora","item":"oak_log","count":8}',
   deposit_stash: "deposit_stash {}",
   withdraw_stash: 'withdraw_stash {"item":"oak_log","count":8}',
 };
@@ -57,7 +58,7 @@ export function buildStrategicPrompt(role: RoleContext): string {
   const name = role.name;
 
   // Build action list — role-specific if configured, otherwise full list
-  const universalNames = ["idle", "respond_to_chat", "invoke_skill", "deposit_stash", "withdraw_stash"];
+  const universalNames = ["idle", "respond_to_chat", "invoke_skill", "give_item", "deposit_stash", "withdraw_stash"];
   const actions = role.allowedActions?.length
     ? renderActions([...role.allowedActions, ...universalNames.filter((u) => !role.allowedActions!.includes(u))])
     : renderActions(Object.keys(ACTION_SIGNATURES));
