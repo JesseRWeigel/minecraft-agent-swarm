@@ -6,6 +6,7 @@ import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import type { BotRoleConfig } from "../bot/role.js";
+import { getStashSummary } from "../skills/stash-ledger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -17,6 +18,11 @@ export function startDashboard(roster: BotRoleConfig[]) {
 
   // Serve dashboard static files
   app.use(express.static(path.join(__dirname, "../../dashboard")));
+
+  // API endpoint: live stash contents (from chest snapshots at each deposit/withdraw)
+  app.get("/api/stash", (_req, res) => {
+    res.json(getStashSummary());
+  });
 
   // API endpoint: bot roster info (ports, names, roles)
   app.get("/api/roster", (_req, res) => {

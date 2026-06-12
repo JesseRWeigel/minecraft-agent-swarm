@@ -3,6 +3,7 @@
 
 import type { Bot } from "mineflayer";
 import { Vec3 } from "vec3";
+import { snapshotChest } from "./stash-ledger.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
 import { safeGoto } from "../bot/actions.js";
@@ -204,6 +205,7 @@ export async function depositStash(
             // Chest might be full
           }
         }
+        snapshotChest(fallback.position, container.containerItems(), container.inventoryStart);
         container.close();
       } catch {
         noChest += items.length;
@@ -222,6 +224,7 @@ export async function depositStash(
           // Chest full — this will trigger expansion request
         }
       }
+      snapshotChest(chest.position, container.containerItems(), container.inventoryStart);
       container.close();
     } catch {
       noChest += items.length;
@@ -294,6 +297,7 @@ export async function withdrawStash(
           }
         }
       }
+      snapshotChest(chest.position, container.containerItems(), container.inventoryStart);
       container.close();
     } catch {
       /* can't open chest */

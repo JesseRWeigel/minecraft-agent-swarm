@@ -66,11 +66,13 @@
   </div>
   <div class="sidebar">
     <h3>STASH STATUS</h3>
-    <div class="stash-row"><span class="stash-label">Bldg</span><span class="stash-val">--</span></div>
-    <div class="stash-row"><span class="stash-label">Metal</span><span class="stash-val">--</span></div>
-    <div class="stash-row"><span class="stash-label">Food</span><span class="stash-val">--</span></div>
-    <div class="stash-row"><span class="stash-label">Tool</span><span class="stash-val">--</span></div>
-    <div class="stash-row"><span class="stash-label">Free</span><span class="stash-val">--</span></div>
+    <div class="stash-row"><span class="stash-label">Bldg</span><span class="stash-val" id="stash-building">--</span></div>
+    <div class="stash-row"><span class="stash-label">Metal</span><span class="stash-val" id="stash-metal">--</span></div>
+    <div class="stash-row"><span class="stash-label">Food</span><span class="stash-val" id="stash-food">--</span></div>
+    <div class="stash-row"><span class="stash-label">Tool</span><span class="stash-val" id="stash-tools">--</span></div>
+    <div class="stash-row"><span class="stash-label">Other</span><span class="stash-val" id="stash-other">--</span></div>
+    <div class="stash-row"><span class="stash-label">Free</span><span class="stash-val" id="stash-free">--</span></div>
+    <div class="stash-row" style="border-bottom:none"><span class="stash-label" id="stash-top" style="font-size:11px;white-space:normal"></span></div>
   </div>
 </div>
 
@@ -93,6 +95,21 @@ function esc(str) {
 
 async function init() {
   try {
+    async function pollStash() {
+      try {
+        var r = await fetch('/api/stash');
+        var st = await r.json();
+        if (!st.chestCount) return; // no chest opened yet this session
+        ['building','metal','food','tools','other'].forEach(function(k) {
+          document.getElementById('stash-' + k).textContent = st.categories[k] || 0;
+        });
+        document.getElementById('stash-free').textContent = st.freeSlots + '/' + st.totalSlots + ' slots';
+        document.getElementById('stash-top').textContent =
+          st.topItems.map(function(t) { return t.count + 'x' + t.name; }).join(', ');
+      } catch (e) { /* dashboard may outlive bot process */ }
+    }
+    pollStash(); setInterval(pollStash, 5000);
+
     var res = await fetch('/api/roster');
     bots = await res.json();
   } catch (e) {

@@ -221,6 +221,7 @@ export async function queryStrategic(
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.8,
+        repeat_penalty: 1.15, // the 8B fine-tune can loop ("Forge demands...!" x50) without this
         num_predict: 1024,
       },
     });
@@ -261,6 +262,7 @@ export async function queryReactive(
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.5, // Lower temp for urgent decisions — be reliable, not creative
+        repeat_penalty: 1.15, // the 8B fine-tune can loop ("Forge demands...!" x50) without this
         num_predict: 384,
       },
     });
@@ -306,6 +308,7 @@ export async function queryCritic(
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.4, // Low temp — critic should be analytical
+        repeat_penalty: 1.15, // the 8B fine-tune can loop ("Forge demands...!" x50) without this
         num_predict: 384,
       },
     });
@@ -466,6 +469,7 @@ export async function queryLLM(
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.85,
+        repeat_penalty: 1.15, // the 8B fine-tune can loop ("Forge demands...!" x50) without this
         num_predict: 1024,
       },
     });
