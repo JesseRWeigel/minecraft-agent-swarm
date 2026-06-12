@@ -153,14 +153,25 @@ const PASSIVE_MOBS = new Set([
   "sniffer",
 ]);
 
+/**
+ * prismarine-entity's mobType GETTER throws for entities with missing
+ * metadata (seen overnight crashing the hostile scanner via a timer).
+ * Read it defensively.
+ */
+function entityName(entity: Entity): string {
+  try {
+    return (entity.name || entity.mobType || "").toLowerCase();
+  } catch {
+    return (entity.name || "").toLowerCase();
+  }
+}
+
 export function isHostile(entity: Entity): boolean {
-  const name = (entity.name || entity.mobType || "").toLowerCase();
-  return HOSTILE_MOBS.has(name);
+  return HOSTILE_MOBS.has(entityName(entity));
 }
 
 export function isPassive(entity: Entity): boolean {
-  const name = (entity.name || entity.mobType || "").toLowerCase();
-  return PASSIVE_MOBS.has(name);
+  return PASSIVE_MOBS.has(entityName(entity));
 }
 
 const NOTABLE_BLOCKS = new Set([
