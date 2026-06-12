@@ -84,6 +84,9 @@ export const PRECONDITION_KEYWORDS = [
   "Could not find",
   // smelt_ores when inventory has no ore (environment, not bug)
   "Nothing to smelt",
+  // craft_gear with an empty inventory (environment, not bug)
+  "No new tools crafted",
+  "get materials first",
   // "timed out" removed — combat/mining skills that time out are real failures,
   // not precondition failures. exploreUntil timeouts use "aborted" instead.
 ];
