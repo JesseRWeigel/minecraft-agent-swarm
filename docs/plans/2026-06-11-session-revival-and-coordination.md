@@ -192,3 +192,17 @@ independently if scoreboards regress):
 5. `trajectory.ts` + `finetune/` — training data accumulates passively;
    overnight LoRA recipe in finetune/README.md with scoreboard-based A/B.
 Viewer bot-switch bug also fixed (worker world-reset race; 195 errors → 0).
+
+## Overnight fine-tune (v1) — 2026-06-12 ~01:00
+- Dataset: 1,385 balanced examples (action-capped) from 4,040 trajectories.
+- Qwen3-8B QLoRA via unsloth on the 5090: loss 2.53 → 0.19 over 2 epochs,
+  51 min. Two snags fixed: (1) missing gradient checkpointing overflowed
+  32GB and spilled to WSL2 shared memory (42-700s/step → 18s/step);
+  (2) bare-FROM ollama Modelfile fell back to raw prompt concatenation —
+  the model echoed prompts. Fixed with an explicit ChatML TEMPLATE matching
+  the training render (empty <think> block).
+- Registered as qwen3-minecraft:8b (q8_0, 8.7GB — vs the MoE's 27GB).
+  138 tok/s, sub-second strategic decisions, valid JSON, in-character.
+- Run 17 launched with the fine-tune as BOTH models. First decisions: 0
+  JSON failures, working critic + team chat. Scoreboard will judge it vs
+  the MoE baseline sessions; revert = one line in .env.
