@@ -98,6 +98,11 @@ export class BotBrain {
   // Leash
   private homePos: { x: number; y: number; z: number } | null;
 
+  // Chat dedup — the 8B anchors on its own last thought and re-sends the
+  // same demand every strategic cycle ("Give me the logs!" x7 in 2 min)
+  private lastChatSent = "";
+  private lastChatSentMs = 0;
+
   // Cooldowns — prevent spamming the same event type
   private lastReactiveMs = 0;
   private lastStrategicMs = 0;
@@ -754,6 +759,20 @@ export class BotBrain {
       if (rawDecision[field] !== undefined && normalizedParams[field] === undefined) {
         normalizedParams[field] = rawDecision[field];
       }
+    }
+
+    // Chat dedup — refuse to re-broadcast a near-identical message
+    if ((decision.action === "chat" || decision.action === "respond_to_chat") && normalizedParams.message) {
+      const sig = String(normalizedParams.message).slice(0, 40);
+      if (sig === this.lastChatSent && Date.now() - this.lastChatSentMs < 180_000) {
+        const msg =
+          "You already said that. Talking won't make it happen — ACT instead (check your inventory first; you may already have what you asked for).";
+        this.events.onAction(decision.action, msg);
+        this.lastResult = msg;
+        return;
+      }
+      this.lastChatSent = sig;
+      this.lastChatSentMs = Date.now();
     }
 
     // Inject stash config
