@@ -389,6 +389,25 @@ async function craftHoe(bot: Bot, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return;
   const mcData = mcDataLoader(bot.version);
 
+  // Convert logs → planks first — the recipes below assume planks exist,
+  // and the self-gathering step above only produces raw logs.
+  const havePlanks = bot.inventory.items().some((i) => i.name.endsWith("_planks"));
+  if (!havePlanks) {
+    const log = bot.inventory.items().find((i) => i.name.endsWith("_log"));
+    if (log) {
+      const plankName = log.name.replace("_log", "_planks");
+      const plankItem = mcData.itemsByName[plankName];
+      const recipe = plankItem ? bot.recipesFor(plankItem.id, null, 1, null)[0] : null;
+      if (recipe) {
+        try {
+          await bot.craft(recipe, Math.min(2, log.count), undefined);
+        } catch {
+          /* ok */
+        }
+      }
+    }
+  }
+
   // Ensure sticks
   const stickItem = mcData.itemsByName["stick"];
   if (stickItem) {

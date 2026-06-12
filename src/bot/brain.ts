@@ -99,6 +99,9 @@ export class BotBrain {
   // Leash
   private homePos: { x: number; y: number; z: number } | null;
 
+  // Farm override cooldown — a fast-failing skill must not thrash every cycle
+  private lastFarmOverrideMs = 0;
+
   // Chat dedup — the 8B anchors on its own last thought and re-sends the
   // same demand every strategic cycle ("Give me the logs!" x7 in 2 min)
   private lastChatSent = "";
@@ -595,7 +598,9 @@ export class BotBrain {
         ),
       );
       const isDay = this.bot.time.timeOfDay < 13000;
-      if (!hasFarm && isDay) {
+      const cooledDown = Date.now() - this.lastFarmOverrideMs > 240_000;
+      if (!hasFarm && isDay && cooledDown) {
+        this.lastFarmOverrideMs = Date.now();
         this.log.info("Brain", "OVERRIDE: no farm exists — running build_farm (self-sufficient)");
         this.events.onThought("The fields call to me. Today the farm gets BUILT — no more excuses.");
         const result = await executeAction(this.bot, "invoke_skill", { skill: "build_farm", x: 284, y: 64, z: -405 });
