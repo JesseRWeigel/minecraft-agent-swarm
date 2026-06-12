@@ -346,11 +346,25 @@ async function giveItem(bot: Bot, to: string, itemName: string, count: number): 
     }
   }
 
+  // Honest handoff: only toss when the target is actually here, and verify
+  // the drops got picked up. The first version reported success while the
+  // recipient walked away and the items rotted on the ground — Flora got
+  // "given" 115 planks and received zero.
   const tgt = bot.players[to]?.entity;
-  if (tgt) await bot.lookAt(tgt.position.offset(0, 1, 0));
+  if (!tgt || bot.entity.position.distanceTo(tgt.position) > 4) {
+    return `${to} moved away before the handoff — NOTHING was given. Get next to them and try again.`;
+  }
+  await bot.lookAt(tgt.position.offset(0, 1, 0));
   const toGive = Math.min(count, item.count);
   await bot.toss(item.type, null, toGive);
-  return `Gave ${toGive}x ${item.name} to ${to} (tossed at their feet — they'll pick it up).`;
+  await new Promise((r) => setTimeout(r, 2500)); // pickup time
+  const leftovers = Object.values(bot.entities).filter(
+    (e) => e.name === "item" && e.position.distanceTo(bot.entity.position) < 5,
+  ).length;
+  if (leftovers > 0) {
+    return `Tossed ${toGive}x ${item.name} toward ${to} but items are still on the ground — delivery NOT confirmed. Tell them to pick the items up.`;
+  }
+  return `Gave ${toGive}x ${item.name} to ${to} — delivery confirmed.`;
 }
 
 async function explore(bot: Bot, direction: string): Promise<string> {

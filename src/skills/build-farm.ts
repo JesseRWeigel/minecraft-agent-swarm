@@ -1,4 +1,5 @@
 import type { Bot } from "mineflayer";
+import { collectNearbyDrops, safeGoto } from "../bot/navigation.js";
 import type { Skill, SkillResult } from "./types.js";
 import { Vec3 } from "vec3";
 import pkg from "mineflayer-pathfinder";
@@ -15,7 +16,7 @@ export const buildFarmSkill: Skill = {
     return {};
   },
 
-  async execute(bot, _params, signal, onProgress): Promise<SkillResult> {
+  async execute(bot, params, signal, onProgress): Promise<SkillResult> {
     // --- Step 0: Harvest mature wheat if any nearby ---
     const harvested = await harvestMatureWheat(bot, signal, onProgress);
     if (harvested > 0) {
@@ -39,6 +40,38 @@ export const buildFarmSkill: Skill = {
     if (!hoe) {
       await craftHoe(bot, signal);
       hoe = bot.inventory.items().find((i) => i.name.endsWith("_hoe"));
+    }
+    if (!hoe) {
+      // Self-sufficiency (same pattern that made build_house complete):
+      // gather a couple of logs instead of failing on missing planks.
+      onProgress({
+        skillName: "build_farm",
+        phase: "Preparing tools",
+        progress: 0.02,
+        message: "No hoe materials — chopping a tree...",
+        active: true,
+      });
+      const logBlock = bot.findBlock({ matching: (b) => b.name.endsWith("_log"), maxDistance: 128 });
+      if (logBlock) {
+        try {
+          await safeGoto(
+            bot,
+            new goals.GoalNear(logBlock.position.x, logBlock.position.y, logBlock.position.z, 3),
+            60000,
+          );
+          await bot.dig(bot.blockAt(logBlock.position)!);
+          await collectNearbyDrops(bot, 6, 6000);
+          const second = bot.findBlock({ matching: (b) => b.name.endsWith("_log"), maxDistance: 16 });
+          if (second) {
+            await bot.dig(bot.blockAt(second.position)!);
+            await collectNearbyDrops(bot, 6, 6000);
+          }
+        } catch {
+          /* best effort */
+        }
+        await craftHoe(bot, signal);
+        hoe = bot.inventory.items().find((i) => i.name.endsWith("_hoe"));
+      }
       if (!hoe) {
         return { success: false, message: "Can't craft a hoe! Need planks + sticks + a crafting table." };
       }
@@ -68,6 +101,35 @@ export const buildFarmSkill: Skill = {
     });
 
     if (!water) {
+      // Travel to a known water site instead of giving up — the village has
+      // no water in range, which is why the farm never got built from there.
+      const fx = Number(params.x);
+      const fz = Number(params.z);
+      if (isFinite(fx) && isFinite(fz)) {
+        onProgress({
+          skillName: "build_farm",
+          phase: "Finding farmable land",
+          progress: 0.06,
+          message: `No water here — heading to the farm site (${fx}, ${fz})...`,
+          active: true,
+        });
+        try {
+          await safeGoto(bot, new goals.GoalNear(fx, Number(params.y) || 64, fz, 8), 90000);
+        } catch {
+          /* try the re-search anyway */
+        }
+        const waterRetry = bot.findBlock({
+          matching: (b) => {
+            if (b.name !== "water" || !b.position) return false;
+            const above = bot.blockAt(b.position.offset(0, 1, 0));
+            return !above || above.name !== "water";
+          },
+          maxDistance: 96,
+        });
+        if (waterRetry) {
+          return await this.execute(bot, {}, signal, onProgress);
+        }
+      }
       return { success: false, message: "No water found within 96 blocks! Explore to find a river or pond." };
     }
 

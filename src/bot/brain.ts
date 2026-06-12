@@ -786,6 +786,17 @@ export class BotBrain {
       normalizedParams.protectPos = this.roleConfig.stashPos;
     }
 
+    // Inject the farm site (lake shore) into build_farm so the skill can
+    // travel to water instead of failing "no water within 96 blocks"
+    const isBuildFarm =
+      decision.action === "build_farm" ||
+      (decision.action === "invoke_skill" && normalizedParams.skill === "build_farm");
+    if (isBuildFarm && normalizedParams.x === undefined) {
+      normalizedParams.x = 284;
+      normalizedParams.y = 64;
+      normalizedParams.z = -405;
+    }
+
     // Inject stash coordinates into setup_stash — the LLM invents garbage coords otherwise
     const isSetupStash =
       decision.action === "setup_stash" ||
