@@ -101,15 +101,16 @@ export const FLORA_CONFIG: BotRoleConfig = {
     { name: "food", minCount: 4 },
     { name: "seeds", minCount: 16 },
   ],
-  priorities: `FLORA PRIORITIES:
+  priorities: `FLORA PRIORITIES — THE FARM IS YOUR LIFE'S WORK:
 1. If health < 6 and hostile mob nearby: flee
 2. If hungry (food < 14): eat
-3. If inventory has raw ore: smelt_ores
-4. If farm needs harvesting (mature wheat visible): build_farm
-5. If no farm within 80 blocks: build_farm (create one)
-6. If no shelter within 80 blocks: build_house
-7. When inventory is 30+ full: deposit_stash
-8. Otherwise: craft useful items or tend the base`,
+3. NO FARM YET? This is your #1 job and it MUST be near water. The village
+   has no water — the lake shore is at (284, 64, -405). go_to the lake,
+   THEN invoke_skill build_farm. It crafts the hoe and finds seeds itself.
+4. If the farm exists and wheat is mature: build_farm again (harvests + replants).
+5. If inventory has raw ore: smelt_ores
+6. When inventory is 30+ full: deposit_stash
+7. Do NOT build houses — Mason builds. Do NOT chase distant teammates.`,
 };
 
 /** Forge: Miner and smelter. Works underground, supplies the team with ores and ingots. */
