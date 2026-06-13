@@ -398,6 +398,9 @@ export class BotBrain {
 
   /** Check for water/underground and handle before LLM query. Returns true if override handled. */
   private async runSafetyOverrides(): Promise<boolean> {
+    // Teleport-based water/buried escapes are interventions — off by default so
+    // bots must swim/dig out themselves (or die; keepInventory protects progress).
+    if (!config.bot.allowInterventions) return false;
     const pos = this.bot.entity.position;
 
     // Water escape
@@ -587,7 +590,7 @@ export class BotBrain {
       "carrot",
       "baked_potato",
     ];
-    if (this.bot.food <= 10 && this.roleConfig.stashPos) {
+    if (config.bot.allowInterventions && this.bot.food <= 10 && this.roleConfig.stashPos) {
       const hasFood = this.bot.inventory.items().some((i) => FOOD_NAMES.some((f) => i.name.includes(f)));
       if (!hasFood) {
         // Survival safety net. Routing starving bots to a chest proved
@@ -630,6 +633,7 @@ export class BotBrain {
     // without ever picking setup_stash, so when the preconditions are met
     // we just run it.
     if (
+      config.bot.allowInterventions &&
       this.roleConfig.allowedSkills.includes("setup_stash") &&
       this.roleConfig.stashPos &&
       !this.recentFailures.has("skill:setup_stash")
@@ -678,7 +682,7 @@ export class BotBrain {
     // precondition blocks (the chunk-load bug recorded many "No water found"
     // failures that pre-loaded as a blacklist entry every restart, which then
     // blocked the override from ever firing). Cooldown alone bounds retries.
-    if (this.roleConfig.allowedSkills.includes("build_farm") && !isSkillRunning(this.bot)) {
+    if (config.bot.allowInterventions && this.roleConfig.allowedSkills.includes("build_farm") && !isSkillRunning(this.bot)) {
       const hasFarm = getAllMemoryStores().some((st) =>
         st.hasStructureNearby(
           "farm",
@@ -716,7 +720,7 @@ export class BotBrain {
     // iron. When the miner has a pickaxe and no iron yet, run strip_mine. This
     // both advances the iron-age goal AND generates the iron/ore trajectories
     // the v2 dataset is starved of.
-    if (this.roleConfig.allowedSkills.includes("strip_mine") && !isSkillRunning(this.bot)) {
+    if (config.bot.allowInterventions && this.roleConfig.allowedSkills.includes("strip_mine") && !isSkillRunning(this.bot)) {
       const hasIron = this.bot.inventory
         .items()
         .some(

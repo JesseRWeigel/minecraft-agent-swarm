@@ -26,6 +26,14 @@ export const config = {
     name: process.env.BOT_NAME || "Atlas",
     decisionIntervalMs: parseInt(process.env.BOT_DECISION_INTERVAL_MS || "500"),
     chatCooldownMs: parseInt(process.env.BOT_CHAT_COOLDOWN_MS || "3000"),
+    /**
+     * When false (default): NO interventions that act for the bots or hand them
+     * unearned resources — deterministic skill overrides, survival rations, and
+     * safety teleports are all disabled. The LLM decides everything and the
+     * bots use only their own skills/navigation. Set ALLOW_INTERVENTIONS=true
+     * to re-enable the scaffolding (e.g. for reliability demos).
+     */
+    allowInterventions: process.env.ALLOW_INTERVENTIONS === "true",
     /** Idle interval for event-driven brain — how often to re-plan when nothing happens. */
     idleIntervalMs: parseInt(process.env.BOT_IDLE_INTERVAL_MS || "10000"),
     /** Enable the critic step after each action (uses an extra LLM call per action). */

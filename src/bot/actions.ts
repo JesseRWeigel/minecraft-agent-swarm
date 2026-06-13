@@ -10,6 +10,7 @@ import { getDynamicSkillNames } from "../skills/dynamic-loader.js";
 import { runNeuralCombat } from "../neural/combat.js";
 import { LOG_TYPES } from "../skills/materials.js";
 import { depositStash, withdrawStash } from "../skills/stash.js";
+import { config } from "../config.js";
 
 import { safeMoves, explorerMoves, safeGoto, collectNearbyDrops } from "./navigation.js";
 export { safeMoves, explorerMoves, safeGoto, collectNearbyDrops };
@@ -490,10 +491,9 @@ async function explore(bot: Bot, direction: string): Promise<string> {
   // The pathfinder can resolve its promise without error when it gives up on an unreachable
   // goal, leaving the bot at the same position. Checking AFTER try/catch ensures we catch both.
   const movedDist = bot.entity.position.distanceTo(startPos);
-  if (movedDist < 2) {
-    // spreadplayers lands on the topmost SAFE block; a raw /tp X 80 Z buried
-    // the bot inside hills taller than 80 and suffocated it (recurring Y=80
-    // deaths far from the village).
+  if (movedDist < 2 && config.bot.allowInterventions) {
+    // Teleport-unstick is an intervention — off by default (the bot must find
+    // its own way or stay put). spreadplayers lands on a safe surface block.
     bot.chat(`/spreadplayers ${Math.round(target.x)} ${Math.round(target.z)} 0 4 false ${bot.username}`);
     await new Promise((r) => setTimeout(r, 3000));
   }
