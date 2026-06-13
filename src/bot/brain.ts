@@ -583,11 +583,12 @@ export class BotBrain {
     // build_farm; the skill is now fully self-sufficient (travels to the
     // lake, chops its own logs, crafts the hoe), so when there's no farm
     // yet we just run it.
-    if (
-      this.roleConfig.allowedSkills.includes("build_farm") &&
-      !this.recentFailures.has("skill:build_farm") &&
-      !isSkillRunning(this.bot)
-    ) {
+    // NOTE: deliberately NOT gated on recentFailures. The override's whole
+    // job is to force the farm past the LLM's avoidance and past stale
+    // precondition blocks (the chunk-load bug recorded many "No water found"
+    // failures that pre-loaded as a blacklist entry every restart, which then
+    // blocked the override from ever firing). Cooldown alone bounds retries.
+    if (this.roleConfig.allowedSkills.includes("build_farm") && !isSkillRunning(this.bot)) {
       const hasFarm = getAllMemoryStores().some((st) =>
         st.hasStructureNearby(
           "farm",
