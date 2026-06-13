@@ -310,6 +310,16 @@ export class BotBrain {
 
     if (hostiles.length === 0) return;
 
+    // A real threat is present — clear any stale "no mobs / attack failed"
+    // blacklist so the bot can actually engage. Without this, the no-target
+    // failures that pile up while safe (Peaceful, or just daytime) permanently
+    // block attack/neural_combat, so Blade could never fight when mobs finally
+    // appeared — he had 0 kills all session.
+    for (const key of ["attack", "neural_combat", "skill:neural_combat"]) {
+      this.recentFailures.delete(key);
+      this.failureCounts.delete(key);
+    }
+
     // Don't spam for the same hostile
     const hostileKey = hostiles.map((h) => `${h.name}:${Math.round(h.position.x)}`).join(",");
     if (hostileKey === this.lastHostileSeen && now - this.lastReactiveMs < 10_000) return;
