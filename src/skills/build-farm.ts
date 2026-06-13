@@ -123,16 +123,29 @@ export const buildFarmSkill: Skill = {
     });
 
     // Surface water only — underwater blocks would send the bot swimming into the lake.
-    const water = bot.findBlock({
-      matching: (b) => {
-        if (b.name !== "water" || !b.position) return false;
-        const above = bot.blockAt(b.position.offset(0, 1, 0));
-        // Surface water: block above is air/land (not another water block).
-        // If above is null (chunk edge, unloaded), assume surface — better to try than skip.
-        return !above || above.name !== "water";
-      },
-      maxDistance: 96,
-    });
+    const findSurfaceWater = () =>
+      bot.findBlock({
+        matching: (b) => {
+          if (b.name !== "water" || !b.position) return false;
+          const above = bot.blockAt(b.position.offset(0, 1, 0));
+          // Surface water: block above is air/land (not another water block).
+          // If above is null (chunk edge, unloaded), assume surface — better to try than skip.
+          return !above || above.name !== "water";
+        },
+        maxDistance: 96,
+      });
+
+    // Chunk-load race: after teleporting to the farm site the destination
+    // chunk hasn't streamed into the bot's world model yet, so findBlock sees
+    // empty space and reports "no water" though it's a few blocks away (this
+    // is why the bot reaches water fine while WALKING but not after a TP).
+    // Wait for chunks and retry before concluding there's no water.
+    let water = findSurfaceWater();
+    for (let attempt = 0; !water && attempt < 5; attempt++) {
+      await bot.waitForChunksToLoad().catch(() => {});
+      await new Promise((r) => setTimeout(r, 1500));
+      water = findSurfaceWater();
+    }
 
     if (!water) {
       // Travel to a known water site instead of giving up — the village has
@@ -152,19 +165,15 @@ export const buildFarmSkill: Skill = {
         } catch {
           /* try the re-search anyway */
         }
-        const waterRetry = bot.findBlock({
-          matching: (b) => {
-            if (b.name !== "water" || !b.position) return false;
-            const above = bot.blockAt(b.position.offset(0, 1, 0));
-            return !above || above.name !== "water";
-          },
-          maxDistance: 96,
-        });
-        if (waterRetry) {
-          return await this.execute(bot, {}, signal, onProgress);
+        for (let attempt = 0; !water && attempt < 5; attempt++) {
+          await bot.waitForChunksToLoad().catch(() => {});
+          await new Promise((r) => setTimeout(r, 1500));
+          water = findSurfaceWater();
         }
       }
-      return { success: false, message: "No water found within 96 blocks! Explore to find a river or pond." };
+      if (!water) {
+        return { success: false, message: "No water found within 96 blocks! Explore to find a river or pond." };
+      }
     }
 
     // Pre-scan a 9x9 area around the water for tillable dirt/grass at the same Y level.
