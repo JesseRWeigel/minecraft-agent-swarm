@@ -125,26 +125,16 @@ export const buildFarmSkill: Skill = {
       active: true,
     });
 
-    // Surface water only — underwater blocks would send the bot swimming into the lake.
-    const findSurfaceWater = () =>
-      bot.findBlock({
-        matching: (b) => {
-          if (b.name !== "water" || !b.position) return false;
-          const above = bot.blockAt(b.position.offset(0, 1, 0));
-          // Surface water: block above is air/land (not another water block).
-          // If above is null (chunk edge, unloaded), assume surface — better to try than skip.
-          return !above || above.name !== "water";
-        },
-        maxDistance: 96,
-      });
+    // Find the nearest water. Instrumentation proved a plain name matcher
+    // works (finds water ~13 blocks away) while the old "surface water only"
+    // matcher — which called bot.blockAt inside the findBlock predicate —
+    // silently returned null for ALL water and was the real, long-hidden
+    // cause of "No water found". The surface concern (bot swimming into a
+    // lake) is handled later by the same-Y dirt scan around the water.
+    const findSurfaceWater = () => bot.findBlock({ matching: (b) => b.name === "water", maxDistance: 96 });
 
-    // Chunk-load race: after teleporting to the farm site the destination
-    // chunk hasn't streamed into the bot's world model yet, so findBlock sees
-    // empty space and reports "no water" though it's a few blocks away (this
-    // is why the bot reaches water fine while WALKING but not after a TP).
-    // Wait for chunks and retry before concluding there's no water.
     let water = findSurfaceWater();
-    for (let attempt = 0; !water && attempt < 5; attempt++) {
+    for (let attempt = 0; !water && attempt < 3; attempt++) {
       await bot.waitForChunksToLoad().catch(() => {});
       await new Promise((r) => setTimeout(r, 1500));
       water = findSurfaceWater();
