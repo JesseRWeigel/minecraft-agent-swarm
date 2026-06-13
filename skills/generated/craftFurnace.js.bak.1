@@ -10,6 +10,11 @@ async function craftFurnace(bot) {
     bot.chat("Collected cobblestone.");
   }
 
-  await bot.craft('furnace', 1);
+  const recipes = bot.recipesFor('furnace', null, 1, craftingTable);
+  if (!recipes || recipes.length === 0) {
+    throw new Error("No furnace recipe found.");
+  }
+
+  await bot.craft(recipes[0], 1, craftingTable);
   bot.chat("Crafted a furnace.");
 }

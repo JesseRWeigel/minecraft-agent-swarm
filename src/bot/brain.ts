@@ -103,6 +103,7 @@ export class BotBrain {
 
   // Farm override cooldown — a fast-failing skill must not thrash every cycle
   private lastFarmOverrideMs = 0;
+  private lastIronOverrideMs = 0;
 
   // Chat dedup — the 8B anchors on its own last thought and re-sends the
   // same demand every strategic cycle ("Give me the logs!" x7 in 2 min)
@@ -666,6 +667,39 @@ export class BotBrain {
           { action: "build_farm", params: {} },
           result,
           /complete|harvest|planted/i.test(result),
+        );
+        return;
+      }
+    }
+
+    // Iron/strip-mine override — same deterministic pattern. The miner has
+    // strip_mine (staircases to Y=11, mines for ore) but the LLM won't pick it
+    // for the iron goal, so Forge mines surface dirt and the team never gets
+    // iron. When the miner has a pickaxe and no iron yet, run strip_mine. This
+    // both advances the iron-age goal AND generates the iron/ore trajectories
+    // the v2 dataset is starved of.
+    if (this.roleConfig.allowedSkills.includes("strip_mine") && !isSkillRunning(this.bot)) {
+      const hasIron = this.bot.inventory
+        .items()
+        .some(
+          (i) =>
+            i.name === "iron_ingot" || i.name === "raw_iron" || (i.name.startsWith("iron_") && i.name !== "iron_ore"),
+        );
+      const hasPickaxe = this.bot.inventory.items().some((i) => i.name.endsWith("_pickaxe"));
+      const cooledDown = Date.now() - this.lastIronOverrideMs > 180_000;
+      if (!hasIron && hasPickaxe && cooledDown) {
+        this.lastIronOverrideMs = Date.now();
+        this.log.info("Brain", "OVERRIDE: no iron yet — running strip_mine for ore");
+        this.events.onThought("The deep calls. Time to carve for iron — pickaxe in hand, downward!");
+        const result = await executeAction(this.bot, "invoke_skill", { skill: "strip_mine" });
+        this.events.onAction("strip_mine", result);
+        this.lastAction = "strip_mine";
+        this.lastResult = result;
+        this.trackFailure(
+          "skill:strip_mine",
+          { action: "strip_mine", params: {} },
+          result,
+          /mined|ore|iron|complete/i.test(result),
         );
         return;
       }
