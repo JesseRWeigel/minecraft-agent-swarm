@@ -597,9 +597,11 @@ export class BotBrain {
           300,
         ),
       );
-      const isDay = this.bot.time.timeOfDay < 13000;
+      // No day-gate: a Minecraft day is only ~20 real minutes, so day-gating
+      // meant the farm rarely got a window — crops grow fine at night and the
+      // skill handles its own safety. Cooldown alone prevents thrash.
       const cooledDown = Date.now() - this.lastFarmOverrideMs > 240_000;
-      if (!hasFarm && isDay && cooledDown) {
+      if (!hasFarm && cooledDown) {
         this.lastFarmOverrideMs = Date.now();
         this.log.info("Brain", "OVERRIDE: no farm exists — running build_farm (self-sufficient)");
         this.events.onThought("The fields call to me. Today the farm gets BUILT — no more excuses.");
