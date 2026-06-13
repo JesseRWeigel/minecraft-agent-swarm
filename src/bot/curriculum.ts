@@ -77,12 +77,12 @@ const FARM_LADDER: TechStage[] = [
   {
     name: "seeds",
     reached: (inv) => [...inv].some((n) => n.includes("seeds")),
-    suggestion: "break tall grass near the river for wheat seeds (build_farm also collects them)",
+    suggestion: "break tall grass near the village for wheat seeds (build_farm also collects them)",
   },
   {
     name: "the farm",
     reached: () => false, // completion is recorded by the skill itself; keep pushing
-    suggestion: "go_to the river at (300, 63, -394), then invoke_skill build_farm — it needs water in sight",
+    suggestion: "go_to the irrigation bed at (290, 71, -312), then invoke_skill build_farm — water is there",
   },
 ];
 
