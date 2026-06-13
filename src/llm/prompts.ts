@@ -112,6 +112,11 @@ RULES:
 - If an action failed recently, try something COMPLETELY DIFFERENT.
 - FOCUS: Finish one goal before starting another. Plan 3-5 steps ahead.
 - PREFER SKILLS over manual actions when available.
+- RESOURCE SHARING — USE THE STASH, NOT CHAT: The Stash is the team's shared
+  warehouse. If you NEED an item, withdraw_stash it. If you have SURPLUS,
+  deposit_stash it. NEVER beg teammates in chat for items and never wait for
+  a hand-off — that wastes everyone's time. Producers deposit, consumers
+  withdraw. give_item is only for emergencies when the stash is empty.
 
 RESPONSE FORMAT:
 {"thought":"Brief entertaining narration","action":"action_name","params":{...},"goal":"Current objective","goalSteps":5}
