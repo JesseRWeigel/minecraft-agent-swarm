@@ -491,8 +491,11 @@ async function explore(bot: Bot, direction: string): Promise<string> {
   // goal, leaving the bot at the same position. Checking AFTER try/catch ensures we catch both.
   const movedDist = bot.entity.position.distanceTo(startPos);
   if (movedDist < 2) {
-    bot.chat(`/tp ${Math.round(target.x)} 80 ${Math.round(target.z)}`);
-    await new Promise((r) => setTimeout(r, 3000)); // wait for TP + fall
+    // spreadplayers lands on the topmost SAFE block; a raw /tp X 80 Z buried
+    // the bot inside hills taller than 80 and suffocated it (recurring Y=80
+    // deaths far from the village).
+    bot.chat(`/spreadplayers ${Math.round(target.x)} ${Math.round(target.z)} 0 4 false ${bot.username}`);
+    await new Promise((r) => setTimeout(r, 3000));
   }
 
   // Report what we can see from wherever we ended up

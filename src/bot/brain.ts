@@ -558,12 +558,17 @@ export class BotBrain {
         // and the safety teleports, this is a survival floor, not a gameplay
         // mechanic: give a small ration directly (bots are ops) so auto-eat
         // has fuel. The farm/cooking economy still runs for real food.
-        this.log.info("Brain", `SURVIVAL: hungry (${this.bot.food}/20), no food — issuing ration`);
+        // Saturation EFFECT, not an item: /give depends on inventory + auto-eat
+        // timing and left Forge stuck at hunger 4. The effect refills hunger
+        // directly with zero dependencies — the bulletproof survival floor.
+        // Also hand over a few cooked_beef so they have reserves to eat normally.
+        this.log.info("Brain", `SURVIVAL: hungry (${this.bot.food}/20), no food — saturation ration`);
+        this.bot.chat(`/effect give ${this.bot.username} minecraft:saturation 2 3 true`);
         this.bot.chat(`/give ${this.bot.username} minecraft:cooked_beef 4`);
-        await new Promise((r) => setTimeout(r, 800));
-        this.events.onAction("eat", "Survival ration issued — eating to recover.");
+        await new Promise((r) => setTimeout(r, 600));
+        this.events.onAction("eat", "Survival ration — recovered hunger.");
         this.lastAction = "eat";
-        this.lastResult = "Got an emergency ration.";
+        this.lastResult = "Recovered hunger with a ration.";
         return;
       }
     }
