@@ -5,6 +5,7 @@ import { Vec3 } from "vec3";
 import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
 import mcDataLoader from "minecraft-data";
+import { getBotMemoryStore } from "../bot/memory-registry.js";
 
 export const buildFarmSkill: Skill = {
   name: "build_farm",
@@ -333,6 +334,14 @@ export const buildFarmSkill: Skill = {
         message: `Couldn't plant anything near water at ${waterPos.x.toFixed(0)},${waterPos.z.toFixed(0)} — navigation or tilling failed. Try 'explore' first.`,
       };
     }
+
+    // Record the farm so the deterministic override sees hasFarm=true and
+    // stops force-firing build_farm every cooldown — the bots can still
+    // CHOOSE to farm (harvest/replant) via normal decisions, but they're no
+    // longer trapped in a permanent farming loop and can pursue other goals.
+    const ms = getBotMemoryStore(bot);
+    if (ms)
+      ms.addStructure("farm", Math.round(waterPos.x), Math.round(waterPos.y), Math.round(waterPos.z), "Wheat farm");
 
     return {
       success: true,
