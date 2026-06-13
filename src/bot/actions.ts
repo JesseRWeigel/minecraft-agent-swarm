@@ -203,6 +203,7 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
 
   let gathered = 0;
   let tried = 0;
+  const chopSpots: Vec3[] = []; // ground positions to replant saplings on
   for (const pos of allLogs) {
     if (gathered >= count) break;
     const log = bot.blockAt(pos);
@@ -227,6 +228,7 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
         await safeGoto(bot, new goals.GoalNear(pos.x, pos.y, pos.z, 3), 90000, 32000);
         await bot.dig(log);
         gathered++;
+        chopSpots.push(pos.clone()); // remember the trunk spot to replant on
         // Walk over the drop — digging alone leaves the item on the ground
         await new Promise((r) => setTimeout(r, 400));
         await collectNearbyDrops(bot, 6, 6000);
@@ -240,11 +242,58 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
     if (tried >= 4 && gathered === 0) break; // give up after 4 failed attempts (360s max)
   }
 
+  // Sustainability: replant saplings so the forest regrows. Trees never come
+  // back on their own in Minecraft — without this the team permanently
+  // deforests the area and wood trips range ever farther. Saplings drop from
+  // the leaf decay of the trees just chopped (collected above).
+  const replanted = await replantSaplings(bot, chopSpots);
+
   const collected = countLogsInInventory() - logsBefore;
-  if (collected > 0) return `Gathered ${collected} logs. Inventory now has wood!`;
+  const replantNote = replanted > 0 ? ` Replanted ${replanted} sapling${replanted > 1 ? "s" : ""}.` : "";
+  if (collected > 0) return `Gathered ${collected} logs. Inventory now has wood!${replantNote}`;
   if (gathered > 0)
-    return `Chopped ${gathered} logs but couldn't pick up the drops — they may be stuck in leaves or a hole.`;
+    return `Chopped ${gathered} logs but couldn't pick up the drops — they may be stuck in leaves or a hole.${replantNote}`;
   return "Couldn't reach any trees within 128 blocks (pathfinding failed). Try exploring south toward Z=-200.";
+}
+
+/**
+ * Replant saplings on the chopped-tree spots (or nearby grass/dirt) so the
+ * forest regrows. Plants up to as many saplings as the bot is carrying.
+ * Returns the number planted.
+ */
+async function replantSaplings(bot: Bot, chopSpots: Vec3[]): Promise<number> {
+  const saplings = bot.inventory.items().filter((i) => i.name.endsWith("_sapling"));
+  if (saplings.length === 0 || chopSpots.length === 0) return 0;
+  let sapling = saplings[0];
+  let planted = 0;
+
+  for (const spot of chopSpots) {
+    if (sapling.count <= 0) {
+      const next = bot.inventory.items().find((i) => i.name.endsWith("_sapling"));
+      if (!next) break;
+      sapling = next;
+    }
+    // The trunk base sat on grass/dirt; plant on that ground block (one below
+    // the lowest log) by placing against it with the sapling occupying the
+    // log's old space.
+    const ground = bot.blockAt(spot.offset(0, -1, 0));
+    const target = bot.blockAt(spot);
+    if (!ground || !target) continue;
+    if (!["grass_block", "dirt", "podzol", "rooted_dirt"].includes(ground.name)) continue;
+    if (target.name !== "air") continue;
+    try {
+      if (bot.entity.position.distanceTo(spot) > 4) {
+        await safeGoto(bot, new goals.GoalNear(spot.x, spot.y, spot.z, 3), 8000);
+      }
+      await bot.equip(sapling, "hand");
+      await bot.placeBlock(ground, new Vec3(0, 1, 0));
+      planted++;
+      sapling = { ...sapling, count: sapling.count - 1 } as typeof sapling;
+    } catch {
+      // couldn't place here — try the next spot
+    }
+  }
+  return planted;
 }
 
 async function mineBlock(
