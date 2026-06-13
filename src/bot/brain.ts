@@ -552,6 +552,15 @@ export class BotBrain {
       const hasFood = this.bot.inventory.items().some((i) => FOOD_NAMES.some((f) => i.name.includes(f)));
       if (!hasFood) {
         this.log.info("Brain", `SURVIVAL: hungry (${this.bot.food}/20), no food — withdrawing from stash`);
+        // Teleport to the stash if far/path-blocked — withdraw_stash's pathing
+        // routinely fails ("Path was stopped"), leaving distant bots to starve
+        // to death (Atlas hit hunger 0). A starving bot reaching food must not
+        // hinge on fragile navigation; bots are ops.
+        const { x, y, z } = this.roleConfig.stashPos;
+        if (this.bot.entity.position.distanceTo(new Vec3(x, y, z)) > 6) {
+          this.bot.chat(`/tp ${this.bot.username} ${x} ${y + 1} ${z}`);
+          await new Promise((r) => setTimeout(r, 2500));
+        }
         const result = await executeAction(this.bot, "withdraw_stash", {
           item: "cooked_beef",
           count: 8,
