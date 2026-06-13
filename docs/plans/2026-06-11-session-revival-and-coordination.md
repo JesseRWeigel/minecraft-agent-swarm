@@ -206,3 +206,16 @@ Viewer bot-switch bug also fixed (worker world-reset race; 195 errors → 0).
 - Run 17 launched with the fine-tune as BOTH models. First decisions: 0
   JSON failures, working critic + team chat. Scoreboard will judge it vs
   the MoE baseline sessions; revert = one line in .env.
+
+## 2026-06-13: Wheat farm finally built (the 19-restart bug)
+The farm — the last unmet village goal — is built and RCON-verified: 3 wheat
+crops growing on farmland at (272,65) by the natural water pool near the
+village. Root cause of ~19 failed attempts: build_farm's "surface water only"
+findBlock predicate called bot.blockAt INSIDE the matcher, which makes
+mineflayer's findBlock silently return null for everything. Every other "fix"
+(travel, chunk-load, coordinates, override gating, day-gate, irrigation bed)
+addressed real-but-secondary issues; a one-line console.log of the bot's
+position + a plain-matcher water result finally exposed it. Lesson saved to
+memory ([[findblock-predicate-trap]]). Also this session: explore made a
+universal action (gated-action waste 27%->8%), give_item verified handoffs,
+chat dedup, observation-verb aliasing.
