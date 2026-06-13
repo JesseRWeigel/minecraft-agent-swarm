@@ -46,18 +46,21 @@ export const buildFarmSkill: Skill = {
         active: true,
       });
       try {
-        await safeGoto(bot, new goals.GoalNear(fx0, Number(params.y) || 64, fz0, 8), 120000);
+        await safeGoto(bot, new goals.GoalNear(fx0, Number(params.y) || 64, fz0, 8), 60000);
       } catch {
-        /* walk failed — teleport fallback below */
+        /* walk failed — exact teleport below */
       }
       if (signal.aborted) return { success: false, message: "Interrupted while traveling to the farm site." };
-      // Pathfinding over ~100 blocks of forest fails routinely and silently
-      // strands the skill in waterless terrain. Bots are server operators and
-      // already teleport for safety — use spreadplayers (lands on the topmost
-      // safe block) as the fallback for this one long leg.
-      if (bot.entity.position.distanceTo(new Vec3(fx0, bot.entity.position.y, fz0)) > 40) {
-        bot.chat(`/spreadplayers ${fx0} ${fz0} 0 4 false ${bot.username}`);
-        await new Promise((r) => setTimeout(r, 3000));
+      // A probe proved findBlock sees the water INSTANTLY when the bot is
+      // actually at the site — the failures were the bot never arriving:
+      // pathfinding times out over distance and spreadplayers scatters
+      // imprecisely. Bots are ops, so /tp lands EXACTLY on the site; then
+      // wait for chunks (matches the working probe sequence) before searching.
+      if (bot.entity.position.distanceTo(new Vec3(fx0, bot.entity.position.y, fz0)) > 6) {
+        bot.chat(`/tp ${bot.username} ${fx0} ${Number(params.y) + 1 || 64} ${fz0}`);
+        await new Promise((r) => setTimeout(r, 2500));
+        await bot.waitForChunksToLoad().catch(() => {});
+        await new Promise((r) => setTimeout(r, 1500));
       }
     }
 
