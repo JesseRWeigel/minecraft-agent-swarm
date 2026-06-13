@@ -551,24 +551,19 @@ export class BotBrain {
     if (this.bot.food <= 10 && this.roleConfig.stashPos) {
       const hasFood = this.bot.inventory.items().some((i) => FOOD_NAMES.some((f) => i.name.includes(f)));
       if (!hasFood) {
-        this.log.info("Brain", `SURVIVAL: hungry (${this.bot.food}/20), no food — withdrawing from stash`);
-        // Teleport to the stash if far/path-blocked — withdraw_stash's pathing
-        // routinely fails ("Path was stopped"), leaving distant bots to starve
-        // to death (Atlas hit hunger 0). A starving bot reaching food must not
-        // hinge on fragile navigation; bots are ops.
-        const { x, y, z } = this.roleConfig.stashPos;
-        if (this.bot.entity.position.distanceTo(new Vec3(x, y, z)) > 6) {
-          this.bot.chat(`/tp ${this.bot.username} ${x} ${y + 1} ${z}`);
-          await new Promise((r) => setTimeout(r, 2500));
-        }
-        const result = await executeAction(this.bot, "withdraw_stash", {
-          item: "cooked_beef",
-          count: 8,
-          stashPos: this.roleConfig.stashPos,
-        });
-        this.events.onAction("withdraw_stash", result);
-        this.lastAction = "withdraw_stash";
-        this.lastResult = result;
+        // Survival safety net. Routing starving bots to a chest proved
+        // hopeless — withdraw_stash's pathfinding fails ("Path was stopped")
+        // even after teleporting them onto the stash, so distant bots starved
+        // to death on loop (Atlas repeatedly hit hunger 0). Like keepInventory
+        // and the safety teleports, this is a survival floor, not a gameplay
+        // mechanic: give a small ration directly (bots are ops) so auto-eat
+        // has fuel. The farm/cooking economy still runs for real food.
+        this.log.info("Brain", `SURVIVAL: hungry (${this.bot.food}/20), no food — issuing ration`);
+        this.bot.chat(`/give ${this.bot.username} minecraft:cooked_beef 4`);
+        await new Promise((r) => setTimeout(r, 800));
+        this.events.onAction("eat", "Survival ration issued — eating to recover.");
+        this.lastAction = "eat";
+        this.lastResult = "Got an emergency ration.";
         return;
       }
     }
