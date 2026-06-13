@@ -140,12 +140,50 @@ export class BotBrain {
     }
   }
 
+  /**
+   * Auto-equip the best armor the bot is carrying. Bots had no behavior to
+   * WEAR armor, so bootstrapped/crafted iron armor sat unworn in inventory
+   * while they fought unprotected and died. Runs periodically; idempotent.
+   */
+  private async equipBestArmor(): Promise<void> {
+    if (isSkillRunning(this.bot)) return;
+    const TIER = ["netherite", "diamond", "iron", "chainmail", "golden", "leather"];
+    const slots: [string, string, number][] = [
+      ["head", "_helmet", 5],
+      ["torso", "_chestplate", 6],
+      ["legs", "_leggings", 7],
+      ["feet", "_boots", 8],
+    ];
+    for (const [dest, suffix, slotIdx] of slots) {
+      const cands = this.bot.inventory.items().filter((i) => i.name.endsWith(suffix));
+      if (!cands.length) continue;
+      cands.sort((a, b) => {
+        const ta = TIER.findIndex((t) => a.name.includes(t));
+        const tb = TIER.findIndex((t) => b.name.includes(t));
+        return (ta < 0 ? 99 : ta) - (tb < 0 ? 99 : tb);
+      });
+      const best = cands[0];
+      const worn = this.bot.inventory.slots[slotIdx];
+      if (worn && worn.name === best.name) continue; // already wearing it
+      try {
+        await this.bot.equip(best, dest as any);
+      } catch {
+        /* equip race — try next cycle */
+      }
+    }
+  }
+
   /** Start the event-driven brain. Call after spawn safety completes. */
   start(): void {
     this.log.info("Brain", `Starting (idle interval: ${this.IDLE_INTERVAL_MS}ms)`);
 
     // 1. Idle timer — triggers strategic planning when nothing else is happening
     this.resetIdleTimer();
+
+    // 0. Auto-equip armor on spawn and every 20s thereafter
+    this.equipBestArmor().catch(() => {});
+    const armorTimer = setInterval(() => this.equipBestArmor().catch(() => {}), 20_000);
+    armorTimer.unref?.();
 
     // 2. Hostile scanner — checks for nearby threats every 2s
     this.hostileScanner = setInterval(() => this.scanHostiles(), this.HOSTILE_CHECK_MS);
