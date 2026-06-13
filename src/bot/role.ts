@@ -58,6 +58,9 @@ export const STASH_POS = { x: 286, y: 70, z: -314 };
  */
 export const FARM_SITE = { x: 290, y: 71, z: -312 };
 
+/** Renewable tree farm east of the village (saplings + torches, RCON-provisioned). */
+export const TREE_FARM = { x: 306, y: 71, z: -316 };
+
 /** Atlas: Explorer and miner. Roams widely, finds ores, scouts terrain. */
 export const ATLAS_CONFIG: BotRoleConfig = {
   name: "Atlas",
