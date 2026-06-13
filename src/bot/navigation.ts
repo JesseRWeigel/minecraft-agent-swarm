@@ -115,3 +115,42 @@ export async function collectNearbyDrops(bot: Bot, radius = 8, maxMs = 8000): Pr
     }
   }
 }
+
+/**
+ * Self-extract from a hole the bot dug itself into. Bots with non-digging
+ * movement get boxed into 1-wide pits (4 walls at head height) and soft-lock.
+ * This is NOT a teleport cheat — the bot digs its own staircase out with its
+ * hands, exactly like a player would. Returns true if it attempted an escape.
+ */
+export async function digOutIfStuck(bot: Bot): Promise<boolean> {
+  const pos = bot.entity.position;
+  const dirs: [number, number][] = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+  let walls = 0;
+  for (const [dx, dz] of dirs) {
+    const head = bot.blockAt(pos.offset(dx, 1, dz));
+    if (head && head.boundingBox === "block") walls++;
+  }
+  if (walls < 3) return false; // not boxed in — nothing to do
+
+  // Dig a staircase up and out using digging-capable movement (the bot's own
+  // pickaxe/hands), then walk clear. Targets ~3 blocks up to clear the pit rim.
+  const moves = new Movements(bot);
+  moves.canDig = true;
+  moves.allow1by1towers = true;
+  bot.pathfinder.setMovements(moves);
+  try {
+    await safeGoto(bot, new goals.GoalY(Math.floor(pos.y) + 3), 15000);
+    // then move laterally onto open ground away from the pit
+    await safeGoto(bot, new goals.GoalNear(Math.floor(pos.x) + 5, Math.floor(pos.y) + 3, Math.floor(pos.z), 2), 15000);
+  } catch {
+    /* best effort — try again next cycle */
+  } finally {
+    bot.pathfinder.setMovements(safeMoves(bot));
+  }
+  return true;
+}

@@ -24,6 +24,7 @@ import { queryStrategic, queryReactive, queryCritic, chatWithLLM, type LLMMessag
 import type { RoleContext } from "../llm/prompts.js";
 import { getWorldContext, isHostile } from "./perception.js";
 import { executeAction } from "./actions.js";
+import { digOutIfStuck } from "./navigation.js";
 import { updateOverlay, addChatMessage, speakThought, setCurrentBot } from "../stream/overlay.js";
 import { generateSpeech } from "../stream/tts.js";
 import { filterContent, filterChatMessage, filterViewerMessage } from "../safety/filter.js";
@@ -184,6 +185,13 @@ export class BotBrain {
     this.equipBestArmor().catch(() => {});
     const armorTimer = setInterval(() => this.equipBestArmor().catch(() => {}), 20_000);
     armorTimer.unref?.();
+
+    // 0b. Self-unstick: if boxed into a hole, dig out (own hands, not a TP).
+    // Skip while a skill runs (e.g. strip_mine intentionally digs down).
+    const unstickTimer = setInterval(() => {
+      if (!this.processing && !isSkillRunning(this.bot)) digOutIfStuck(this.bot).catch(() => {});
+    }, 25_000);
+    unstickTimer.unref?.();
 
     // 2. Hostile scanner — checks for nearby threats every 2s
     this.hostileScanner = setInterval(() => this.scanHostiles(), this.HOSTILE_CHECK_MS);
@@ -682,7 +690,11 @@ export class BotBrain {
     // precondition blocks (the chunk-load bug recorded many "No water found"
     // failures that pre-loaded as a blacklist entry every restart, which then
     // blocked the override from ever firing). Cooldown alone bounds retries.
-    if (config.bot.allowInterventions && this.roleConfig.allowedSkills.includes("build_farm") && !isSkillRunning(this.bot)) {
+    if (
+      config.bot.allowInterventions &&
+      this.roleConfig.allowedSkills.includes("build_farm") &&
+      !isSkillRunning(this.bot)
+    ) {
       const hasFarm = getAllMemoryStores().some((st) =>
         st.hasStructureNearby(
           "farm",
@@ -720,7 +732,11 @@ export class BotBrain {
     // iron. When the miner has a pickaxe and no iron yet, run strip_mine. This
     // both advances the iron-age goal AND generates the iron/ore trajectories
     // the v2 dataset is starved of.
-    if (config.bot.allowInterventions && this.roleConfig.allowedSkills.includes("strip_mine") && !isSkillRunning(this.bot)) {
+    if (
+      config.bot.allowInterventions &&
+      this.roleConfig.allowedSkills.includes("strip_mine") &&
+      !isSkillRunning(this.bot)
+    ) {
       const hasIron = this.bot.inventory
         .items()
         .some(
