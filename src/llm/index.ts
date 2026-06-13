@@ -173,6 +173,13 @@ function parseDecision(
     action = "mine_block";
   }
 
+  // craft_ITEM → craft {item} (e.g. craft_furnace, craft_crafting_table).
+  // Exclude craft_gear, which is a real skill handled by the registry.
+  if (/^craft_\w+$/.test(action) && action !== "craft_gear") {
+    params.item = params.item || action.slice(6);
+    action = "craft";
+  }
+
   // manuallyBuild* / buildAShelter* → build_house
   if (/^manually(build|construct)|^build.*(shelter|hut)|^construct.*(shelter|house)/i.test(action)) {
     action = "build_house";
