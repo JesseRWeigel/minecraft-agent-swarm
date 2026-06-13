@@ -48,9 +48,17 @@ export const buildFarmSkill: Skill = {
       try {
         await safeGoto(bot, new goals.GoalNear(fx0, Number(params.y) || 64, fz0, 8), 120000);
       } catch {
-        /* best effort — proceed with whatever is loaded here */
+        /* walk failed — teleport fallback below */
       }
       if (signal.aborted) return { success: false, message: "Interrupted while traveling to the farm site." };
+      // Pathfinding over ~100 blocks of forest fails routinely and silently
+      // strands the skill in waterless terrain. Bots are server operators and
+      // already teleport for safety — use spreadplayers (lands on the topmost
+      // safe block) as the fallback for this one long leg.
+      if (bot.entity.position.distanceTo(new Vec3(fx0, bot.entity.position.y, fz0)) > 40) {
+        bot.chat(`/spreadplayers ${fx0} ${fz0} 0 4 false ${bot.username}`);
+        await new Promise((r) => setTimeout(r, 3000));
+      }
     }
 
     // --- Step 1: Ensure we have a hoe ---

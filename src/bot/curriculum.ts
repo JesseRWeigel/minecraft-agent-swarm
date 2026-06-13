@@ -82,7 +82,7 @@ const FARM_LADDER: TechStage[] = [
   {
     name: "the farm",
     reached: () => false, // completion is recorded by the skill itself; keep pushing
-    suggestion: "go_to the river at (318, 63, -378), then invoke_skill build_farm — it needs water in sight",
+    suggestion: "go_to the river at (300, 63, -394), then invoke_skill build_farm — it needs water in sight",
   },
 ];
 
