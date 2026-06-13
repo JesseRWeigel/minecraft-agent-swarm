@@ -276,6 +276,16 @@ export async function withdrawStash(
     if (block && !chestsToTry.includes(block)) chestsToTry.push(block);
   }
 
+  // Count what we actually have BEFORE, so we can report the real delta —
+  // container.withdraw can resolve without delivering (Flora "withdrew" 48
+  // planks across 6 calls and ended with 0), which made her loop forever.
+  const countItem = () =>
+    bot.inventory
+      .items()
+      .filter((i) => i.name.includes(itemName))
+      .reduce((s, i) => s + i.count, 0);
+  const before = countItem();
+
   let withdrawn = 0;
   const needed = count;
 
@@ -304,7 +314,12 @@ export async function withdrawStash(
     }
   }
 
-  if (withdrawn === 0) return `No ${itemName} found in any stash chest.`;
-  if (withdrawn < needed) return `Withdrew ${withdrawn}x ${itemName} (wanted ${needed} — stash doesn't have enough).`;
-  return `Withdrew ${withdrawn}x ${itemName} from stash.`;
+  // Report the VERIFIED delta, not what container.withdraw claimed.
+  const gained = countItem() - before;
+  if (gained <= 0 && withdrawn > 0) {
+    return `Tried to withdraw ${itemName} but it never reached your inventory (stash transfer failed) — the stash may be empty of it. Gather it yourself or check a different item.`;
+  }
+  if (gained === 0) return `No ${itemName} in the stash. Gather it yourself instead.`;
+  if (gained < needed) return `Withdrew ${gained}x ${itemName} from stash (wanted ${needed} — that's all there was).`;
+  return `Withdrew ${gained}x ${itemName} from stash.`;
 }

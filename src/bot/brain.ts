@@ -85,6 +85,8 @@ export class BotBrain {
   private currentGoal = "";
   private goalStepsLeft = 0;
   private lastAction = "";
+  private lastResultSig = "";
+  private sameResultCount = 0;
   private lastResult = "";
   private lastActionWasSuccess = false;
   private repeatCount = 0;
@@ -924,6 +926,27 @@ export class BotBrain {
       } else {
         this.repeatCount = 1;
       }
+    }
+
+    // General repeat-breaker: the same action producing the SAME result 3x in
+    // a row is a stuck loop — even if the action reports "success" (e.g. Flora
+    // "withdrew" planks 6x that never arrived, or chat begging). Blacklist it
+    // briefly and force a re-plan so no buggy effector can trap a bot forever.
+    const resultSig = `${actionKey}|${result.slice(0, 60)}`;
+    if (decision.action !== "idle" && resultSig === this.lastResultSig) {
+      this.sameResultCount++;
+      if (this.sameResultCount >= 2) {
+        this.recentFailures.set(
+          actionKey,
+          `Stuck repeating "${decision.action}" with no change — do something different.`,
+        );
+        this.sameResultCount = 0;
+        this.lastResultSig = "";
+        setTimeout(() => this.triggerReplan(), 300);
+      }
+    } else {
+      this.sameResultCount = 0;
+      this.lastResultSig = resultSig;
     }
 
     // Failure tracking
