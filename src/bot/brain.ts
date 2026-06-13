@@ -534,6 +534,36 @@ export class BotBrain {
     // Safety overrides first
     if (await this.runSafetyOverrides()) return;
 
+    // Survival override: starvation was killing the team (whole roster at
+    // hunger 0, 286 failed "eat" attempts in one run). If hungry with no food
+    // on hand, withdraw food from the stash so auto-eat has fuel — no waiting
+    // on the LLM to figure out the farm→bake→eat loop.
+    const FOOD_NAMES = [
+      "bread",
+      "cooked_beef",
+      "cooked_porkchop",
+      "cooked_chicken",
+      "cooked_mutton",
+      "apple",
+      "carrot",
+      "baked_potato",
+    ];
+    if (this.bot.food <= 10 && this.roleConfig.stashPos) {
+      const hasFood = this.bot.inventory.items().some((i) => FOOD_NAMES.some((f) => i.name.includes(f)));
+      if (!hasFood) {
+        this.log.info("Brain", `SURVIVAL: hungry (${this.bot.food}/20), no food — withdrawing from stash`);
+        const result = await executeAction(this.bot, "withdraw_stash", {
+          item: "cooked_beef",
+          count: 8,
+          stashPos: this.roleConfig.stashPos,
+        });
+        this.events.onAction("withdraw_stash", result);
+        this.lastAction = "withdraw_stash";
+        this.lastResult = result;
+        return;
+      }
+    }
+
     // Leash hard override — skip LLM entirely if way too far from home
     if (this.homePos && this.roleConfig.leashRadius > 0) {
       const dx = this.bot.entity.position.x - this.homePos.x;

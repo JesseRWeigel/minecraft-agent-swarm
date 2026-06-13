@@ -1,0 +1,28 @@
+async function cookSevenMutton(bot) {
+  const furnaceItem = bot.inventory.findInventoryItem(mcData.itemsByName.furnace.id);
+  if (!furnaceItem) {
+    await craftFurnace(bot);
+  }
+
+  const furnacePosition = await findSuitablePosition(bot);
+  if (!furnacePosition) {
+    throw new Error("Could not find a suitable position for the furnace");
+  }
+
+  await placeItem(bot, "furnace", furnacePosition);
+
+  const coal = bot.inventory.items().find(i => i.name === "coal");
+  if (!coal) throw new Error("No coal in inventory to fuel furnace");
+
+  await bot.equip(coal, "hand");
+  await bot.equip(furnaceItem, "furnace");
+
+  const mutton = bot.inventory.items().find(i => i.name === "mutton");
+  if (!mutton) throw new Error("No raw mutton in inventory");
+
+  await bot.equip(mutton, "hand");
+  await bot.equip(furnaceItem, "furnace");
+
+  await bot.furnace.smelt(7);
+  bot.chat("7 mutton cooked.");
+}

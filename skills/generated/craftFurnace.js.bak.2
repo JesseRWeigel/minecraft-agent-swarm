@@ -1,0 +1,20 @@
+async function craftFurnace(bot) {
+  const craftingTable = bot.findBlock({ matching: (b) => b.name === 'crafting_table', maxDistance: 32 });
+  if (!craftingTable) {
+    throw new Error("Cannot find a crafting table nearby.");
+  }
+
+  const cobblestoneCount = bot.inventory.count('cobblestone');
+  if (cobblestoneCount < 8) {
+    await mineBlock(bot, 'stone', 8 - cobblestoneCount);
+    bot.chat("Collected cobblestone.");
+  }
+
+  const recipes = bot.recipesFor('furnace', null, 1, craftingTable);
+  if (!recipes || recipes.length === 0) {
+    throw new Error("No furnace recipe found.");
+  }
+
+  await bot.craft(recipes[0], 1, craftingTable);
+  bot.chat("Crafted a furnace.");
+}
