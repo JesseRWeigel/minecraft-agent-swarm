@@ -762,6 +762,13 @@ export class BotBrain {
       "withdraw_stash",
       "chat",
       "generate_skill",
+      // Every bot must be able to MOVE and LOOK. Withholding "explore" from
+      // non-scout roles meant the farmer/builder/guard fired thousands of
+      // rejected look_around/scan/explore decisions (27% of Flora's actions
+      // overnight) — looking like they were "standing around" when they were
+      // actually stuck in a rejection loop. The alias family (scan,
+      // look_around, search...) already normalizes to explore in parseDecision.
+      "explore",
     ]);
     if (
       this.roleConfig.allowedActions.length > 0 &&
