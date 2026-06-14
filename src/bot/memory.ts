@@ -82,8 +82,12 @@ export const PRECONDITION_KEYWORDS = [
   // voyager mineBlock / exploreUntil: resource not nearby (precondition, not bug)
   "Cannot find",
   "Could not find",
-  // smelt_ores when inventory has no ore (environment, not bug)
+  // smelt_ores when inventory has no ore / no fuel (environment, not bug —
+  // analogous to "No water found" for build_farm). Without "No fuel" excluded,
+  // a working smelt skill gets retired during the team's fuel droughts, which
+  // then permanently blocks the iron loop once ore IS available.
   "Nothing to smelt",
+  "No fuel",
   // craft_gear with an empty inventory (environment, not bug)
   "No new tools crafted",
   "get materials first",
