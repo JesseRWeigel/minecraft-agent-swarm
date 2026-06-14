@@ -135,7 +135,7 @@ export const FORGE_CONFIG: BotRoleConfig = {
   leashRadius: 250,
   stashPos: STASH_POS,
   safeSpawn: { x: 280, y: 0, z: -320 },
-  allowedActions: ["mine_block", "go_to", "eat", "sleep", "craft", "chat", "flee"],
+  allowedActions: ["mine_block", "gather_wood", "go_to", "eat", "sleep", "craft", "chat", "flee"],
   allowedSkills: ["strip_mine", "smelt_ores", "craft_gear"],
   keepItems: [
     { name: "pickaxe", minCount: 1 },

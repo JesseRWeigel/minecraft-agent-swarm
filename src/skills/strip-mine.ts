@@ -135,6 +135,13 @@ export const stripMineSkill: Skill = {
         }
       }
 
+      // Mine any ore exposed in the surrounding walls/floor/ceiling. The old
+      // tunnel only checked the 2 blocks dead ahead, so it walked straight past
+      // veins in the walls — which is why nights of mining found "0 ores".
+      const exposed = await mineExposedOre(bot, pos);
+      mined += exposed.mined;
+      oresFound.push(...exposed.ores);
+
       // Walk forward into cleared space
       const targetPos = pos.offset(forward.x, 0, forward.z);
       await moveToPosition(bot, targetPos);
@@ -172,6 +179,74 @@ export const stripMineSkill: Skill = {
 async function equipBestPickaxe(bot: Bot): Promise<void> {
   const pick = bot.inventory.items().find((i) => i.name.endsWith("_pickaxe"));
   if (pick) await bot.equip(pick, "hand");
+}
+
+/**
+ * Mine any ore block exposed in the 3x3x3 shell around `pos` (the bot's cell),
+ * then follow each vein a few blocks. This is what turns a blind tunnel into an
+ * actually-productive one — ores in the walls used to be ignored entirely.
+ */
+async function mineExposedOre(bot: Bot, pos: Vec3): Promise<{ mined: number; ores: string[] }> {
+  let mined = 0;
+  const ores: string[] = [];
+  const toCheck: Vec3[] = [];
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 2; dy++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        if (dx === 0 && dz === 0 && (dy === 0 || dy === 1)) continue; // skip the cleared path itself
+        toCheck.push(pos.offset(dx, dy, dz));
+      }
+    }
+  }
+  for (const t of toCheck) {
+    const b = bot.blockAt(t);
+    if (!b || !b.name.endsWith("_ore")) continue;
+    try {
+      await equipBestPickaxe(bot);
+      await bot.dig(b);
+      mined++;
+      ores.push(b.name);
+      // Follow the vein a little so we don't leave most of it in the wall.
+      mined += await followVein(bot, t, b.name, ores);
+    } catch {
+      /* out of reach or interrupted — skip */
+    }
+  }
+  return { mined, ores };
+}
+
+async function followVein(bot: Bot, start: Vec3, oreName: string, ores: string[], cap = 8): Promise<number> {
+  const seen = new Set<string>([start.toString()]);
+  const queue: Vec3[] = [start];
+  let extra = 0;
+  while (queue.length && extra < cap) {
+    const cur = queue.shift()!;
+    for (const d of [
+      [1, 0, 0],
+      [-1, 0, 0],
+      [0, 1, 0],
+      [0, -1, 0],
+      [0, 0, 1],
+      [0, 0, -1],
+    ] as const) {
+      const p = cur.offset(d[0], d[1], d[2]);
+      if (seen.has(p.toString())) continue;
+      seen.add(p.toString());
+      const b = bot.blockAt(p);
+      if (!b || b.name !== oreName) continue;
+      if (bot.entity.position.distanceTo(p) > 4.3) continue; // only what we can reach without re-pathing
+      try {
+        await equipBestPickaxe(bot);
+        await bot.dig(b);
+        extra++;
+        ores.push(b.name);
+        queue.push(p);
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  return extra;
 }
 
 async function moveToPosition(bot: Bot, targetPos: Vec3): Promise<void> {

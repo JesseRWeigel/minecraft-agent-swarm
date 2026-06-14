@@ -297,6 +297,23 @@ async function replantSaplings(bot: Bot, chopSpots: Vec3[]): Promise<number> {
   return planted;
 }
 
+/**
+ * Normalize what the LLM asked to mine into a block-name matcher.
+ * Accepts exact names ("iron_ore"), bare metals ("iron" → "iron_ore"), and
+ * the generic "ore"/"ores" (any *_ore block). Ore is the whole point of
+ * mining, so when an ore is requested we prefer it over plain stone.
+ */
+function blockMatcher(blockType: string): { match: (name: string) => boolean; isOre: boolean } {
+  const bt = blockType.toLowerCase();
+  if (bt === "ore" || bt === "ores") {
+    return { match: (n) => n.endsWith("_ore"), isOre: true };
+  }
+  // "iron" / "iron_ore" / "diamond" etc. → match the ore form too
+  const oreForm = bt.endsWith("_ore") ? bt : `${bt}_ore`;
+  const isOre = oreForm.endsWith("_ore") && bt !== "stone" && bt !== "cobblestone" && bt !== "deepslate";
+  return { match: (n) => n === bt || n === oreForm || (isOre && n === `deepslate_${oreForm}`), isOre };
+}
+
 async function mineBlock(
   bot: Bot,
   blockType: string,
@@ -305,15 +322,19 @@ async function mineBlock(
   // Keep the village/stash site intact — bots kept strip-mining the base and
   // other bots fell into the pits and got stuck.
   const PROTECT_RADIUS = 12;
+  const { match, isOre } = blockMatcher(blockType);
+  const protectedAt = (pos: Vec3) => {
+    if (!protectPos) return false;
+    const dx = pos.x - protectPos.x;
+    const dz = pos.z - protectPos.z;
+    return dx * dx + dz * dz <= PROTECT_RADIUS * PROTECT_RADIUS;
+  };
+
+  // Ore can be tens of blocks below the surface, so search wider for it.
   const block = bot.findBlock({
-    matching: (b) => b.name === blockType,
-    maxDistance: 32,
-    useExtraInfo: (b) => {
-      if (!protectPos) return true;
-      const dx = b.position.x - protectPos.x;
-      const dz = b.position.z - protectPos.z;
-      return dx * dx + dz * dz > PROTECT_RADIUS * PROTECT_RADIUS;
-    },
+    matching: (b) => match(b.name),
+    maxDistance: isOre ? 64 : 32,
+    useExtraInfo: (b) => !protectedAt(b.position),
   });
 
   if (!block)
@@ -327,12 +348,81 @@ async function mineBlock(
   digMoves.canDig = true;
   bot.pathfinder.setMovements(digMoves);
   await safeGoto(bot, new goals.GoalNear(block.position.x, block.position.y, block.position.z, 2));
+  await equipPickaxe(bot);
   await bot.dig(block);
-  // Walk over the drop — digging alone leaves the item on the ground
+  let mined = 1;
+
+  // Vein mining: one ore block is rarely worth the trip. Follow the connected
+  // vein (flood-fill of same-type ore) so a single mine_block yields a useful
+  // haul instead of one block at a time.
+  if (isOre) {
+    mined += await mineVein(bot, block.position, block.name, protectedAt);
+  }
+
+  // Walk over the drops — digging alone leaves items on the ground
   await new Promise((r) => setTimeout(r, 400));
-  await collectNearbyDrops(bot, 6, 5000);
+  await collectNearbyDrops(bot, 6, 6000);
   bot.pathfinder.setMovements(safeMoves(bot)); // restore safe moves
-  return `Mined ${blockType}.`;
+  return isOre ? `Mined ${mined}x ${block.name} (vein).` : `Mined ${blockType}.`;
+}
+
+async function equipPickaxe(bot: Bot): Promise<void> {
+  // Prefer the best pickaxe so harder ores (iron needs stone+) actually drop.
+  const ranks = ["netherite", "diamond", "iron", "stone", "golden", "wooden"];
+  const picks = bot.inventory.items().filter((i) => i.name.endsWith("_pickaxe"));
+  picks.sort((a, b) => ranks.findIndex((r) => a.name.startsWith(r)) - ranks.findIndex((r) => b.name.startsWith(r)));
+  const best = picks.find((p) => ranks.some((r) => p.name.startsWith(r)));
+  if (best) {
+    try {
+      await bot.equip(best, "hand");
+    } catch {
+      /* keep current tool */
+    }
+  }
+}
+
+/** Flood-fill mine the ore vein connected to `start`. Capped to stay quick. */
+async function mineVein(
+  bot: Bot,
+  start: Vec3,
+  oreName: string,
+  protectedAt: (pos: Vec3) => boolean,
+  cap = 16,
+): Promise<number> {
+  const seen = new Set<string>([start.toString()]);
+  const queue: Vec3[] = [start];
+  let extra = 0;
+  while (queue.length && extra < cap) {
+    const cur = queue.shift()!;
+    for (const d of [
+      [1, 0, 0],
+      [-1, 0, 0],
+      [0, 1, 0],
+      [0, -1, 0],
+      [0, 0, 1],
+      [0, 0, -1],
+    ] as const) {
+      const p = cur.offset(d[0], d[1], d[2]);
+      const key = p.toString();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const b = bot.blockAt(p);
+      if (!b || b.name !== oreName || protectedAt(p)) continue;
+      try {
+        if (bot.entity.position.distanceTo(p) > 4) {
+          await safeGoto(bot, new goals.GoalNear(p.x, p.y, p.z, 2), 8000);
+        }
+        await equipPickaxe(bot);
+        await bot.dig(b);
+        extra++;
+        queue.push(p);
+        if (extra >= cap) break;
+      } catch {
+        /* unreachable block — skip */
+      }
+    }
+  }
+  return extra;
 }
 
 async function goTo(bot: Bot, x: number, y: number, z: number): Promise<string> {

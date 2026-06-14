@@ -30,7 +30,7 @@ export interface RoleContext {
 /** Compact param signatures — shown next to each action so the LLM sends usable params. */
 const ACTION_SIGNATURES: Record<string, string> = {
   gather_wood: 'gather_wood {"count":5}',
-  mine_block: 'mine_block {"blockType":"stone"}',
+  mine_block: 'mine_block {"blockType":"iron_ore"}',
   go_to: 'go_to {"x":0,"y":64,"z":0}',
   explore: 'explore {"direction":"north"}',
   craft: 'craft {"item":"oak_planks","count":4}',
@@ -104,6 +104,14 @@ CRAFTING BASICS:
 - 3 planks + 2 sticks → wooden_pickaxe. 2 planks → crafting_table.
 - Wool from killing sheep (0-2 per sheep). 3 wool + 3 planks → bed.
 - Use exact Minecraft IDs: oak_planks, stick, wooden_pickaxe, etc.
+
+IRON PATH (the goal — don't mine plain stone when you want iron):
+- When you SPOT iron_ore, mine it: mine_block {"blockType":"iron_ore"} (it walks
+  to the ore and mines the whole vein). A stone pickaxe or better is required.
+- Then smelt it: invoke_skill {"skill":"smelt_ores"} → iron_ingot (needs a
+  furnace + fuel like coal/planks; the skill builds the furnace from cobblestone).
+- Then upgrade gear: invoke_skill {"skill":"craft_gear"}.
+- No ore in sight? invoke_skill {"skill":"strip_mine"} digs down to Y=11 and mines.
 
 RULES:
 - Respond ONLY with valid JSON. Keep "thought" under 120 chars — shown on stream.
