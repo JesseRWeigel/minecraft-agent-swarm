@@ -1,7 +1,7 @@
 {
-  "name": "minecraft-ai-streamer",
+  "name": "minecraft-agent-swarm",
   "version": "2.0.0",
-  "description": "An autonomous AI Minecraft bot powered by a local LLM, with Twitch/YouTube chat interaction for 24/7 livestreaming",
+  "description": "A self-improving swarm of local-LLM agents that mine, smelt, build, farm, and fight their way through Minecraft as a coordinated team. Built on mineflayer + Ollama.",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

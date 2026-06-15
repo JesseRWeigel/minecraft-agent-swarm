@@ -14,8 +14,8 @@ Thanks for your interest in contributing! This guide will help you get started.
 ### Setup
 
 ```bash
-git clone https://github.com/JesseRWeigel/mineflayer-chatgpt.git
-cd mineflayer-chatgpt
+git clone https://github.com/JesseRWeigel/minecraft-agent-swarm.git
+cd minecraft-agent-swarm
 npm install
 cp .env.example .env   # then edit .env with your server details
 ```

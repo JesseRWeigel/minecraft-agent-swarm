@@ -1,10 +1,14 @@
-# Atlas — Autonomous AI Minecraft Bot Team
+# Minecraft Agent Swarm
 
-A team of autonomous AI agents that play Minecraft together, powered by a local LLM (Ollama) with a hybrid skill system: hand-crafted TypeScript skills, 57 Voyager-style JavaScript skills, and dynamic skill generation at runtime.
+A self-improving swarm of autonomous AI agents that play Minecraft together, powered by local LLMs (Ollama) with a hybrid skill system: hand-crafted TypeScript skills, 57 Voyager-style JavaScript skills, and dynamic skill generation at runtime.
 
-Each bot specializes in a different area — exploring, farming, mining, building, or combat — and they coordinate through shared context and a central resource stash.
+Each of the 5 bots specializes in a different area — exploring, farming, mining, building, or combat — and they coordinate through shared context and a central resource stash.
+
+**The bots earn everything in-game.** No item handouts, no teleport rescues, no scripted shortcuts that act on their behalf — progress comes from making the *agents* more capable (better prompts, skills, and action logic), not from cheating for them. Self-improvement is the whole point.
 
 Designed for live streaming: includes a Mission Control dashboard, per-bot 3D viewers, OBS overlays, TTS, and Twitch integration.
+
+> Formerly `mineflayer-chatgpt`. Renamed to reflect what it became: a multi-agent swarm running on local models, not a single ChatGPT bot.
 
 ---
 
@@ -97,8 +101,8 @@ Each bot has its own personality, allowed actions, allowed skills, memory file, 
 ### Install
 
 ```bash
-git clone https://github.com/JesseRWeigel/mineflayer-chatgpt.git
-cd mineflayer-chatgpt
+git clone https://github.com/JesseRWeigel/minecraft-agent-swarm.git
+cd minecraft-agent-swarm
 npm install
 pip install -r requirements.txt   # for neural server
 ```
@@ -132,6 +136,10 @@ BOT_CHAT_COOLDOWN_MS=3000
 # Multi-bot mode
 ENABLE_MULTI_BOT=true
 BOT_COUNT=5                   # 1=Atlas only, 2=+Flora, 5=all bots
+
+# Autonomy
+ALLOW_INTERVENTIONS=false     # false (default): LLM decides everything, no cheating.
+                              # true: re-enable deterministic scaffolding (demos only)
 
 # Twitch (optional)
 TWITCH_CHANNEL=your_channel
@@ -237,7 +245,7 @@ Each decision executes a gated action (restricted to the bot's allowed actions/s
 
 **Leash enforcement:** Each bot has a max distance from home. At 80% of leash radius, the LLM is warned. At 150%, the bot is force-navigated home.
 
-**Deterministic overrides:** Known-correct moves skip the LLM entirely — leash returns, water/buried escapes, and stash bootstrap (when a bot owns `setup_stash`, has materials, and no stash chest exists, it just runs it).
+**Autonomy — no cheating (default):** With `ALLOW_INTERVENTIONS=false` (the default) the LLM decides *everything*. There are no deterministic overrides that act for the bots or hand them resources. The only non-LLM helpers are reflexes a human player would do without thinking: auto-equipping the best armor a bot already owns, and digging itself out when boxed in. Setting `ALLOW_INTERVENTIONS=true` re-enables optional scaffolding (leash returns, water/buried escapes, stash bootstrap) for reliability demos — but the project's goal is capability that survives with interventions *off*.
 
 ### Skill System
 
@@ -245,9 +253,9 @@ Each decision executes a gated action (restricted to the bot's allowed actions/s
 - `build_house` — build a 7x7 shelter with doors, crafting table, torches
 - `build_farm` — hoe dirt, plant wheat near water, harvest when ready
 - `build_bridge` — bridge across water/gaps in facing direction
-- `craft_gear` — craft best available tools and armor
-- `strip_mine` — horizontal mining tunnel at current Y
-- `smelt_ores` — smelt raw ore into ingots, crafts furnace if needed
+- `craft_gear` — craft the best available tool set (tries diamond→iron→stone→wood per tool)
+- `strip_mine` — staircase down to Y=11, then tunnel — scans the surrounding walls and follows any ore vein it exposes
+- `smelt_ores` — smelt raw ore into ingots, crafts a furnace from cobblestone if needed
 - `light_area` — place torches in a radius
 - `go_fishing` — cast and reel a fishing rod
 - `setup_stash` — bootstrap shared chest area
@@ -286,6 +294,14 @@ Combat ticks run at 50ms intervals for up to 10 seconds per engagement. If the n
 - **TTS** — Bot thoughts converted to speech and played through overlay
 - **Twitch integration** — Reads Twitch chat; viewers can interact with the bots
 
+### Survival & Resource Loops
+
+The bots run the real Minecraft progression loops end-to-end, using only their own faculties:
+
+- **Iron chain:** `mine_block`/`strip_mine` vein-mine ore (the miner equips the best pickaxe and follows connected ore) → `smelt_ores` turns it into ingots in a self-built furnace → `craft_gear` upgrades tools (diamond→iron→stone→wood per tool, using whatever it has).
+- **Food chain:** when no hostile threatens, `attack` hunts the nearest passive animal (cow/pig/sheep/chicken), then drops are collected off the ground and `eat` consumes the best food on hand — falling back to raw meat to avoid starvation. (A `cook_food` skill to multiply raw-meat value is on the roadmap.)
+- **Drop collection:** mining, gathering, and kills all walk the bot over the dropped items — nothing is left on the ground.
+
 ### Self-Improvement Loop
 
 The team measures and improves itself across sessions:
@@ -308,7 +324,7 @@ All chat messages and bot thoughts are filtered:
 ## Project Structure
 
 ```
-mineflayer-chatgpt/
+minecraft-agent-swarm/
 ├── src/
 │   ├── bot/
 │   │   ├── index.ts         # Bot lifecycle (connection, spawn safety)
@@ -418,6 +434,6 @@ Drop a `.js` file into `skills/voyager/`. The function name must match the filen
 
 ## Credits
 
-- Original mineflayer-chatgpt by Jesse Weigel
+- Originated as `mineflayer-chatgpt` by Jesse Weigel (a single ChatGPT-driven bot)
 - Voyager skill library from [MineDreamer/Voyager](https://github.com/MineDreamer/Voyager)
-- Autonomous agent architecture, neural combat, multi-bot team system, and streaming features added in 2024-2026
+- Autonomous multi-agent swarm, local-LLM brain, neural combat, self-improvement loop, and streaming features added 2024–2026
