@@ -819,16 +819,39 @@ async function eat(bot: Bot): Promise<string> {
   return `Ate ${best}. Hunger: ${bot.food}/20${raw ? " (raw — cook it next time for more)" : ""}`;
 }
 
+const FOOD_ANIMALS = ["cow", "pig", "sheep", "chicken", "rabbit", "mooshroom"];
+
 async function attackNearest(bot: Bot): Promise<string> {
-  // Use same hostile detection as perception system
+  // Defense first: nearest hostile within 16.
   let target = bot.nearestEntity((e) => isHostile(e) && e.position.distanceTo(bot.entity.position) < 16);
 
   if (!target) {
-    // Try any living mob nearby (exclude players, dropped items, projectiles)
+    // No threat → HUNT the nearest passive food animal for meat. This was the
+    // missing food source: bots killed hostiles (bones/arrows, no food) but
+    // never sought out animals, so raw meat never entered the pipeline.
+    const animal = bot.nearestEntity(
+      (e) =>
+        e !== bot.entity &&
+        FOOD_ANIMALS.includes((e.name || "").toLowerCase()) &&
+        e.position.distanceTo(bot.entity.position) < 24,
+    );
+    if (animal) {
+      // Animals roam out of reach — walk up to it before swinging.
+      try {
+        await safeGoto(bot, new goals.GoalNear(animal.position.x, animal.position.y, animal.position.z, 2), 8000);
+      } catch {
+        /* attack from wherever we got to */
+      }
+      target = animal;
+    }
+  }
+
+  if (!target) {
+    // Last resort: any living mob nearby (exclude players, dropped items, projectiles)
     target = bot.nearestEntity(
       (e) => e !== bot.entity && e.type === "mob" && e.position.distanceTo(bot.entity.position) < 8,
     );
-    if (!target) return "No mobs to attack nearby.";
+    if (!target) return "No hostiles or food animals to hunt nearby. Explore to find some.";
   }
 
   const targetName = target.name || (target as any).mobType || "entity";

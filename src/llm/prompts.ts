@@ -113,6 +113,12 @@ IRON PATH (the goal — don't mine plain stone when you want iron):
 - Then upgrade gear: invoke_skill {"skill":"craft_gear"}.
 - No ore in sight? invoke_skill {"skill":"strip_mine"} digs down to Y=11 and mines.
 
+FOOD / DON'T STARVE:
+- If hunger is low: eat {} (eats the best food you have, including raw meat).
+- NO food in inventory? attack {} — when no monster is near it HUNTS the nearest
+  animal (cow/pig/sheep/chicken) and collects the meat. Then eat {}. Hunt BEFORE
+  you starve, not at 0 hunger.
+
 RULES:
 - Respond ONLY with valid JSON. Keep "thought" under 120 chars — shown on stream.
 - Be entertaining and in-character in your "thought" wording — BUT base every
