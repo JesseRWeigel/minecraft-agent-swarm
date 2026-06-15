@@ -762,38 +762,52 @@ async function craftItem(bot: Bot, itemName: string, count: number): Promise<str
   return `Crafted ${count}x ${resolvedName}.`;
 }
 
-async function eat(bot: Bot): Promise<string> {
-  const foods = bot.inventory.items().filter((i) => {
-    const foodItems = [
-      "bread",
-      "cooked_beef",
-      "cooked_porkchop",
-      "cooked_chicken",
-      "cooked_mutton",
-      "cooked_salmon",
-      "cooked_cod",
-      "baked_potato",
-      "apple",
-      "golden_apple",
-      "carrot",
-      "melon_slice",
-      "sweet_berries",
-      "cookie",
-      "pumpkin_pie",
-      "mushroom_stew",
-      "beetroot_soup",
-      "rabbit_stew",
-      "cooked_rabbit",
-    ];
-    return foodItems.includes(i.name);
-  });
+// Food ranked best→worst by hunger/saturation. The bot eats the best it has.
+// Raw meats are the critical addition: bots hunt animals and end up holding
+// raw_mutton/raw_beef, but the old list only knew cooked food — so a starving
+// bot with raw meat got "No food!" and died. Raw is weak but beats starvation.
+const FOOD_PRIORITY = [
+  "rabbit_stew",
+  "cooked_beef",
+  "cooked_porkchop",
+  "pumpkin_pie",
+  "golden_apple",
+  "cooked_mutton",
+  "cooked_salmon",
+  "cooked_chicken",
+  "mushroom_stew",
+  "beetroot_soup",
+  "bread",
+  "baked_potato",
+  "cooked_cod",
+  "cooked_rabbit",
+  "apple",
+  "carrot",
+  "melon_slice",
+  "sweet_berries",
+  "glow_berries",
+  "cookie",
+  // raw fallback — low hunger value, but prevents starvation death
+  "raw_beef",
+  "raw_porkchop",
+  "raw_rabbit",
+  "raw_mutton",
+  "raw_salmon",
+  "raw_cod",
+  "raw_chicken",
+];
 
-  if (foods.length === 0) return "No food in inventory!";
+async function eat(bot: Bot): Promise<string> {
   if (bot.food >= 20) return "Already full! Hunger: 20/20. Do something else.";
 
-  await bot.equip(foods[0], "hand");
+  const have = new Map(bot.inventory.items().map((i) => [i.name, i]));
+  const best = FOOD_PRIORITY.find((name) => have.has(name));
+  if (!best) return "No food in inventory!";
+
+  await bot.equip(have.get(best)!, "hand");
   await bot.consume();
-  return `Ate ${foods[0].name}. Hunger: ${bot.food}/20`;
+  const raw = best.startsWith("raw_");
+  return `Ate ${best}. Hunger: ${bot.food}/20${raw ? " (raw — cook it next time for more)" : ""}`;
 }
 
 async function attackNearest(bot: Bot): Promise<string> {
