@@ -797,6 +797,15 @@ const FOOD_PRIORITY = [
   "raw_chicken",
 ];
 
+/** Total count of edible items (raw or cooked) in the bot's inventory. */
+function countEdibleItems(bot: Bot): number {
+  const edible = new Set(FOOD_PRIORITY);
+  return bot.inventory
+    .items()
+    .filter((i) => edible.has(i.name))
+    .reduce((sum, i) => sum + i.count, 0);
+}
+
 async function eat(bot: Bot): Promise<string> {
   if (bot.food >= 20) return "Already full! Hunger: 20/20. Do something else.";
 
@@ -860,7 +869,13 @@ async function attackNearest(bot: Bot): Promise<string> {
     });
 
     if (kills > 0) {
-      return `Defeated ${targetName} using advanced combat!`;
+      // Walk over the drops — a kill leaves raw meat/wool/etc. on the ground,
+      // and without collecting it the bots hunt but never actually get food.
+      // This was THE food-acquisition gap: 5 sheep killed, 0 meat in inventory.
+      const foodBefore = countEdibleItems(bot);
+      await collectNearbyDrops(bot, 8, 6000);
+      const gained = countEdibleItems(bot) - foodBefore;
+      return `Defeated ${targetName} using advanced combat!${gained > 0 ? ` Grabbed ${gained} food drop(s).` : " (grabbed drops)"}`;
     }
     return `Fought ${targetName} for ${((Date.now() - combatStart) / 1000).toFixed(1)}s (still alive — may need to re-engage).`;
   }
