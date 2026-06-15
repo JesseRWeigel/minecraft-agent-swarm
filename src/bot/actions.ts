@@ -836,13 +836,10 @@ async function attackNearest(bot: Bot): Promise<string> {
         e.position.distanceTo(bot.entity.position) < 24,
     );
     if (animal) {
-      // Animals roam out of reach — walk up to it before swinging.
-      try {
-        await safeGoto(bot, new goals.GoalNear(animal.position.x, animal.position.y, animal.position.z, 2), 8000);
-      } catch {
-        /* attack from wherever we got to */
-      }
-      target = animal;
+      // Hunt it with a dedicated pursue-and-kill loop (below). swordpvp is built
+      // for hostiles that approach you — it does NOT chase fleeing animals, so it
+      // was falsely reporting kills when the animal just ran >20 blocks away.
+      return await huntAnimal(bot, animal);
     }
   }
 
@@ -877,9 +874,13 @@ async function attackNearest(bot: Bot): Promise<string> {
           resolve();
           return;
         }
-        // Stop if target is dead/removed or too far away
-        if (!target!.isValid || target!.position.distanceTo(bot.entity.position) > 20) {
+        // A real kill = the entity is gone. Fleeing >20 blocks away ends the
+        // engagement but is NOT a kill (it used to be falsely counted).
+        if (!target!.isValid) {
           kills++;
+          cleanup();
+          resolve();
+        } else if (target!.position.distanceTo(bot.entity.position) > 20) {
           cleanup();
           resolve();
         }
@@ -907,6 +908,48 @@ async function attackNearest(bot: Bot): Promise<string> {
   await bot.lookAt(target.position.offset(0, (target as any).height ?? 1.6, 0));
   bot.attack(target);
   return `Attacked ${targetName} (basic hit).`;
+}
+
+/**
+ * Pursue and kill a fleeing passive animal, then collect the meat. Animals run
+ * when hit, so we chase (re-path toward it) and swing until it's actually dead
+ * (entity invalid) — not until it gets "far enough away" (the old false-kill).
+ */
+async function huntAnimal(bot: Bot, animal: import("prismarine-entity").Entity): Promise<string> {
+  const name = animal.name || "animal";
+  const HUNT_TIMEOUT = 12000;
+  const start = Date.now();
+
+  while (Date.now() - start < HUNT_TIMEOUT && animal.isValid) {
+    const dist = animal.position.distanceTo(bot.entity.position);
+    if (dist > 3) {
+      try {
+        await safeGoto(bot, new goals.GoalNear(animal.position.x, animal.position.y, animal.position.z, 2), 3000);
+      } catch {
+        /* keep chasing */
+      }
+    }
+    if (!animal.isValid) break; // died while we closed in
+    try {
+      await bot.lookAt(animal.position.offset(0, (animal as any).height ?? 0.6, 0));
+      bot.attack(animal);
+    } catch {
+      /* swing missed — loop and retry */
+    }
+    await bot.waitForTicks(6); // attack cooldown (~0.3s)
+  }
+
+  if (animal.isValid) {
+    return `Chased ${name} but it got away — too fast. Try again or pick a closer one.`;
+  }
+
+  // Confirmed kill — collect the meat it dropped.
+  const before = countEdibleItems(bot);
+  await collectNearbyDrops(bot, 8, 6000);
+  const gained = countEdibleItems(bot) - before;
+  return gained > 0
+    ? `Hunted ${name} and collected ${gained} food! Eat when hungry.`
+    : `Hunted ${name} (drops collected — check inventory).`;
 }
 
 async function flee(bot: Bot): Promise<string> {
