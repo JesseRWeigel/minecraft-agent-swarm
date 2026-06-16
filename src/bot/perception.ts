@@ -160,9 +160,14 @@ const PASSIVE_MOBS = new Set([
  */
 function entityName(entity: Entity): string {
   try {
-    return (entity.name || entity.mobType || "").toLowerCase();
+    return (entity?.name || entity?.mobType || "").toLowerCase();
   } catch {
-    return (entity.name || "").toLowerCase();
+    // Never re-dereference the entity here. The old catch did `entity.name`
+    // again, which re-threw uncaught when the entity ref was bad or the
+    // mobType getter threw — firing thousands of times/run via isHostile in
+    // the attack search predicate. Return empty; a nameless entity is "not a
+    // hostile / not passive", which is the safe default.
+    return "";
   }
 }
 
