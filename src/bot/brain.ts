@@ -525,10 +525,7 @@ export class BotBrain {
     if (reason === "hostile_nearby" && entities?.length) {
       const hostileList = entities
         .slice(0, 3)
-        .map(
-          (e: Entity) =>
-            `${e.name || "mob"} (${e.position.distanceTo(this.bot.entity.position).toFixed(0)} blocks)`,
-        )
+        .map((e: Entity) => `${e.name || "mob"} (${e.position.distanceTo(this.bot.entity.position).toFixed(0)} blocks)`)
         .join(", ");
       const equipment =
         this.bot.inventory

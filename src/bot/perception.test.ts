@@ -54,8 +54,19 @@ test("isHostile: cow is not hostile", () => {
   assert.equal(isHostile({ name: "cow", mobType: "cow" } as any), false);
 });
 
-test("isHostile: uses mobType as fallback when name is empty", () => {
-  assert.equal(isHostile({ name: "", mobType: "skeleton" } as any), true);
+test("isHostile: classifies by entity.name (mobType is deprecated, no longer read)", () => {
+  // entity.name is populated in 1.21.4; mobType is a deprecated getter that
+  // console.trace-spams on access, so entityName uses ONLY name now.
+  assert.equal(isHostile({ name: "skeleton" } as any), true);
+});
+
+test("isHostile: empty name is not classified as hostile (no mobType fallback)", () => {
+  assert.equal(isHostile({ name: "", mobType: "skeleton" } as any), false);
+});
+
+test("isHostile: never throws on a bad entity ref", () => {
+  assert.equal(isHostile(null as any), false);
+  assert.equal(isHostile({} as any), false);
 });
 
 test("isPassive: recognizes cow as passive", () => {

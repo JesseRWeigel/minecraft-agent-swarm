@@ -729,12 +729,13 @@ async function craftItem(bot: Bot, itemName: string, count: number): Promise<str
     // Generic: try to identify missing ingredients from the first known recipe
     const allRecipes = mcData.recipes?.[item.id];
     if (allRecipes?.length) {
-      const needed = (allRecipes[0].ingredients ?? allRecipes[0].inShape?.flat() ?? [])
-        .filter(Boolean)
-        .map((ing: any) => {
-          const ingId = typeof ing === "object" ? (ing.id ?? ing) : ing;
-          return mcData.items[ingId]?.name ?? String(ingId);
-        });
+      // Recipe is ShapedRecipe | ShapelessRecipe — one has inShape, the other
+      // ingredients. Cast to read both with ?? (the union type rejects each).
+      const r0 = allRecipes[0] as { ingredients?: unknown[]; inShape?: unknown[][] };
+      const needed = (r0.ingredients ?? r0.inShape?.flat() ?? []).filter(Boolean).map((ing: any) => {
+        const ingId = typeof ing === "object" ? (ing.id ?? ing) : ing;
+        return mcData.items[ingId]?.name ?? String(ingId);
+      });
       const uniqueNeeded = [...new Set(needed)]
         .filter((n) => n && n !== "null")
         // Recipe variant 0 is an arbitrary wood family — don't tell the bot it
