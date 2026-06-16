@@ -787,7 +787,10 @@ const FOOD_PRIORITY = [
   "sweet_berries",
   "glow_berries",
   "cookie",
-  // raw fallback — low hunger value, but prevents starvation death
+  // weak edibles + raw fallback — low hunger value, but prevent starvation death
+  "potato",
+  "beetroot",
+  "dried_kelp",
   "raw_beef",
   "raw_porkchop",
   "raw_rabbit",
@@ -795,6 +798,10 @@ const FOOD_PRIORITY = [
   "raw_salmon",
   "raw_cod",
   "raw_chicken",
+  // ABSOLUTE last resort: rotten flesh restores 4 hunger (brief harmless hunger
+  // debuff on Easy). Bots were starving to death holding rotten flesh from
+  // zombie kills while looping "eat is broken" because it wasn't recognized.
+  "rotten_flesh",
 ];
 
 /** Total count of edible items (raw or cooked) in the bot's inventory. */
