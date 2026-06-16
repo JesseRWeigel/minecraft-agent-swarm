@@ -18,13 +18,22 @@ export const buildFarmSkill: Skill = {
   },
 
   async execute(bot, params, signal, onProgress): Promise<SkillResult> {
-    // --- Step 0: Harvest mature wheat if any nearby ---
+    // --- Step 0: Harvest mature wheat, then BAKE BREAD ---
+    // The loop used to dead-end here: wheat was harvested but never turned into
+    // bread (wheat isn't edible), so the team starved beside a working farm.
+    // Bake any accumulated wheat (>=3) into bread — done inside the skill so it
+    // bypasses the blacklisted `craft:bread` action.
     const harvested = await harvestMatureWheat(bot, signal, onProgress);
-    if (harvested > 0) {
+    const baked = await bakeBread(bot, signal, onProgress);
+    if (harvested > 0 || baked > 0) {
+      const breadNote =
+        baked > 0
+          ? `Baked ${baked} bread — food secured! 🍞`
+          : "Not enough wheat to bake bread yet (need 3+); farm is still growing.";
       return {
         success: true,
-        message: `Harvested ${harvested} mature wheat! Got wheat and seeds. The farm cycle continues!`,
-        stats: { wheatHarvested: harvested },
+        message: `${harvested > 0 ? `Harvested ${harvested} wheat. ` : ""}${breadNote} The farm cycle continues!`,
+        stats: { wheatHarvested: harvested, breadBaked: baked },
       };
     }
 
@@ -428,6 +437,52 @@ async function harvestMatureWheat(bot: Bot, signal: AbortSignal, onProgress: (p:
   }
 
   return harvested;
+}
+
+/**
+ * Bake bread from accumulated wheat (3 wheat -> 1 bread). Needs a crafting
+ * table (3-wide recipe). This is the step that finally closes the farm->food
+ * loop. Done in-skill to dodge the blacklisted `craft:bread` action.
+ */
+async function bakeBread(bot: Bot, signal: AbortSignal, onProgress: (p: any) => void): Promise<number> {
+  if (signal.aborted) return 0;
+  const wheat = countItem(bot, "wheat");
+  if (wheat < 3) return 0;
+
+  const mcData = mcDataLoader(bot.version);
+  const breadItem = mcData.itemsByName["bread"];
+  if (!breadItem) return 0;
+  const count = Math.floor(wheat / 3);
+
+  // Bread is a 3-wide recipe → requires a crafting table.
+  const table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 48 });
+  if (!table || !table.position) return 0; // no table in reach — bake next cycle near one
+
+  onProgress({
+    skillName: "build_farm",
+    phase: "Baking bread",
+    progress: 0.95,
+    message: `Baking ${count} bread from ${wheat} wheat...`,
+    active: true,
+  });
+
+  setMovements(bot);
+  try {
+    await bot.pathfinder.goto(new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2));
+  } catch {
+    /* try crafting from where we are */
+  }
+
+  const recipe = bot.recipesFor(breadItem.id, null, count, table)[0];
+  if (!recipe) return 0;
+
+  const before = countItem(bot, "bread");
+  try {
+    await bot.craft(recipe, count, table);
+  } catch {
+    return 0;
+  }
+  return countItem(bot, "bread") - before;
 }
 
 async function craftHoe(bot: Bot, signal: AbortSignal): Promise<void> {
