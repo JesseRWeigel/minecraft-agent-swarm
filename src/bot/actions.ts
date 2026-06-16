@@ -822,8 +822,15 @@ async function eat(bot: Bot): Promise<string> {
 const FOOD_ANIMALS = ["cow", "pig", "sheep", "chicken", "rabbit", "mooshroom"];
 
 async function attackNearest(bot: Bot): Promise<string> {
-  // Defense first: nearest hostile within 16.
-  let target = bot.nearestEntity((e) => isHostile(e) && e.position.distanceTo(bot.entity.position) < 16);
+  // Guard: while dead/respawning, bot.entity is undefined. Dereferencing
+  // bot.entity.position inside the search predicates threw ~20k times/run and
+  // silently killed every attack/hunt during that window. Bail cleanly instead.
+  const myPos = bot.entity?.position;
+  if (!myPos) return "Can't attack right now — still respawning.";
+
+  // Defense first: nearest hostile within 16. (!!e.position guards entities
+  // that are mid-spawn and have no position yet.)
+  let target = bot.nearestEntity((e) => !!e.position && isHostile(e) && e.position.distanceTo(myPos) < 16);
 
   if (!target) {
     // No threat → HUNT the nearest passive food animal for meat. This was the
@@ -832,8 +839,9 @@ async function attackNearest(bot: Bot): Promise<string> {
     const animal = bot.nearestEntity(
       (e) =>
         e !== bot.entity &&
+        !!e.position &&
         FOOD_ANIMALS.includes((e.name || "").toLowerCase()) &&
-        e.position.distanceTo(bot.entity.position) < 24,
+        e.position.distanceTo(myPos) < 24,
     );
     if (animal) {
       // Hunt it with a dedicated pursue-and-kill loop (below). swordpvp is built
@@ -875,12 +883,14 @@ async function attackNearest(bot: Bot): Promise<string> {
           return;
         }
         // A real kill = the entity is gone. Fleeing >20 blocks away ends the
-        // engagement but is NOT a kill (it used to be falsely counted).
+        // engagement but is NOT a kill (it used to be falsely counted). If we
+        // died mid-fight (bot.entity gone), just end it.
+        const me = bot.entity?.position;
         if (!target!.isValid) {
           kills++;
           cleanup();
           resolve();
-        } else if (target!.position.distanceTo(bot.entity.position) > 20) {
+        } else if (!me || target!.position.distanceTo(me) > 20) {
           cleanup();
           resolve();
         }
@@ -921,7 +931,9 @@ async function huntAnimal(bot: Bot, animal: import("prismarine-entity").Entity):
   const start = Date.now();
 
   while (Date.now() - start < HUNT_TIMEOUT && animal.isValid) {
-    const dist = animal.position.distanceTo(bot.entity.position);
+    const myPos = bot.entity?.position;
+    if (!myPos) return `Lost ${name} — died/respawned mid-hunt.`; // bot died chasing
+    const dist = animal.position.distanceTo(myPos);
     if (dist > 3) {
       try {
         await safeGoto(bot, new goals.GoalNear(animal.position.x, animal.position.y, animal.position.z, 2), 3000);
