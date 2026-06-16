@@ -32,7 +32,7 @@ export function getWorldContext(bot: Bot): string {
 
   if (hostiles.length > 0) {
     parts.push(
-      `DANGER - Hostile mobs nearby: ${hostiles.map((e) => `${e.name || e.mobType} (${distTo(bot, e).toFixed(0)} blocks away)`).join(", ")}`,
+      `DANGER - Hostile mobs nearby: ${hostiles.map((e) => `${e.name || "mob"} (${distTo(bot, e).toFixed(0)} blocks away)`).join(", ")}`,
     );
   }
 
@@ -41,7 +41,7 @@ export function getWorldContext(bot: Bot): string {
   }
 
   if (animals.length > 0) {
-    parts.push(`Animals nearby: ${animals.map((e) => e.name || e.mobType).join(", ")}`);
+    parts.push(`Animals nearby: ${animals.map((e) => e.name || "animal").join(", ")}`);
   }
 
   if (nearbyBlocks.length > 0) {
@@ -154,19 +154,18 @@ const PASSIVE_MOBS = new Set([
 ]);
 
 /**
- * prismarine-entity's mobType GETTER throws for entities with missing
- * metadata (seen overnight crashing the hostile scanner via a timer).
- * Read it defensively.
+ * Entity type id, lowercased, for matching against the mob sets.
+ * Uses ONLY entity.name — never entity.mobType, which is a deprecated getter
+ * that emits a console.trace warning on every access (it spammed ~tens of
+ * thousands of stack traces per run through this hot path, bloating logs to
+ * 280MB+ and masquerading as "attackNearest errors"). Defensive try/catch
+ * returns "" on any bad entity ref — a nameless entity is safely treated as
+ * neither hostile nor passive.
  */
 function entityName(entity: Entity): string {
   try {
-    return (entity?.name || entity?.mobType || "").toLowerCase();
+    return (entity?.name || "").toLowerCase();
   } catch {
-    // Never re-dereference the entity here. The old catch did `entity.name`
-    // again, which re-threw uncaught when the entity ref was bad or the
-    // mobType getter threw — firing thousands of times/run via isHostile in
-    // the attack search predicate. Return empty; a nameless entity is "not a
-    // hostile / not passive", which is the safe default.
     return "";
   }
 }

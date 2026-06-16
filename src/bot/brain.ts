@@ -527,7 +527,7 @@ export class BotBrain {
         .slice(0, 3)
         .map(
           (e: Entity) =>
-            `${e.name || e.mobType} (${e.position.distanceTo(this.bot.entity.position).toFixed(0)} blocks)`,
+            `${e.name || "mob"} (${e.position.distanceTo(this.bot.entity.position).toFixed(0)} blocks)`,
         )
         .join(", ");
       const equipment =

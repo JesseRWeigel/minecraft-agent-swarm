@@ -859,7 +859,7 @@ async function attackNearest(bot: Bot): Promise<string> {
     if (!target) return "No hostiles or food animals to hunt nearby. Explore to find some.";
   }
 
-  const targetName = target.name || (target as any).mobType || "entity";
+  const targetName = target.name || "entity";
 
   // Use @nxg-org/mineflayer-custom-pvp for sustained, skilled combat
   // The plugin handles strafing, critical-hit timing, shield use, and target tracking
@@ -984,7 +984,7 @@ async function flee(bot: Bot): Promise<string> {
 
   bot.pathfinder.setMovements(safeMoves(bot));
   await safeGoto(bot, new goals.GoalNear(target.x, target.y, target.z, 5), 8000);
-  return `Fled from ${hostile.name || hostile.mobType}!`;
+  return `Fled from ${hostile.name || "danger"}!`;
 }
 
 async function buildShelter(bot: Bot): Promise<string> {

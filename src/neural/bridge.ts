@@ -41,7 +41,7 @@ export function buildObservation(bot: Bot): NeuralObservation {
     if (relAngle > Math.PI) relAngle = 2 * Math.PI - relAngle;
     const relAngleDeg = relAngle * (180 / Math.PI);
 
-    const type = entity.name || (entity as any).mobType || "unknown";
+    const type = entity.name || "unknown";
     allEntities.push({ type, distance: dist, angle: relAngleDeg });
 
     if (isHostile(entity)) {
