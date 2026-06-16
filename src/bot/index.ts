@@ -273,12 +273,26 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
     addChatMessage(username, message, "free");
   });
 
+  // Death cause capture — the server's death message ("X drowned", "X
+  // suffocated in a wall", "X fell from a high place"…) arrives as chat just
+  // before/with the death event. Recording the real cause (was hardcoded
+  // "unknown") lets us diagnose recurring death-traps and feeds the bots'
+  // death-location avoidance.
+  let lastDeathMessage = "";
+  const DEATH_RE =
+    /\b(drowned|suffocat|fell|hit the ground|tried to swim in lava|burned|went up in flames|walked into fire|was slain|was shot|was blown up|blew up|was killed|starv|was pricked|was squashed|was impaled|was struck|froze|magma|withered|didn'?t want to live)/i;
+  bot.on("messagestr", (msg: string) => {
+    if (msg.includes(roleConfig.username) && DEATH_RE.test(msg)) lastDeathMessage = msg.trim();
+  });
+
   // Death
   bot.on("death", () => {
     const pos = bot.entity.position;
-    memStore.recordDeath(pos.x, pos.y, pos.z, "unknown");
+    const cause = lastDeathMessage || "unknown";
+    memStore.recordDeath(pos.x, pos.y, pos.z, cause);
     recordDeath(roleConfig.name);
-    console.log("[Bot] I died! Respawning...");
+    console.log(`[Bot] I died! Cause: ${cause}. Respawning...`);
+    lastDeathMessage = "";
     abortActiveSkill(bot);
   });
 
