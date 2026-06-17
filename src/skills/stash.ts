@@ -129,6 +129,18 @@ export function shouldKeep(
   keepItems: { name: string; minCount: number }[],
   currentCounts: Map<string, number>,
 ): boolean {
+  // ALWAYS keep valuable gear. Bots crafted iron tools (12 in one run) then
+  // deposited them as "surplus" and re-ground iron forever, never advancing.
+  // A bot should never give up its iron/diamond/netherite tools or armor.
+  const GEAR = ["_pickaxe", "_axe", "_sword", "_shovel", "_hoe", "_helmet", "_chestplate", "_leggings", "_boots"];
+  if (
+    (itemName.startsWith("iron_") || itemName.startsWith("diamond_") || itemName.startsWith("netherite_")) &&
+    GEAR.some((g) => itemName.includes(g))
+  ) {
+    return true;
+  }
+  if (itemName === "shield") return true;
+
   for (const keep of keepItems) {
     if (itemName.includes(keep.name)) {
       const kept = currentCounts.get(keep.name) ?? 0;
