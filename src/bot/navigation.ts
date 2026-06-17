@@ -154,3 +154,51 @@ export async function digOutIfStuck(bot: Bot): Promise<boolean> {
   }
   return true;
 }
+
+/**
+ * Anti-drown self-rescue. ~90% of all deaths were bots drowning in a water pit
+ * by the stash: they path in, can't climb out, and drown. When the bot's HEAD
+ * is submerged, swim up (jump) for air and head for the nearest dry shore. This
+ * is the bot's own swimming — self-preservation, not a cheat. Called on a fast
+ * timer from the brain. Returns true if it took rescue action.
+ */
+export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
+  const head = bot.blockAt(bot.entity.position.offset(0, 1, 0));
+  if (!head || head.name !== "water") return false; // head not submerged → breathing fine
+
+  // Find the nearest dry shore: a solid block with air above, scanned over fixed
+  // offset rings (NOT a findBlock predicate that calls blockAt — that silently
+  // matches nothing). Prefer the closest.
+  const base = bot.entity.position.floored();
+  let shore = null as ReturnType<typeof bot.blockAt> | null;
+  for (let r = 1; r <= 8 && !shore; r++) {
+    for (let dx = -r; dx <= r && !shore; dx++) {
+      for (let dz = -r; dz <= r && !shore; dz++) {
+        if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue; // ring perimeter only
+        for (let dy = -1; dy <= 1; dy++) {
+          const b = bot.blockAt(base.offset(dx, dy, dz));
+          const above = bot.blockAt(base.offset(dx, dy + 1, dz));
+          if (b && b.boundingBox === "block" && b.name !== "water" && above && above.name === "air") {
+            shore = b;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  try {
+    bot.setControlState("jump", true); // swim upward toward the surface for air
+    if (shore && shore.position) {
+      await bot.lookAt(shore.position.offset(0.5, 1.5, 0.5));
+      bot.setControlState("forward", true);
+    }
+    await bot.waitForTicks(24); // ~1.2s of swimming up/out; the timer re-runs if still under
+  } catch {
+    /* best effort — timer retries */
+  } finally {
+    bot.setControlState("forward", false);
+    bot.setControlState("jump", false);
+  }
+  return true;
+}

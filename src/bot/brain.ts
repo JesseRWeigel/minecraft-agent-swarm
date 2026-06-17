@@ -24,7 +24,7 @@ import { queryStrategic, queryReactive, queryCritic, chatWithLLM, type LLMMessag
 import type { RoleContext } from "../llm/prompts.js";
 import { getWorldContext, isHostile } from "./perception.js";
 import { executeAction } from "./actions.js";
-import { digOutIfStuck } from "./navigation.js";
+import { digOutIfStuck, escapeWaterIfDrowning } from "./navigation.js";
 import { updateOverlay, addChatMessage, speakThought, setCurrentBot } from "../stream/overlay.js";
 import { generateSpeech } from "../stream/tts.js";
 import { filterContent, filterChatMessage, filterViewerMessage } from "../safety/filter.js";
@@ -75,6 +75,7 @@ export class BotBrain {
   // Processing state
   private processing = false;
   private stopped = false;
+  private rescuingFromWater = false;
   private eventQueue: BrainEvent[] = [];
 
   // Timers
@@ -192,6 +193,20 @@ export class BotBrain {
       if (!this.processing && !isSkillRunning(this.bot)) digOutIfStuck(this.bot).catch(() => {});
     }, 25_000);
     unstickTimer.unref?.();
+
+    // 0c. Anti-drown: ~90% of all deaths were bots drowning in the stash water
+    // pit. Drowning kills in ~15s, so check often and swim out even mid-action
+    // (this overrides whatever the bot is doing — staying alive comes first).
+    const drownTimer = setInterval(() => {
+      if (this.rescuingFromWater) return;
+      this.rescuingFromWater = true;
+      escapeWaterIfDrowning(this.bot)
+        .catch(() => {})
+        .finally(() => {
+          this.rescuingFromWater = false;
+        });
+    }, 3000);
+    drownTimer.unref?.();
 
     // 2. Hostile scanner — checks for nearby threats every 2s
     this.hostileScanner = setInterval(() => this.scanHostiles(), this.HOSTILE_CHECK_MS);

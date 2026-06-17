@@ -245,7 +245,7 @@ Each decision executes a gated action (restricted to the bot's allowed actions/s
 
 **Leash enforcement:** Each bot has a max distance from home. At 80% of leash radius, the LLM is warned. At 150%, the bot is force-navigated home.
 
-**Autonomy — no cheating (default):** With `ALLOW_INTERVENTIONS=false` (the default) the LLM decides *everything*. There are no deterministic overrides that act for the bots or hand them resources. The only non-LLM helpers are reflexes a human player would do without thinking: auto-equipping the best armor a bot already owns, and digging itself out when boxed in. Setting `ALLOW_INTERVENTIONS=true` re-enables optional scaffolding (leash returns, water/buried escapes, stash bootstrap) for reliability demos — but the project's goal is capability that survives with interventions *off*.
+**Autonomy — no cheating (default):** With `ALLOW_INTERVENTIONS=false` (the default) the LLM decides *everything*. There are no deterministic overrides that act for the bots or hand them resources. The only non-LLM helpers are reflexes a human player would do without thinking: auto-equipping the best armor a bot already owns, digging itself out when boxed in, and swimming to the surface when its head goes underwater (self-preservation, not item handouts). Setting `ALLOW_INTERVENTIONS=true` re-enables optional scaffolding (leash returns, water/buried escapes, stash bootstrap) for reliability demos — but the project's goal is capability that survives with interventions *off*.
 
 ### Skill System
 
