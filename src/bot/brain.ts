@@ -1015,6 +1015,17 @@ export class BotBrain {
       normalizedParams.z = this.roleConfig.stashPos.z;
     }
 
+    // Give smelt_ores the stash position so it can withdraw ore/fuel the team
+    // already mined. Bots kept invoking smelt empty-handed ("Nothing to smelt"
+    // / "No fuel") because the miner deposits ore+coal and a different bot
+    // smelts — this connects them via the shared stash.
+    const isSmelt =
+      decision.action === "smelt_ores" ||
+      (decision.action === "invoke_skill" && normalizedParams.skill === "smelt_ores");
+    if (isSmelt && this.roleConfig.stashPos && normalizedParams.stashPos === undefined) {
+      normalizedParams.stashPos = this.roleConfig.stashPos;
+    }
+
     // ── Execute ──
     const result = await executeAction(this.bot, decision.action, normalizedParams);
     this.lastAction = decision.action;

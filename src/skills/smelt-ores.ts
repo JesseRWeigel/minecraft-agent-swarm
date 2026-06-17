@@ -4,6 +4,7 @@ import { Vec3 } from "vec3";
 import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
 import mcDataLoader from "minecraft-data";
+import { withdrawStash } from "./stash.js";
 
 /** Items that can be smelted: input → output name. */
 const SMELT_RECIPES: Record<string, string> = {
@@ -50,8 +51,44 @@ export const smeltOresSkill: Skill = {
     return {};
   },
 
-  async execute(bot, _params, signal, onProgress): Promise<SkillResult> {
+  async execute(bot, params, signal, onProgress): Promise<SkillResult> {
     const mcData = mcDataLoader(bot.version);
+    const countInv = (name: string) =>
+      bot.inventory
+        .items()
+        .filter((i) => i.name === name)
+        .reduce((s, i) => s + i.count, 0);
+
+    // --- Step 0: Pull ore + fuel from the shared stash if we lack them. ---
+    // Bots kept invoking smelt empty-handed ("Nothing to smelt" / "No fuel")
+    // because the miner deposits raw_iron + coal and a DIFFERENT bot tries to
+    // smelt. Withdraw what the team already mined (the stash is the intended
+    // hand-off mechanism — not a cheat).
+    const stashPos = params?.stashPos as { x: number; y: number; z: number } | undefined;
+    if (stashPos && !signal.aborted) {
+      const haveSmeltable = Object.keys(SMELT_RECIPES).some((n) => countInv(n) > 0);
+      if (!haveSmeltable) {
+        for (const ore of ["raw_iron", "iron_ore", "raw_copper", "copper_ore", "raw_gold", "gold_ore"]) {
+          try {
+            await withdrawStash(bot, stashPos, ore, 16);
+          } catch {
+            /* none in stash — try next */
+          }
+          if (Object.keys(SMELT_RECIPES).some((n) => countInv(n) > 0)) break;
+        }
+      }
+      const haveFuel = FUEL_ITEMS.some((n) => countInv(n) > 0);
+      if (!haveFuel) {
+        for (const fuel of ["coal", "charcoal"]) {
+          try {
+            await withdrawStash(bot, stashPos, fuel, 16);
+          } catch {
+            /* none — try next */
+          }
+          if (FUEL_ITEMS.some((n) => countInv(n) > 0)) break;
+        }
+      }
+    }
 
     // --- Step 1: Find smeltable items in inventory ---
     const toSmelt: Array<{ itemName: string; count: number; output: string }> = [];
