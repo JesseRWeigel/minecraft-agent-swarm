@@ -3,6 +3,7 @@ import type { Skill, SkillResult } from "./types.js";
 import { Vec3 } from "vec3";
 import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
+import { collectNearbyDrops } from "../bot/navigation.js";
 
 const TUNNEL_LENGTH = 30;
 const TORCH_INTERVAL = 6;
@@ -32,70 +33,41 @@ export const stripMineSkill: Skill = {
     const forward = getCardinalDirection(bot.entity.yaw);
     console.log(`[Skill] Strip mine direction: ${dirName(forward)}, starting Y=${bot.entity.position.y.toFixed(0)}`);
 
-    // --- Phase 1: Staircase down to TARGET_Y if needed ---
+    // --- Phase 1: Descend to TARGET_Y (iron/diamond depth) ---
+    // The old manual staircase dug blocks but moveToPosition often failed to
+    // follow it down, so the bot stayed at the surface (Y~64-90) and tunneled
+    // where iron is rare — 12 runs found only coal, 0 iron. Use the pathfinder
+    // with digging enabled to ACTUALLY reach depth: it handles the descent and
+    // avoids lava/dangerous falls itself.
     const currentY = Math.floor(bot.entity.position.y);
     if (currentY > TARGET_Y + 5) {
       onProgress({
         skillName: "strip_mine",
-        phase: "Digging staircase",
-        progress: 0,
-        message: `Digging down to Y=${TARGET_Y}...`,
+        phase: "Digging down",
+        progress: 0.05,
+        message: `Digging down to Y=${TARGET_Y} (iron depth)...`,
         active: true,
       });
-
-      const stepsDown = currentY - TARGET_Y;
-      for (let step = 0; step < stepsDown && !signal.aborted; step++) {
-        const pos = bot.entity.position.floored();
-
-        // Dig 3 blocks: head level ahead, foot level ahead, below foot ahead
-        const targets = [
-          pos.offset(forward.x, 1, forward.z),
-          pos.offset(forward.x, 0, forward.z),
-          pos.offset(forward.x, -1, forward.z),
-        ];
-
-        for (const t of targets) {
-          const b = bot.blockAt(t);
-          if (!b || b.name === "air" || b.name === "water" || b.name === "bedrock") continue;
-          if (b.name === "lava") {
-            return {
-              success: mined > 0,
-              message: `Hit lava! Retreated. Mined ${mined} blocks. ${formatOres(oresFound)}`,
-              stats: { blocksMined: mined, oresFound: oresFound.length },
-            };
-          }
-
-          await equipBestPickaxe(bot);
-          try {
-            await bot.dig(b);
-            mined++;
-            if (b.name.includes("ore")) oresFound.push(b.name);
-          } catch {
-            break;
-          }
-        }
-
-        // Move into the dug space (one step forward, one step down)
-        const targetPos = pos.offset(forward.x, -1, forward.z);
-        await moveToPosition(bot, targetPos);
-
-        // Place torch on wall every N steps
-        if (step > 0 && step % TORCH_INTERVAL === 0) {
-          await placeTorchOnWall(bot, forward);
-        }
-
-        if (step % 5 === 0) {
-          onProgress({
-            skillName: "strip_mine",
-            phase: "Digging staircase",
-            progress: (step / stepsDown) * 0.3,
-            message: `Y=${bot.entity.position.y.toFixed(0)} → ${TARGET_Y}`,
-            active: true,
-          });
-        }
-
-        if (bot.entity.position.y <= TARGET_Y + 1) break;
+      const digMoves = new Movements(bot);
+      digMoves.canDig = true;
+      digMoves.allow1by1towers = true;
+      bot.pathfinder.setMovements(digMoves);
+      try {
+        await Promise.race([
+          bot.pathfinder.goto(new goals.GoalY(TARGET_Y)),
+          new Promise<void>((_, rej) =>
+            setTimeout(() => {
+              bot.pathfinder.stop();
+              rej(new Error("descend timeout"));
+            }, 90000),
+          ),
+        ]);
+      } catch {
+        /* partial descent — mine wherever we reached */
       }
+      // Collect anything the descent dropped (ore dug on the way down).
+      await collectNearbyDrops(bot, 4, 3000);
+      console.log(`[Skill] strip_mine descended to Y=${bot.entity.position.y.toFixed(0)}`);
     }
 
     // --- Phase 2: Horizontal mining tunnel ---
@@ -165,6 +137,11 @@ export const stripMineSkill: Skill = {
     if (mined === 0) {
       return { success: false, message: "Couldn't mine anything. Pickaxe might have broken." };
     }
+
+    // Sweep the tunnel to pick up the ore we dug — without this, strip_mine
+    // reported "Found 8x iron_ore" but left the drops on the ground, so the
+    // bot never actually had iron to smelt. Walk back over the tunnel.
+    await collectNearbyDrops(bot, 16, 8000);
 
     return {
       success: true,
