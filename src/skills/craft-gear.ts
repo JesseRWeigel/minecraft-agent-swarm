@@ -92,9 +92,22 @@ export const craftGearSkill: Skill = {
         }
 
         try {
+          const countOf = (n: string) =>
+            bot.inventory
+              .items()
+              .filter((i) => i.name === n)
+              .reduce((s, i) => s + i.count, 0);
+          const before = countOf(itemName);
           await bot.craft(recipe, 1, table || undefined);
-          crafted.push(itemName);
-          break;
+          // VERIFY the craft actually produced the item. bot.craft can return
+          // without error yet without crafting (e.g. not actually at the table),
+          // which made craft_gear report phantom 'iron_pickaxe' successes while
+          // the bot held nothing. Only claim it if the count truly rose; else
+          // fall through to a lower tier so the bot still gets a working tool.
+          if (countOf(itemName) > before) {
+            crafted.push(itemName);
+            break;
+          }
         } catch {
           continue;
         }
