@@ -149,6 +149,13 @@ export function shouldKeep(
   const KEEP_MATERIALS = ["raw_iron", "iron_ingot", "raw_gold", "gold_ingot", "diamond"];
   if (KEEP_MATERIALS.includes(itemName)) return true;
 
+  // Keep wheat + seeds in inventory. The farm harvests only ~2 wheat per pass
+  // and bread needs 3 — but bots deposited each harvest instantly, so wheat
+  // never reached 3 and bread never baked ('Not enough wheat' x8/run). Holding
+  // wheat lets small harvests accumulate across passes until bread can bake;
+  // holding seeds keeps the bot able to replant.
+  if (itemName === "wheat" || itemName === "wheat_seeds") return true;
+
   // Keep a PERSONAL FOOD BUFFER. Bots deposited every scrap of food the instant
   // they got it (314 deposits/run) and then starved between production cycles —
   // a starving worker (esp. the miner) burns all its turns failing to eat
