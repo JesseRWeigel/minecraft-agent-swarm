@@ -149,6 +149,45 @@ export function shouldKeep(
   const KEEP_MATERIALS = ["raw_iron", "iron_ingot", "raw_gold", "gold_ingot", "diamond"];
   if (KEEP_MATERIALS.includes(itemName)) return true;
 
+  // Keep a PERSONAL FOOD BUFFER. Bots deposited every scrap of food the instant
+  // they got it (314 deposits/run) and then starved between production cycles —
+  // a starving worker (esp. the miner) burns all its turns failing to eat
+  // instead of working. Hold up to KEEP_FOOD food stacks; surplus still goes to
+  // the stash for the team.
+  const FOOD = new Set([
+    "bread",
+    "cooked_beef",
+    "cooked_porkchop",
+    "cooked_mutton",
+    "cooked_chicken",
+    "cooked_cod",
+    "cooked_salmon",
+    "cooked_rabbit",
+    "baked_potato",
+    "apple",
+    "golden_apple",
+    "carrot",
+    "melon_slice",
+    "mushroom_stew",
+    "rabbit_stew",
+    "beetroot_soup",
+    "raw_beef",
+    "raw_porkchop",
+    "raw_mutton",
+    "raw_chicken",
+    "raw_cod",
+    "raw_salmon",
+  ]);
+  if (FOOD.has(itemName)) {
+    const KEEP_FOOD = 6;
+    const kept = currentCounts.get("__food") ?? 0;
+    if (kept < KEEP_FOOD) {
+      currentCounts.set("__food", kept + 1);
+      return true;
+    }
+    return false;
+  }
+
   for (const keep of keepItems) {
     if (itemName.includes(keep.name)) {
       const kept = currentCounts.get(keep.name) ?? 0;
