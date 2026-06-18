@@ -141,6 +141,14 @@ export function shouldKeep(
   }
   if (itemName === "shield") return true;
 
+  // Keep precious crafting materials in inventory. Bots deposited every iron
+  // ingot the instant they smelted it (314 deposits/run, empty inventories), so
+  // they never accumulated the 3+ ingots needed in-hand to craft an iron tool.
+  // Hold onto these so the smelter can actually craft — surplus is fine, the
+  // bots' inventories are nearly empty anyway.
+  const KEEP_MATERIALS = ["raw_iron", "iron_ingot", "raw_gold", "gold_ingot", "diamond"];
+  if (KEEP_MATERIALS.includes(itemName)) return true;
+
   for (const keep of keepItems) {
     if (itemName.includes(keep.name)) {
       const kept = currentCounts.get(keep.name) ?? 0;
