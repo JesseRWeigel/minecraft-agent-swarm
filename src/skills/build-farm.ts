@@ -187,8 +187,12 @@ export const buildFarmSkill: Skill = {
       return { success: false, message: "Water block has no position — chunk may not be loaded. Try again." };
     }
     const farmTargets: Vec3[] = [];
-    for (let dx = -4; dx <= 4; dx++) {
-      for (let dz = -4; dz <= 4; dz++) {
+    // 13x13 around the water (was 9x9): a bigger plot = bigger harvests = enough
+    // bread to actually feed the team. Food scarcity (workers starving, unable
+    // to mine/build) is the universal bottleneck; the farm is the only renewable
+    // source, so make each pass yield more.
+    for (let dx = -6; dx <= 6; dx++) {
+      for (let dz = -6; dz <= 6; dz++) {
         if (dx === 0 && dz === 0) continue; // skip water block itself
         const pos = waterPos.offset(dx, 0, dz);
         const block = bot.blockAt(pos);
@@ -251,10 +255,10 @@ export const buildFarmSkill: Skill = {
     });
 
     let seedCount = countItem(bot, "wheat_seeds");
-    for (let i = 0; i < 50 && seedCount < 16 && !signal.aborted; i++) {
+    for (let i = 0; i < 90 && seedCount < 32 && !signal.aborted; i++) {
       const grass = bot.findBlock({
         matching: (b) => b.name === "short_grass" || b.name === "tall_grass",
-        maxDistance: 24,
+        maxDistance: 40,
       });
       if (!grass) break;
 
@@ -282,7 +286,7 @@ export const buildFarmSkill: Skill = {
     });
 
     let planted = 0;
-    const target = Math.min(seedCount, farmTargets.length, 16);
+    const target = Math.min(seedCount, farmTargets.length, 32);
 
     for (const targetPos of farmTargets) {
       if (planted >= target || signal.aborted) break;
