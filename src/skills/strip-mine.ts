@@ -5,13 +5,13 @@ import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
 import { collectNearbyDrops } from "../bot/navigation.js";
 
-const TUNNEL_LENGTH = 30;
+const TUNNEL_LENGTH = 40;
 const TORCH_INTERVAL = 6;
-// Y=-16 is in the deepslate diamond zone (diamonds concentrate Y<0, peak ~-59).
-// The old Y=11 was iron-rich but nearly diamond-free (1 diamond_ore/run). Bots
-// now reach depth reliably (pathfinder dig-down) and have iron pickaxes, so push
-// into real diamond territory. Still well above the worst lava lakes (~-50).
-const TARGET_Y = -16;
+// Y=-54 is the diamond sweet spot (peak ~-59, just above the jagged bedrock).
+// Y=-16 reached depth + 0 lava deaths (tunnel skips lava, pathfinder avoids it),
+// but found 0 diamonds — too sparse there. Push to true diamond level now that
+// the safety held. Longer 40-block tunnels add volume (diamonds are rare).
+const TARGET_Y = -54;
 
 export const stripMineSkill: Skill = {
   name: "strip_mine",
@@ -63,7 +63,7 @@ export const stripMineSkill: Skill = {
             setTimeout(() => {
               bot.pathfinder.stop();
               rej(new Error("descend timeout"));
-            }, 150000),
+            }, 200000),
           ),
         ]);
       } catch {
