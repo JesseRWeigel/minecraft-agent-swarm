@@ -238,6 +238,22 @@ export async function depositStash(
     byCategory.get(cat)!.push(item);
   }
 
+  // DIAGNOSTIC: precious items vanish despite shouldKeep protecting them and
+  // keepInventory being on. Log exactly what's being deposited (should never
+  // include iron/wheat/food) and what the bot is KEEPING (should persist). If
+  // RCON later shows these gone, the loss is downstream of deposit.
+  const PRECIOUS = /iron_(pickaxe|axe|sword|shovel|ingot)|^wheat$|bread|cooked_|raw_(beef|mutton|porkchop)|diamond/;
+  const depositing = [...byCategory.values()].flat().map((i) => `${i.count}x${i.name}`);
+  const keeping = bot.inventory
+    .items()
+    .filter((i) => PRECIOUS.test(i.name))
+    .map((i) => `${i.count}x${i.name}`);
+  const leaked = depositing.filter((s) => PRECIOUS.test(s));
+  console.log(
+    `[DepositDiag] ${bot.username} keeping[${keeping.join(",") || "none"}]` +
+      (leaked.length ? ` LEAK-DEPOSITING[${leaked.join(",")}]` : ""),
+  );
+
   // For each category, find nearest chest at the right row offset and deposit
   for (const [category, items] of byCategory) {
     const rowOffset = getRowOffset(category);
