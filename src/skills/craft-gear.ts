@@ -25,11 +25,32 @@ export const craftGearSkill: Skill = {
     return {};
   },
 
-  async execute(bot, _params, signal, onProgress): Promise<SkillResult> {
+  async execute(bot, params, signal, onProgress): Promise<SkillResult> {
     const mcData = mcDataLoader(bot.version);
     const crafted: string[] = [];
     const total = TOOL_TYPES.length;
     let done = 0;
+
+    // Pull iron ingots from the shared stash before crafting (the stash is the
+    // team warehouse — use it). The smelter deposits ingots; whoever crafts
+    // withdraws them. Without this, craft_gear only ever found enough materials
+    // for stone/wood tools and never made iron, even though the team had smelted
+    // plenty. Mirrors smelt_ores' stash withdrawal.
+    const stashPos = params?.stashPos as { x: number; y: number; z: number } | undefined;
+    if (stashPos && !signal.aborted) {
+      const ironIngots = bot.inventory
+        .items()
+        .filter((i) => i.name === "iron_ingot")
+        .reduce((s, i) => s + i.count, 0);
+      if (ironIngots < 9) {
+        const { withdrawStash } = await import("./stash.js");
+        try {
+          await withdrawStash(bot, stashPos, "iron_ingot", 9 - ironIngots);
+        } catch {
+          /* none in stash — craft whatever tier we can */
+        }
+      }
+    }
 
     // Ensure we have sticks (need at least 8 for a full set)
     await ensureSticks(bot, 8, signal);

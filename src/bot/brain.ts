@@ -1026,6 +1026,15 @@ export class BotBrain {
       normalizedParams.stashPos = this.roleConfig.stashPos;
     }
 
+    // Give craft_gear the stash position so it can withdraw iron ingots the team
+    // already smelted (the stash is the shared warehouse — use it, per design).
+    const isCraftGear =
+      decision.action === "craft_gear" ||
+      (decision.action === "invoke_skill" && normalizedParams.skill === "craft_gear");
+    if (isCraftGear && this.roleConfig.stashPos && normalizedParams.stashPos === undefined) {
+      normalizedParams.stashPos = this.roleConfig.stashPos;
+    }
+
     // ── Execute ──
     const result = await executeAction(this.bot, decision.action, normalizedParams);
     this.lastAction = decision.action;
