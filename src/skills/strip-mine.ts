@@ -7,11 +7,13 @@ import { collectNearbyDrops } from "../bot/navigation.js";
 
 const TUNNEL_LENGTH = 40;
 const TORCH_INTERVAL = 6;
-// Y=-54 is the diamond sweet spot (peak ~-59, just above the jagged bedrock).
-// Y=-16 reached depth + 0 lava deaths (tunnel skips lava, pathfinder avoids it),
-// but found 0 diamonds — too sparse there. Push to true diamond level now that
-// the safety held. Longer 40-block tunnels add volume (diamonds are rare).
-const TARGET_Y = -54;
+// Y=-16: deepslate level — good iron/redstone/lapis, some diamonds, and PROVEN
+// lava-safe (0 lava deaths at this depth). Y=-54 (the diamond sweet spot) was
+// tried but caused a lava-death spike (4 of 6 deaths/run, bots fleeing mobs
+// into lava in the dark deep caves) with ZERO diamond payoff — diamonds are
+// volume-limited by the bots' intermittent mining, not depth-limited, so the
+// deep push paid lava costs for nothing. Back to the safe, productive level.
+const TARGET_Y = -16;
 
 export const stripMineSkill: Skill = {
   name: "strip_mine",
