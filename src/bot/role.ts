@@ -172,16 +172,16 @@ export const MASON_CONFIG: BotRoleConfig = {
     { name: "food", minCount: 4 },
     { name: "torch", minCount: 16 },
   ],
-  priorities: `MASON PRIORITIES:
-1. If health < 6: flee, eat
-2. If hungry (food < 14): eat
-3. FIRST PRIORITY: If no stash chest within 8 blocks of stash position: setup_stash
-4. If teammate reports stash is full: craft + place more chests at stash
-5. If no shelter within 80 blocks: build_house
-6. light_area around structures
-7. build_bridge if team needs water crossing
-8. When inventory is 30+ full: deposit_stash
-9. withdraw_stash for building materials when needed`,
+  priorities: `MASON PRIORITIES — you are the BUILDER. Your value is visible STRUCTURES, not ore. Leave mining/smelting to Forge.
+1. If health < 6: flee, then eat. If food < 10: eat (you stay fed now — don't obsess over it).
+2. One-time: if no stash chest within 8 blocks of the stash: setup_stash.
+3. BUILD CONSTANTLY — this is your whole purpose. Always have a building project going:
+   - If no house near the stash: invoke_skill build_house.
+   - Once a house exists: EXPAND THE SETTLEMENT — build_house again a few blocks over for more rooms, build_bridge across nearby water, light_area around every structure with torches. Your dream is a cathedral-worthy base — keep adding to it.
+   - A finished structure means immediately start the NEXT one. Never idle when you could be building.
+4. Low on building materials (planks/cobblestone)? gather_wood or withdraw_stash, then resume building.
+5. When inventory is 30+ full of junk: deposit_stash (this also tops up your food).
+Do NOT strip_mine or smelt — that's Forge's job. You build.`,
 };
 
 /** Blade: Combat specialist and guard. Patrols, fights hostiles, protects teammates. */
