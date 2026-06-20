@@ -62,11 +62,11 @@ export const buildHouseSkill: Skill = {
       const candidates = getAllMemoryStores()
         .map((s) => s.getNearestStructure("house", botPos.x, botPos.z))
         .filter((st): st is NonNullable<typeof st> => !!st)
-        .filter((st) => Math.hypot(st.x - botPos.x, st.z - botPos.z) < 80)
+        .filter((st) => Math.hypot(st.x - botPos.x, st.z - botPos.z) < 12)
         .sort((a, b) => Math.hypot(a.x - botPos.x, a.z - botPos.z) - Math.hypot(b.x - botPos.x, b.z - botPos.z));
       const nearest =
         candidates[0] ??
-        (hasStructureNearby("house", botPos.x, botPos.y, botPos.z, 80)
+        (hasStructureNearby("house", botPos.x, botPos.y, botPos.z, 12)
           ? getNearestStructure("house", botPos.x, botPos.z)
           : null);
 
