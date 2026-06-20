@@ -238,22 +238,6 @@ export async function depositStash(
     byCategory.get(cat)!.push(item);
   }
 
-  // DIAGNOSTIC: precious items vanish despite shouldKeep protecting them and
-  // keepInventory being on. Log exactly what's being deposited (should never
-  // include iron/wheat/food) and what the bot is KEEPING (should persist). If
-  // RCON later shows these gone, the loss is downstream of deposit.
-  const PRECIOUS = /iron_(pickaxe|axe|sword|shovel|ingot)|^wheat$|bread|cooked_|raw_(beef|mutton|porkchop)|diamond/;
-  const depositing = [...byCategory.values()].flat().map((i) => `${i.count}x${i.name}`);
-  const keeping = bot.inventory
-    .items()
-    .filter((i) => PRECIOUS.test(i.name))
-    .map((i) => `${i.count}x${i.name}`);
-  const leaked = depositing.filter((s) => PRECIOUS.test(s));
-  console.log(
-    `[DepositDiag] ${bot.username} keeping[${keeping.join(",") || "none"}]` +
-      (leaked.length ? ` LEAK-DEPOSITING[${leaked.join(",")}]` : ""),
-  );
-
   // For each category, find nearest chest at the right row offset and deposit
   for (const [category, items] of byCategory) {
     const rowOffset = getRowOffset(category);
@@ -310,6 +294,25 @@ export async function depositStash(
       container.close();
     } catch {
       noChest += items.length;
+    }
+  }
+
+  // Top up food while we're already at the stash (non-disruptive distribution).
+  // Remote workers (miner, explorer) starve away from the farm; topping up on
+  // each stash visit spreads the team's surplus bread to whoever comes to
+  // deposit — the stash as a shared pantry, no extra trips.
+  const foodHeld = bot.inventory
+    .items()
+    .filter((i) => i.name === "bread" || i.name.startsWith("cooked_"))
+    .reduce((s, i) => s + i.count, 0);
+  if (foodHeld < 4) {
+    for (const f of ["bread", "cooked_beef", "cooked_porkchop", "cooked_mutton", "cooked_chicken", "cooked_cod"]) {
+      try {
+        await withdrawStash(bot, stashPos, f, 4 - foodHeld);
+      } catch {
+        /* none of this food in stash — try next */
+      }
+      if (bot.inventory.items().some((i) => i.name === f)) break;
     }
   }
 
