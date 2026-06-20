@@ -38,7 +38,7 @@ export const buildHouseSkill: Skill = {
     return {};
   },
 
-  async execute(bot, _params, signal, onProgress): Promise<SkillResult> {
+  async execute(bot, params, signal, onProgress): Promise<SkillResult> {
     const bp = houseBlueprint;
 
     // --- Step 1: Find a flat build site ---
@@ -104,6 +104,25 @@ export const buildHouseSkill: Skill = {
     // +6 for door crafting (6 planks → 3 doors, we need 2)
     const doorsNeeded = bp.materials["oak_door"] || 0;
     const totalPlanksTarget = totalPlanksNeeded + 8 + (doorsNeeded > 0 ? 6 : 0);
+
+    // Pull building materials from the shared stash before chopping trees. The
+    // team gathers wood + cobblestone and deposits it, so the warehouse usually
+    // has plenty; chopping enough planks for a whole house from scratch was the
+    // blocker ("Not enough planks"). Stash-first, chop only the remainder.
+    // Mirrors smelt_ores/craft_gear (the user's deposit+withdraw model).
+    const stashPos = (params as { stashPos?: { x: number; y: number; z: number } } | undefined)?.stashPos;
+    const haveEnoughWood = () => countAllPlanks(bot) + countAllLogs(bot) * 4 >= totalPlanksTarget;
+    if (stashPos && !signal.aborted && !haveEnoughWood()) {
+      const { withdrawStash } = await import("./stash.js");
+      for (const item of ["oak_planks", "spruce_planks", "birch_planks", "oak_log", "spruce_log", "birch_log"]) {
+        if (haveEnoughWood()) break;
+        try {
+          await withdrawStash(bot, stashPos, item, 64);
+        } catch {
+          /* none of this type in stash — try next */
+        }
+      }
+    }
 
     const existingPlanks = countAllPlanks(bot);
     const existingLogs = countAllLogs(bot);

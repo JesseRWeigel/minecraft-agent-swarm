@@ -1035,6 +1035,15 @@ export class BotBrain {
       normalizedParams.stashPos = this.roleConfig.stashPos;
     }
 
+    // build_house pulls planks/logs from the stash so the builder isn't blocked
+    // chopping a whole house's worth of wood from scratch.
+    const isBuildHouse =
+      decision.action === "build_house" ||
+      (decision.action === "invoke_skill" && normalizedParams.skill === "build_house");
+    if (isBuildHouse && this.roleConfig.stashPos && normalizedParams.stashPos === undefined) {
+      normalizedParams.stashPos = this.roleConfig.stashPos;
+    }
+
     // ── Execute ──
     const result = await executeAction(this.bot, decision.action, normalizedParams);
     this.lastAction = decision.action;
