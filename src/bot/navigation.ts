@@ -19,6 +19,13 @@ export function explorerMoves(bot: Bot): InstanceType<typeof Movements> {
   moves.allow1by1towers = false;
   moves.allowFreeMotion = true; // needed for pathfinder to route through water
   moves.scafoldingBlocks = [];
+  // Fall safety: Atlas the explorer was 25 of 31 fall deaths over the week,
+  // roaming off cliffs/ledges. Cap how far the pathfinder will drop (default
+  // lets it take 4-block fall-damage drops) and forbid parkour leaps across
+  // gaps — both routinely walked him off high terrain. Navigation caution,
+  // not a cheat.
+  moves.maxDropDown = 3; // 3 blocks = no fall damage
+  moves.allowParkour = false;
   return moves;
 }
 
