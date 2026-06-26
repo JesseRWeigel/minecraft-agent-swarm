@@ -1044,6 +1044,15 @@ export class BotBrain {
       normalizedParams.stashPos = this.roleConfig.stashPos;
     }
 
+    // light_area pulls torches from the stash (or crafts them) so it stops
+    // failing "No torches" — lit caves cut the top death cause (cave mobs).
+    const isLightArea =
+      decision.action === "light_area" ||
+      (decision.action === "invoke_skill" && normalizedParams.skill === "light_area");
+    if (isLightArea && this.roleConfig.stashPos && normalizedParams.stashPos === undefined) {
+      normalizedParams.stashPos = this.roleConfig.stashPos;
+    }
+
     // ── Execute ──
     const result = await executeAction(this.bot, decision.action, normalizedParams);
     this.lastAction = decision.action;

@@ -15,13 +15,34 @@ export const lightAreaSkill: Skill = {
     return {};
   },
 
-  async execute(bot, _params, signal, onProgress): Promise<SkillResult> {
-    const torches = bot.inventory.items().filter((i) => i.name === "torch");
-    const torchCount = torches.reduce((s, i) => s + i.count, 0);
+  async execute(bot, params, signal, onProgress): Promise<SkillResult> {
+    const countTorches = () =>
+      bot.inventory
+        .items()
+        .filter((i) => i.name === "torch")
+        .reduce((s, i) => s + i.count, 0);
 
-    if (torchCount === 0) {
-      return { success: false, message: "No torches in inventory! Craft some first (coal + sticks)." };
+    // Acquire torches if we have none: withdraw from the shared stash, else
+    // CRAFT them from coal + sticks (the team mines coal constantly). Without
+    // this, light_area just bailed "No torches" — and dark mining caves (mobs
+    // spawn there even in frozen-day) are now the top death cause.
+    if (countTorches() === 0 && !signal.aborted) {
+      const stashPos = (params as { stashPos?: { x: number; y: number; z: number } } | undefined)?.stashPos;
+      if (stashPos) {
+        const { withdrawStash } = await import("./stash.js");
+        try {
+          await withdrawStash(bot, stashPos, "torch", 16);
+        } catch {
+          /* none in stash — craft below */
+        }
+      }
+      if (countTorches() === 0) await craftTorches(bot);
     }
+
+    if (countTorches() === 0) {
+      return { success: false, message: "No torches and couldn't make any — need coal + sticks (planks)." };
+    }
+    const torchCount = countTorches();
 
     const center = bot.entity.position.floored();
     const SPACING = 5;
@@ -131,3 +152,44 @@ export const lightAreaSkill: Skill = {
     };
   },
 };
+
+/** Craft torches from coal/charcoal + sticks (crafting sticks from planks if needed). */
+async function craftTorches(bot: Bot): Promise<void> {
+  const mcDataMod = await import("minecraft-data");
+  const mcData = mcDataMod.default(bot.version);
+  const has = (n: string) =>
+    bot.inventory
+      .items()
+      .filter((i) => i.name === n)
+      .reduce((s, i) => s + i.count, 0);
+
+  // Need sticks — craft from any planks if short.
+  if (has("stick") === 0) {
+    const stick = mcData.itemsByName["stick"];
+    const planks = bot.inventory.items().find((i) => i.name.endsWith("_planks"));
+    if (stick && planks) {
+      const recipe = bot.recipesFor(stick.id, null, 1, null)[0];
+      if (recipe) {
+        try {
+          await bot.craft(recipe, 1, undefined);
+        } catch {
+          /* best effort */
+        }
+      }
+    }
+  }
+
+  const hasFuel = has("coal") > 0 || has("charcoal") > 0;
+  if (!hasFuel || has("stick") === 0) return; // can't craft torches without both
+
+  const torch = mcData.itemsByName["torch"];
+  if (!torch) return;
+  const recipe = bot.recipesFor(torch.id, null, 1, null)[0];
+  if (recipe) {
+    try {
+      await bot.craft(recipe, Math.min(has("coal") + has("charcoal"), 4), undefined);
+    } catch {
+      /* best effort */
+    }
+  }
+}
