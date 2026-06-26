@@ -9,6 +9,13 @@ export function safeMoves(bot: Bot): InstanceType<typeof Movements> {
   moves.allow1by1towers = false;
   moves.allowFreeMotion = false;
   moves.scafoldingBlocks = [];
+  // Fall safety for the TEAM-WIDE default movement (go_to + every post-action
+  // nav). The explorerMoves-only cap missed this path — bots still fell during
+  // go_to, incl. into the mined-out pits around the base. Cap drop height (no
+  // fall damage) and forbid parkour leaps so the pathfinder never routes over
+  // a dangerous drop. Navigation caution, not a cheat.
+  moves.maxDropDown = 3;
+  moves.allowParkour = false;
   return moves;
 }
 
