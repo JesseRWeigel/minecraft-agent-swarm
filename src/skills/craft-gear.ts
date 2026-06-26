@@ -13,11 +13,16 @@ const TIERS = [
 ];
 
 const TOOL_TYPES = ["pickaxe", "axe", "sword", "shovel"];
+// Armor: bots were ALL fighting unarmored (combat was the top death cause —
+// 12 of 21 deaths/run). craft_gear made tools but never armor, so the brain's
+// auto-equip-armor timer had nothing to wear. Iron armor ~halves damage.
+const ARMOR_TYPES = ["helmet", "chestplate", "leggings", "boots"];
+const ARMOR_TIERS = ["diamond", "iron"]; // only metal armor is worth crafting
 
 export const craftGearSkill: Skill = {
   name: "craft_gear",
   description:
-    "Craft the best tool set (pickaxe, axe, sword, shovel) from available materials. No gathering needed — uses what's in inventory.",
+    "Craft the best tools (pickaxe, axe, sword, shovel) AND armor (helmet, chestplate, leggings, boots) from available materials; pulls iron from the stash. The bot auto-equips crafted armor.",
   params: {},
 
   estimateMaterials(_bot, _params) {
@@ -42,10 +47,12 @@ export const craftGearSkill: Skill = {
         .items()
         .filter((i) => i.name === "iron_ingot")
         .reduce((s, i) => s + i.count, 0);
-      if (ironIngots < 9) {
+      // Tools need ~9 ingots, a full iron armor set needs 24 — withdraw enough
+      // for both so the bot can armor up in one trip.
+      if (ironIngots < 33) {
         const { withdrawStash } = await import("./stash.js");
         try {
-          await withdrawStash(bot, stashPos, "iron_ingot", 9 - ironIngots);
+          await withdrawStash(bot, stashPos, "iron_ingot", 33 - ironIngots);
         } catch {
           /* none in stash — craft whatever tier we can */
         }
@@ -131,6 +138,56 @@ export const craftGearSkill: Skill = {
           }
         } catch {
           continue;
+        }
+      }
+    }
+
+    // --- Craft ARMOR (iron/diamond) — the brain's auto-equip timer wears it ---
+    for (const piece of ARMOR_TYPES) {
+      if (signal.aborted) break;
+      for (const tier of ARMOR_TIERS) {
+        const itemName = `${tier}_${piece}`;
+        const mcItem = mcData.itemsByName[itemName];
+        if (!mcItem) continue;
+        if (bot.inventory.items().some((i) => i.name === itemName)) {
+          crafted.push(`${itemName} (already had)`);
+          break;
+        }
+        let table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 32 });
+        if (!table) {
+          await placeCraftingTable(bot);
+          table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 8 });
+        }
+        const recipe = table
+          ? bot.recipesFor(mcItem.id, null, 1, table)[0]
+          : bot.recipesFor(mcItem.id, null, 1, null)[0];
+        if (!recipe) continue;
+        if (table) {
+          const pkg = await import("mineflayer-pathfinder");
+          const { goals, Movements } = pkg.default;
+          const moves = new Movements(bot);
+          moves.canDig = false;
+          bot.pathfinder.setMovements(moves);
+          try {
+            await bot.pathfinder.goto(new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2));
+          } catch {
+            /* try anyway */
+          }
+        }
+        try {
+          const countOf = (n: string) =>
+            bot.inventory
+              .items()
+              .filter((i) => i.name === n)
+              .reduce((s, i) => s + i.count, 0);
+          const before = countOf(itemName);
+          await bot.craft(recipe, 1, table || undefined);
+          if (countOf(itemName) > before) {
+            crafted.push(itemName);
+            break; // got this piece — next slot
+          }
+        } catch {
+          continue; // try lower tier
         }
       }
     }
