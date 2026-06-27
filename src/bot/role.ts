@@ -104,7 +104,7 @@ export const FLORA_CONFIG: BotRoleConfig = {
   stashPos: STASH_POS,
   // Matches Atlas safeSpawn — moved east to fresh territory away from the stripped X=30 zone
   safeSpawn: { x: 280, y: 0, z: -320 },
-  allowedActions: ["craft", "eat", "sleep", "go_to", "place_block", "chat"],
+  allowedActions: ["craft", "eat", "sleep", "go_to", "place_block", "chat", "flee"],
   allowedSkills: ["build_farm", "craft_gear", "smelt_ores", "light_area"],
   keepItems: [
     { name: "hoe", minCount: 1 },
@@ -165,7 +165,7 @@ export const MASON_CONFIG: BotRoleConfig = {
   leashRadius: 150,
   stashPos: STASH_POS,
   safeSpawn: { x: 280, y: 0, z: -320 },
-  allowedActions: ["go_to", "place_block", "craft", "gather_wood", "eat", "sleep", "chat"],
+  allowedActions: ["go_to", "place_block", "craft", "gather_wood", "eat", "sleep", "chat", "flee"],
   allowedSkills: ["build_house", "build_bridge", "light_area", "build_farm", "setup_stash"],
   keepItems: [
     { name: "axe", minCount: 1 },
