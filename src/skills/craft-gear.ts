@@ -59,6 +59,16 @@ export const craftGearSkill: Skill = {
       }
     }
 
+    // ARMOR-FIRST for the chestplate (the single biggest protection). Iron is
+    // scarce and tools were eating ALL of it (craft_gear made pickaxe+sword
+    // every run, never reaching the armor step), so bots stayed unarmored.
+    // Crafting the chestplate before tools routes the bot's handful of iron to
+    // survival gear first; tools still get crafted after (and stone fallbacks
+    // cover most tasks). The brain's auto-equip timer then wears it.
+    if (!signal.aborted && !bot.inventory.items().some((i) => i.name === "iron_chestplate")) {
+      await craftPiece(bot, mcData, "iron_chestplate", crafted);
+    }
+
     // Ensure we have sticks (need at least 8 for a full set)
     await ensureSticks(bot, 8, signal);
 
@@ -220,6 +230,52 @@ export const craftGearSkill: Skill = {
     };
   },
 };
+
+/** Craft one gear item (tool/armor) at a crafting table, verifying it appeared. Returns true if crafted. */
+async function craftPiece(
+  bot: Bot,
+  mcData: ReturnType<typeof mcDataLoader>,
+  itemName: string,
+  crafted: string[],
+): Promise<boolean> {
+  const mcItem = mcData.itemsByName[itemName];
+  if (!mcItem) return false;
+  let table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 32 });
+  if (!table) {
+    await placeCraftingTable(bot);
+    table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 8 });
+  }
+  const recipe = table ? bot.recipesFor(mcItem.id, null, 1, table)[0] : bot.recipesFor(mcItem.id, null, 1, null)[0];
+  if (!recipe) return false;
+  if (table) {
+    const pkg = await import("mineflayer-pathfinder");
+    const { goals, Movements } = pkg.default;
+    const moves = new Movements(bot);
+    moves.canDig = false;
+    bot.pathfinder.setMovements(moves);
+    try {
+      await bot.pathfinder.goto(new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2));
+    } catch {
+      /* try anyway */
+    }
+  }
+  const countOf = (n: string) =>
+    bot.inventory
+      .items()
+      .filter((i) => i.name === n)
+      .reduce((s, i) => s + i.count, 0);
+  const before = countOf(itemName);
+  try {
+    await bot.craft(recipe, 1, table || undefined);
+  } catch {
+    return false;
+  }
+  if (countOf(itemName) > before) {
+    crafted.push(itemName);
+    return true;
+  }
+  return false;
+}
 
 /** Place a crafting table from inventory near the bot, or craft one from planks first. */
 async function placeCraftingTable(bot: Bot): Promise<void> {
