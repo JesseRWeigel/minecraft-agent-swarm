@@ -156,6 +156,14 @@ export class BotBrain {
       ["legs", "_leggings", 7],
       ["feet", "_boots", 8],
     ];
+    // DIAGNOSTIC: armor is crafted (craft_gear made 4 pieces/run) but never
+    // ends up WORN — keepInventory is on, shouldKeep protects it, it's not in
+    // the stash, yet inventory + armor slots are empty. Log what this sees so
+    // next cycle reveals where armor goes (held? equip throws? never seen?).
+    const armorInInv = this.bot.inventory.items().filter((i) => /_(helmet|chestplate|leggings|boots)$/.test(i.name));
+    if (armorInInv.length) {
+      this.log.info("Armor", `holding [${armorInInv.map((i) => i.name).join(",")}] — attempting equip`);
+    }
     for (const [dest, suffix, slotIdx] of slots) {
       const cands = this.bot.inventory.items().filter((i) => i.name.endsWith(suffix));
       if (!cands.length) continue;
@@ -169,8 +177,9 @@ export class BotBrain {
       if (worn && worn.name === best.name) continue; // already wearing it
       try {
         await this.bot.equip(best, dest as any);
-      } catch {
-        /* equip race — try next cycle */
+        this.log.info("Armor", `equipped ${best.name}`);
+      } catch (e: any) {
+        this.log.warn("Armor", `equip ${best.name} FAILED: ${e?.message || e}`);
       }
     }
   }
