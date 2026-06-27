@@ -7,13 +7,14 @@ import { collectNearbyDrops } from "../bot/navigation.js";
 
 const TUNNEL_LENGTH = 40;
 const TORCH_INTERVAL = 6;
-// Y=-16: deepslate level — good iron/redstone/lapis, some diamonds, and PROVEN
-// lava-safe (0 lava deaths at this depth). Y=-54 (the diamond sweet spot) was
-// tried but caused a lava-death spike (4 of 6 deaths/run, bots fleeing mobs
-// into lava in the dark deep caves) with ZERO diamond payoff — diamonds are
-// volume-limited by the bots' intermittent mining, not depth-limited, so the
-// deep push paid lava costs for nothing. Back to the safe, productive level.
-const TARGET_Y = -16;
+// Y=16 is IRON's peak in 1.18+ (and the classic iron-mining level). At Y=-16
+// (a prior diamond-chasing setting) tunnels yielded gold/redstone but ZERO
+// iron — the deepslate zone is iron-poor — which starved the whole
+// iron->tools->armor chain (0 iron smelted for runs). Diamonds are shelved
+// (volume-limited, not worth the deep lava), so there's no reason to be that
+// deep. Y=16 restores iron supply, still yields coal/copper, and is well above
+// the lava lakes (~-50) so it stays lava-safe.
+const TARGET_Y = 16;
 
 export const stripMineSkill: Skill = {
   name: "strip_mine",
