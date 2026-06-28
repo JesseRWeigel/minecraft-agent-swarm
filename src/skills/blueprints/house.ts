@@ -63,6 +63,24 @@ function generate(): Blueprint {
   blocks.push({ pos: [5, 3, 4], block: "torch", phase: "interior" }); // east wall
   blocks.push({ pos: [1, 3, 4], block: "torch", phase: "interior" }); // west wall
 
+  // Exterior: ground-level torch ring around the house (a few blocks out). Lights
+  // the settlement so mobs can't spawn next to the base — skeletons spawning in
+  // the dark base/mining-pits then shooting bots became the top death cause —
+  // and makes the base visibly inhabited (a lit hamlet, not a dark work-site).
+  // Best-effort: placements on uneven/missing ground are simply skipped.
+  for (const [x, z] of [
+    [-1, -1],
+    [3, -1],
+    [7, -1],
+    [-1, 3],
+    [7, 3],
+    [-1, 7],
+    [3, 7],
+    [7, 7],
+  ] as const) {
+    blocks.push({ pos: [x, 1, z], block: "torch", phase: "interior" });
+  }
+
   // Compute materials
   const materials: Record<string, number> = {};
   for (const b of blocks) {
