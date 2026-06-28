@@ -1013,6 +1013,11 @@ export class BotBrain {
       normalizedParams.y = FARM_SITE.y;
       normalizedParams.z = FARM_SITE.z;
     }
+    // build_farm's bake step withdraws pooled wheat from the stash to bake a
+    // real bread batch (harvests are too small/scattered to bake individually).
+    if (isBuildFarm && this.roleConfig.stashPos && normalizedParams.stashPos === undefined) {
+      normalizedParams.stashPos = this.roleConfig.stashPos;
+    }
 
     // Inject stash coordinates into setup_stash — the LLM invents garbage coords otherwise
     const isSetupStash =

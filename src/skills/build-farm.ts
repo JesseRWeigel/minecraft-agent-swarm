@@ -24,7 +24,7 @@ export const buildFarmSkill: Skill = {
     // Bake any accumulated wheat (>=3) into bread — done inside the skill so it
     // bypasses the blacklisted `craft:bread` action.
     const harvested = await harvestMatureWheat(bot, signal, onProgress);
-    const baked = await bakeBread(bot, signal, onProgress);
+    const baked = await bakeBread(bot, signal, onProgress, params?.stashPos as { x: number; y: number; z: number });
     if (harvested > 0 || baked > 0) {
       const breadNote =
         baked > 0
@@ -448,8 +448,26 @@ async function harvestMatureWheat(bot: Bot, signal: AbortSignal, onProgress: (p:
  * table (3-wide recipe). This is the step that finally closes the farm->food
  * loop. Done in-skill to dodge the blacklisted `craft:bread` action.
  */
-async function bakeBread(bot: Bot, signal: AbortSignal, onProgress: (p: any) => void): Promise<number> {
+async function bakeBread(
+  bot: Bot,
+  signal: AbortSignal,
+  onProgress: (p: any) => void,
+  stashPos?: { x: number; y: number; z: number },
+): Promise<number> {
   if (signal.aborted) return 0;
+  // Pool wheat from the shared stash before baking. Harvests are small (~1-2
+  // wheat/pass) and scattered across bots, so no single baker reaches the 3
+  // wheat a loaf needs — 81 wheat harvested/run yet only 4 bread baked, and the
+  // team starved (1214 eat-fails). Withdraw the team's pooled wheat to bake a
+  // real batch. (shouldKeep now lets wheat surplus deposit so it pools here.)
+  if (stashPos && countItem(bot, "wheat") < 9) {
+    const { withdrawStash } = await import("./stash.js");
+    try {
+      await withdrawStash(bot, stashPos, "wheat", 18);
+    } catch {
+      /* none pooled yet — bake whatever we have */
+    }
+  }
   const wheat = countItem(bot, "wheat");
   if (wheat < 3) return 0;
 

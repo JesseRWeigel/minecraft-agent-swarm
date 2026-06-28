@@ -149,12 +149,21 @@ export function shouldKeep(
   const KEEP_MATERIALS = ["raw_iron", "iron_ingot", "raw_gold", "gold_ingot", "diamond"];
   if (KEEP_MATERIALS.includes(itemName)) return true;
 
-  // Keep wheat + seeds in inventory. The farm harvests only ~2 wheat per pass
-  // and bread needs 3 — but bots deposited each harvest instantly, so wheat
-  // never reached 3 and bread never baked ('Not enough wheat' x8/run). Holding
-  // wheat lets small harvests accumulate across passes until bread can bake;
-  // holding seeds keeps the bot able to replant.
-  if (itemName === "wheat" || itemName === "wheat_seeds") return true;
+  // Seeds: always keep (needed to replant).
+  if (itemName === "wheat_seeds") return true;
+  // Wheat: keep only a tiny reserve, DEPOSIT the surplus so it POOLS in the
+  // stash. Keeping all wheat (prior fix) backfired — harvests stayed scattered
+  // across bots in sub-3 amounts, so no baker ever reached 3 and bread never
+  // baked (81 wheat/run -> 4 bread, team starved). Pooling + build_farm's
+  // stash-withdraw bake step turns the team's wheat into real bread batches.
+  if (itemName === "wheat") {
+    const kept = currentCounts.get("__wheat") ?? 0;
+    if (kept < 2) {
+      currentCounts.set("__wheat", kept + 1);
+      return true;
+    }
+    return false;
+  }
 
   // Keep a PERSONAL FOOD BUFFER. Bots deposited every scrap of food the instant
   // they got it (314 deposits/run) and then starved between production cycles —
