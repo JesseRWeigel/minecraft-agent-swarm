@@ -836,9 +836,16 @@ async function attackNearest(bot: Bot): Promise<string> {
   const myPos = bot.entity?.position;
   if (!myPos) return "Can't attack right now — still respawning.";
 
+  // Fall guard: don't pursue a target more than 3 blocks BELOW us — chasing
+  // mobs down into the base mining-pits / off ledges was the #1 death cause
+  // (falls during combat pursuit, which the swordpvp sprint takes the bot over,
+  // bypassing the pathfinder drop cap). A target down a pit isn't worth dying
+  // for; engage only reachable ones.
+  const reachable = (e: { position?: { y: number } }) => !!e.position && e.position.y >= myPos.y - 3;
+
   // Defense first: nearest hostile within 16. (!!e.position guards entities
   // that are mid-spawn and have no position yet.)
-  let target = bot.nearestEntity((e) => !!e.position && isHostile(e) && e.position.distanceTo(myPos) < 16);
+  let target = bot.nearestEntity((e) => reachable(e) && isHostile(e) && e.position.distanceTo(myPos) < 16);
 
   if (!target) {
     // No threat → HUNT the nearest passive food animal for meat. This was the
@@ -847,7 +854,7 @@ async function attackNearest(bot: Bot): Promise<string> {
     const animal = bot.nearestEntity(
       (e) =>
         e !== bot.entity &&
-        !!e.position &&
+        reachable(e) &&
         FOOD_ANIMALS.includes((e.name || "").toLowerCase()) &&
         e.position.distanceTo(myPos) < 24,
     );
