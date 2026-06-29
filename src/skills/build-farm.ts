@@ -141,7 +141,30 @@ export const buildFarmSkill: Skill = {
     // silently returned null for ALL water and was the real, long-hidden
     // cause of "No water found". The surface concern (bot swimming into a
     // lake) is handled later by the same-Y dirt scan around the water.
-    const findSurfaceWater = () => bot.findBlock({ matching: (b) => b.name === "water", maxDistance: 96 });
+    // Find a water source that ACTUALLY HAS tillable land around it. The old
+    // code took the single nearest water — but after weeks of mining, the base
+    // pond is ringed by cobble/sand (no dirt), so build_farm failed 'No tillable
+    // dirt' every run as the base degraded. Scan many water sources and pick the
+    // first with enough grass/dirt nearby (fresh grassland the bots explore).
+    const scanTillable = (wp: Vec3): Vec3[] => {
+      const targets: Vec3[] = [];
+      for (let dx = -6; dx <= 6; dx++) {
+        for (let dz = -6; dz <= 6; dz++) {
+          if (dx === 0 && dz === 0) continue;
+          const pos = wp.offset(dx, 0, dz);
+          const b = bot.blockAt(pos);
+          if (b && (b.name === "dirt" || b.name === "grass_block")) targets.push(pos.clone());
+        }
+      }
+      return targets;
+    };
+    const findSurfaceWater = () => {
+      const waters = bot.findBlocks({ matching: (b) => b.name === "water", maxDistance: 96, count: 40 });
+      for (const wp of waters) {
+        if (scanTillable(wp).length >= 4) return bot.blockAt(wp);
+      }
+      return null;
+    };
 
     let water = findSurfaceWater();
     for (let attempt = 0; !water && attempt < 3; attempt++) {
