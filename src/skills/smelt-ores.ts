@@ -154,7 +154,7 @@ export const smeltOresSkill: Skill = {
           if (table) {
             setMovements(bot);
             try {
-              await bot.pathfinder.goto(new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2));
+              await gotoTimed(bot, new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2), 20000);
             } catch {
               /* best-effort */
             }
@@ -203,8 +203,10 @@ export const smeltOresSkill: Skill = {
     // --- Step 4: Navigate to furnace ---
     setMovements(bot);
     try {
-      await bot.pathfinder.goto(
+      await gotoTimed(
+        bot,
         new goals.GoalNear(furnaceBlock.position.x, furnaceBlock.position.y, furnaceBlock.position.z, 2),
+        20000,
       );
     } catch {
       /* try anyway */
@@ -293,6 +295,20 @@ function setMovements(bot: Bot) {
   moves.allowFreeMotion = false;
   moves.scafoldingBlocks = [];
   bot.pathfinder.setMovements(moves);
+}
+
+/** pathfinder.goto with a hard timeout — an unreachable furnace/table goal
+ *  otherwise hangs smelt_ores to the 240s skill watchdog, stalling the smelter. */
+async function gotoTimed(bot: Bot, goal: any, ms: number): Promise<void> {
+  await Promise.race([
+    bot.pathfinder.goto(goal),
+    new Promise<void>((_, rej) =>
+      setTimeout(() => {
+        bot.pathfinder.stop();
+        rej(new Error("goto timeout"));
+      }, ms),
+    ),
+  ]);
 }
 
 function countItem(bot: Bot, name: string): number {

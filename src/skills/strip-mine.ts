@@ -66,7 +66,7 @@ export const stripMineSkill: Skill = {
             setTimeout(() => {
               bot.pathfinder.stop();
               rej(new Error("descend timeout"));
-            }, 200000),
+            }, 60000),
           ),
         ]);
       } catch {
@@ -106,7 +106,7 @@ export const stripMineSkill: Skill = {
 
         await equipBestPickaxe(bot);
         try {
-          await bot.dig(b);
+          await digSafe(bot, b);
           mined++;
           if (b.name.includes("ore")) oresFound.push(b.name);
         } catch {
@@ -166,6 +166,28 @@ async function equipBestPickaxe(bot: Bot): Promise<void> {
 }
 
 /**
+ * bot.dig with a hard timeout. A bare bot.dig can hang indefinitely if the
+ * block can't be reached/broken — this (plus an over-long descent timeout) made
+ * strip_mine run to the 240s skill watchdog repeatedly, stalling the miner.
+ * Fail fast (12s) and move on instead.
+ */
+async function digSafe(bot: Bot, b: import("prismarine-block").Block): Promise<void> {
+  await Promise.race([
+    bot.dig(b),
+    new Promise<void>((_, rej) =>
+      setTimeout(() => {
+        try {
+          bot.stopDigging();
+        } catch {
+          /* not digging */
+        }
+        rej(new Error("dig timeout"));
+      }, 12000),
+    ),
+  ]);
+}
+
+/**
  * Mine any ore block exposed in the 3x3x3 shell around `pos` (the bot's cell),
  * then follow each vein a few blocks. This is what turns a blind tunnel into an
  * actually-productive one — ores in the walls used to be ignored entirely.
@@ -187,7 +209,7 @@ async function mineExposedOre(bot: Bot, pos: Vec3): Promise<{ mined: number; ore
     if (!b || !b.name.endsWith("_ore")) continue;
     try {
       await equipBestPickaxe(bot);
-      await bot.dig(b);
+      await digSafe(bot, b);
       mined++;
       ores.push(b.name);
       // Follow the vein a little so we don't leave most of it in the wall.
@@ -221,7 +243,7 @@ async function followVein(bot: Bot, start: Vec3, oreName: string, ores: string[]
       if (bot.entity.position.distanceTo(p) > 4.3) continue; // only what we can reach without re-pathing
       try {
         await equipBestPickaxe(bot);
-        await bot.dig(b);
+        await digSafe(bot, b);
         extra++;
         ores.push(b.name);
         queue.push(p);
