@@ -238,7 +238,17 @@ async function moveToPosition(bot: Bot, targetPos: Vec3): Promise<void> {
     const moves = new Movements(bot);
     moves.canDig = false;
     bot.pathfinder.setMovements(moves);
-    await bot.pathfinder.goto(new goals.GoalBlock(targetPos.x, targetPos.y, targetPos.z));
+    // Bounded: an unreachable GoalBlock here hung strip_mine (and the whole
+    // bot) for ~13h. Race against a timeout that stops the pathfinder.
+    await Promise.race([
+      bot.pathfinder.goto(new goals.GoalBlock(targetPos.x, targetPos.y, targetPos.z)),
+      new Promise<void>((_, rej) =>
+        setTimeout(() => {
+          bot.pathfinder.stop();
+          rej(new Error("moveToPosition timeout"));
+        }, 8000),
+      ),
+    ]);
   } catch {
     // Fallback: manual walk
     try {

@@ -127,8 +127,32 @@ export async function runSkill(bot: Bot, skill: Skill, params: Record<string, an
     }
   }, 30000);
 
+  // HARD WATCHDOG: a skill that blocks in an unbounded call (e.g. a
+  // pathfinder.goto to an unreachable goal, or bot.dig on a stuck block) never
+  // observes the abort signal, so it freezes the bot's ENTIRE brain loop
+  // indefinitely. Atlas + Flora were frozen ~13h inside a hung strip_mine.
+  // Race the skill against a hard timeout that force-stops movement and RETURNS,
+  // freeing the brain regardless of what the skill's internal await is doing.
+  const MAX_SKILL_MS = 240_000;
+  let watchdog: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<{ success: boolean; message: string }>((resolve) => {
+    watchdog = setTimeout(() => {
+      try {
+        bot.pathfinder.stop();
+      } catch {
+        /* best effort */
+      }
+      abortController.abort();
+      resolve({
+        success: false,
+        message: `${skill.name} timed out after ${MAX_SKILL_MS / 1000}s — aborted to free the bot.`,
+      });
+    }, MAX_SKILL_MS);
+    watchdog.unref?.();
+  });
+
   try {
-    const result = await skillPromise;
+    const result = await Promise.race([skillPromise, timeoutPromise]);
     const durationSeconds = (Date.now() - startTime) / 1000;
 
     // Record skill attempt in per-bot memory (fallback to singleton for non-registered bots)
@@ -161,6 +185,7 @@ export async function runSkill(bot: Bot, skill: Skill, params: Record<string, an
     progress({ skillName: skill.name, phase: "Crashed", progress: 0, message: err.message, active: false });
     return `Skill ${skill.name} crashed: ${err.message}`;
   } finally {
+    if (watchdog) clearTimeout(watchdog);
     clearInterval(chatterInterval);
     activeSkillMap.delete(bot);
   }
