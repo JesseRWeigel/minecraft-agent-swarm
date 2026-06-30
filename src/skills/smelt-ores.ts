@@ -66,9 +66,18 @@ export const smeltOresSkill: Skill = {
     // hand-off mechanism — not a cheat).
     const stashPos = params?.stashPos as { x: number; y: number; z: number } | undefined;
     if (stashPos && !signal.aborted) {
+      // TIME BUDGET: each withdrawStash re-walks to the stash (safeGoto up to
+      // 30s). Looping all 6 ore + 2 fuel types when the stash is EMPTY (common —
+      // ore production is low) meant 8 x 30s ≈ 240s → the skill watchdog fired
+      // and Forge/Atlas/Flora hung repeatedly producing 0 ingots. Cap the whole
+      // withdrawal phase at 30s; if nothing's pooled, bail and let smelt report
+      // "Nothing to smelt" fast instead of stalling.
+      const wdStart = Date.now();
+      const budgetLeft = () => Date.now() - wdStart < 30000;
       const haveSmeltable = Object.keys(SMELT_RECIPES).some((n) => countInv(n) > 0);
       if (!haveSmeltable) {
         for (const ore of ["raw_iron", "iron_ore", "raw_copper", "copper_ore", "raw_gold", "gold_ore"]) {
+          if (!budgetLeft()) break;
           try {
             await withdrawStash(bot, stashPos, ore, 16);
           } catch {
@@ -80,6 +89,7 @@ export const smeltOresSkill: Skill = {
       const haveFuel = FUEL_ITEMS.some((n) => countInv(n) > 0);
       if (!haveFuel) {
         for (const fuel of ["coal", "charcoal"]) {
+          if (!budgetLeft()) break;
           try {
             await withdrawStash(bot, stashPos, fuel, 16);
           } catch {
