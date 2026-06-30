@@ -235,7 +235,14 @@ export const smeltOresSkill: Skill = {
         });
         if (!furnaceBlock) break;
 
-        const furnace = await bot.openFurnace(furnaceBlock);
+        // openFurnace blocks forever if the furnace GUI never opens (block not
+        // truly reachable/loaded) — this hung smelt_ores to the 240s watchdog
+        // repeatedly, producing 0 ingots. Bound it so it fails fast and the
+        // batch is skipped (caught below).
+        const furnace = (await Promise.race([
+          bot.openFurnace(furnaceBlock),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("openFurnace timeout")), 10000)),
+        ])) as Awaited<ReturnType<typeof bot.openFurnace>>;
 
         // Put fuel first
         const fuelItem = bot.inventory.items().find((i) => FUEL_ITEMS.includes(i.name));

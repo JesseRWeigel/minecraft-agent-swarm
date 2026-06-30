@@ -8,6 +8,16 @@ import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
 import { safeGoto } from "../bot/actions.js";
 
+/** bot.openContainer with a hard timeout — a chest GUI that never opens (block
+ *  not truly reachable/loaded) otherwise blocks forever, hanging the calling
+ *  skill to the 240s watchdog. Fail fast (10s) so the skill recovers. */
+async function openContainerTimed(bot: Bot, block: Parameters<Bot["openContainer"]>[0]) {
+  return (await Promise.race([
+    bot.openContainer(block),
+    new Promise((_, rej) => setTimeout(() => rej(new Error("openContainer timeout")), 10000)),
+  ])) as Awaited<ReturnType<Bot["openContainer"]>>;
+}
+
 /** Stash row categories and their item patterns. Order matches physical chest rows. */
 const STASH_ROWS: { category: string; patterns: string[] }[] = [
   {
@@ -271,7 +281,7 @@ export async function depositStash(
       }
       // Use fallback chest
       try {
-        const container = await bot.openContainer(fallback);
+        const container = await openContainerTimed(bot, fallback);
         for (const item of items) {
           try {
             await container.deposit(item.type, null, item.count);
@@ -290,7 +300,7 @@ export async function depositStash(
 
     try {
       await safeGoto(bot, new goals.GoalNear(chest.position.x, chest.position.y, chest.position.z, 2), 10000);
-      const container = await bot.openContainer(chest);
+      const container = await openContainerTimed(bot, chest);
       for (const item of items) {
         try {
           await container.deposit(item.type, null, item.count);
@@ -387,7 +397,7 @@ export async function withdrawStash(
     if (withdrawn >= needed) break;
     try {
       await safeGoto(bot, new goals.GoalNear(chest.position.x, chest.position.y, chest.position.z, 2), 10000);
-      const container = await bot.openContainer(chest);
+      const container = await openContainerTimed(bot, chest);
 
       for (const slot of container.containerItems()) {
         if (withdrawn >= needed) break;
