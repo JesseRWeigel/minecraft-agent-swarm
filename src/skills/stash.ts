@@ -240,6 +240,17 @@ export async function depositStash(
   // Walk to stash area
   await safeGoto(bot, new goals.GoalNear(stashPos.x, stashPos.y, stashPos.z, 3), 30000);
 
+  // Fail fast if we never actually reached the stash (underground / blocked /
+  // being chased). safeGoto returns after its 30s timeout WITHOUT throwing, so
+  // otherwise every downstream op — per-chest gotos + the 6-type food top-up
+  // loop, each a fresh withdrawStash with its own 30s goto — retries the same
+  // unreachable spot and their timeouts sum past the 150s action watchdog. This
+  // caused 16 deposit_stash hangs in 9 min when the team was stuck underground.
+  const distToStash = bot.entity.position.distanceTo(new Vec3(stashPos.x, stashPos.y, stashPos.z));
+  if (distToStash > 6) {
+    return `Can't reach the stash — ${distToStash.toFixed(0)} blocks away (blocked or underground). Get to the surface near ${stashPos.x},${stashPos.y},${stashPos.z} first.`;
+  }
+
   const itemsToDeposit = bot.inventory.items();
   if (itemsToDeposit.length === 0) return "Nothing to deposit — inventory is empty.";
 
@@ -325,7 +336,12 @@ export async function depositStash(
     .filter((i) => i.name === "bread" || i.name.startsWith("cooked_"))
     .reduce((s, i) => s + i.count, 0);
   if (foodHeld < 4) {
+    // Aggregate budget (LESSON 2): even though each withdrawStash is individually
+    // bounded, looping all 6 food types re-runs the travel each time — cap the
+    // whole top-up so it can't stall deposit_stash if the stash chest churns.
+    const topupStart = Date.now();
     for (const f of ["bread", "cooked_beef", "cooked_porkchop", "cooked_mutton", "cooked_chicken", "cooked_cod"]) {
+      if (Date.now() - topupStart > 20000) break;
       try {
         await withdrawStash(bot, stashPos, f, 4 - foodHeld);
       } catch {
