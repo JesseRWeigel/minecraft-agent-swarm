@@ -15,7 +15,53 @@ import { config } from "../config.js";
 import { safeMoves, explorerMoves, safeGoto, collectNearbyDrops } from "./navigation.js";
 export { safeMoves, explorerMoves, safeGoto, collectNearbyDrops };
 
+/** Hard cap for a single DIRECT action. Longer than any legit action (gather
+ *  several trees, navigate far) but far short of a brain-freeze. Skills are
+ *  exempt — they route through runSkill's own 240s watchdog. */
+const DIRECT_ACTION_TIMEOUT_MS = 150_000;
+
+/**
+ * Watchdog wrapper around the action dispatcher. Direct actions (mine_block,
+ * go_to, gather_wood, eat, …) call unbounded `bot.dig`/`goto`/`consume` that can
+ * block a bot's ENTIRE brain loop forever if the server never responds — Forge
+ * froze 50 min mid-`mine_block` (its `bot.dig` never returned) because, unlike
+ * skills, direct actions had NO timeout backstop. Race the dispatch against a
+ * hard timeout that stops movement + digging so the brain always recovers.
+ * invoke_skill / registered-skill names are left to runSkill's own 240s watchdog
+ * (double-bounding would preempt legit long skills like build_house).
+ */
 export async function executeAction(bot: Bot, action: string, params: Record<string, any>): Promise<string> {
+  const delegatesToSkill = action === "invoke_skill" || skillRegistry.get(action) !== undefined;
+  if (delegatesToSkill) {
+    return executeActionInner(bot, action, params);
+  }
+
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<string>((resolve) => {
+    timer = setTimeout(() => {
+      try {
+        bot.pathfinder.stop();
+      } catch {
+        /* best effort */
+      }
+      try {
+        bot.stopDigging();
+      } catch {
+        /* best effort */
+      }
+      resolve(`Action "${action}" timed out after ${DIRECT_ACTION_TIMEOUT_MS / 1000}s — aborted to free the brain.`);
+    }, DIRECT_ACTION_TIMEOUT_MS);
+    timer.unref?.();
+  });
+
+  try {
+    return await Promise.race([executeActionInner(bot, action, params), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function executeActionInner(bot: Bot, action: string, params: Record<string, any>): Promise<string> {
   try {
     switch (action) {
       case "gather_wood":
