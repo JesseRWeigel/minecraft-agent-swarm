@@ -251,8 +251,16 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
   let gathered = 0;
   let tried = 0;
   const chopSpots: Vec3[] = []; // ground positions to replant saplings on
+  // Aggregate travel budget: the old design allowed 4 tries x 90s per-tree goto
+  // = 360s of pathing, which now trips the 150s action watchdog and hard-kills
+  // the action mid-dig (Atlas/Forge hit it 4x in 10 min chasing far trees).
+  // Cap the loop at 110s so it returns gracefully (restoring movements +
+  // thinkTimeout via the finally) well before the watchdog fires. 110s + one
+  // 30s goto = 140s < 150s.
+  const gatherStart = Date.now();
   for (const pos of allLogs) {
     if (gathered >= count) break;
+    if (Date.now() - gatherStart > 110000) break;
     const log = bot.blockAt(pos);
     if (!log || !(logTypes as readonly string[]).includes(log.name)) continue;
 
@@ -272,7 +280,7 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
         }
       }, 400);
       try {
-        await safeGoto(bot, new goals.GoalNear(pos.x, pos.y, pos.z, 3), 90000, 32000);
+        await safeGoto(bot, new goals.GoalNear(pos.x, pos.y, pos.z, 3), 30000, 12000);
         await bot.dig(log);
         gathered++;
         chopSpots.push(pos.clone()); // remember the trunk spot to replant on
@@ -286,7 +294,7 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
     } catch {
       // This log was unreachable — skip it and try the next one
     }
-    if (tried >= 4 && gathered === 0) break; // give up after 4 failed attempts (360s max)
+    if (tried >= 4 && gathered === 0) break; // give up after 4 failed attempts (~120s max)
   }
 
   // Sustainability: replant saplings so the forest regrows. Trees never come
