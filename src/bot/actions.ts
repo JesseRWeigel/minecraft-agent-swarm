@@ -368,6 +368,26 @@ function blockMatcher(blockType: string): { match: (name: string) => boolean; is
   return { match: (n) => n === bt || n === oreForm || (isOre && n === `deepslate_${oreForm}`), isOre };
 }
 
+/** bot.dig with a hard timeout — an unbounded dig (odd block state, a face the
+ *  bot can't quite reach, a server hiccup) otherwise blocks the brain until the
+ *  150s action watchdog fires. mine_block was the top residual watchdog trip
+ *  (8 in 11h) from exactly this; stopDigging + reject lets it fail fast. */
+async function digSafe(bot: Bot, block: import("prismarine-block").Block): Promise<void> {
+  await Promise.race([
+    bot.dig(block),
+    new Promise<void>((_, rej) =>
+      setTimeout(() => {
+        try {
+          bot.stopDigging();
+        } catch {
+          /* wasn't digging */
+        }
+        rej(new Error("dig timeout"));
+      }, 12000),
+    ),
+  ]);
+}
+
 async function mineBlock(
   bot: Bot,
   blockType: string,
@@ -403,7 +423,7 @@ async function mineBlock(
   bot.pathfinder.setMovements(digMoves);
   await safeGoto(bot, new goals.GoalNear(block.position.x, block.position.y, block.position.z, 2));
   await equipPickaxe(bot);
-  await bot.dig(block);
+  await digSafe(bot, block);
   let mined = 1;
 
   // Vein mining: one ore block is rarely worth the trip. Follow the connected
@@ -467,7 +487,7 @@ async function mineVein(
           await safeGoto(bot, new goals.GoalNear(p.x, p.y, p.z, 2), 8000);
         }
         await equipPickaxe(bot);
-        await bot.dig(b);
+        await digSafe(bot, b);
         extra++;
         queue.push(p);
         if (extra >= cap) break;
