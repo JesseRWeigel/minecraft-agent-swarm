@@ -866,13 +866,18 @@ const FOOD_PRIORITY = [
   "potato",
   "beetroot",
   "dried_kelp",
-  "raw_beef",
-  "raw_porkchop",
-  "raw_rabbit",
-  "raw_mutton",
-  "raw_salmon",
-  "raw_cod",
-  "raw_chicken",
+  // NOTE: raw meats have NO raw_ prefix in Minecraft (that's only ores like
+  // raw_iron). The list previously said raw_beef/raw_porkchop/... which match
+  // NOTHING — so the raw fallback never fired and bots starved at HP 10
+  // holding meat ("No food in inventory!" 559x/run). Real ids: beef, porkchop,
+  // rabbit, mutton, salmon, cod, chicken.
+  "beef",
+  "porkchop",
+  "rabbit",
+  "mutton",
+  "salmon",
+  "cod",
+  "chicken",
   // ABSOLUTE last resort: rotten flesh restores 4 hunger (brief harmless hunger
   // debuff on Easy). Bots were starving to death holding rotten flesh from
   // zombie kills while looping "eat is broken" because it wasn't recognized.

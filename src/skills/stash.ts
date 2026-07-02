@@ -197,12 +197,16 @@ export function shouldKeep(
     "mushroom_stew",
     "rabbit_stew",
     "beetroot_soup",
-    "raw_beef",
-    "raw_porkchop",
-    "raw_mutton",
-    "raw_chicken",
-    "raw_cod",
-    "raw_salmon",
+    // Raw meats — real Minecraft ids have NO raw_ prefix (that's only ores).
+    // The old raw_beef/raw_mutton/... names matched nothing, so raw meat never
+    // counted toward the food buffer and bots deposited ALL their meat.
+    "beef",
+    "porkchop",
+    "mutton",
+    "chicken",
+    "cod",
+    "salmon",
+    "rabbit",
   ]);
   if (FOOD.has(itemName)) {
     const KEEP_FOOD = 6;
