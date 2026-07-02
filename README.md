@@ -270,6 +270,18 @@ Each decision executes a gated action (restricted to the bot's allowed actions/s
 
 **Dynamic skill generation:** Bots can generate new JS skills at runtime when existing skills don't cover a task. Generated skills are saved to `skills/generated/` and reused.
 
+### Freeze Protection (Watchdogs)
+
+A bot's brain loop awaits its current skill/action, so a single unbounded `await` on a server response (`pathfinder.goto` to an unreachable spot, `bot.dig` on a bad block state, a furnace GUI that never opens) used to freeze a bot **forever** — online and healthy-looking, but brain-dead. This is now impossible, enforced in layers:
+
+- **Skill watchdog (240s)** — `runSkill` races every skill against a hard timeout that stops the pathfinder, releases any in-progress dig, and returns control to the brain (`src/skills/executor.ts`).
+- **Action watchdog (150s)** — direct actions (`mine_block`, `go_to`, `gather_wood`, ...) get the same treatment at the dispatch boundary (`src/bot/actions.ts`); skills are exempt since they have their own watchdog.
+- **Bounded primitives** — every `pathfinder.goto` (8–30s), `bot.dig` (12s), `bot.craft` (20s), `openFurnace`/`openContainer` (10s) inside skills/actions is wrapped in a timeout race so failures are fast, not 4 minutes.
+- **Aggregate loop budgets** — loops that repeat bounded travel (stash withdrawal item-types, per-tree wood gathering, wheat harvest passes) carry a wall-clock cap, because N bounded calls still sum past a watchdog.
+- **Fail-fast reachability** — `deposit_stash` bails immediately if the bot didn't actually reach the stash instead of retrying every downstream step against the same unreachable spot.
+
+The watchdogs are the backstop; the per-call bounds make skills fail in seconds with a useful error the LLM can re-plan on. Health monitoring compares each bot's last-decision timestamp against the newest log line — a hung brain is visible even though the bot never dies.
+
 ### Persistent Memory
 
 Each bot has its own memory file (e.g. `memory-atlas.json`, `memory-forge.json`):
@@ -398,7 +410,8 @@ minecraft-agent-swarm/
 | Issue | Status |
 |-------|--------|
 | Ollama JSON-schema `format` ignored | qwen3.6 on ollama 0.20.x returns prose for schema-constrained requests; plain `format:"json"` works (used). Re-test after upgrading ollama |
-| Pathfinder timeouts on some goals | Bots recover via critic re-plan, but turns are wasted |
+| Pathfinder timeouts on some goals | Bounded + watchdog-backstopped (see Freeze Protection); bots recover via critic re-plan |
+| Food supply can't sustain 5 bots | Local-model ceiling: ~1 bot's intermittent farming oscillates; bots survive (Easy floors starvation at 10 HP) but productivity drops during hungry stretches |
 | Farms unbuilt unless water is near | `build_farm` needs water within range of the village site |
 | Neural combat untested in survival | Server is implemented and running; needs hostile mob environment |
 | Generated skills may fail on first run | Mitigated: code-error failures now trigger automatic LLM refinement |
