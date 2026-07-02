@@ -6,6 +6,7 @@ import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
 import mcDataLoader from "minecraft-data";
 import { getBotMemoryStore } from "../bot/memory-registry.js";
+import { config } from "../config.js";
 
 export const buildFarmSkill: Skill = {
   name: "build_farm",
@@ -62,15 +63,23 @@ export const buildFarmSkill: Skill = {
       }
       if (signal.aborted) return { success: false, message: "Interrupted while traveling to the farm site." };
       // A probe proved findBlock sees the water INSTANTLY when the bot is
-      // actually at the site — the failures were the bot never arriving:
-      // pathfinding times out over distance and spreadplayers scatters
-      // imprecisely. Bots are ops, so /tp lands EXACTLY on the site; then
-      // wait for chunks (matches the working probe sequence) before searching.
+      // actually at the site — the failures were the bot never arriving
+      // (pathfinding times out over distance). A /tp fallback lived here but
+      // violated the no-cheat rule (it was the ONLY command not gated behind
+      // allowInterventions); now it's gated like every other intervention.
+      // With interventions off the bot either walks there or reports failure.
       if (bot.entity.position.distanceTo(new Vec3(fx0, bot.entity.position.y, fz0)) > 6) {
-        bot.chat(`/tp ${bot.username} ${fx0} ${Number(params.y) + 1 || 64} ${fz0}`);
-        await new Promise((r) => setTimeout(r, 2500));
-        await bot.waitForChunksToLoad().catch(() => {});
-        await new Promise((r) => setTimeout(r, 1500));
+        if (config.bot.allowInterventions) {
+          bot.chat(`/tp ${bot.username} ${fx0} ${Number(params.y) + 1 || 64} ${fz0}`);
+          await new Promise((r) => setTimeout(r, 2500));
+          await bot.waitForChunksToLoad().catch(() => {});
+          await new Promise((r) => setTimeout(r, 1500));
+        } else {
+          return {
+            success: false,
+            message: `Couldn't reach the farm site (${fx0}, ${fz0}) by walking — try again when closer, or go_to it first.`,
+          };
+        }
       }
     }
 
@@ -106,11 +115,11 @@ export const buildFarmSkill: Skill = {
             new goals.GoalNear(logBlock.position.x, logBlock.position.y, logBlock.position.z, 3),
             60000,
           );
-          await bot.dig(bot.blockAt(logBlock.position)!);
+          await digT(bot, bot.blockAt(logBlock.position)!);
           await collectNearbyDrops(bot, 6, 6000);
           const second = bot.findBlock({ matching: (b) => b.name.endsWith("_log"), maxDistance: 16 });
           if (second) {
-            await bot.dig(bot.blockAt(second.position)!);
+            await digT(bot, bot.blockAt(second.position)!);
             await collectNearbyDrops(bot, 6, 6000);
           }
         } catch {
@@ -287,8 +296,8 @@ export const buildFarmSkill: Skill = {
 
       try {
         setMovements(bot);
-        await bot.pathfinder.goto(new goals.GoalNear(grass.position.x, grass.position.y, grass.position.z, 2));
-        await bot.dig(grass);
+        await gotoT(bot, new goals.GoalNear(grass.position.x, grass.position.y, grass.position.z, 2));
+        await digT(bot, grass);
         seedCount = countItem(bot, "wheat_seeds");
       } catch {
         continue;
@@ -405,11 +414,56 @@ function countItem(bot: Bot, name: string): number {
     .reduce((s, i) => s + i.count, 0);
 }
 
+/** pathfinder.goto with a hard timeout — build_farm was the last skill still
+ *  hanging to the 240s watchdog (3 events/26h, always at 0% progress) because
+ *  its harvest/bake/hoe phases used RAW gotos that block forever when the bot
+ *  is stuck underground (the common food-spiral state). Same fix as the rest
+ *  of the freeze-bug arc. */
+async function gotoT(bot: Bot, goal: InstanceType<typeof goals.GoalNear>, ms = 15000): Promise<void> {
+  await Promise.race([
+    bot.pathfinder.goto(goal),
+    new Promise<void>((_, rej) =>
+      setTimeout(() => {
+        bot.pathfinder.stop();
+        rej(new Error("goto timeout"));
+      }, ms),
+    ),
+  ]);
+}
+
+/** bot.dig with a hard timeout (see gotoT). */
+async function digT(bot: Bot, block: import("prismarine-block").Block): Promise<void> {
+  await Promise.race([
+    bot.dig(block),
+    new Promise<void>((_, rej) =>
+      setTimeout(() => {
+        try {
+          bot.stopDigging();
+        } catch {
+          /* wasn't digging */
+        }
+        rej(new Error("dig timeout"));
+      }, 12000),
+    ),
+  ]);
+}
+
+/** bot.craft with a hard timeout (see gotoT) — table interaction can stall. */
+async function craftT(bot: Bot, recipe: Parameters<Bot["craft"]>[0], count: number, table?: any): Promise<void> {
+  await Promise.race([
+    bot.craft(recipe, count, table),
+    new Promise<void>((_, rej) => setTimeout(() => rej(new Error("craft timeout")), 20000)),
+  ]);
+}
+
 /** Harvest all mature wheat within 20 blocks. Returns count harvested. */
 async function harvestMatureWheat(bot: Bot, signal: AbortSignal, onProgress: (p: any) => void): Promise<number> {
   let harvested = 0;
 
-  for (let i = 0; i < 40 && !signal.aborted; i++) {
+  // Aggregate budget (freeze-arc LESSON 2): 40 iterations of bounded travel
+  // still sums past the 240s skill watchdog — cap the phase's wall-clock.
+  const harvestStart = Date.now();
+  for (let i = 0; i < 40 && !signal.aborted && Date.now() - harvestStart < 90000; i++) {
     const wheat = bot.findBlock({
       matching: (b) => b.name === "wheat" && b.metadata >= 7,
       maxDistance: 20,
@@ -418,8 +472,8 @@ async function harvestMatureWheat(bot: Bot, signal: AbortSignal, onProgress: (p:
 
     try {
       setMovements(bot);
-      await bot.pathfinder.goto(new goals.GoalNear(wheat.position.x, wheat.position.y, wheat.position.z, 2));
-      await bot.dig(wheat);
+      await gotoT(bot, new goals.GoalNear(wheat.position.x, wheat.position.y, wheat.position.z, 2));
+      await digT(bot, wheat);
       harvested++;
       onProgress({
         skillName: "build_farm",
@@ -436,7 +490,8 @@ async function harvestMatureWheat(bot: Bot, signal: AbortSignal, onProgress: (p:
   // Replant seeds on empty farmland after harvesting
   if (harvested > 0) {
     let replanted = 0;
-    for (let i = 0; i < 40 && !signal.aborted; i++) {
+    const replantStart = Date.now();
+    for (let i = 0; i < 40 && !signal.aborted && Date.now() - replantStart < 45000; i++) {
       const farmland = bot.findBlock({
         matching: (b) => {
           if (b.name !== "farmland" || !b.position) return false;
@@ -452,7 +507,7 @@ async function harvestMatureWheat(bot: Bot, signal: AbortSignal, onProgress: (p:
 
       try {
         setMovements(bot);
-        await bot.pathfinder.goto(new goals.GoalNear(farmland.position.x, farmland.position.y, farmland.position.z, 2));
+        await gotoT(bot, new goals.GoalNear(farmland.position.x, farmland.position.y, farmland.position.z, 2));
         await bot.equip(seeds, "hand");
         await bot.placeBlock(farmland, new Vec3(0, 1, 0));
         replanted++;
@@ -513,7 +568,7 @@ async function bakeBread(
 
   setMovements(bot);
   try {
-    await bot.pathfinder.goto(new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2));
+    await gotoT(bot, new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2));
   } catch {
     /* try crafting from where we are */
   }
@@ -523,7 +578,7 @@ async function bakeBread(
 
   const before = countItem(bot, "bread");
   try {
-    await bot.craft(recipe, count, table);
+    await craftT(bot, recipe, count, table);
   } catch {
     return 0;
   }
@@ -545,7 +600,7 @@ async function craftHoe(bot: Bot, signal: AbortSignal): Promise<void> {
       const recipe = plankItem ? bot.recipesFor(plankItem.id, null, 1, null)[0] : null;
       if (recipe) {
         try {
-          await bot.craft(recipe, Math.min(2, log.count), undefined);
+          await craftT(bot, recipe, Math.min(2, log.count));
         } catch {
           /* ok */
         }
@@ -559,7 +614,7 @@ async function craftHoe(bot: Bot, signal: AbortSignal): Promise<void> {
     const recipe = bot.recipesFor(stickItem.id, null, 1, null)[0];
     if (recipe) {
       try {
-        await bot.craft(recipe, 1, undefined);
+        await craftT(bot, recipe, 1);
       } catch {
         /* ok */
       }
@@ -575,7 +630,7 @@ async function craftHoe(bot: Bot, signal: AbortSignal): Promise<void> {
     let recipe = bot.recipesFor(mcItem.id, null, 1, null)[0];
     if (recipe) {
       try {
-        await bot.craft(recipe, 1, undefined);
+        await craftT(bot, recipe, 1);
         return;
       } catch {
         continue;
@@ -586,14 +641,14 @@ async function craftHoe(bot: Bot, signal: AbortSignal): Promise<void> {
     if (table) {
       setMovements(bot);
       try {
-        await bot.pathfinder.goto(new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2));
+        await gotoT(bot, new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2));
       } catch {
         /* try anyway */
       }
       recipe = bot.recipesFor(mcItem.id, null, 1, table)[0];
       if (recipe) {
         try {
-          await bot.craft(recipe, 1, table);
+          await craftT(bot, recipe, 1, table);
           return;
         } catch {
           continue;

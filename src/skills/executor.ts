@@ -142,6 +142,14 @@ export async function runSkill(bot: Bot, skill: Skill, params: Record<string, an
       } catch {
         /* best effort */
       }
+      try {
+        // Release a hung bot.dig too — otherwise the orphaned skill promise
+        // stays blocked on it and keeps contesting the pathfinder with the
+        // reactive brain (observed: Flora's flee failing "Stuck" mid-hang).
+        bot.stopDigging();
+      } catch {
+        /* wasn't digging */
+      }
       abortController.abort();
       resolve({
         success: false,
