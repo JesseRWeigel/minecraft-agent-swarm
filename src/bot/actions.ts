@@ -1241,8 +1241,36 @@ async function sleepInBed(bot: Bot): Promise<string> {
 
   // Auto-place bed from inventory if none found nearby
   if (!bed) {
-    const bedItem = bot.inventory.items().find((i) => i.name.includes("bed"));
-    if (!bedItem) return "No bed in inventory. Craft or find one.";
+    let bedItem = bot.inventory.items().find((i) => i.name.includes("bed"));
+
+    // Self-sufficiency (same pattern as build_farm's hoe / smelt's furnace):
+    // craft a bed from wool + planks instead of failing. Bots were CHOOSING to
+    // sleep at night but none of the 5 ever owned a bed ("No bed in inventory"
+    // x4/run), so they roamed at night and skeletons shredded them (20
+    // skeleton deaths in one 5h window). Bed = 3 same-color wool + 3 planks.
+    if (!bedItem) {
+      const woolCounts = new Map<string, number>();
+      for (const it of bot.inventory.items()) {
+        if (it.name.endsWith("_wool")) woolCounts.set(it.name, (woolCounts.get(it.name) ?? 0) + it.count);
+      }
+      const woolColor = [...woolCounts.entries()].find(([, c]) => c >= 3)?.[0];
+      if (!woolColor) {
+        return "No bed and no wool to craft one (need 3 same-color wool + 3 planks). Hunt sheep for wool first!";
+      }
+      const planks = bot.inventory
+        .items()
+        .filter((i) => i.name.endsWith("_planks"))
+        .reduce((s, i) => s + i.count, 0);
+      if (planks < 3) {
+        const log = bot.inventory.items().find((i) => (LOG_TYPES as readonly string[]).includes(i.name));
+        if (!log) return "Have wool but no planks/logs for a bed. Gather wood, then sleep.";
+        await craftItem(bot, log.name.replace("_log", "_planks"), 1); // 1 craft = 4 planks
+      }
+      await craftItem(bot, woolColor.replace("_wool", "_bed"), 1);
+      bedItem = bot.inventory.items().find((i) => i.name.includes("bed"));
+      if (!bedItem) return "Bed crafting failed — need a crafting table nearby (or in inventory).";
+      console.log(`[Skill] Crafted a ${bedItem.name} to sleep in`);
+    }
 
     await bot.equip(bedItem, "hand");
 
