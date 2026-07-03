@@ -180,6 +180,25 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   const head = bot.blockAt(bot.entity.position.offset(0, 1, 0));
   if (!head || head.name !== "water") return false; // head not submerged → breathing fine
 
+  // When air is actually running out, this reflex must WIN the controls: the
+  // pathfinder re-asserts movement every tick, so 1.2s rescue bursts lost the
+  // tug-of-war against an underwater goal (Blade drowned 16x in one run
+  // mining lake-bed iron — rescued, shoved back down, drowned). Stop the
+  // pathfinder + any dig before swimming; the brain re-plans afterwards.
+  const air = bot.oxygenLevel ?? 20;
+  if (air < 12) {
+    try {
+      bot.pathfinder.stop();
+    } catch {
+      /* best effort */
+    }
+    try {
+      bot.stopDigging();
+    } catch {
+      /* wasn't digging */
+    }
+  }
+
   // Find the nearest dry shore: a solid block with air above, scanned over fixed
   // offset rings (NOT a findBlock predicate that calls blockAt — that silently
   // matches nothing). Prefer the closest.
