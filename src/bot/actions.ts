@@ -655,11 +655,21 @@ async function explore(bot: Bot, direction: string): Promise<string> {
   // The pathfinder can resolve its promise without error when it gives up on an unreachable
   // goal, leaving the bot at the same position. Checking AFTER try/catch ensures we catch both.
   const movedDist = bot.entity.position.distanceTo(startPos);
-  if (movedDist < 2 && config.bot.allowInterventions) {
-    // Teleport-unstick is an intervention — off by default (the bot must find
-    // its own way or stay put). spreadplayers lands on a safe surface block.
-    bot.chat(`/spreadplayers ${Math.round(target.x)} ${Math.round(target.z)} 0 4 false ${bot.username}`);
-    await new Promise((r) => setTimeout(r, 3000));
+  if (movedDist < 2) {
+    if (config.bot.allowInterventions) {
+      // Teleport-unstick is an intervention — off by default (the bot must find
+      // its own way or stay put). spreadplayers lands on a safe surface block.
+      bot.chat(`/spreadplayers ${Math.round(target.x)} ${Math.round(target.z)} 0 4 false ${bot.username}`);
+      await new Promise((r) => setTimeout(r, 3000));
+    } else {
+      // HONEST failure. This used to fall through to the success message —
+      // "Explored <dir> (~N blocks)" with the INTENDED distance — even when
+      // the pathfinder never moved the bot. The LLM believed it, saw the same
+      // surroundings, and chose explore again: Atlas returned 226 identical
+      // "explored" results at the same coords, visually frozen at a lake edge.
+      // Report the truth so the brain re-plans instead of looping.
+      return `Couldn't move ${direction} — path blocked, still at ${startPos.x.toFixed(0)}, ${startPos.y.toFixed(0)}, ${startPos.z.toFixed(0)}. Try a DIFFERENT direction, mine_block to dig through the obstacle, or go_to a known location like the stash.`;
+    }
   }
 
   // Report what we can see from wherever we ended up
