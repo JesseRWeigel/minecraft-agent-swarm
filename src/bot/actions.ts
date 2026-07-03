@@ -624,9 +624,36 @@ async function explore(bot: Bot, direction: string): Promise<string> {
   const currentPos = bot.entity.position;
   const dist = 60 + Math.floor(Math.random() * 60);
   const jitter = () => (Math.random() - 0.5) * 20;
+  // Movement is measured from BEFORE the switch — the "up" case moves the bot
+  // inside its case block, and measuring after it would misreport a
+  // successful climb as "Couldn't move up".
+  const originPos = bot.entity.position.clone();
   let target: Vec3;
 
   switch (direction) {
+    case "up": {
+      // Real vertical escape. The LLM asks to explore "up" constantly when a
+      // bot is trapped in the mined-out pits around the base (92x in 73 min):
+      // maxDropDown=3 lets bots DROP into 3-deep pits, but they can't climb
+      // 2+ block walls and towers are disabled in normal movement — a trap.
+      // Previously "up" wasn't a case, silently aliased to the default
+      // (east!) and honest-failed. Dig/tower toward the surface instead,
+      // using the bot's own tools and blocks.
+      const upMoves = new Movements(bot);
+      upMoves.canDig = true;
+      upMoves.allow1by1towers = true;
+      upMoves.allowFreeMotion = true;
+      bot.pathfinder.setMovements(upMoves);
+      const fromY = bot.entity.position.y;
+      try {
+        await safeGoto(bot, new goals.GoalY(Math.max(72, Math.ceil(fromY) + 4)), 30000);
+      } catch {
+        /* movedDist check below reports honestly */
+      }
+      bot.pathfinder.setMovements(explorerMoves(bot));
+      target = bot.entity.position.clone(); // no lateral leg; report from here
+      break;
+    }
     case "north":
       target = currentPos.offset(jitter(), 0, -dist);
       break;
@@ -644,7 +671,7 @@ async function explore(bot: Bot, direction: string): Promise<string> {
   }
 
   bot.pathfinder.setMovements(explorerMoves(bot));
-  const startPos = bot.entity.position.clone();
+  const startPos = originPos;
   try {
     await safeGoto(bot, new goals.GoalNear(target.x, target.y, target.z, 5), 20000);
   } catch {
