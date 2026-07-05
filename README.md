@@ -20,7 +20,7 @@ Designed for live streaming: includes a Mission Control dashboard, per-bot 3D vi
 │  events: idle(10s)→strategic · hostiles/damage→reactive ·     │
 │  action done→critic · chat→reply                              │
 │  World Context + Team Bulletin + TECH TREE → LLM → Action     │
-│            (single Ollama MoE: qwen3.6:35b-a3b)               │
+│            (single Ollama MoE: gpt-oss:20b)                   │
 └────────────────────────┬─────────────────────────────────────┘
                          │
           ┌──────────────┼──────────────┐
@@ -94,7 +94,7 @@ Each bot has its own personality, allowed actions, allowed skills, memory file, 
 ### Requirements
 
 - Node.js 20+
-- [Ollama](https://ollama.ai) with `qwen3.6:35b-a3b` pulled (one MoE model serves all decision types)
+- [Ollama](https://ollama.ai) with `gpt-oss:20b` pulled (one MoE model serves all decision types — chosen by A/B trial over qwen3.6 and nemotron-3-nano for structured-output quality and speed)
 - Minecraft Java Edition server (1.21.4) with 5+ player slots
 - Python 3.10+ (for neural combat server)
 
@@ -125,8 +125,9 @@ MC_AUTH=offline
 
 # LLM (Ollama)
 OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=qwen3.6:35b-a3b       # MoE: ~3B active params, ~150 tok/s on a 32GB GPU
-OLLAMA_FAST_MODEL=qwen3.6:35b-a3b  # Same model — two models don't fit in 32GB together
+OLLAMA_MODEL=gpt-oss:20b       # MoE: ~3.6B active params, ~200 tok/s on a 32GB GPU
+OLLAMA_FAST_MODEL=gpt-oss:20b  # Same model — avoids VRAM eviction thrash between two residents
+# Reasoning-native models (gpt-oss) run with think:"low"; qwen needs think:false (auto-detected in src/llm)
 
 # Bot identity
 BOT_NAME=Atlas
