@@ -12,6 +12,15 @@ import {
 } from "./prompts.js";
 import { createLogger } from "../util/logger.js";
 
+/** Model-aware think option. qwen3.6 needs think:false (it otherwise burns the
+ *  whole token budget reasoning — the original gotcha). gpt-oss models are
+ *  reasoning-NATIVE: think:false makes them terminate with EMPTY content under
+ *  format:"json" (~1/3 of queries in run 114, 14/44) — the documented usage is
+ *  a reasoning-effort level; "low" keeps decision latency down. */
+function thinkFor(model: string): boolean | "low" | "medium" | "high" {
+  return model.includes("gpt-oss") ? "low" : false;
+}
+
 const ollama = new Ollama({ host: config.ollama.host });
 const llmLog = createLogger();
 
@@ -230,7 +239,7 @@ export async function queryStrategic(
     const response = await ollama.chat({
       model: config.ollama.model, // Strong model for strategic decisions
       messages,
-      think: false,
+      think: thinkFor(config.ollama.model),
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.8,
@@ -271,7 +280,7 @@ export async function queryReactive(
     const response = await ollama.chat({
       model: config.ollama.fastModel,
       messages,
-      think: false,
+      think: thinkFor(config.ollama.fastModel),
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.5, // Lower temp for urgent decisions — be reliable, not creative
@@ -317,7 +326,7 @@ export async function queryCritic(
     const response = await ollama.chat({
       model: config.ollama.fastModel,
       messages,
-      think: false,
+      think: thinkFor(config.ollama.fastModel),
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.4, // Low temp — critic should be analytical
@@ -478,7 +487,7 @@ export async function queryLLM(
     let response = await ollama.chat({
       model: config.ollama.fastModel,
       messages,
-      think: false,
+      think: thinkFor(config.ollama.fastModel),
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
       options: {
         temperature: 0.85,
@@ -492,7 +501,7 @@ export async function queryLLM(
       llmLog.warn("LLM", "Short/empty response — retrying with fallback prompt...");
       response = await ollama.chat({
         model: config.ollama.fastModel,
-        think: false,
+        think: thinkFor(config.ollama.fastModel),
         messages: [
           {
             role: "system",
@@ -526,7 +535,7 @@ export async function chatWithLLM(prompt: string, context: string, roleConfig?: 
       model: config.ollama.fastModel,
       // think:false is load-bearing: without it qwen3.6 spends the entire
       // token budget inside <think> and returns empty content ("Hmm...").
-      think: false,
+      think: thinkFor(config.ollama.fastModel),
       messages: [
         {
           role: "system",
