@@ -97,6 +97,32 @@ export class BotBrain {
 
   // Failure tracking
   private recentFailures = new Map<string, string>();
+  // recentFailures entries EXPIRE. They used to live forever, and a blocked
+  // action can never run again to clear itself — so over a long run the
+  // blacklist saturated (eat/explore/go_to/mine_block all blocked) and all 5
+  // bots stood frozen churning "Blocked:" x357/15min at hour ~20 of run 118.
+  // Transient failures (no path, no food HERE, no mobs NOW) age out fast; the
+  // world changes. Structural blocks (wrong-role action, retired skill,
+  // hallucinated name) persist long.
+  private failureExpiry = new Map<string, number>();
+  private static readonly FAILURE_TTL_TRANSIENT_MS = 120_000;
+  private static readonly FAILURE_TTL_STRUCTURAL_MS = 3_600_000;
+
+  private blockAction(key: string, msg: string, ttlMs: number = BotBrain.FAILURE_TTL_TRANSIENT_MS): void {
+    this.recentFailures.set(key, msg);
+    this.failureExpiry.set(key, Date.now() + ttlMs);
+  }
+
+  private purgeExpiredFailures(): void {
+    const now = Date.now();
+    for (const [k, exp] of this.failureExpiry.entries()) {
+      if (now > exp) {
+        this.failureExpiry.delete(k);
+        this.recentFailures.delete(k);
+        this.failureCounts.delete(k);
+      }
+    }
+  }
   private failureCounts = new Map<string, number>();
   private successesSinceLastExpiry = 0;
 
@@ -135,7 +161,7 @@ export class BotBrain {
 
     // Pre-populate failure blacklist from memory
     for (const [skill, msg] of memStore.getSessionPreconditionBlocks()) {
-      this.recentFailures.set(`skill:${skill}`, msg);
+      this.blockAction(`skill:${skill}`, msg, BotBrain.FAILURE_TTL_STRUCTURAL_MS);
     }
     if (this.recentFailures.size > 0) {
       this.log.debug("Brain", `Pre-populated ${this.recentFailures.size} blacklist entries from memory`);
@@ -526,6 +552,7 @@ export class BotBrain {
     if (teamStatus) ctx += `\n${teamStatus}`;
 
     // Recent failures
+    this.purgeExpiredFailures();
     if (this.recentFailures.size > 0) {
       const lines: string[] = [];
       for (const [k, v] of this.recentFailures.entries()) {
@@ -950,14 +977,16 @@ export class BotBrain {
       // Blacklist it so the RECENTLY FAILED prompt section stops the bot from
       // re-picking it — the fine-tuned model especially leaks other roles'
       // actions (trained on all five bots' decisions mixed together).
-      this.recentFailures.set(
+      this.blockAction(
         decision.action,
         `Not in YOUR toolkit — use: ${this.roleConfig.allowedActions.join(", ")}`,
+        BotBrain.FAILURE_TTL_STRUCTURAL_MS,
       );
       return;
     }
 
     // ── Blacklist check ──
+    this.purgeExpiredFailures();
     const actionKey = this.getActionKey(decision);
     if (this.recentFailures.has(actionKey)) {
       const blockMsg = `Blocked: "${actionKey}" recently failed. Try something else.`;
@@ -1141,10 +1170,7 @@ export class BotBrain {
     if (decision.action !== "idle" && resultSig === this.lastResultSig) {
       this.sameResultCount++;
       if (this.sameResultCount >= 2) {
-        this.recentFailures.set(
-          actionKey,
-          `Stuck repeating "${decision.action}" with no change — do something different.`,
-        );
+        this.blockAction(actionKey, `Stuck repeating "${decision.action}" with no change — do something different.`);
         this.sameResultCount = 0;
         this.lastResultSig = "";
         setTimeout(() => this.triggerReplan(), 300);
@@ -1216,14 +1242,18 @@ export class BotBrain {
   ): void {
     // Hallucinated action names
     if (result.startsWith("Unknown action:")) {
-      this.recentFailures.set(decision.action, "Unknown action");
+      this.blockAction(decision.action, "Unknown action", BotBrain.FAILURE_TTL_STRUCTURAL_MS);
       return;
     }
 
     // Retired skills — put them straight into the do-NOT-retry prompt list
     // so the LLM stops re-picking them from conversation history.
     if (result.includes("is RETIRED")) {
-      this.recentFailures.set(actionKey, "Retired — proven broken, use basic actions instead");
+      this.blockAction(
+        actionKey,
+        "Retired — proven broken, use basic actions instead",
+        BotBrain.FAILURE_TTL_STRUCTURAL_MS,
+      );
       return;
     }
 
@@ -1240,7 +1270,7 @@ export class BotBrain {
         const prevCount = (this.failureCounts.get("attack") ?? 0) + 1;
         this.failureCounts.set("attack", prevCount);
         if (prevCount >= 3) {
-          this.recentFailures.set("attack", "No mobs nearby — explore first");
+          this.blockAction("attack", "No mobs nearby — explore first");
         }
       } else if (decision.action === "attack" && isSuccess) {
         this.failureCounts.delete("attack");
@@ -1260,12 +1290,12 @@ export class BotBrain {
           const prevCount = (this.failureCounts.get(actionKey) ?? 0) + 1;
           this.failureCounts.set(actionKey, prevCount);
           if (prevCount >= 2) {
-            this.recentFailures.set(actionKey, result.slice(0, 120));
+            this.blockAction(actionKey, result.slice(0, 120));
           }
         } else if (!isAlreadyRunning && /no trees/i.test(result)) {
-          this.recentFailures.set(actionKey, "No trees — explore first");
+          this.blockAction(actionKey, "No trees — explore first");
         } else if (!isAlreadyRunning && /no water/i.test(result)) {
-          this.recentFailures.set(actionKey, "No water — explore first");
+          this.blockAction(actionKey, "No water — explore first");
         }
       } else {
         this.failureCounts.delete(actionKey);
