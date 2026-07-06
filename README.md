@@ -10,6 +10,8 @@ Designed for live streaming: includes a Mission Control dashboard, per-bot 3D vi
 
 > Formerly `mineflayer-chatgpt`. Renamed to reflect what it became: a multi-agent swarm running on local models, not a single ChatGPT bot.
 
+📖 **Project page, devlogs, and live scoreboard stats:** [jesseweigel.com/workshop/minecraft-agent-swarm](https://jesseweigel.com/workshop/minecraft-agent-swarm)
+
 ---
 
 ## Architecture
@@ -331,6 +333,44 @@ All chat messages and bot thoughts are filtered:
 - Blocks harmful/inappropriate content
 - Detects and sanitizes prompt injection attempts from player chat
 - Viewer messages filtered separately with tighter rules
+
+---
+
+## Models
+
+The bots' decisions all run through a single local model that fits on one 32GB
+GPU. That model has changed several times as stronger local options appeared.
+This is the running record.
+
+| Model | Era | Type | Notes |
+|-------|-----|------|-------|
+| OpenAI GPT-3.5 / GPT-4 | 2023, single-bot origin | Cloud API | The original `mineflayer-chatgpt`: one bot on a cloud model. |
+| qwen3:32b + qwen3:8b | early multi-bot | Dense pair | Large model for strategy, small one for reactions. The two swapped in and out of VRAM and thrashed. |
+| qwen3.6:35b-a3b | June 2026 | MoE | One MoE for every decision type. ~3B active params, ~147 tok/s. Ended the two-model swap. |
+| qwen3-minecraft:8b | June 2026 | LoRA fine-tune | Qwen3-8B trained on the team's own successful games. 8.7GB, 138 tok/s. Played competently but did not beat the stock model. Reverted. |
+| qwen3.6:27b | late June 2026 | Dense | Stock model that beat the fine-tune. Baseline for the July trial. |
+| **gpt-oss:20b** | **July 2026 (current)** | **MoE** | **Won the three-way trial below. ~3.6B active params, ~200 tok/s, 13GB VRAM. Reasoning-native, runs at `think: "low"`.** |
+
+### July 2026 three-way trial
+
+Local-only, head to head, same world and prompts, with `qwen3.6:27b` as the baseline.
+
+| Metric | gpt-oss:20b | nemotron-3-nano | qwen3.6:27b |
+|--------|-------------|-----------------|-------------|
+| Eats / hour | **10** | 1.6 | 0.7 |
+| Action-failure rate | **31%** | n/a | 61% |
+| Decisions / hour | **~1,700** (≈8× qwen) | n/a | baseline |
+| VRAM | 13GB | n/a | n/a |
+
+`gpt-oss:20b` won on food economy, action success, skill success, and decision
+throughput. Deaths rose (2 → 5/hr) from sheer activity: about eight times more
+actions per hour, though each individual decision is safer than before.
+
+**Reasoning-native gotcha.** `qwen3.6` needs `think: false` or it burns its whole
+token budget reasoning. `gpt-oss` is the reverse: with `think: false` under
+`format: "json"` it terminates with empty content on roughly a third of queries
+(14 of 44 in one run). `thinkFor(model)` in `src/llm/index.ts` picks the level
+per model (`"low"` for gpt-oss, `false` for qwen). Same flag, opposite settings.
 
 ---
 
