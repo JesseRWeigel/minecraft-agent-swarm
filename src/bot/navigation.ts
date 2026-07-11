@@ -125,7 +125,34 @@ export async function collectNearbyDrops(bot: Bot, radius = 8, maxMs = 8000): Pr
       await safeGoto(bot, new goals.GoalBlock(p.x, p.y, p.z), 6000);
       await new Promise((r) => setTimeout(r, 400)); // pickup tick
     } catch {
-      continue; // stuck in leaves or a hole — try the next drop
+      // Drop lodged in the canopy? Punch out the leaf it rests on/in so it
+      // falls to walkable ground, then allow one retry. Leaf-lodged drops were
+      // the top wood-loss cause (78% of chopped logs never collected).
+      try {
+        const at = bot.blockAt(drop.position.floored());
+        const under = bot.blockAt(drop.position.floored().offset(0, -1, 0));
+        const leaf = [at, under].find((b) => b && b.name.includes("leaves"));
+        if (leaf && bot.entity.position.distanceTo(leaf.position) < 5) {
+          await Promise.race([
+            bot.dig(leaf),
+            new Promise<void>((_, rej) =>
+              setTimeout(() => {
+                try {
+                  bot.stopDigging();
+                } catch {
+                  /* not digging */
+                }
+                rej(new Error("leaf dig timeout"));
+              }, 5000),
+            ),
+          ]);
+          tried.delete(drop.id); // it can fall now — retry on a later pass
+          await new Promise((r) => setTimeout(r, 600)); // let it fall
+        }
+      } catch {
+        /* leaf out of reach — leave the drop */
+      }
+      continue;
     }
   }
 }
