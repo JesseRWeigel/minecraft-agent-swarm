@@ -322,7 +322,14 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
         bot.pathfinder.thinkTimeout = prevThinkTimeout;
       }
     } catch {
-      // This log was unreachable — skip it and try the next one
+      // This log was unreachable — skip it and try the next one.
+      // INSTRUMENTATION (wood-economy debugging): record exactly where the
+      // approach fails so the fix targets evidence, not guesses — 80% of
+      // gathers still die here even after the leaf-dig retry.
+      const bp = bot.entity.position;
+      console.log(
+        `[GatherDebug] approach failed: bot(${bp.x.toFixed(0)},${bp.y.toFixed(0)},${bp.z.toFixed(0)}) -> tree(${pos.x},${pos.y},${pos.z}) dist=${bp.distanceTo(pos).toFixed(0)}`,
+      );
     }
     if (tried >= 4 && gathered === 0) break; // give up after 4 failed attempts (~120s max)
   }
