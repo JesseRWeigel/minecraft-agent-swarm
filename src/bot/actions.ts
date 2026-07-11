@@ -281,6 +281,20 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
       }, 400);
       try {
         await safeGoto(bot, new goals.GoalNear(pos.x, pos.y, pos.z, 3), 30000, 12000);
+        // Young regrown trees sit inside ground-level leaf bushes that the
+        // no-dig movement can't push through — at the regrown forest EVERY
+        // approach failed ("Couldn't reach any trees... pathfinding failed").
+        // If we're still not adjacent, retry once with digging allowed: the
+        // bot chews through the bush exactly like a player would.
+        if (bot.entity.position.distanceTo(new Vec3(pos.x, pos.y, pos.z)) > 4.5) {
+          const bushMoves = new Movements(bot);
+          bushMoves.canDig = true;
+          bushMoves.allow1by1towers = false;
+          bushMoves.maxDropDown = 3;
+          bushMoves.allowParkour = false;
+          bot.pathfinder.setMovements(bushMoves);
+          await safeGoto(bot, new goals.GoalNear(pos.x, pos.y, pos.z, 2), 20000, 8000);
+        }
         await digSafe(bot, log);
         gathered++;
         // Fell the WHOLE trunk, not just one block: logs above float (classic
