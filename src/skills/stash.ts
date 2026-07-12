@@ -376,6 +376,14 @@ export async function withdrawStash(
   await safeGoto(bot, new goals.GoalNear(stashPos.x, stashPos.y, stashPos.z, 3), 30000);
 
   const category = categorizeItem(itemName);
+
+  // Wood-family fuzzy matching: bots request "oak_log" while the stash holds
+  // birch/spruce (exact-name miss — the raw_beef lesson again: 58 failed
+  // withdrawals in one night while wood sat in the chests). Any wood variant
+  // or generic term matches the whole family via substring.
+  let matchName = itemName;
+  if (/^([a-z]+_)?logs?$|^wood$/.test(itemName) || itemName.endsWith("_log")) matchName = "_log";
+  else if (/^([a-z]+_)?planks?$/.test(itemName) || itemName.endsWith("_planks")) matchName = "_planks";
   const rowOffset = getRowOffset(category);
   const chestPos = new Vec3(stashPos.x + rowOffset, stashPos.y, stashPos.z);
 
@@ -406,7 +414,7 @@ export async function withdrawStash(
   const countItem = () =>
     bot.inventory
       .items()
-      .filter((i) => i.name.includes(itemName))
+      .filter((i) => i.name.includes(matchName))
       .reduce((s, i) => s + i.count, 0);
   const before = countItem();
 
@@ -421,7 +429,7 @@ export async function withdrawStash(
 
       for (const slot of container.containerItems()) {
         if (withdrawn >= needed) break;
-        if (slot.name.includes(itemName)) {
+        if (slot.name.includes(matchName)) {
           const take = Math.min(slot.count, needed - withdrawn);
           try {
             await container.withdraw(slot.type, null, take);
