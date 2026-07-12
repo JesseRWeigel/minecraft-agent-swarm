@@ -226,6 +226,12 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
   if (allLogs.length === 0)
     return "No trees found within 256 blocks. Explore further south (toward Z=-100 or Z=0) to find an uncharted forest.";
 
+  // Nearest-first: findBlocks returns scan order, and burning the 4-try
+  // budget on 120+ block hikes (which time out over broken terrain) starves
+  // the close, reachable trees (evidence: failures at dist 124-163 while
+  // dist<20 candidates existed).
+  allLogs.sort((a, b) => a.distanceTo(bot.entity.position) - b.distanceTo(bot.entity.position));
+
   // If underground, surface first — explorerMoves can't dig through solid blocks
   if (bot.entity.position.y < 63) {
     const digMoves = new Movements(bot);
@@ -276,6 +282,11 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
       below = bot.blockAt(log.position.offset(0, -1, 0));
     }
     const basePos = log.position;
+    // Skip FLOATING tree remnants: weeks of old one-log chopping left
+    // trunk-tops hovering over air everywhere, and they bait the finder into
+    // unreachable targets (evidence: base at y=82 with the bot directly
+    // below at y=74). A real trunk base sits on a solid block.
+    if (!below || below.name === "air" || below.name === "water") continue;
 
     tried++;
     try {
