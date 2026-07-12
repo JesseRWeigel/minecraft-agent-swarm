@@ -331,6 +331,39 @@ export async function depositStash(
     }
   }
 
+  // AUTO-EXPANSION: the stash filled up with weeks of accumulated blocks and
+  // every deposit bounced ("needs expansion" x days). The prompt-level cue
+  // (Mason: place chests) produced chest WITHDRAWALS but no successful
+  // placement in 24h — so give the deposit routine the capability directly:
+  // if items bounced and this bot is CARRYING a chest (crafted by the team —
+  // no free items), place it past the stash rows and deposit into it.
+  if (noChest > 0) {
+    const chestItem = bot.inventory.items().find((i) => i.name === "chest");
+    if (chestItem) {
+      try {
+        const placed = await placeChestNearStash(bot, stashPos);
+        if (placed) {
+          const container = await openContainerTimed(bot, placed);
+          for (const item of bot.inventory.items()) {
+            if (item.name === "chest") continue; // keep spare chests for next expansion
+            if (shouldKeep(item.name, keepItems, keptCounts)) continue;
+            try {
+              await container.deposit(item.type, null, item.count);
+              deposited += item.count;
+            } catch {
+              break; // new chest full too
+            }
+          }
+          snapshotChest(placed.position, container.containerItems(), container.inventoryStart);
+          container.close();
+          noChest = 0;
+        }
+      } catch {
+        /* expansion failed — report full as before */
+      }
+    }
+  }
+
   // Top up food while we're already at the stash (non-disruptive distribution).
   // Remote workers (miner, explorer) starve away from the farm; topping up on
   // each stash visit spreads the team's surplus bread to whoever comes to
@@ -454,4 +487,41 @@ export async function withdrawStash(
   if (gained === 0) return `No ${itemName} in the stash. Gather it yourself instead.`;
   if (gained < needed) return `Withdrew ${gained}x ${itemName} from stash (wanted ${needed} — that's all there was).`;
   return `Withdrew ${gained}x ${itemName} from stash.`;
+}
+
+/** Find open ground just past the stash rows and place a chest from inventory.
+ *  Part of auto-expansion: the bot supplies its own chest; this only handles
+ *  the placement mechanics (goto, equip, place) that the LLM kept fumbling. */
+async function placeChestNearStash(
+  bot: Bot,
+  stashPos: { x: number; y: number; z: number },
+): Promise<ReturnType<Bot["blockAt"]>> {
+  const chestItem = bot.inventory.items().find((i) => i.name === "chest");
+  if (!chestItem) return null;
+  for (let dx = 10; dx <= 16; dx++) {
+    for (const dz of [0, 2, -2, 1, -1]) {
+      const base = new Vec3(stashPos.x + dx, stashPos.y, stashPos.z + dz);
+      const ground = bot.blockAt(base.offset(0, -1, 0));
+      const target = bot.blockAt(base);
+      const above = bot.blockAt(base.offset(0, 1, 0));
+      if (!ground || ground.boundingBox !== "block" || !target || target.name !== "air" || !above) continue;
+      if (above.name !== "air") continue;
+      try {
+        await safeGoto(bot, new goals.GoalNear(base.x, base.y, base.z, 2), 15000);
+        await bot.equip(chestItem, "hand");
+        await Promise.race([
+          bot.placeBlock(ground, new Vec3(0, 1, 0)),
+          new Promise<void>((_, rej) => setTimeout(() => rej(new Error("place timeout")), 5000)),
+        ]);
+        const placed = bot.findBlock({ matching: (b) => b.name === "chest", maxDistance: 4 });
+        if (placed) {
+          console.log(`[Stash] Expanded: placed a new chest at ${placed.position}`);
+          return placed;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  return null;
 }
