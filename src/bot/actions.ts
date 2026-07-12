@@ -261,8 +261,21 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
   for (const pos of allLogs) {
     if (gathered >= count) break;
     if (Date.now() - gatherStart > 110000) break;
-    const log = bot.blockAt(pos);
+    let log = bot.blockAt(pos);
     if (!log || !(logTypes as readonly string[]).includes(log.name)) continue;
+
+    // Target the BASE of the trunk, not whatever log findBlocks returned.
+    // Big oaks return canopy BRANCH logs 8-10 blocks up — GoalNear(3) can
+    // never be satisfied from the ground for those (instrumentation showed
+    // repeated failures with the tree DIRECTLY OVERHEAD at dist 8-10), and
+    // chopping a canopy log rains its drops into the leaves. Walk the log
+    // column down to ground level and approach that instead.
+    let below = bot.blockAt(log.position.offset(0, -1, 0));
+    while (below && (logTypes as readonly string[]).includes(below.name)) {
+      log = below;
+      below = bot.blockAt(log.position.offset(0, -1, 0));
+    }
+    const basePos = log.position;
 
     tried++;
     try {
@@ -280,20 +293,20 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
         }
       }, 400);
       try {
-        await safeGoto(bot, new goals.GoalNear(pos.x, pos.y, pos.z, 3), 30000, 12000);
+        await safeGoto(bot, new goals.GoalNear(basePos.x, basePos.y, basePos.z, 3), 30000, 12000);
         // Young regrown trees sit inside ground-level leaf bushes that the
         // no-dig movement can't push through — at the regrown forest EVERY
         // approach failed ("Couldn't reach any trees... pathfinding failed").
         // If we're still not adjacent, retry once with digging allowed: the
         // bot chews through the bush exactly like a player would.
-        if (bot.entity.position.distanceTo(new Vec3(pos.x, pos.y, pos.z)) > 4.5) {
+        if (bot.entity.position.distanceTo(new Vec3(basePos.x, basePos.y, basePos.z)) > 4.5) {
           const bushMoves = new Movements(bot);
           bushMoves.canDig = true;
           bushMoves.allow1by1towers = false;
           bushMoves.maxDropDown = 3;
           bushMoves.allowParkour = false;
           bot.pathfinder.setMovements(bushMoves);
-          await safeGoto(bot, new goals.GoalNear(pos.x, pos.y, pos.z, 2), 20000, 8000);
+          await safeGoto(bot, new goals.GoalNear(basePos.x, basePos.y, basePos.z, 2), 20000, 8000);
         }
         await digSafe(bot, log);
         gathered++;
@@ -301,7 +314,7 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
         // Minecraft) and their drops rain down the cleared column to walkable
         // ground. Chopping a single log left drops lodged in the canopy — 78%
         // of chopped logs were lost as unreachable (1138 lost vs 326 gathered).
-        let above = bot.blockAt(pos.offset(0, 1, 0));
+        let above = bot.blockAt(basePos.offset(0, 1, 0));
         let felled = 0;
         while (above && (logTypes as readonly string[]).includes(above.name) && felled < 6) {
           try {
@@ -313,7 +326,7 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
           above = bot.blockAt(above.position.offset(0, 1, 0));
         }
         gathered += felled;
-        chopSpots.push(pos.clone()); // remember the trunk spot to replant on
+        chopSpots.push(basePos.clone()); // remember the trunk spot to replant on
         // Walk over the drops — digging alone leaves the items on the ground
         await new Promise((r) => setTimeout(r, 600));
         await collectNearbyDrops(bot, 8, 9000);
@@ -328,7 +341,7 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
       // gathers still die here even after the leaf-dig retry.
       const bp = bot.entity.position;
       console.log(
-        `[GatherDebug] approach failed: bot(${bp.x.toFixed(0)},${bp.y.toFixed(0)},${bp.z.toFixed(0)}) -> tree(${pos.x},${pos.y},${pos.z}) dist=${bp.distanceTo(pos).toFixed(0)}`,
+        `[GatherDebug] approach failed: bot(${bp.x.toFixed(0)},${bp.y.toFixed(0)},${bp.z.toFixed(0)}) -> base(${basePos.x},${basePos.y},${basePos.z}) dist=${bp.distanceTo(basePos).toFixed(0)}`,
       );
     }
     if (tried >= 4 && gathered === 0) break; // give up after 4 failed attempts (~120s max)
