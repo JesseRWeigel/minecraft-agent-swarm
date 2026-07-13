@@ -338,7 +338,39 @@ export async function depositStash(
   // if items bounced and this bot is CARRYING a chest (crafted by the team —
   // no free items), place it past the stash rows and deposit into it.
   if (noChest > 0) {
-    const chestItem = bot.inventory.items().find((i) => i.name === "chest");
+    let chestItem = bot.inventory.items().find((i) => i.name === "chest");
+    // No chest carried? CRAFT one on the spot from carried planks (8) — the
+    // "craft a chest and carry it" mission produced talk but no carried
+    // chests across a full day (crafted ones get spent/deposited before the
+    // next bounce). All materials are still bot-earned; this only removes
+    // the multi-step timing coordination the LLM can't hold.
+    if (!chestItem) {
+      const planks = bot.inventory
+        .items()
+        .filter((i) => i.name.endsWith("_planks"))
+        .reduce((sum, i) => sum + i.count, 0);
+      if (planks >= 8) {
+        try {
+          const mcData = (await import("minecraft-data")).default(bot.version);
+          const chestDef = mcData.itemsByName["chest"];
+          const table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 24 });
+          if (chestDef && table) {
+            await safeGoto(bot, new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2), 15000);
+            const recipe = bot.recipesFor(chestDef.id, null, 1, table)[0];
+            if (recipe) {
+              await Promise.race([
+                bot.craft(recipe, 1, table),
+                new Promise<void>((_, rej) => setTimeout(() => rej(new Error("craft timeout")), 15000)),
+              ]);
+              chestItem = bot.inventory.items().find((i) => i.name === "chest");
+              if (chestItem) console.log("[Stash] Crafted a chest for expansion");
+            }
+          }
+        } catch {
+          /* couldn't craft — fall through to the old full-stash report */
+        }
+      }
+    }
     if (chestItem) {
       try {
         const placed = await placeChestNearStash(bot, stashPos);
