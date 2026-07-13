@@ -151,6 +151,26 @@ export function shouldKeep(
   }
   if (itemName === "shield") return true;
 
+  // Never deposit your ONLY tools. shouldKeep protected iron+ gear only, so
+  // wooden/stone pickaxes were dumped as junk on every stash trip — craft_gear
+  // made wooden_pickaxe repeatedly (4 successes in run 127) and every one
+  // vanished into the stash, so nobody could ever mine iron. Keep ONE pickaxe
+  // and ONE axe of ANY tier.
+  if (itemName.endsWith("_pickaxe")) {
+    const kept = currentCounts.get("__pickaxe") ?? 0;
+    if (kept < 1) {
+      currentCounts.set("__pickaxe", 1);
+      return true;
+    }
+  }
+  if (itemName.endsWith("_axe") && !itemName.endsWith("_pickaxe")) {
+    const kept = currentCounts.get("__axe") ?? 0;
+    if (kept < 1) {
+      currentCounts.set("__axe", 1);
+      return true;
+    }
+  }
+
   // Keep precious crafting materials in inventory. Bots deposited every iron
   // ingot the instant they smelted it (314 deposits/run, empty inventories), so
   // they never accumulated the 3+ ingots needed in-hand to craft an iron tool.
