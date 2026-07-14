@@ -2,6 +2,8 @@ import type { Bot } from "mineflayer";
 import type { Skill, SkillResult } from "./types.js";
 import { LOG_TYPES } from "./materials.js";
 import mcDataLoader from "minecraft-data";
+import pkg from "mineflayer-pathfinder";
+const { goals } = pkg;
 import { Vec3 } from "vec3";
 
 /** Tool tiers from best to worst. */
@@ -55,6 +57,60 @@ export const craftGearSkill: Skill = {
           await withdrawStash(bot, stashPos, "iron_ingot", 33 - ironIngots);
         } catch {
           /* none in stash — craft whatever tier we can */
+        }
+      }
+    }
+
+    // WOOD SELF-SUPPLY (same pattern as build_farm's hoe step, which works):
+    // craft_gear failed 79x in one run with "Missing: pickaxe... use
+    // gather_wood" — the LLM never holds the gather->keep->craft sequence,
+    // and gathered logs evaporate into other uses first. Withdraw logs from
+    // the stash; failing that, chop a couple of nearby trees right here.
+    const hasWood = () => bot.inventory.items().some((i) => i.name.endsWith("_log") || i.name.endsWith("_planks"));
+    if (!signal.aborted && !hasWood()) {
+      if (stashPos) {
+        const { withdrawStash } = await import("./stash.js");
+        try {
+          await withdrawStash(bot, stashPos, "log", 8);
+        } catch {
+          /* none pooled */
+        }
+      }
+      if (!hasWood()) {
+        const { safeGoto, collectNearbyDrops } = await import("../bot/navigation.js");
+        for (let t = 0; t < 2 && !signal.aborted && !hasWood(); t++) {
+          let logBlock = bot.findBlock({ matching: (b) => b.name.endsWith("_log"), maxDistance: 64 });
+          if (!logBlock) break;
+          // Walk to the trunk BASE (canopy-branch lesson) and skip floaters.
+          let below = bot.blockAt(logBlock.position.offset(0, -1, 0));
+          while (below && below.name.endsWith("_log")) {
+            logBlock = below;
+            below = bot.blockAt(logBlock.position.offset(0, -1, 0));
+          }
+          if (!below || below.name === "air" || below.name === "water") continue;
+          try {
+            await safeGoto(
+              bot,
+              new goals.GoalNear(logBlock.position.x, logBlock.position.y, logBlock.position.z, 2),
+              20000,
+            );
+            await Promise.race([
+              bot.dig(logBlock),
+              new Promise<void>((_, rej) =>
+                setTimeout(() => {
+                  try {
+                    bot.stopDigging();
+                  } catch {
+                    /* not digging */
+                  }
+                  rej(new Error("dig timeout"));
+                }, 12000),
+              ),
+            ]);
+            await collectNearbyDrops(bot, 8, 6000);
+          } catch {
+            /* try the next tree */
+          }
         }
       }
     }
