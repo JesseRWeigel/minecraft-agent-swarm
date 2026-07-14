@@ -115,6 +115,21 @@ export const craftGearSkill: Skill = {
       }
     }
 
+    // INSTRUMENTATION (craft-gear debugging): entry material state, so the
+    // next failure diagnosis reads evidence instead of guessing (5 previous
+    // wood-chain fixes were each one layer deeper than the guess).
+    {
+      const cnt = (suffix: string) =>
+        bot.inventory
+          .items()
+          .filter((i) => i.name.endsWith(suffix))
+          .reduce((s, i) => s + i.count, 0);
+      const tableNear = !!bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 32 });
+      console.log(
+        `[GearDebug] entry: logs=${cnt("_log")} planks=${cnt("_planks")} sticks=${cnt("stick")} cobble=${cnt("cobblestone")} ingots=${cnt("iron_ingot")} table=${tableNear}`,
+      );
+    }
+
     // ARMOR-FIRST for the chestplate (the single biggest protection). Iron is
     // scarce and tools were eating ALL of it (craft_gear made pickaxe+sword
     // every run, never reaching the armor step), so bots stayed unarmored.
@@ -179,7 +194,15 @@ export const craftGearSkill: Skill = {
           moves.canDig = false;
           bot.pathfinder.setMovements(moves);
           try {
-            await bot.pathfinder.goto(new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2));
+            await Promise.race([
+              bot.pathfinder.goto(new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2)),
+              new Promise<void>((_, rej) =>
+                setTimeout(() => {
+                  bot.pathfinder.stop();
+                  rej(new Error("goto timeout"));
+                }, 15000),
+              ),
+            ]);
           } catch {
             /* try anyway */
           }
