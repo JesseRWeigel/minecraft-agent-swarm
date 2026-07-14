@@ -66,7 +66,21 @@ export const craftGearSkill: Skill = {
     // gather_wood" — the LLM never holds the gather->keep->craft sequence,
     // and gathered logs evaporate into other uses first. Withdraw logs from
     // the stash; failing that, chop a couple of nearby trees right here.
-    const hasWood = () => bot.inventory.items().some((i) => i.name.endsWith("_log") || i.name.endsWith("_planks"));
+    // SUFFICIENCY, not existence: GearDebug caught the failure at
+    // planks=1 sticks=10 — one lonely plank made the old some() check skip
+    // self-supply, then the wooden pickaxe (3 planks) had no recipe. Count
+    // planks-equivalents (a log crafts into 4 planks); resupply below 6.
+    const hasWood = () => {
+      const logs = bot.inventory
+        .items()
+        .filter((i) => i.name.endsWith("_log"))
+        .reduce((s, i) => s + i.count, 0);
+      const planks = bot.inventory
+        .items()
+        .filter((i) => i.name.endsWith("_planks"))
+        .reduce((s, i) => s + i.count, 0);
+      return logs * 4 + planks >= 6;
+    };
     if (!signal.aborted && !hasWood()) {
       if (stashPos) {
         const { withdrawStash } = await import("./stash.js");
