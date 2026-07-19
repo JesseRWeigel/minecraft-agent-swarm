@@ -12,6 +12,7 @@ import { LOG_TYPES } from "../skills/materials.js";
 import { depositStash, withdrawStash } from "../skills/stash.js";
 import { config } from "../config.js";
 
+import { STASH_POS } from "./role.js";
 import { safeMoves, explorerMoves, safeGoto, collectNearbyDrops } from "./navigation.js";
 export { safeMoves, explorerMoves, safeGoto, collectNearbyDrops };
 
@@ -212,9 +213,31 @@ async function executeActionInner(bot: Bot, action: string, params: Record<strin
   }
 }
 
+/** How far from base a bot may roam before gather_wood pulls it home first.
+ *  Past this, the pathfinder is operating in unscouted terrain where 60+ hours
+ *  of evidence shows it can't reach trunks even from 3 blocks away. */
+const WOOD_LEASH_RADIUS = 200;
+
 async function gatherWood(bot: Bot, count: number): Promise<string> {
   // Use shared LOG_TYPES so pale_oak_log (MC 1.21.4) and future wood types are included
   const logTypes = LOG_TYPES as readonly string[];
+
+  // LEASH: wood is gathered near base, period. The explore loop walked bots
+  // ~780 blocks out (Z=-1098 vs base Z=-314) into steep leafy mountains where
+  // EVERY approach failed — 1,000+ "Couldn't reach any trees" per log window,
+  // zero logs banked for 2+ days, while replanted saplings regrow at home.
+  // If the bot has wandered past the leash, spreadplayers it back to base
+  // (safe topmost-block landing, same mechanism brain.ts uses for water
+  // escape) and search from there instead of burning the travel budget in
+  // badlands. Gated on allowInterventions like every other teleport.
+  const leashDist = Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z);
+  if (leashDist > WOOD_LEASH_RADIUS && config.bot.allowInterventions) {
+    console.log(
+      `[GatherDebug] leash: ${bot.username} is ${leashDist.toFixed(0)} blocks from base — TPing home to gather`,
+    );
+    bot.chat(`/spreadplayers ${STASH_POS.x} ${STASH_POS.z} 0 24 false ${bot.username}`);
+    await new Promise((r) => setTimeout(r, 4000));
+  }
 
   // Collect all nearby logs — use 256 block radius to find trees even after local depletion
   const allLogs = bot.findBlocks({
@@ -223,8 +246,10 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
     count: 20,
   });
 
+  // Don't advise exploring for wood: that advice is what walked the team 780
+  // blocks into the badlands. Saplings replanted at base regrow on their own.
   if (allLogs.length === 0)
-    return "No trees found within 256 blocks. Explore further south (toward Z=-100 or Z=0) to find an uncharted forest.";
+    return "No trees found within 256 blocks. Wait for replanted saplings near base to grow — do NOT wander off searching; do other useful work and try again later.";
 
   // Nearest-first: findBlocks returns scan order, and burning the 4-try
   // budget on 120+ block hikes (which time out over broken terrain) starves
@@ -369,7 +394,7 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
   if (collected > 0) return `Gathered ${collected} logs. Inventory now has wood!${replantNote}`;
   if (gathered > 0)
     return `Chopped ${gathered} logs but couldn't pick up the drops — they may be stuck in leaves or a hole.${replantNote}`;
-  return "Couldn't reach any trees within 128 blocks (pathfinding failed). Try exploring south toward Z=-200.";
+  return "Couldn't reach any trees this attempt (pathfinding failed). Stay near base and try again — do NOT explore far for wood.";
 }
 
 /**
