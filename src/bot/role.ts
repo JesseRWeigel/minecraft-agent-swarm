@@ -78,6 +78,7 @@ export const ATLAS_CONFIG: BotRoleConfig = {
   allowedActions: ["explore", "go_to", "gather_wood", "mine_block", "chat", "eat", "sleep", "flee", "attack"],
   allowedSkills: [],
   keepItems: [
+    { name: "sapling", minCount: 16 },
     { name: "sword", minCount: 1 },
     { name: "food", minCount: 4 },
     { name: "torch", minCount: 8 },
@@ -138,6 +139,7 @@ export const FORGE_CONFIG: BotRoleConfig = {
   allowedActions: ["mine_block", "gather_wood", "go_to", "eat", "sleep", "craft", "chat", "flee"],
   allowedSkills: ["strip_mine", "smelt_ores", "craft_gear"],
   keepItems: [
+    { name: "sapling", minCount: 16 },
     { name: "pickaxe", minCount: 1 },
     { name: "food", minCount: 4 },
     { name: "torch", minCount: 8 },
@@ -169,6 +171,7 @@ export const MASON_CONFIG: BotRoleConfig = {
   allowedActions: ["go_to", "place_block", "craft", "gather_wood", "eat", "sleep", "chat", "flee"],
   allowedSkills: ["build_house", "build_bridge", "light_area", "build_farm", "setup_stash"],
   keepItems: [
+    { name: "sapling", minCount: 16 },
     { name: "axe", minCount: 1 },
     { name: "food", minCount: 4 },
     { name: "torch", minCount: 16 },
