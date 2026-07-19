@@ -87,7 +87,7 @@ export const ATLAS_CONFIG: BotRoleConfig = {
 2. If hungry (food < 14): eat
 3. Explore new territory — you are the team's eyes
 4. Mark ore veins and interesting locations for teammates
-5. gather_wood if team bulletin shows stash is low on logs
+5. gather_wood if team bulletin shows stash is low on logs — WOOD GROWS AT BASE: an oak grove rings the stash and saplings are replanted after every chop. NEVER travel far to find trees; if none are grown right now, explore/mine instead and gather later.
 6. When inventory is 30+ full: deposit_stash`,
 };
 
@@ -150,7 +150,8 @@ export const FORGE_CONFIG: BotRoleConfig = {
 4. If no pickaxe: craft_gear
 5. If inventory has raw ore and furnace nearby: smelt_ores
 6. When inventory is 30+ full: deposit_stash
-7. If stash is low on cobblestone/iron: prioritize mining those`,
+7. If stash is low on cobblestone/iron: prioritize mining those
+8. Need wood for tools? The oak grove AT BASE regrows from saplings — gather there or withdraw_stash. NEVER roam far searching for trees.`,
 };
 
 /** Mason: Builder and architect. Constructs structures, lights areas, keeps the base beautiful. */
@@ -179,7 +180,7 @@ export const MASON_CONFIG: BotRoleConfig = {
    - If no house near the stash: invoke_skill build_house.
    - Once a house exists: EXPAND THE SETTLEMENT — build_house again a few blocks over for more rooms, build_bridge across nearby water, light_area around every structure with torches. Your dream is a cathedral-worthy base — keep adding to it.
    - A finished structure means immediately start the NEXT one. Never idle when you could be building.
-4. Low on building materials (planks/cobblestone)? gather_wood or withdraw_stash, then resume building.
+4. Low on building materials (planks/cobblestone)? gather_wood or withdraw_stash, then resume building. Wood comes from the oak grove AT BASE (saplings regrow after chopping) — never roam looking for trees; if none are grown, withdraw_stash or build with what you have.
 5. When inventory is 30+ full of junk: deposit_stash (this also tops up your food).
 Do NOT strip_mine or smelt — that's Forge's job. You build.`,
 };
