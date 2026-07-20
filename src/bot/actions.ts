@@ -240,10 +240,14 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
   }
 
   // Collect all nearby logs — use 256 block radius to find trees even after local depletion
+  // count 64, not 20: floating trunk remnants (skipped below) accumulate as
+  // the team chops, and with only 20 candidates the finder's list fills with
+  // floaters, crowding out the real regrown trees behind them (overnight
+  // evidence: 1,132 approach fails with grown trees standing at the grove).
   const allLogs = bot.findBlocks({
     matching: (block) => logTypes.includes(block.name),
     maxDistance: 256,
-    count: 20,
+    count: 64,
   });
 
   // Don't advise exploring for wood: that advice is what walked the team 780
@@ -352,7 +356,9 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
         // of chopped logs were lost as unreachable (1138 lost vs 326 gathered).
         let above = bot.blockAt(basePos.offset(0, 1, 0));
         let felled = 0;
-        while (above && (logTypes as readonly string[]).includes(above.name) && felled < 6) {
+        // Cap 12, not 6: a 6-cap left the tops of tall oaks floating, and those
+        // remnants are exactly what poisons the finder (see count comment above).
+        while (above && (logTypes as readonly string[]).includes(above.name) && felled < 12) {
           try {
             await digSafe(bot, above);
             felled++;
