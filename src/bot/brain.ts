@@ -197,7 +197,16 @@ export class BotBrain {
       });
       const best = cands[0];
       const worn = this.bot.inventory.slots[slotIdx];
-      if (worn && worn.name === best.name) continue; // already wearing it
+      // Compare TIERS, not names: inventory.items() excludes worn armor, so a
+      // bot wearing iron while carrying a leather spare sees best=leather,
+      // fails the name check, and swaps — then swaps back next cycle. Flora
+      // flip-flopped iron<->leather helmets 149 times in an hour this way.
+      // Only equip when the carried candidate strictly beats what's worn.
+      const tierOf = (n: string) => {
+        const t = TIER.findIndex((tier) => n.includes(tier));
+        return t < 0 ? 99 : t;
+      };
+      if (worn && tierOf(worn.name) <= tierOf(best.name)) continue; // worn is same or better
       try {
         await this.bot.equip(best, dest as any);
         this.log.info("Armor", `equipped ${best.name}`);
