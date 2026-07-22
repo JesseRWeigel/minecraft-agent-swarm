@@ -409,6 +409,14 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
   if (collected > 0) return `Gathered ${collected} logs. Inventory now has wood!${replantNote}`;
   if (gathered > 0)
     return `Chopped ${gathered} logs but couldn't pick up the drops — they may be stuck in leaves or a hole.${replantNote}`;
+  // BOOTSTRAP path: with zero chops there are no chopSpots, so the replant
+  // above planted nothing — and if planting only happens after success, a
+  // treeless area DEADLOCKS (saplings in pockets, none in the ground, no
+  // trees ever again). A failed gather is exactly when planting matters
+  // most: seed the recovery now so there's something to chop next time.
+  const seeded = await scatterSaplings(bot, 4);
+  if (seeded > 0)
+    return `Couldn't reach any trees, so planted ${seeded} sapling${seeded > 1 ? "s" : ""} on open ground instead — they'll grow. Do other work and gather later.`;
   return "Couldn't reach any trees this attempt (pathfinding failed). Stay near base and try again — do NOT explore far for wood.";
 }
 
