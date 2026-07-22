@@ -333,7 +333,16 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
         }
       }, 400);
       try {
-        await safeGoto(bot, new goals.GoalNear(basePos.x, basePos.y, basePos.z, 3), 30000, 12000);
+        // The clean (no-dig) approach may THROW on a bush-locked tree, not just
+        // resolve-without-arriving — and a throw used to skip the dig retry
+        // entirely, which is why regrown clumpy forests still starved us after
+        // the retry was added. Swallow the first failure; the dig retry below
+        // is the real fallback either way.
+        try {
+          await safeGoto(bot, new goals.GoalNear(basePos.x, basePos.y, basePos.z, 3), 30000, 12000);
+        } catch {
+          /* fall through to the dig-enabled retry */
+        }
         // Young regrown trees sit inside ground-level leaf bushes that the
         // no-dig movement can't push through — at the regrown forest EVERY
         // approach failed ("Couldn't reach any trees... pathfinding failed").
@@ -438,6 +447,65 @@ async function replantSaplings(bot: Bot, chopSpots: Vec3[]): Promise<number> {
       sapling = { ...sapling, count: sapling.count - 1 } as typeof sapling;
     } catch {
       // couldn't place here — try the next spot
+    }
+  }
+
+  // FORESTRY, not just replacement: chop spots sit inside the old clumps, so
+  // replanting only there regrows the same bush-locked thickets the
+  // pathfinder can't enter — the forest "regrew" three times and starved the
+  // team anyway. Scatter a few extra saplings on OPEN grass with clearance so
+  // the next generation grows spaced and reachable.
+  planted += await scatterSaplings(bot, 4);
+  return planted;
+}
+
+/**
+ * Plant up to `max` saplings on open grass near the bot: sky above, no logs or
+ * leaves within 2 blocks, and ≥4 blocks from any other sapling so grown trees
+ * don't fuse into an unreachable thicket. This is the bots' own forestry —
+ * the forest must sustain itself without outside gardening.
+ */
+async function scatterSaplings(bot: Bot, max: number): Promise<number> {
+  let sapling = bot.inventory.items().find((i) => i.name.endsWith("_sapling"));
+  if (!sapling) return 0;
+
+  const isClearAround = (pos: Vec3): boolean => {
+    for (let dx = -2; dx <= 2; dx++)
+      for (let dy = 0; dy <= 2; dy++)
+        for (let dz = -2; dz <= 2; dz++) {
+          const b = bot.blockAt(pos.offset(dx, dy, dz));
+          if (b && (b.name.endsWith("_log") || b.name.endsWith("_leaves") || b.name.endsWith("_sapling"))) return false;
+        }
+    return true;
+  };
+
+  const grounds = bot.findBlocks({
+    matching: (b) => b.name === "grass_block",
+    maxDistance: 24,
+    count: 40,
+  });
+  let planted = 0;
+  const plantedAt: Vec3[] = [];
+  for (const g of grounds) {
+    if (planted >= max) break;
+    const above = bot.blockAt(g.offset(0, 1, 0));
+    if (!above || above.name !== "air") continue;
+    if (!isClearAround(g.offset(0, 1, 0))) continue;
+    if (plantedAt.some((p) => p.distanceTo(g) < 4)) continue;
+    try {
+      if (bot.entity.position.distanceTo(g) > 4) {
+        await safeGoto(bot, new goals.GoalNear(g.x, g.y, g.z, 3), 8000);
+      }
+      const ground = bot.blockAt(g);
+      if (!ground) continue;
+      sapling = bot.inventory.items().find((i) => i.name.endsWith("_sapling"));
+      if (!sapling) break;
+      await bot.equip(sapling, "hand");
+      await bot.placeBlock(ground, new Vec3(0, 1, 0));
+      planted++;
+      plantedAt.push(g.clone());
+    } catch {
+      // spot didn't work out — try the next one
     }
   }
   return planted;
