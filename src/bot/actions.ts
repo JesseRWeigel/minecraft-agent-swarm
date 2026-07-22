@@ -414,6 +414,17 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
   // treeless area DEADLOCKS (saplings in pockets, none in the ground, no
   // trees ever again). A failed gather is exactly when planting matters
   // most: seed the recovery now so there's something to chop next time.
+  // SEED CAPITAL: saplings come from leaf decay of chopped trees, so a bot
+  // with no saplings AND no reachable trees is doubly stuck (182 fails/hour
+  // with zero plantings — the seeds have to come from somewhere). The team
+  // stash banks saplings from richer times; withdraw a handful first.
+  if (!bot.inventory.items().some((i) => i.name.endsWith("_sapling"))) {
+    try {
+      await withdrawStash(bot, STASH_POS, "sapling", 8);
+    } catch {
+      /* stash empty or unreachable — scatterSaplings will no-op below */
+    }
+  }
   const seeded = await scatterSaplings(bot, 4);
   if (seeded > 0)
     return `Couldn't reach any trees, so planted ${seeded} sapling${seeded > 1 ? "s" : ""} on open ground instead — they'll grow. Do other work and gather later.`;
