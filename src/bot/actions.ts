@@ -489,19 +489,26 @@ async function scatterSaplings(bot: Bot, max: number): Promise<number> {
   if (!sapling) return 0;
 
   const isClearAround = (pos: Vec3): boolean => {
+    // Logs need 2 blocks of clearance (trunk adjacency = fused thicket), but
+    // leaves/saplings only 1: requiring a 5-block-wide woody-free zone found
+    // ZERO valid spots near the lived-in base (existing plantings, floaters,
+    // and canopy edges disqualified everything — 272 fails, 0 seeds).
     for (let dx = -2; dx <= 2; dx++)
       for (let dy = 0; dy <= 2; dy++)
         for (let dz = -2; dz <= 2; dz++) {
           const b = bot.blockAt(pos.offset(dx, dy, dz));
-          if (b && (b.name.endsWith("_log") || b.name.endsWith("_leaves") || b.name.endsWith("_sapling"))) return false;
+          if (!b) continue;
+          if (b.name.endsWith("_log")) return false;
+          if (Math.abs(dx) <= 1 && Math.abs(dz) <= 1 && (b.name.endsWith("_leaves") || b.name.endsWith("_sapling")))
+            return false;
         }
     return true;
   };
 
   const grounds = bot.findBlocks({
-    matching: (b) => b.name === "grass_block",
-    maxDistance: 24,
-    count: 40,
+    matching: (b) => b.name === "grass_block" || b.name === "dirt",
+    maxDistance: 32,
+    count: 60,
   });
   let planted = 0;
   const plantedAt: Vec3[] = [];
@@ -526,6 +533,15 @@ async function scatterSaplings(bot: Bot, max: number): Promise<number> {
     } catch {
       // spot didn't work out — try the next one
     }
+  }
+  // INSTRUMENTATION (forestry debugging): when nothing gets planted, say why
+  // it looks that way so the next fix targets evidence, not guesses.
+  if (planted === 0) {
+    const sapCount = bot.inventory
+      .items()
+      .filter((i) => i.name.endsWith("_sapling"))
+      .reduce((s, i) => s + i.count, 0);
+    console.log(`[ForestryDebug] scatter planted 0: ${grounds.length} ground candidates, ${sapCount} saplings held`);
   }
   return planted;
 }
