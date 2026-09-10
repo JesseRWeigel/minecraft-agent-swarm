@@ -11,7 +11,7 @@
     "start": "tsx --max-old-space-size=8192 src/index.ts",
     "server": "cd server && java -Xmx2G -Xms1G -jar paper.jar --nogui",
     "download-skills": "node scripts/download-voyager-skills.mjs",
-    "test": "node --import tsx --test src/**/*.test.ts",
+    "test": "node --import tsx --test src/*.test.ts src/**/*.test.ts",
     "test:sandbox": "node --import tsx --test src/skills/generated-sandbox.qualification.ts",
     "generated-skill": "node --import tsx src/skills/generated-cli.ts",
     "lint": "eslint src/",
