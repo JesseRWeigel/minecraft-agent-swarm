@@ -174,7 +174,7 @@ async function main() {
 
   if (config.generatedSkills.enabled) {
     await assertGeneratedSandboxAvailable(config.generatedSkills.bwrapPath, config.generatedSkills.nodePath);
-    const policyHash = await getSandboxPolicyHash();
+    const policyHash = await getSandboxPolicyHash({ nodePath: config.generatedSkills.nodePath });
     const loaded = await loadApprovedGeneratedSkills({
       enabled: true,
       root: getGeneratedStoreRoot(),

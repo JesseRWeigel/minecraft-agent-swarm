@@ -58,6 +58,7 @@ test("only exact-policy approved skills register and execute through the isolate
       bwrapPath: "/fixture/bwrap",
       nodePath: "/fixture/node",
       runner: async (options) => {
+        assert.equal(options.expectedPolicyHash, "policy-v1");
         capturedCode = options.code.toString();
         return {
           success: true,
@@ -74,6 +75,40 @@ test("only exact-policy approved skills register and execute through the isolate
       .execute({ entity: { position: { x: 0, y: 64, z: 0 } } } as any, {}, new AbortController().signal, () => {});
     assert.equal(result.success, true);
     assert.match(capturedCode, /api\.observe/);
+  } finally {
+    clearGeneratedSkills();
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("a failed re-verification revokes an already-loaded skill before execution", async () => {
+  const f = await approvedFixture();
+  let runnerCalls = 0;
+  try {
+    await loadApprovedGeneratedSkills({
+      enabled: true,
+      root: f.root,
+      policyHash: "policy-v1",
+      bwrapPath: "/fixture/bwrap",
+      nodePath: "/fixture/node",
+      runner: async () => {
+        runnerCalls++;
+        throw new Error("runner must not start");
+      },
+    });
+    await recordGeneratedVerification(f.root, {
+      candidateId: f.candidate.id,
+      sha256: f.candidate.sha256,
+      policyHash: "policy-v1",
+      passed: false,
+      checks: [{ name: "isolated execution", passed: false, detail: "later verification failed" }],
+    });
+    const result = await skillRegistry
+      .get("approvedFixture")!
+      .execute({ entity: { position: { x: 0, y: 64, z: 0 } } } as any, {}, new AbortController().signal, () => {});
+    assert.equal(result.success, false);
+    assert.match(result.message, /verification did not pass/i);
+    assert.equal(runnerCalls, 0);
   } finally {
     clearGeneratedSkills();
     await rm(f.root, { recursive: true, force: true });

@@ -4,9 +4,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { reloadDynamicSkill } from "./dynamic-loader.js";
 import { registerTrustedHotReloadSkill, skillRegistry } from "./registry.js";
 import type { Skill } from "./types.js";
+import { resolveProjectRoot } from "../project-root.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = path.resolve(__dirname, "../../");
+const PROJECT_ROOT = resolveProjectRoot(__dirname);
 let importSequence = 0;
 
 function isSkill(value: unknown): value is Skill {

@@ -92,3 +92,26 @@ test("capability handler rejects distant actions, players, extra keys, and quota
   for (let i = 0; i < 7; i++) await handle("attack", { entityId: 7 });
   await assert.rejects(handle("attack", { entityId: 7 }), /quota/i);
 });
+
+test("capability abort stops bot operations and prevents a pre-aborted operation from starting", async () => {
+  const { bot, calls } = fakeBot();
+  let releaseNavigation: (() => void) | undefined;
+  bot.pathfinder.goto = () =>
+    new Promise<void>((resolve) => {
+      releaseNavigation = resolve;
+    });
+  const controller = new AbortController();
+  const handle = createGeneratedCapabilityHandler(bot, { signal: controller.signal });
+  const navigation = handle("navigate", { x: 2, y: 64, z: 2 });
+  controller.abort();
+  await assert.rejects(navigation, /aborted/i);
+  assert.ok(calls.includes("stop"));
+  releaseNavigation?.();
+
+  let digs = 0;
+  bot.dig = async () => {
+    digs++;
+  };
+  await assert.rejects(handle("mine", { block: "oak_log", count: 1 }), /aborted/i);
+  assert.equal(digs, 0);
+});

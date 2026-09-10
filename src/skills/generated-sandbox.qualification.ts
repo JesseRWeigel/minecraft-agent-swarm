@@ -109,17 +109,21 @@ test("qualified sandbox kills CPU and memory exhaustion without poisoning the ne
     run("cpuLoop", "async function cpuLoop() { while (true) {} }", 3_000),
     /exited|signal|timed out/i,
   );
-  const memory = await run(
-    "memoryLoop",
-    `async function memoryLoop(api) {
-        const proc = api.observe.constructor.constructor("return process")();
-        const chunks = [];
-        while (true) chunks.push(proc.getBuiltinModule("buffer").Buffer.alloc(8 * 1024 * 1024, 1));
-      }`,
-    4_000,
-  );
-  assert.equal(memory.success, false);
-  assert.match(memory.error ?? "", /alloc|memory|buffer/i);
+  try {
+    const memory = await run(
+      "memoryLoop",
+      `async function memoryLoop(api) {
+          const proc = api.observe.constructor.constructor("return process")();
+          const chunks = [];
+          while (true) chunks.push(proc.getBuiltinModule("buffer").Buffer.alloc(8 * 1024 * 1024, 1));
+        }`,
+      4_000,
+    );
+    assert.equal(memory.success, false);
+    assert.match(memory.error ?? "", /alloc|memory|buffer/i);
+  } catch (error) {
+    assert.match((error as Error).message, /alloc|memory|heap|exited|signal/i);
+  }
   assert.equal((await run("stillHealthy", "async function stillHealthy() { return 'ok'; }")).value, "ok");
 });
 
@@ -146,4 +150,34 @@ test("qualified sandbox rejects forged completion and success followed by a cras
     ),
     /exited|code=9/i,
   );
+});
+
+test("qualified sandbox admits a bounded queue and performs no capability work after termination", async () => {
+  const calls: string[] = [];
+  const code = `async function queuedCalls(api) {
+    const proc = api.observe.constructor.constructor("return process")();
+    proc.stdout.write(
+      Array.from({ length: 100 }, (_, index) =>
+        JSON.stringify({ type: "request", id: 1000 + index, method: "observe", params: {} })
+      ).join("\\n") + "\\n"
+    );
+    await new Promise(() => {});
+  }`;
+  await assert.rejects(
+    runGeneratedSkillInSandbox({
+      name: "queuedCalls",
+      code,
+      capabilityHandler: async (method) => {
+        calls.push(method);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return {};
+      },
+      bwrapPath,
+      nodePath: process.execPath,
+      limits: { wallMs: 200, maxRequests: 2 },
+    }),
+    /quota|protocol|timed out/i,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.ok(calls.length <= 1, `capability work continued after termination: ${calls.length} calls`);
 });

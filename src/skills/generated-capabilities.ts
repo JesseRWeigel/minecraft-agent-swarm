@@ -1,23 +1,16 @@
 import type { Bot } from "mineflayer";
 import pkg from "mineflayer-pathfinder";
 import { Vec3 } from "vec3";
-import type { GeneratedCapabilityHandler, GeneratedCapabilityMethod } from "./generated-sandbox.js";
+import {
+  GENERATED_CAPABILITY_POLICY,
+  type GeneratedCapabilityHandler,
+  type GeneratedCapabilityMethod,
+} from "./generated-sandbox.js";
 
 const { goals } = pkg;
 const ITEM_NAME = /^[a-z0-9_]{1,64}$/;
 const DESTINATIONS = new Set(["hand", "head", "torso", "legs", "feet", "off-hand"]);
-const METHOD_QUOTAS: Record<GeneratedCapabilityMethod, number> = {
-  observe: 16,
-  navigate: 4,
-  mine: 8,
-  craft: 8,
-  equip: 8,
-  consume: 8,
-  place: 8,
-  look: 16,
-  attack: 8,
-  wait: 16,
-};
+const METHOD_QUOTAS: Record<GeneratedCapabilityMethod, number> = GENERATED_CAPABILITY_POLICY.methodQuotas;
 
 function objectParams(value: unknown, allowed: readonly string[]): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -63,25 +56,44 @@ function distance(a: { x: number; y: number; z: number }, b: { x: number; y: num
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
-async function bounded<T>(bot: Bot, operation: Promise<T>, signal: AbortSignal, timeoutMs = 15_000): Promise<T> {
+function stopBotOperations(bot: Bot): void {
+  try {
+    bot.pathfinder.stop();
+  } catch {
+    // Best-effort stop: the bot may be disconnecting.
+  }
+  try {
+    bot.stopDigging();
+  } catch {
+    // Best-effort stop: no dig may be active.
+  }
+}
+
+async function bounded<T>(bot: Bot, start: () => Promise<T>, signal: AbortSignal, timeoutMs = 15_000): Promise<T> {
   if (signal.aborted) throw new Error("Generated skill was aborted");
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let removeAbort = () => {};
+  const abort = new Promise<never>((_, reject) => {
+    const onAbort = () => {
+      stopBotOperations(bot);
+      reject(new Error("Generated skill was aborted"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    removeAbort = () => signal.removeEventListener("abort", onAbort);
+  });
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      try {
-        bot.pathfinder.stop();
-      } catch {}
-      try {
-        bot.stopDigging();
-      } catch {}
+      stopBotOperations(bot);
       reject(new Error(`Capability timed out after ${timeoutMs}ms`));
     }, timeoutMs);
     timer.unref?.();
   });
   try {
-    return await Promise.race([operation, timeout]);
+    if (signal.aborted) throw new Error("Generated skill was aborted");
+    return await Promise.race([start(), timeout, abort]);
   } finally {
     if (timer) clearTimeout(timer);
+    removeAbort();
   }
 }
 
@@ -90,9 +102,11 @@ export function createGeneratedCapabilityHandler(
   options: { signal?: AbortSignal; maxDistance?: number } = {},
 ): GeneratedCapabilityHandler {
   const signal = options.signal ?? new AbortController().signal;
-  const maxDistance = options.maxDistance ?? 64;
+  const maxDistance = options.maxDistance ?? GENERATED_CAPABILITY_POLICY.maxDistance;
   const origin = dtoPoint(bot.entity.position);
   const uses = new Map<GeneratedCapabilityMethod, number>();
+  const stopOnAbort = () => stopBotOperations(bot);
+  signal.addEventListener("abort", stopOnAbort, { once: true });
 
   const charge = (method: GeneratedCapabilityMethod, amount = 1) => {
     const next = (uses.get(method) ?? 0) + amount;
@@ -111,7 +125,13 @@ export function createGeneratedCapabilityHandler(
       case "observe": {
         charge(method);
         const params = objectParams(rawParams, ["blocks", "includeEntities", "radius"]);
-        const radius = params.radius === undefined ? 16 : integerParam(params.radius, "radius", 1, 32);
+        const radius =
+          params.radius === undefined
+            ? 16
+            : integerParam(params.radius, "radius", 1, GENERATED_CAPABILITY_POLICY.maxObserveRadius);
+        if (params.includeEntities !== undefined && typeof params.includeEntities !== "boolean") {
+          throw new Error("includeEntities must be a boolean");
+        }
         const names =
           params.blocks === undefined
             ? []
@@ -123,7 +143,9 @@ export function createGeneratedCapabilityHandler(
         const ids = names
           .map((name) => bot.registry.blocksByName[name]?.id)
           .filter((id): id is number => id !== undefined);
-        const foundPositions = ids.length ? bot.findBlocks({ matching: ids, maxDistance: radius, count: 64 }) : [];
+        const foundPositions = ids.length
+          ? bot.findBlocks({ matching: ids, maxDistance: radius, count: GENERATED_CAPABILITY_POLICY.maxObservedBlocks })
+          : [];
         const blocks = foundPositions.flatMap((position) => {
           const block = bot.blockAt(position);
           return block ? [{ name: block.name, position: dtoPoint(block.position) }] : [];
@@ -138,7 +160,7 @@ export function createGeneratedCapabilityHandler(
                     !entity.username &&
                     distance(bot.entity.position, entity.position) <= radius,
                 )
-                .slice(0, 32)
+                .slice(0, GENERATED_CAPABILITY_POLICY.maxObservedEntities)
                 .map((entity) => ({
                   id: entity.id,
                   name: entity.name ?? entity.displayName ?? "unknown",
@@ -164,7 +186,7 @@ export function createGeneratedCapabilityHandler(
         const target = point(params);
         inRange(target);
         const radius = params.radius === undefined ? 2 : integerParam(params.radius, "radius", 1, 4);
-        await bounded(bot, bot.pathfinder.goto(new goals.GoalNear(target.x, target.y, target.z, radius)), signal);
+        await bounded(bot, () => bot.pathfinder.goto(new goals.GoalNear(target.x, target.y, target.z, radius)), signal);
         return { ok: true, position: dtoPoint(bot.entity.position) };
       }
       case "mine": {
@@ -179,24 +201,27 @@ export function createGeneratedCapabilityHandler(
           inRange(block.position);
           await bounded(
             bot,
-            bot.pathfinder.goto(new goals.GoalNear(block.position.x, block.position.y, block.position.z, 2)),
+            () => bot.pathfinder.goto(new goals.GoalNear(block.position.x, block.position.y, block.position.z, 2)),
             signal,
           );
-          await bounded(bot, bot.dig(block), signal, 12_000);
+          await bounded(bot, () => bot.dig(block), signal, 12_000);
         }
         return { ok: true, mined };
       }
       case "craft": {
-        charge(method);
         const params = objectParams(rawParams, ["item", "count"]);
         const itemName = itemParam(params.item, "item");
-        const count = params.count === undefined ? 1 : integerParam(params.count, "count", 1, 16);
+        const count =
+          params.count === undefined
+            ? 1
+            : integerParam(params.count, "count", 1, GENERATED_CAPABILITY_POLICY.maxCraftCount);
+        charge(method, count);
         const item = bot.registry.itemsByName[itemName];
         if (!item) throw new Error(`Unknown item '${itemName}'`);
         const table = bot.findBlock({ matching: (block) => block.name === "crafting_table", maxDistance: 16 });
         const recipes = bot.recipesFor(item.id, null, 1, table);
         if (!recipes.length) throw new Error(`No available recipe for ${itemName}`);
-        await bounded(bot, bot.craft(recipes[0], count, table ?? undefined), signal, 20_000);
+        await bounded(bot, () => bot.craft(recipes[0], count, table ?? undefined), signal, 20_000);
         return { ok: true, crafted: count, item: itemName };
       }
       case "equip": {
@@ -208,7 +233,7 @@ export function createGeneratedCapabilityHandler(
           throw new Error("Invalid equip destination");
         const item = bot.inventory.items().find((candidate) => candidate.name === itemName);
         if (!item) throw new Error(`No ${itemName} in inventory`);
-        await bounded(bot, bot.equip(item, destination as any), signal, 10_000);
+        await bounded(bot, () => bot.equip(item, destination as any), signal, 10_000);
         return { ok: true };
       }
       case "consume": {
@@ -217,8 +242,8 @@ export function createGeneratedCapabilityHandler(
         const itemName = itemParam(params.item, "item");
         const item = bot.inventory.items().find((candidate) => candidate.name === itemName);
         if (!item) throw new Error(`No ${itemName} in inventory`);
-        await bounded(bot, bot.equip(item, "hand"), signal, 10_000);
-        await bounded(bot, bot.consume(), signal, 10_000);
+        await bounded(bot, () => bot.equip(item, "hand"), signal, 10_000);
+        await bounded(bot, () => bot.consume(), signal, 10_000);
         return { ok: true };
       }
       case "place": {
@@ -232,8 +257,8 @@ export function createGeneratedCapabilityHandler(
         if (!item) throw new Error(`No ${blockName} in inventory`);
         const support = bot.blockAt(new Vec3(target.x, target.y - 1, target.z));
         if (!support) throw new Error("Placement requires a loaded support block below the target");
-        await bounded(bot, bot.equip(item, "hand"), signal, 10_000);
-        await bounded(bot, bot.placeBlock(support, new Vec3(0, 1, 0)), signal, 10_000);
+        await bounded(bot, () => bot.equip(item, "hand"), signal, 10_000);
+        await bounded(bot, () => bot.placeBlock(support, new Vec3(0, 1, 0)), signal, 10_000);
         return { ok: true };
       }
       case "look": {
@@ -241,7 +266,7 @@ export function createGeneratedCapabilityHandler(
         const params = objectParams(rawParams, ["x", "y", "z"]);
         const target = point(params);
         inRange(target);
-        await bounded(bot, bot.lookAt(new Vec3(target.x, target.y, target.z), true), signal, 5_000);
+        await bounded(bot, () => bot.lookAt(new Vec3(target.x, target.y, target.z), true), signal, 5_000);
         return { ok: true };
       }
       case "attack": {
@@ -260,7 +285,7 @@ export function createGeneratedCapabilityHandler(
         charge(method);
         const params = objectParams(rawParams, ["ticks"]);
         const ticks = integerParam(params.ticks, "ticks", 1, 100);
-        await bounded(bot, bot.waitForTicks(ticks), signal, Math.max(1_000, ticks * 100));
+        await bounded(bot, () => bot.waitForTicks(ticks), signal, Math.max(1_000, ticks * 100));
         return { ok: true };
       }
     }

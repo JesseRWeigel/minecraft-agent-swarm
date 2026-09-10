@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { access, chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -23,6 +23,48 @@ export const GENERATED_CAPABILITY_METHODS = [
 
 export type GeneratedCapabilityMethod = (typeof GENERATED_CAPABILITY_METHODS)[number];
 export type GeneratedCapabilityHandler = (method: GeneratedCapabilityMethod, params: unknown) => Promise<unknown>;
+export type TerminationAwareCapabilityHandler = (
+  method: GeneratedCapabilityMethod,
+  params: unknown,
+  terminationSignal: AbortSignal,
+) => Promise<unknown>;
+
+export const GENERATED_CAPABILITY_POLICY = {
+  version: 1,
+  maxDistance: 64,
+  methodQuotas: {
+    observe: 16,
+    navigate: 4,
+    mine: 8,
+    craft: 32,
+    equip: 8,
+    consume: 8,
+    place: 8,
+    look: 16,
+    attack: 8,
+    wait: 16,
+  },
+  maxObserveRadius: 32,
+  maxObservedBlocks: 64,
+  maxObservedEntities: 32,
+  maxMineCount: 8,
+  maxCraftCount: 16,
+  maxPlaceDistance: 6,
+  maxAttackDistance: 16,
+  maxWaitTicks: 100,
+} as const;
+
+const SANDBOX_LAUNCH_POLICY = {
+  version: 2,
+  mounts: "exact-node-and-ldd-libraries",
+  namespaces: "all",
+  network: "none",
+  environment: "clear",
+  root: "read-only",
+  devices: ["/dev/null", "/dev/urandom"],
+  capabilities: "drop-all",
+  nodePermissions: "read-worker-and-candidate-only",
+} as const;
 
 export type SandboxLimits = {
   wallMs: number;
@@ -93,6 +135,7 @@ export async function assertGeneratedSandboxAvailable(bwrapPath: string, nodePat
   } catch (error) {
     throw new Error(
       `Generated-skill sandbox unavailable (bubblewrap, Node, and prlimit are required): ${(error as Error).message}`,
+      { cause: error },
     );
   }
 }
@@ -101,16 +144,22 @@ export async function getSandboxPolicyHash(
   options: {
     workerSource?: Buffer;
     limits?: Partial<SandboxLimits>;
+    nodePath?: string;
   } = {},
 ): Promise<string> {
   const worker = options.workerSource ? Buffer.from(options.workerSource) : await defaultWorkerSource();
   const limits = resolvedLimits(options.limits);
   const policy = createSandboxSeccompPolicy();
+  const runtime = resolveNodeRuntime(options.nodePath ?? process.execPath);
   return hash([
     "minecraft-agent-swarm-generated-sandbox",
     String(GENERATED_CAPABILITY_SCHEMA_VERSION),
     JSON.stringify(limits),
-    process.version,
+    JSON.stringify(GENERATED_CAPABILITY_POLICY),
+    JSON.stringify(SANDBOX_LAUNCH_POLICY),
+    runtime.executable,
+    runtime.version,
+    JSON.stringify(runtime.libraries),
     policy,
     worker,
   ]);
@@ -122,25 +171,56 @@ function assertPlainParams(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+function resolveNodeRuntime(nodePath: string): { executable: string; version: string; libraries: string[] } {
+  let lddOutput: string;
+  let version: string;
+  try {
+    lddOutput = execFileSync("/usr/bin/ldd", [nodePath], { encoding: "utf8", env: { PATH: "/usr/bin:/bin" } });
+    version = execFileSync(nodePath, ["--version"], { encoding: "utf8", env: {} }).trim();
+  } catch (error) {
+    throw new Error(`Could not inspect configured Node runtime: ${(error as Error).message}`, { cause: error });
+  }
+  if (lddOutput.includes("not found")) throw new Error("Configured Node runtime has an unresolved shared library");
+  const libraries = new Set<string>();
+  for (const line of lddOutput.split("\n")) {
+    const mapped = line.match(/=>\s+(\/\S+)\s+\(/)?.[1];
+    const loader = line.trim().match(/^(\/\S+)\s+\(/)?.[1];
+    const library = mapped ?? loader;
+    if (library) libraries.add(library);
+  }
+  if (libraries.size === 0) throw new Error("Could not resolve configured Node runtime libraries");
+  return { executable: path.resolve(nodePath), version, libraries: Array.from(libraries).sort() };
+}
+
+function parentDirectories(filePaths: string[]): string[] {
+  const directories = new Set<string>();
+  for (const filePath of filePaths) {
+    let current = path.dirname(filePath);
+    while (current !== "/") {
+      directories.add(current);
+      current = path.dirname(current);
+    }
+  }
+  return Array.from(directories).sort(
+    (left, right) => left.split("/").length - right.split("/").length || left.localeCompare(right),
+  );
+}
+
 function sandboxArguments(
   bwrapPath: string,
   nodePath: string,
   stagingDir: string,
   limits: SandboxLimits,
 ): { command: string; args: string[] } {
-  const bwrap: string[] = [
-    "--unshare-all",
-    "--die-with-parent",
-    "--new-session",
-    "--clearenv",
-    "--ro-bind",
-    "/usr",
-    "/usr",
-    "--ro-bind",
-    "/lib",
-    "/lib",
-  ];
-  if (process.arch === "x64") bwrap.push("--ro-bind", "/lib64", "/lib64");
+  const runtime = resolveNodeRuntime(nodePath);
+  const nodeMajor = Number.parseInt(runtime.version.replace(/^v/, "").split(".")[0], 10);
+  if (!Number.isSafeInteger(nodeMajor) || nodeMajor < 20) {
+    throw new Error("Generated-skill sandbox requires Node 20 or newer");
+  }
+  const permissionFlag = nodeMajor >= 22 ? "--permission" : "--experimental-permission";
+  const bwrap: string[] = ["--unshare-all", "--die-with-parent", "--new-session", "--clearenv", "--cap-drop", "ALL"];
+  for (const directory of parentDirectories(runtime.libraries)) bwrap.push("--dir", directory);
+  for (const library of runtime.libraries) bwrap.push("--ro-bind", library, library);
   bwrap.push(
     "--dir",
     "/sandbox",
@@ -182,7 +262,7 @@ function sandboxArguments(
     "3",
     "--",
     "/sandbox/node",
-    "--permission",
+    permissionFlag,
     "--allow-fs-read=/sandbox/worker.mjs",
     "--allow-fs-read=/sandbox/candidate.js",
     "--jitless",
@@ -207,12 +287,13 @@ function sandboxArguments(
 export async function runGeneratedSkillInSandbox(options: {
   name: string;
   code: string | Buffer;
-  capabilityHandler: GeneratedCapabilityHandler;
+  capabilityHandler: TerminationAwareCapabilityHandler;
   bwrapPath: string;
   nodePath: string;
   limits?: Partial<SandboxLimits>;
   signal?: AbortSignal;
   workerSource?: Buffer;
+  expectedPolicyHash?: string;
 }): Promise<SandboxResult> {
   if (!/^[a-z][A-Za-z0-9_]{0,39}$/.test(options.name)) throw new Error("Invalid generated skill name");
   const code = Buffer.from(options.code);
@@ -220,7 +301,12 @@ export async function runGeneratedSkillInSandbox(options: {
   const worker = options.workerSource ? Buffer.from(options.workerSource) : await defaultWorkerSource();
   const limits = resolvedLimits(options.limits);
   const policy = createSandboxSeccompPolicy();
-  const policyHash = await getSandboxPolicyHash({ workerSource: worker, limits });
+  const policyHash = await getSandboxPolicyHash({ workerSource: worker, limits, nodePath: options.nodePath });
+  if (options.expectedPolicyHash !== undefined && options.expectedPolicyHash !== policyHash) {
+    throw new Error(
+      `Generated-skill sandbox policy changed before execution (expected ${options.expectedPolicyHash}, got ${policyHash})`,
+    );
+  }
   const codeHash = createHash("sha256").update(code).digest("hex");
   await assertGeneratedSandboxAvailable(options.bwrapPath, options.nodePath);
 
@@ -244,10 +330,15 @@ export async function runGeneratedSkillInSandbox(options: {
       let result: Omit<SandboxResult, "requests" | "sha256" | "policyHash"> | undefined;
       let protocolChain = Promise.resolve();
       let finished = false;
+      let admittedMessages = 0;
+      let admittedBytes = 0;
+      const requestIds = new Set<number>();
+      const terminationController = new AbortController();
 
       const finishError = (error: Error) => {
         if (finished) return;
         finished = true;
+        terminationController.abort();
         child.kill("SIGKILL");
         reject(error);
       };
@@ -261,12 +352,18 @@ export async function runGeneratedSkillInSandbox(options: {
       else options.signal?.addEventListener("abort", abort, { once: true });
 
       child.on("error", (error) => finishError(new Error(`Could not start generated-skill sandbox: ${error.message}`)));
+      child.stdin.on("error", () => {});
       child.stderr.setEncoding("utf8");
       child.stderr.on("data", (chunk: string) => {
         stderr = (stderr + chunk).slice(-limits.maxMessageBytes);
       });
       child.stdout.setEncoding("utf8");
       child.stdout.on("data", (chunk: string) => {
+        admittedBytes += Buffer.byteLength(chunk);
+        if (admittedBytes > limits.maxMessageBytes * (limits.maxRequests + 2)) {
+          finishError(new Error("Generated-skill worker exceeded its total protocol output limit"));
+          return;
+        }
         stdout += chunk;
         if (Buffer.byteLength(stdout) > limits.maxMessageBytes * 2) {
           finishError(new Error("Generated-skill worker exceeded its protocol output limit"));
@@ -276,12 +373,46 @@ export async function runGeneratedSkillInSandbox(options: {
         while ((newline = stdout.indexOf("\n")) !== -1) {
           const line = stdout.slice(0, newline);
           stdout = stdout.slice(newline + 1);
+          admittedMessages++;
+          if (admittedMessages > limits.maxRequests + 2) {
+            finishError(new Error("Generated-skill worker exceeded its protocol message quota"));
+            return;
+          }
+          if (Buffer.byteLength(line) > limits.maxMessageBytes) {
+            finishError(new Error("Generated-skill worker sent an oversized protocol message"));
+            return;
+          }
+          let message: Record<string, unknown>;
+          try {
+            message = JSON.parse(line) as Record<string, unknown>;
+          } catch (error) {
+            finishError(new Error(`Generated-skill worker sent malformed JSON: ${(error as Error).message}`));
+            return;
+          }
+          if (!message || typeof message !== "object" || Array.isArray(message)) {
+            finishError(new Error("Generated-skill worker sent a non-object protocol message"));
+            return;
+          }
+          if (message.type === "request") {
+            if (
+              !Number.isSafeInteger(message.id) ||
+              typeof message.method !== "string" ||
+              !assertPlainParams(message.params) ||
+              requestIds.has(message.id as number)
+            ) {
+              finishError(new Error("Generated-skill worker sent a malformed or duplicate capability request"));
+              return;
+            }
+            requestIds.add(message.id as number);
+            requests++;
+            if (requests > limits.maxRequests) {
+              finishError(new Error("Generated skill exceeded its capability request quota"));
+              return;
+            }
+          }
           protocolChain = protocolChain
             .then(async () => {
-              if (Buffer.byteLength(line) > limits.maxMessageBytes) {
-                throw new Error("Generated-skill worker sent an oversized protocol message");
-              }
-              const message = JSON.parse(line) as Record<string, unknown>;
+              if (finished || terminationController.signal.aborted) return;
               if (message.type === "ready") {
                 if (readyToken || typeof message.token !== "string" || !/^[a-f0-9]{64}$/.test(message.token)) {
                   throw new Error("Generated-skill worker sent an invalid protocol ready message");
@@ -292,36 +423,29 @@ export async function runGeneratedSkillInSandbox(options: {
               if (message.type === "request") {
                 if (!readyToken)
                   throw new Error("Generated-skill worker requested a capability before protocol readiness");
-                if (
-                  !Number.isSafeInteger(message.id) ||
-                  typeof message.method !== "string" ||
-                  !assertPlainParams(message.params)
-                ) {
-                  throw new Error("Generated-skill worker sent a malformed capability request");
-                }
                 if (!GENERATED_CAPABILITY_METHODS.includes(message.method as GeneratedCapabilityMethod)) {
                   throw new Error(`Generated-skill worker requested unsupported capability '${message.method}'`);
                 }
-                requests++;
-                if (requests > limits.maxRequests)
-                  throw new Error("Generated skill exceeded its capability request quota");
                 try {
                   const value = await options.capabilityHandler(
                     message.method as GeneratedCapabilityMethod,
                     message.params,
+                    terminationController.signal,
                   );
+                  if (finished || terminationController.signal.aborted) return;
                   const response = JSON.stringify({ type: "response", id: message.id, ok: true, value });
                   if (Buffer.byteLength(response) > limits.maxMessageBytes)
                     throw new Error("Capability response is too large");
-                  child.stdin.write(`${response}\n`);
+                  if (!child.stdin.destroyed) child.stdin.write(`${response}\n`);
                 } catch (error) {
+                  if (finished || terminationController.signal.aborted) return;
                   const response = JSON.stringify({
                     type: "response",
                     id: message.id,
                     ok: false,
                     error: (error as Error).message.slice(0, 1000),
                   });
-                  child.stdin.write(`${response}\n`);
+                  if (!child.stdin.destroyed) child.stdin.write(`${response}\n`);
                 }
                 return;
               }
@@ -342,6 +466,7 @@ export async function runGeneratedSkillInSandbox(options: {
         }
       });
       child.on("close", (exitCode, signal) => {
+        terminationController.abort();
         void protocolChain.finally(() => {
           clearTimeout(timer);
           options.signal?.removeEventListener("abort", abort);

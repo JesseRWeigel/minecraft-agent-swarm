@@ -355,7 +355,25 @@ Each decision executes a gated action (restricted to the bot's allowed actions/s
 - Combat: `killOnePig`, `killOneZombie`, `killFourSheep`, and more
 - Gathering: `collectBamboo`, `collectFiveCactusBlocks`, `fillBucketWithWater`
 
-**Dynamic skill generation:** Bots can generate new JS skills at runtime when existing skills don't cover a task. Generated skills are saved to `skills/generated/` and reused.
+**Isolated generated skills (disabled by default):** Model-produced JavaScript is quarantined in a content-addressed store. It cannot enter the registry until an operator verifies it in the Bubblewrap sandbox and promotes its exact SHA-256. Approved generated code runs in a separate Linux process with no network, no inherited environment, a read-only minimal filesystem, a seccomp syscall policy, and CPU, memory, file, descriptor, request, and wall-clock limits. It can only request bounded high-level Minecraft capabilities over validated JSON RPC. Authored Voyager files remain on the trusted in-process path and cannot be replaced by generation or refinement.
+
+Enable this subsystem only on Linux x64 after installing `bubblewrap` and running its mandatory qualification:
+
+```bash
+sudo apt-get install bubblewrap
+GENERATED_SKILLS_BWRAP=/usr/bin/bwrap npm run test:sandbox
+```
+
+Then set `GENERATED_SKILLS_ENABLED=true`. Generation creates an inert candidate and prints its ID and SHA; it never installs or reloads the code. Use the operator CLI to review and advance it:
+
+```bash
+npm run generated-skill -- list
+npm run generated-skill -- verify <candidate-id>
+npm run generated-skill -- promote <candidate-id> <exact-sha256>
+npm run generated-skill -- rollback <skill-name>
+```
+
+Verification, promotion, runtime loading, and each execution bind the same candidate hash and current sandbox-policy fingerprint. A policy/runtime change or later failed verification revokes execution. Restart the swarm after promote or rollback so the registry picks up the selected version. Promotion/rollback uses an exclusive fail-closed lock; after a crash, inspect the store and remove a stale `.lock` only while all generated-skill operator commands are stopped.
 
 ### Freeze Protection (Watchdogs)
 
@@ -514,7 +532,7 @@ minecraft-agent-swarm/
 │   └── index.html           # OBS overlay frontend
 ├── skills/
 │   ├── voyager/             # 57 Voyager-style JS skills
-│   └── generated/           # LLM-generated skills (runtime)
+│   └── generated/store/     # Quarantined candidates and approved manifest (ignored)
 ├── finetune/                # LoRA fine-tuning pipeline (see finetune/README.md)
 ├── scripts/                 # Dataset extraction, skill downloads
 ├── logs/
@@ -540,7 +558,7 @@ minecraft-agent-swarm/
 | Food supply can't sustain 5 bots | Local-model ceiling: ~1 bot's intermittent farming oscillates; bots survive (Easy floors starvation at 10 HP) but productivity drops during hungry stretches |
 | Farms unbuilt unless water is near | `build_farm` needs water within range of the village site |
 | Neural combat untested in survival | Server is implemented and running; needs hostile mob environment |
-| Generated skills may fail on first run | Mitigated: code-error failures now trigger automatic LLM refinement |
+| Generated skills require Linux x64 + Bubblewrap | Disabled by default; `test:sandbox` is mandatory before opt-in, and promotion is manual by exact hash |
 
 ---
 
@@ -552,9 +570,9 @@ npm test        # Run tests
 npm run build   # Compile TypeScript
 ```
 
-Skill edits under `src/skills`, `skills/voyager`, and `skills/generated` are
-reloaded without restarting the process. Invalid edits leave the last working
-skill registered.
+Trusted skill edits under `src/skills` and `skills/voyager` are reloaded without
+restarting the process. Invalid edits leave the last working trusted skill registered.
+Generated candidates are never watched or host-loaded; use the verify/promote flow above.
 
 ### Adding a New TypeScript Skill
 

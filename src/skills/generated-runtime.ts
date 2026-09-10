@@ -1,6 +1,7 @@
 import type { Skill } from "./types.js";
 import {
   listApprovedGeneratedSkills,
+  readApprovedGeneratedSkill,
   readGeneratedCandidateArtifact,
   recordGeneratedVerification,
   type GeneratedVerification,
@@ -59,7 +60,7 @@ export async function verifyGeneratedCandidate(options: {
       nodePath: options.nodePath,
     });
   } catch (error) {
-    const policyHash = await getSandboxPolicyHash();
+    const policyHash = await getSandboxPolicyHash({ nodePath: options.nodePath });
     return recordGeneratedVerification(options.root, {
       candidateId: artifact.candidate.id,
       sha256: artifact.candidate.sha256,
@@ -95,13 +96,13 @@ export async function verifyGeneratedCandidate(options: {
 function generatedSkill(
   artifact: Awaited<ReturnType<typeof listApprovedGeneratedSkills>>[number],
   options: {
+    root: string;
     policyHash: string;
     bwrapPath: string;
     nodePath: string;
     runner: SandboxRunner;
   },
 ): Skill {
-  const code = Buffer.from(artifact.code);
   return {
     name: artifact.name,
     description: `Approved isolated generated skill: ${artifact.name}`,
@@ -116,14 +117,32 @@ function generatedSkill(
         message: `Running approved SHA-256 ${artifact.sha256.slice(0, 12)}…`,
         active: true,
       });
+      const invocationController = new AbortController();
+      const abortInvocation = () => invocationController.abort();
+      if (signal.aborted) abortInvocation();
+      else signal.addEventListener("abort", abortInvocation, { once: true });
       try {
+        const fresh = await readApprovedGeneratedSkill(options.root, artifact.name, options.policyHash);
+        if (fresh.candidateId !== artifact.candidateId || fresh.sha256 !== artifact.sha256) {
+          return { success: false, message: `${artifact.name} approval changed; restart before executing it.` };
+        }
+        const handler = createGeneratedCapabilityHandler(bot, { signal: invocationController.signal });
+        const terminationSignals = new WeakSet<AbortSignal>();
         const result = await options.runner({
           name: artifact.name,
-          code,
-          capabilityHandler: createGeneratedCapabilityHandler(bot, { signal }),
+          code: Buffer.from(fresh.code),
+          capabilityHandler: (method, params, terminationSignal) => {
+            if (!terminationSignals.has(terminationSignal)) {
+              terminationSignals.add(terminationSignal);
+              if (terminationSignal.aborted) abortInvocation();
+              else terminationSignal.addEventListener("abort", abortInvocation, { once: true });
+            }
+            return handler(method, params);
+          },
           bwrapPath: options.bwrapPath,
           nodePath: options.nodePath,
           signal,
+          expectedPolicyHash: options.policyHash,
         });
         if (result.sha256 !== artifact.sha256 || result.policyHash !== options.policyHash) {
           return { success: false, message: `${artifact.name} failed runtime hash verification.` };
@@ -135,6 +154,9 @@ function generatedSkill(
         return { success: true, message: `${artifact.name} ${detail}.` };
       } catch (error) {
         return { success: false, message: `${artifact.name} isolated worker failed: ${(error as Error).message}` };
+      } finally {
+        signal.removeEventListener("abort", abortInvocation);
+        invocationController.abort();
       }
     },
   };
@@ -155,6 +177,7 @@ export async function loadApprovedGeneratedSkills(options: {
   for (const artifact of artifacts) {
     registerGeneratedSkill(
       generatedSkill(artifact, {
+        root: options.root,
         policyHash: options.policyHash,
         bwrapPath: options.bwrapPath,
         nodePath: options.nodePath,

@@ -6,9 +6,10 @@ import { createRequire } from "node:module";
 import { Vec3 } from "vec3";
 import { getGeneratedSkillNames, skillRegistry } from "./registry.js";
 import type { Skill } from "./types.js";
+import { resolveProjectRoot } from "../project-root.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = path.resolve(__dirname, "../../");
+const PROJECT_ROOT = resolveProjectRoot(__dirname);
 
 const VOYAGER_DIR = path.join(PROJECT_ROOT, "skills/voyager");
 const authoredDynamicSkillNames = new Set<string>();

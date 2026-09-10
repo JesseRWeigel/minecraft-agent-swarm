@@ -87,26 +87,26 @@ test("dynamic-loader: a finished authored skill leaves no watchdog timer behind"
 });
 
 test("dynamic-loader: Voyager reload keeps the previous skill after a syntax error", async () => {
-    const { reloadDynamicSkill } = await import("./dynamic-loader.js");
-    const { skillRegistry } = await import("./registry.js");
-    const skillName = "hotReloadVoyager";
-    const skillPath = path.join(__dirname, `../../skills/voyager/${skillName}.js`);
+  const { reloadDynamicSkill } = await import("./dynamic-loader.js");
+  const { skillRegistry } = await import("./registry.js");
+  const skillName = "hotReloadVoyager";
+  const skillPath = path.join(__dirname, `../../skills/voyager/${skillName}.js`);
 
-    fs.writeFileSync(skillPath, `async function ${skillName}(bot) { bot.version = 1; }`);
-    reloadDynamicSkill(skillPath);
-    const workingSkill = skillRegistry.get(skillName)!;
+  fs.writeFileSync(skillPath, `async function ${skillName}(bot) { bot.version = 1; }`);
+  reloadDynamicSkill(skillPath);
+  const workingSkill = skillRegistry.get(skillName)!;
 
-    fs.writeFileSync(skillPath, `async function ${skillName}( {`);
-    assert.throws(() => reloadDynamicSkill(skillPath), SyntaxError);
-    assert.equal(skillRegistry.get(skillName), workingSkill);
+  fs.writeFileSync(skillPath, `async function ${skillName}( {`);
+  assert.throws(() => reloadDynamicSkill(skillPath), SyntaxError);
+  assert.equal(skillRegistry.get(skillName), workingSkill);
 
-    fs.writeFileSync(skillPath, `async function ${skillName}(bot) { bot.version = 2; }`);
-    reloadDynamicSkill(skillPath);
-    assert.notEqual(skillRegistry.get(skillName), workingSkill);
+  fs.writeFileSync(skillPath, `async function ${skillName}(bot) { bot.version = 2; }`);
+  reloadDynamicSkill(skillPath);
+  assert.notEqual(skillRegistry.get(skillName), workingSkill);
 
-    fs.unlinkSync(skillPath);
-    reloadDynamicSkill(skillPath);
-    assert.equal(skillRegistry.has(skillName), false);
+  fs.unlinkSync(skillPath);
+  reloadDynamicSkill(skillPath);
+  assert.equal(skillRegistry.has(skillName), false);
 });
 
 test("dynamic-loader: generated paths cannot be reloaded into the host registry", async () => {

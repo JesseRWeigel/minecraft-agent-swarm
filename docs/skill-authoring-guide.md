@@ -215,3 +215,24 @@ mechanism, not a replacement for tests of a contributed skill.
   [`materials.ts`](../src/skills/materials.ts) for gathering capabilities, and
   [Mineflayer's API reference](https://github.com/PrismarineJS/mineflayer/blob/master/docs/api.md)
   for operation arguments. Check APIs against the version installed in your checkout.
+
+
+## Generated skills are a separate security domain
+
+Files in `skills/voyager/` are authored, reviewed code. They retain the existing
+Mineflayer-compatible API and trusted in-process loader. Do not put model output
+there.
+
+Model-generated and refined code uses the narrow `api.observe`, `api.navigate`,
+`api.mine`, `api.craft`, `api.equip`, `api.consume`, `api.place`, `api.look`,
+`api.attack`, and `api.wait` interface. It is stored as an inert candidate and
+cannot replace an authored or built-in skill name. Verification runs exact
+candidate bytes in the OS sandbox, and promotion requires the candidate ID plus
+the exact SHA-256. Runtime also rechecks the current successful verification and
+sandbox-policy fingerprint before every execution.
+
+Generated execution is disabled by default and fails closed without Linux x64,
+Bubblewrap, `prlimit`, the configured Node executable, or a passing
+`npm run test:sandbox`. Generation and refinement never promote, rewrite an
+authored skill, or hot reload a candidate. Restart the application after an
+operator promotes or rolls back an approved generated skill.

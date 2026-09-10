@@ -11,6 +11,7 @@ firebase-debug.log
 /overlay/audio/.thought-*.mp3.part
 
 skills/generated/*.js
+skills/generated/store/
 memory-*.json
 .playwright-mcp/
 *.png

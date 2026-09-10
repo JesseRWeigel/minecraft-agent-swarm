@@ -23,6 +23,9 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
+      - name: Install sandbox dependency
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
       - name: Install dependencies
         run: npm ci
 
@@ -43,3 +46,6 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Qualify generated-skill containment
+        run: npm run test:sandbox

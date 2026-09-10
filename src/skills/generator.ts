@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Ollama } from "ollama";
 import { config } from "../config.js";
+import { resolveProjectRoot } from "../project-root.js";
 import { getAuthoredSkillNames } from "./dynamic-loader.js";
 import { getBuiltInSkillNames } from "./registry.js";
 import {
@@ -13,7 +14,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export function getGeneratedStoreRoot(): string {
-  return config.generatedSkills.storeDir || path.resolve(__dirname, "../../skills/generated/store");
+  return config.generatedSkills.storeDir || path.join(resolveProjectRoot(__dirname), "skills/generated/store");
 }
 
 const ollama = new Ollama({ host: config.ollama.host });
@@ -99,7 +100,7 @@ export async function generateSkill(task: string): Promise<GeneratedCandidate> {
     options: { temperature: 0.3, num_predict: 4096 },
   });
 
-  let code = response.message.content
+  const code = response.message.content
     .trim()
     .replace(/^```[a-z]*\n?/i, "")
     .replace(/\n?```$/i, "")
@@ -114,7 +115,7 @@ export async function generateSkill(task: string): Promise<GeneratedCandidate> {
   });
 }
 
-const REFINEMENT_PROMPT = `You are fixing a buggy Mineflayer bot skill written in JavaScript.
+const REFINEMENT_PROMPT = `You are fixing a buggy isolated Minecraft bot skill written in JavaScript.
 
 THE CURRENT CODE:
 \`\`\`
@@ -124,17 +125,11 @@ CURRENT_CODE
 IT FAILED WITH THIS ERROR:
 ERROR_MESSAGE
 
-Fix the bug. Keep the SAME function name and signature (one async function
-taking only \`bot\`). Follow these API rules strictly:
-- bot.inventory.items() is a FUNCTION — always call with ()
-- crafting: const recipes = bot.recipesFor(item.id, null, 1, table); await bot.craft(recipes[0], 1, table)
-- navigation: const { goals } = require('mineflayer-pathfinder'); await bot.pathfinder.goto(new goals.GoalNear(x,y,z,2))
-- placement: await bot.placeBlock(referenceBlock, faceVector) — bot.place/bot.build do NOT exist
-- after bot.dig(block), walk to the block position to pick up the drop
-- if the error is a TIMEOUT: add an early existence check (bot.findBlock /
-  bot.nearestEntity) and throw new Error("Cannot find <resource> nearby")
-  immediately when the target resource is absent — never wander on a timer
-- all require() calls INSIDE the function body; no try/catch; no infinite loops; under 60 lines
+Fix the bug. Keep the SAME function name and signature (one async function taking only \`api\`).
+The only available operations are awaited calls to api.observe, api.navigate, api.mine,
+api.craft, api.equip, api.consume, api.place, api.look, api.attack, and api.wait.
+Never use require, import, process, fetch, WebSocket, filesystem, child processes, timers,
+bot.chat, try/catch, or infinite loops. Keep the function under 60 lines.
 
 NO markdown, NO backticks, NO explanation — output ONLY the fixed JavaScript function:`;
 

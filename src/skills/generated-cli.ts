@@ -20,7 +20,7 @@ export async function runGeneratedSkillCli(args: string[]): Promise<unknown> {
   if (!command || !first) throw new Error(usage);
 
   await assertGeneratedSandboxAvailable(config.generatedSkills.bwrapPath, config.generatedSkills.nodePath);
-  const policyHash = await getSandboxPolicyHash();
+  const policyHash = await getSandboxPolicyHash({ nodePath: config.generatedSkills.nodePath });
   if (command === "verify") {
     return verifyGeneratedCandidate({
       root,
