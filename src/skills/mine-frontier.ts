@@ -2,7 +2,7 @@ import type { Bot } from "mineflayer";
 import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
-import { baseMoves, safeGoto } from "../bot/navigation.js";
+import { explorerMoves, safeGoto } from "../bot/navigation.js";
 
 /**
  * mine_frontier — mine where there is still ore to mine.
@@ -43,12 +43,14 @@ export const mineFrontierSkill: Skill = {
       return { success: false, message: resumable("Not in the overworld — can't reach the frontier from here.") };
     }
 
-    // Dig-capable so a ridge or a shallow bank doesn't pin the ferry; the
-    // waypoint hops stay inside the searchRadius cap.
-    const marchMoves = baseMoves(bot);
-    (marchMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).canDig = true;
-    (marchMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).allow1by1towers = true;
-    bot.pathfinder.setMovements(marchMoves);
+    // SURFACE moves for the ferry, not dig-capable. The first build dug its
+    // way out and stalled 59 blocks from base every trip ("still 191 blocks
+    // out") — canDig routed it straight into the base's water and honeycomb,
+    // exactly the trap that kills strip_mine's hike. The roamers reach this
+    // same fresh forest reliably on the surface, so path OVER the terrain the
+    // way they do; strip_mine re-enables digging for the descent and tunnel
+    // once the bot is standing on fresh ground.
+    bot.pathfinder.setMovements(explorerMoves(bot));
 
     const gap = () => Math.hypot(bot.entity.position.x - FRONTIER.x, bot.entity.position.z - FRONTIER.z);
     const marchUntil = Date.now() + 300_000;
