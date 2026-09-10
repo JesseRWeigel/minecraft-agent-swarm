@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, open, rename, rm, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 
@@ -107,9 +107,16 @@ async function readRegularFile(filePath: string, maxBytes: number): Promise<Buff
     const info = await handle.stat();
     if (!info.isFile()) throw new Error(`Refusing non-regular generated-skill file: ${filePath}`);
     if (info.size > maxBytes) throw new Error(`Generated-skill file exceeds ${maxBytes} bytes`);
-    const bytes = await handle.readFile();
-    if (bytes.length > maxBytes) throw new Error(`Generated-skill file exceeds ${maxBytes} bytes`);
-    return bytes;
+    // A regular file can grow after stat. Never allocate or read beyond the cap plus one sentinel byte.
+    const bytes = Buffer.alloc(maxBytes + 1);
+    let length = 0;
+    while (length < bytes.length) {
+      const { bytesRead } = await handle.read(bytes, length, bytes.length - length, null);
+      if (bytesRead === 0) break;
+      length += bytesRead;
+    }
+    if (length > maxBytes) throw new Error(`Generated-skill file exceeds ${maxBytes} bytes`);
+    return bytes.subarray(0, length);
   } finally {
     await handle.close();
   }
@@ -161,7 +168,7 @@ export async function createGeneratedCandidate(
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     const existing = await readRegularFile(blobPath, MAX_CODE_BYTES);
     if (sha256(existing) !== digest || !existing.equals(bytes)) {
-      throw new Error("Existing content-addressed blob does not match its filename");
+      throw new Error("Existing content-addressed blob does not match its filename", { cause: error });
     }
   }
   await chmod(blobPath, 0o400);
@@ -234,7 +241,7 @@ async function withManifestLock<T>(root: string, operation: () => Promise<T>): P
     handle = await open(lockPath, "wx", 0o600);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-      throw new Error("Another generated-skill promotion or rollback is in progress");
+      throw new Error("Another generated-skill promotion or rollback is in progress", { cause: error });
     }
     throw error;
   }
@@ -244,6 +251,50 @@ async function withManifestLock<T>(root: string, operation: () => Promise<T>): P
     await handle.close();
     await rm(lockPath, { force: true });
   }
+}
+
+async function requireSuccessfulVerification(
+  root: string,
+  candidate: GeneratedCandidate,
+  policyHash: string,
+): Promise<GeneratedVerification> {
+  let verification: GeneratedVerification;
+  try {
+    verification = await readJson<GeneratedVerification>(
+      path.join(getGeneratedPaths(root).verifications, `${candidate.id}.json`),
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT")
+      throw new Error("Candidate has no verification record", { cause: error });
+    throw error;
+  }
+  if (
+    !verification ||
+    verification.version !== STORE_VERSION ||
+    verification.candidateId !== candidate.id ||
+    verification.sha256 !== candidate.sha256 ||
+    verification.policyHash !== policyHash ||
+    verification.passed !== true ||
+    !Array.isArray(verification.checks) ||
+    verification.checks.length === 0 ||
+    verification.checks.some(
+      (check) => !check || check.passed !== true || typeof check.name !== "string" || !check.name.trim(),
+    )
+  ) {
+    throw new Error("Candidate verification did not pass for these exact bytes and current policy");
+  }
+  return verification;
+}
+
+async function readVerifiedApproval(root: string, name: string, entry: ApprovedVersion): Promise<Buffer> {
+  assertHash(entry.sha256);
+  if (typeof entry.policyHash !== "string" || !entry.policyHash.trim()) throw new Error("Malformed approval policy");
+  const candidate = await readGeneratedCandidate(root, entry.candidateId);
+  if (candidate.name !== name || candidate.sha256 !== entry.sha256) {
+    throw new Error("Approved candidate name or hash does not match its approval");
+  }
+  await requireSuccessfulVerification(root, candidate, entry.policyHash);
+  return readCandidateBytes(root, candidate);
 }
 
 export async function promoteGeneratedCandidate(
@@ -262,25 +313,7 @@ export async function promoteGeneratedCandidate(
     assertName(candidate.name, input.reservedNames);
     if (candidate.sha256 !== input.expectedSha256) throw new Error("Expected hash does not match candidate SHA-256");
     await readCandidateBytes(root, candidate);
-    let verification: GeneratedVerification;
-    try {
-      verification = await readJson<GeneratedVerification>(
-        path.join(getGeneratedPaths(root).verifications, `${candidate.id}.json`),
-      );
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error("Candidate has no verification record");
-      throw error;
-    }
-    if (
-      verification.candidateId !== candidate.id ||
-      verification.sha256 !== candidate.sha256 ||
-      verification.policyHash !== input.policyHash ||
-      !verification.passed ||
-      verification.checks.length === 0 ||
-      verification.checks.some((check) => !check.passed)
-    ) {
-      throw new Error("Candidate verification did not pass for these exact bytes");
-    }
+    const verification = await requireSuccessfulVerification(root, candidate, input.policyHash);
     const manifest = await readManifest(root);
     const prior = manifest.skills[candidate.name];
     const approved: ApprovedVersion = {
@@ -319,9 +352,7 @@ export async function readApprovedGeneratedSkill(
   if (policyHash !== undefined && entry.policyHash !== policyHash) {
     throw new Error(`Generated skill '${name}' was approved under a different sandbox policy`);
   }
-  assertHash(entry.sha256);
-  const bytes = await readRegularFile(path.join(getGeneratedPaths(root).blobs, `${entry.sha256}.js`), MAX_CODE_BYTES);
-  if (sha256(bytes) !== entry.sha256) throw new Error("Approved generated-skill hash mismatch");
+  const bytes = await readVerifiedApproval(root, name, entry);
   return {
     name,
     candidateId: entry.candidateId,
@@ -355,10 +386,7 @@ export async function rollbackGeneratedSkill(
     if (policyHash !== undefined && previous.policyHash !== policyHash) {
       throw new Error("Rollback target was approved under a different sandbox policy");
     }
-    const candidate = await readGeneratedCandidate(root, previous.candidateId);
-    if (candidate.sha256 !== previous.sha256)
-      throw new Error("Rollback candidate hash does not match approval history");
-    await readCandidateBytes(root, candidate);
+    await readVerifiedApproval(root, name, previous);
     manifest.skills[name] = { ...previous, history: current.history.slice(0, -1) };
     await writeJsonAtomic(getGeneratedPaths(root).manifest, manifest);
     return previous;

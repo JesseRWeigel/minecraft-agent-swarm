@@ -178,3 +178,86 @@ test("promotion is exclusive, preserves history, and rollback restores the previ
     await f.cleanup();
   }
 });
+
+async function verifiedVersion(root: string, body: string) {
+  const candidate = await createGeneratedCandidate(root, {
+    name: "reviewedSkill",
+    code: `async function reviewedSkill(api) { ${body} }`,
+    provenance,
+  });
+  await recordGeneratedVerification(root, {
+    candidateId: candidate.id,
+    sha256: candidate.sha256,
+    policyHash: "review-policy",
+    passed: true,
+    checks: [{ name: "isolated execution", passed: true }],
+  });
+  await promoteGeneratedCandidate(root, {
+    candidateId: candidate.id,
+    expectedSha256: candidate.sha256,
+    policyHash: "review-policy",
+  });
+  return candidate;
+}
+
+test("failed re-verification revokes loading and rollback without changing the manifest", async () => {
+  const f = await fixture();
+  try {
+    const first = await verifiedVersion(f.root, "await api.observe({});");
+    await recordGeneratedVerification(f.root, {
+      candidateId: first.id,
+      sha256: first.sha256,
+      policyHash: "review-policy",
+      passed: false,
+      checks: [{ name: "isolated execution", passed: false }],
+    });
+    await assert.rejects(readApprovedGeneratedSkill(f.root, "reviewedSkill", "review-policy"), /verification/i);
+    const second = await verifiedVersion(f.root, "await api.wait({ ticks: 1 });");
+    const before = await readFile(getGeneratedPaths(f.root).manifest, "utf8");
+    await assert.rejects(rollbackGeneratedSkill(f.root, "reviewedSkill", "review-policy"), /verification/i);
+    assert.equal(await readFile(getGeneratedPaths(f.root).manifest, "utf8"), before);
+    assert.equal((await readApprovedGeneratedSkill(f.root, "reviewedSkill", "review-policy")).sha256, second.sha256);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("approved loading checks candidate name and verification linkage", async () => {
+  const f = await fixture();
+  try {
+    const candidate = await verifiedVersion(f.root, "await api.observe({});");
+    const paths = getGeneratedPaths(f.root);
+    const candidatePath = path.join(paths.candidates, `${candidate.id}.json`);
+    await writeFile(candidatePath, JSON.stringify({ ...candidate, name: "otherSkill" }));
+    await assert.rejects(readApprovedGeneratedSkill(f.root, "reviewedSkill", "review-policy"), /candidate|name/i);
+    await writeFile(candidatePath, JSON.stringify(candidate));
+    const recordPath = path.join(paths.verifications, `${candidate.id}.json`);
+    const original = JSON.parse(await readFile(recordPath, "utf8"));
+    for (const change of [
+      { version: 2 },
+      { candidateId: "wrong" },
+      { sha256: "0".repeat(64) },
+      { policyHash: "old-policy" },
+      { passed: "true" },
+      { checks: [{ name: "check", passed: "true" }] },
+    ]) {
+      await writeFile(recordPath, JSON.stringify({ ...original, ...change }));
+      await assert.rejects(readApprovedGeneratedSkill(f.root, "reviewedSkill", "review-policy"), /verification/i);
+    }
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("approved loading rejects oversized blob files", async () => {
+  const f = await fixture();
+  try {
+    const candidate = await verifiedVersion(f.root, "await api.observe({});");
+    const blob = path.join(getGeneratedPaths(f.root).blobs, `${candidate.sha256}.js`);
+    await chmod(blob, 0o600);
+    await writeFile(blob, Buffer.alloc(65537, 32));
+    await assert.rejects(readApprovedGeneratedSkill(f.root, "reviewedSkill", "review-policy"), /exceeds/);
+  } finally {
+    await f.cleanup();
+  }
+});
