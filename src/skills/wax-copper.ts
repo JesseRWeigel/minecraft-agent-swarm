@@ -116,14 +116,38 @@ export const waxCopperSkill: Skill = {
   params: {},
   timeoutMs: 300_000,
 
+  // NO precondition. mineflayer's client inventory goes stale after a death —
+  // a Forge holding 26 copper (confirmed from an opened window) reads as 1 to
+  // the count-based precondition, which then blocks the skill from ever
+  // running. The skill resyncs and checks its own materials below instead.
   estimateMaterials(): Record<string, number> {
-    return { copper_ingot: 9, iron_ingot: 2 };
+    return {};
   },
 
   async execute(bot, _params, signal, onProgress): Promise<SkillResult> {
     const step = (message: string, progress: number) =>
       onProgress({ skillName: "wax_copper", phase: "Wax", progress, message, active: true });
     const resumable = (msg: string) => `${msg} invoke_skill {"skill":"wax_copper"} again to continue.`;
+
+    // --- Resync the client inventory first ---
+    // Post-death, the bot's own view of its pack drifts stale (it read 1
+    // copper while a freshly opened window showed 26). Opening any container
+    // makes the server resend the full inventory, so do that before trusting
+    // any count below. A failed open still triggers the resend.
+    step("Refreshing inventory...", 0.03);
+    const resyncBlock = bot.findBlock({
+      matching: (b) => b.name === "chest" || b.name === "trapped_chest",
+      maxDistance: 10,
+    });
+    if (resyncBlock) {
+      try {
+        const w = await bot.openContainer(resyncBlock);
+        await new Promise((r) => setTimeout(r, 400));
+        w.close();
+      } catch {
+        /* even a failed open resends the inventory window */
+      }
+    }
 
     // --- Ensure a copper block ---
     step("Checking materials...", 0.05);
