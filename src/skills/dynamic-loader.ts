@@ -10,7 +10,8 @@ import type { Skill } from "./types.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "../../");
 
-const SKILL_DIRS = [path.join(PROJECT_ROOT, "skills/voyager"), path.join(PROJECT_ROOT, "skills/generated")];
+const VOYAGER_DIR = path.join(PROJECT_ROOT, "skills/voyager");
+const authoredDynamicSkillNames = new Set<string>();
 
 // All Voyager skills concatenated — used as a helper library in the vm context so skills
 // can call each other (e.g. smeltFiveRawIron calls craftFurnace, placeItem, smeltItem)
@@ -179,7 +180,7 @@ export function loadDynamicSkills(): void {
 
   // Build the Voyager helper bundle first (all Voyager skills concatenated)
   // so that when any skill runs it can call helpers like craftFurnace, placeItem, smeltItem
-  const voyagerDir = SKILL_DIRS[0];
+  const voyagerDir = VOYAGER_DIR;
   voyagerSources.clear();
   if (fs.existsSync(voyagerDir)) {
     for (const file of fs.readdirSync(voyagerDir)) {
@@ -196,14 +197,18 @@ export function loadDynamicSkills(): void {
   }
   rebuildVoyagerHelperBundle();
 
-  for (const dir of SKILL_DIRS) {
-    if (!fs.existsSync(dir)) continue;
-    for (const file of fs.readdirSync(dir)) {
+  if (fs.existsSync(VOYAGER_DIR)) {
+    for (const file of fs.readdirSync(VOYAGER_DIR)) {
       if (!file.endsWith(".js")) continue;
       const skillName = file.replace(".js", "");
-      const skillPath = path.join(dir, file);
+      const skillPath = path.join(VOYAGER_DIR, file);
       try {
+        if (skillRegistry.has(skillName) && !authoredDynamicSkillNames.has(skillName)) {
+          console.warn(`[DynamicSkill] Skipped ${file}: name collides with a registered trusted skill`);
+          continue;
+        }
         skillRegistry.set(skillName, buildDynamicSkill(skillName, skillPath));
+        authoredDynamicSkillNames.add(skillName);
         loaded++;
       } catch (err: any) {
         console.warn(`[DynamicSkill] Skipped ${file}: ${err.message}`);
@@ -218,19 +223,20 @@ function rebuildVoyagerHelperBundle(): void {
 }
 
 /**
- * Atomically reload one Voyager or generated JavaScript skill.
+ * Atomically reload one trusted, operator-authored Voyager JavaScript skill.
  * The existing registry entry and helper source stay live if parsing fails.
  */
 export function reloadDynamicSkill(filePath: string): string {
   const resolvedPath = path.resolve(filePath);
   const parentDir = path.dirname(resolvedPath);
-  if (!SKILL_DIRS.includes(parentDir) || path.extname(resolvedPath) !== ".js") {
-    throw new Error(`Not a dynamic skill path: ${filePath}`);
+  if (parentDir !== VOYAGER_DIR || path.extname(resolvedPath) !== ".js") {
+    throw new Error(`Not a trusted authored skill path: ${filePath}`);
   }
 
   const skillName = path.basename(resolvedPath, ".js");
   if (!fs.existsSync(resolvedPath)) {
-    skillRegistry.delete(skillName);
+    if (authoredDynamicSkillNames.has(skillName)) skillRegistry.delete(skillName);
+    authoredDynamicSkillNames.delete(skillName);
     voyagerSources.delete(resolvedPath);
     rebuildVoyagerHelperBundle();
     return skillName;
@@ -239,12 +245,14 @@ export function reloadDynamicSkill(filePath: string): string {
   // Build and parse everything before mutating shared state. A broken edit
   // therefore leaves the last working skill and Voyager helper bundle intact.
   const nextSkill = buildDynamicSkill(skillName, resolvedPath);
-  const nextSource = fs.readFileSync(resolvedPath, "utf-8");
-  if (parentDir === SKILL_DIRS[0]) {
-    voyagerSources.set(resolvedPath, nextSource);
-    rebuildVoyagerHelperBundle();
+  if (skillRegistry.has(skillName) && !authoredDynamicSkillNames.has(skillName)) {
+    throw new Error(`Skill name '${skillName}' collides with a registered trusted skill`);
   }
+  const nextSource = fs.readFileSync(resolvedPath, "utf-8");
+  voyagerSources.set(resolvedPath, nextSource);
+  rebuildVoyagerHelperBundle();
   skillRegistry.set(skillName, nextSkill);
+  authoredDynamicSkillNames.add(skillName);
   return skillName;
 }
 
@@ -384,17 +392,16 @@ function buildDynamicSkill(name: string, filePath: string): Skill {
   };
 }
 
-const STATIC_SKILL_NAMES = new Set([
-  "build_house",
-  "craft_gear",
-  "light_area",
-  "build_farm",
-  "strip_mine",
-  "smelt_ores",
-  "go_fishing",
-  "build_bridge",
-]);
-
 export function getDynamicSkillNames(): string[] {
-  return Array.from(skillRegistry.keys()).filter((k) => !STATIC_SKILL_NAMES.has(k));
+  return Array.from(authoredDynamicSkillNames);
+}
+
+/** Names reserved by trusted Voyager files, including files not loaded due to a collision. */
+export function getAuthoredSkillNames(): Set<string> {
+  const names = new Set(authoredDynamicSkillNames);
+  if (!fs.existsSync(VOYAGER_DIR)) return names;
+  for (const file of fs.readdirSync(VOYAGER_DIR)) {
+    if (file.endsWith(".js")) names.add(file.slice(0, -3));
+  }
+  return names;
 }

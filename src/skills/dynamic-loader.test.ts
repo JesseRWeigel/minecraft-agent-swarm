@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-test("dynamic-loader: loads a JS skill into the registry", async () => {
+test("dynamic-loader: does not host-load a generated JS candidate", async () => {
   const { loadDynamicSkills } = await import("./dynamic-loader.js");
   const { skillRegistry } = await import("./registry.js");
 
@@ -17,18 +17,17 @@ test("dynamic-loader: loads a JS skill into the registry", async () => {
 
   loadDynamicSkills();
 
-  assert.ok(skillRegistry.has("testEcho"), "testEcho should be in registry");
-  assert.equal(skillRegistry.get("testEcho")!.name, "testEcho");
+  assert.equal(skillRegistry.has("testEcho"), false);
 
   fs.unlinkSync(skillPath);
   skillRegistry.delete("testEcho");
 });
 
-test("dynamic-loader: skill executes in sandboxed context", async () => {
+test("dynamic-loader: trusted Voyager skill executes through the authored VM path", async () => {
   const { loadDynamicSkills } = await import("./dynamic-loader.js");
   const { skillRegistry } = await import("./registry.js");
 
-  const tmpDir = path.join(__dirname, "../../skills/generated");
+  const tmpDir = path.join(__dirname, "../../skills/voyager");
   fs.mkdirSync(tmpDir, { recursive: true });
   const skillPath = path.join(tmpDir, "testMock.js");
   fs.writeFileSync(skillPath, `async function testMock(bot) { bot.__ran = true; }`);
@@ -64,11 +63,11 @@ test("dynamic-loader: skill executes in sandboxed context", async () => {
 // cost became visible on every run. In production every dynamic skill
 // invocation left one of these behind.
 
-test("dynamic-loader: a finished skill leaves no watchdog timer behind", async () => {
+test("dynamic-loader: a finished authored skill leaves no watchdog timer behind", async () => {
   const { loadDynamicSkills } = await import("./dynamic-loader.js");
   const { skillRegistry } = await import("./registry.js");
 
-  const tmpDir = path.join(__dirname, "../../skills/generated");
+  const tmpDir = path.join(__dirname, "../../skills/voyager");
   fs.mkdirSync(tmpDir, { recursive: true });
   const skillPath = path.join(tmpDir, "testQuick.js");
   fs.writeFileSync(skillPath, `async function testQuick(bot) { bot.__quick = true; }`);
@@ -87,12 +86,11 @@ test("dynamic-loader: a finished skill leaves no watchdog timer behind", async (
   skillRegistry.delete("testQuick");
 });
 
-for (const directory of ["generated", "voyager"]) {
-  test(`dynamic-loader: ${directory} reload keeps the previous skill after a syntax error`, async () => {
+test("dynamic-loader: Voyager reload keeps the previous skill after a syntax error", async () => {
     const { reloadDynamicSkill } = await import("./dynamic-loader.js");
     const { skillRegistry } = await import("./registry.js");
-    const skillName = `hotReload${directory}`;
-    const skillPath = path.join(__dirname, `../../skills/${directory}/${skillName}.js`);
+    const skillName = "hotReloadVoyager";
+    const skillPath = path.join(__dirname, `../../skills/voyager/${skillName}.js`);
 
     fs.writeFileSync(skillPath, `async function ${skillName}(bot) { bot.version = 1; }`);
     reloadDynamicSkill(skillPath);
@@ -109,5 +107,30 @@ for (const directory of ["generated", "voyager"]) {
     fs.unlinkSync(skillPath);
     reloadDynamicSkill(skillPath);
     assert.equal(skillRegistry.has(skillName), false);
-  });
-}
+});
+
+test("dynamic-loader: generated paths cannot be reloaded into the host registry", async () => {
+  const { reloadDynamicSkill } = await import("./dynamic-loader.js");
+  const skillPath = path.join(__dirname, "../../skills/generated/rejectedGenerated.js");
+  fs.writeFileSync(skillPath, "async function rejectedGenerated() {}");
+  try {
+    assert.throws(() => reloadDynamicSkill(skillPath), /trusted authored skill path/);
+  } finally {
+    fs.unlinkSync(skillPath);
+  }
+});
+
+test("dynamic-loader: a Voyager filename cannot replace a built-in skill", async () => {
+  const { loadDynamicSkills } = await import("./dynamic-loader.js");
+  const { skillRegistry } = await import("./registry.js");
+  const original = skillRegistry.get("build_house");
+  const skillPath = path.join(__dirname, "../../skills/voyager/build_house.js");
+  fs.writeFileSync(skillPath, "async function build_house() { throw new Error('collision'); }");
+  try {
+    loadDynamicSkills();
+    assert.equal(skillRegistry.get("build_house"), original);
+  } finally {
+    fs.unlinkSync(skillPath);
+    if (original) skillRegistry.set("build_house", original);
+  }
+});

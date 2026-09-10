@@ -51,9 +51,9 @@ test("TypeScript reload replaces valid skills and keeps the previous version on 
   }
 });
 
-test("development watcher reloads generated skills without restarting", async () => {
+test("development watcher reloads trusted Voyager skills without restarting", async () => {
   const skillName = `hotReloadWatch${process.pid}`;
-  const filePath = path.join(PROJECT_ROOT, "skills/generated", `${skillName}.js`);
+  const filePath = path.join(PROJECT_ROOT, "skills/voyager", `${skillName}.js`);
   const stop = startSkillHotReload(PROJECT_ROOT);
 
   try {
@@ -72,5 +72,19 @@ test("development watcher reloads generated skills without restarting", async ()
     stop();
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     reloadDynamicSkill(filePath);
+  }
+});
+
+test("development watcher ignores generated candidate files", async () => {
+  const skillName = `ignoredGeneratedWatch${process.pid}`;
+  const filePath = path.join(PROJECT_ROOT, "skills/generated", `${skillName}.js`);
+  const stop = startSkillHotReload(PROJECT_ROOT);
+  try {
+    fs.writeFileSync(filePath, `async function ${skillName}() {}`);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(skillRegistry.has(skillName), false);
+  } finally {
+    stop();
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 });

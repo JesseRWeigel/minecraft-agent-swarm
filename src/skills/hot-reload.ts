@@ -82,7 +82,6 @@ export function startSkillHotReload(projectRoot: string = PROJECT_ROOT): () => v
 
   watchDirectory(path.join(projectRoot, "src/skills"), "typescript");
   watchDirectory(path.join(projectRoot, "skills/voyager"), "dynamic");
-  watchDirectory(path.join(projectRoot, "skills/generated"), "dynamic");
   console.log(`[SkillHotReload] Watching ${watchers.length} skill directories`);
 
   return () => {
