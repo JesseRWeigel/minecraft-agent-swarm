@@ -84,7 +84,7 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<boole
   if (!bot.canDigBlock(b)) return false; // unbreakable for this bot right now
   await settleOnGround(bot);
   const heldType = bot.heldItem?.type ?? null;
-  const base = b.digTime(heldType, false, false, false, [], {});
+  const base = b.digTime(heldType, false, false, false, [], []);
   const expected = bot.digTime(b);
   const budget = digBudgetMs(base, expected);
   if (budget === null) {
