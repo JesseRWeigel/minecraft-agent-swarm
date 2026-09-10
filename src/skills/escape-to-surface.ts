@@ -22,7 +22,10 @@ import { baseMoves, safeGoto } from "../bot/navigation.js";
  * from the surface, where wood and the stash are reachable again.
  *
  * The staircase consumes no blocks, so it works for a bot carrying nothing
- * across the whole ~44-block climb through solid stone. Where there is no
+ * across the whole ~44-block climb through solid stone. Each dig waits as
+ * long as the block really takes by hand (deepslate 15s, ores up to 22.5s),
+ * because a fixed short timeout silently made every deepslate block
+ * unbreakable. Where there is no
  * solid block to step onto — an open cave or a pocket — it falls back to
  * pillaring straight up on a scaffold block from the pack (Atlas and Flora
  * stalled exactly in those open spots).
@@ -34,16 +37,54 @@ function feet(bot: Bot) {
   return bot.entity.position.floored();
 }
 
-/** Direct bare-handed dig with a timeout — bypasses the pathfinder tool check. */
-async function handDig(bot: Bot, x: number, y: number, z: number): Promise<void> {
+/** Longest bare-hand break we will wait for. Stone is 7.5s, deepslate 15s,
+ * deepslate ores 22.5s; obsidian (250s) and bedrock (never) are hopeless. */
+const MAX_HAND_DIG_MS = 40_000;
+const DIG_MARGIN_MS = 4_000;
+const MIN_DIG_BUDGET_MS = 5_000;
+
+/**
+ * How long to wait for one bare-hand dig, given the server's expected break
+ * time — or null when the block is not worth trying by hand.
+ *
+ * This replaced a fixed 12s timeout that was shorter than deepslate's 15s
+ * bare-hand break time: every dig below y=0 was aborted just before the block
+ * broke, so a bot in deepslate could never carve a step, never clear a
+ * ceiling to pillar into, and reported "all four sides blocked" from a spot
+ * that was plain diggable rock (Flora, y=-45, for two hours).
+ */
+export function digBudgetMs(expectedMs: number): number | null {
+  if (!Number.isFinite(expectedMs) || expectedMs > MAX_HAND_DIG_MS) return null;
+  return Math.max(MIN_DIG_BUDGET_MS, expectedMs + DIG_MARGIN_MS);
+}
+
+/** Direct bare-handed dig sized to the block's real break time — bypasses the
+ * pathfinder tool check. Returns true once the block is gone. */
+async function handDig(bot: Bot, x: number, y: number, z: number): Promise<boolean> {
   const { Vec3 } = await import("vec3");
-  const b = bot.blockAt(new Vec3(x, y, z));
-  if (!b || b.boundingBox !== "block") return; // already air/liquid — nothing to break
-  if (b.name === "bedrock" || b.name === "water" || b.name === "lava") return; // never dig these
-  if (!bot.canDigBlock(b)) return; // unbreakable for this bot right now
+  const pos = new Vec3(x, y, z);
+  const b = bot.blockAt(pos);
+  if (!b || b.boundingBox !== "block") return true; // already air/liquid — nothing to break
+  if (b.name === "bedrock" || b.name === "water" || b.name === "lava") return false; // never dig these
+  if (!bot.canDigBlock(b)) return false; // unbreakable for this bot right now
+  const expected = bot.digTime(b);
+  const budget = digBudgetMs(expected);
+  if (budget === null) {
+    console.log(
+      `[EscapeDebug] ${bot.username}: skipping ${b.name} at ${x},${y},${z} — ${Math.round(expected / 1000)}s by hand is hopeless`,
+    );
+    return false;
+  }
+  const started = Date.now();
+  let timedOut = false;
   await Promise.race([
     bot.dig(b),
-    new Promise<void>((_, rej) => setTimeout(() => rej(new Error("dig timeout")), 12_000)),
+    new Promise<void>((_, rej) =>
+      setTimeout(() => {
+        timedOut = true;
+        rej(new Error("dig timeout"));
+      }, budget),
+    ),
   ]).catch(() => {
     try {
       bot.stopDigging();
@@ -51,6 +92,14 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<void>
       /* wasn't digging */
     }
   });
+  const after = bot.blockAt(pos);
+  const gone = !after || after.boundingBox !== "block";
+  if (!gone) {
+    console.log(
+      `[EscapeDebug] ${bot.username}: ${b.name} at ${x},${y},${z} survived a ${Math.round((Date.now() - started) / 1000)}s dig (expected ${Math.round(expected / 1000)}s${timedOut ? ", timed out" : ", dig ended early"})`,
+    );
+  }
+  return gone;
 }
 
 /** Full solid blocks a bot can pillar up on — anything a miner or roamer picks
