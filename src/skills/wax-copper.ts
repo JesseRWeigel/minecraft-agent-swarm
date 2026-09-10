@@ -33,28 +33,48 @@ async function ensureTable(bot: Bot): Promise<Block | null> {
   let table = near();
   if (table) return table;
   const mcData = (await import("minecraft-data")).default(bot.version);
-  // Get a table item in pocket — craft one from planks if needed.
+  const planksHeld = bot.inventory
+    .items()
+    .filter((i) => i.name.endsWith("_planks"))
+    .reduce((s, i) => s + i.count, 0);
+  // Get a table item in pocket — craft one from planks (or logs) if needed.
   if (!bot.inventory.items().some((i) => i.name === "crafting_table")) {
-    const planks = bot.inventory.items().find((i) => i.name.endsWith("_planks"));
-    if (planks && planks.count >= 4) {
-      const rec = bot.recipesFor(mcData.itemsByName.crafting_table.id, null, 1, null)[0];
-      if (rec) await bot.craft(rec, 1).catch(() => {});
+    if (planksHeld < 4) {
+      // Convert a log to planks first if the bot is out of planks.
+      const log = bot.inventory.items().find((i) => i.name.endsWith("_log"));
+      if (log) {
+        const plankName = log.name.replace("_log", "_planks");
+        const pdef = mcData.itemsByName[plankName];
+        const prec = pdef ? bot.recipesFor(pdef.id, null, 1, null)[0] : null;
+        if (prec) await bot.craft(prec, 1).catch(() => {});
+      }
     }
+    const rec = bot.recipesFor(mcData.itemsByName.crafting_table.id, null, 1, null)[0];
+    if (rec) await bot.craft(rec, 1).catch(() => {});
   }
   const tableItem = bot.inventory.items().find((i) => i.name === "crafting_table");
-  if (!tableItem) return null;
-  // Place it on a solid block with air above, adjacent to the bot.
+  if (!tableItem) {
+    console.log(`[WaxDebug] ${bot.username}: no crafting table and only ${planksHeld} planks to craft one`);
+    return null;
+  }
+  await bot.equip(tableItem, "hand").catch(() => {});
+  // Try to place on any solid block with air above it, all 8 neighbours plus
+  // the block directly under the bot's feet (step off it after).
   const { Vec3 } = await import("vec3");
-  for (const [dx, dz] of [
+  const dirs: [number, number][] = [
     [1, 0],
     [-1, 0],
     [0, 1],
     [0, -1],
-  ]) {
+    [1, 1],
+    [1, -1],
+    [-1, 1],
+    [-1, -1],
+  ];
+  for (const [dx, dz] of dirs) {
     const floor = bot.blockAt(bot.entity.position.offset(dx, -1, dz));
     const spot = bot.blockAt(bot.entity.position.offset(dx, 0, dz));
-    if (floor && floor.boundingBox === "block" && spot && spot.name === "air") {
-      await bot.equip(tableItem, "hand").catch(() => {});
+    if (floor && floor.boundingBox === "block" && spot && (spot.name === "air" || spot.name === "cave_air")) {
       try {
         await bot.placeBlock(floor, new Vec3(0, 1, 0));
         table = near();
@@ -63,6 +83,13 @@ async function ensureTable(bot: Bot): Promise<Block | null> {
         /* try the next side */
       }
     }
+  }
+  if (!near()) {
+    const feet = bot.blockAt(bot.entity.position.offset(0, -1, 0));
+    console.log(
+      `[WaxDebug] ${bot.username}: couldn't place a table at ${bot.entity.position.floored()} ` +
+        `(standing on ${feet?.name}, ${planksHeld} planks) — terrain too tight`,
+    );
   }
   return near();
 }
