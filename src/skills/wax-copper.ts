@@ -27,11 +27,51 @@ function count(bot: Bot, name: string): number {
     .reduce((s, i) => s + i.count, 0);
 }
 
+/** A crafting table within reach — placing one from pocket if none is nearby. */
+async function ensureTable(bot: Bot): Promise<Block | null> {
+  const near = () => bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 5 });
+  let table = near();
+  if (table) return table;
+  const mcData = (await import("minecraft-data")).default(bot.version);
+  // Get a table item in pocket — craft one from planks if needed.
+  if (!bot.inventory.items().some((i) => i.name === "crafting_table")) {
+    const planks = bot.inventory.items().find((i) => i.name.endsWith("_planks"));
+    if (planks && planks.count >= 4) {
+      const rec = bot.recipesFor(mcData.itemsByName.crafting_table.id, null, 1, null)[0];
+      if (rec) await bot.craft(rec, 1).catch(() => {});
+    }
+  }
+  const tableItem = bot.inventory.items().find((i) => i.name === "crafting_table");
+  if (!tableItem) return null;
+  // Place it on a solid block with air above, adjacent to the bot.
+  const { Vec3 } = await import("vec3");
+  for (const [dx, dz] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ]) {
+    const floor = bot.blockAt(bot.entity.position.offset(dx, -1, dz));
+    const spot = bot.blockAt(bot.entity.position.offset(dx, 0, dz));
+    if (floor && floor.boundingBox === "block" && spot && spot.name === "air") {
+      await bot.equip(tableItem, "hand").catch(() => {});
+      try {
+        await bot.placeBlock(floor, new Vec3(0, 1, 0));
+        table = near();
+        if (table) return table;
+      } catch {
+        /* try the next side */
+      }
+    }
+  }
+  return near();
+}
+
 async function craftItem(bot: Bot, name: string): Promise<boolean> {
   const mcData = (await import("minecraft-data")).default(bot.version);
   const item = mcData.itemsByName[name];
   if (!item) return false;
-  const table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 6 });
+  const table = await ensureTable(bot);
   const recipe = bot.recipesFor(item.id, null, 1, table ?? null)[0];
   if (!recipe) return false;
   try {
