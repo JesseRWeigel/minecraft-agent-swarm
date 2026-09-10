@@ -253,7 +253,6 @@ export const stripMineSkill: Skill = {
       }
     }
 
-    const hasIronPick = bot.inventory.items().some((i) => (PICK_TIER[i.name] ?? 0) >= 2);
     // ARMOUR BEFORE DIAMONDS: a diamond dive to y=-58 sits BELOW the iron band
     // (iron peaks at y=16, its triangle ends near y=-24), so a deep tunnel
     // yields ~1 iron — Forge dug 29 blocks at y=-60 for a single raw_iron
@@ -262,12 +261,15 @@ export const stripMineSkill: Skill = {
     // moment they held an iron pick. So an UNARMOURED miner mines iron at
     // y=15 (its abundant peak) regardless of pickaxe, and only a fully armoured
     // one with an iron pick dives for the diamonds the Nether arc still needs.
-    const wornArmour = [5, 6, 7, 8].filter((i) => bot.inventory.slots[i]).length;
-    // -58, corrected from -53 after the mechanics research: diamond peaks at
-    // y=-58/-59 and the accepted practice is mining the peak band with a
-    // water bucket for lava (common at -54 and below) — the kits carry one,
-    // and the tunnel already stops at breached fluids.
-    const targetY = hasIronPick && wornArmour >= 4 ? -58 : TARGET_Y;
+    // STAY SHALLOW. The old rule sent a fully-armoured iron-pick miner diving
+    // to y=-58 for diamonds — but that band is a cave-and-lava gauntlet, and
+    // now that Forge is finally armoured it was killing him there (falls into
+    // caves at y=-11/-21, "tried to swim in lava"), wrecking the very mining
+    // that banks the iron and copper the current goal needs. Enchanting is
+    // already earned and no diamond target is live, so mine iron and copper at
+    // the shallow band where it is safe and plentiful; the deep dive can return
+    // deliberately when a diamond mission actually calls for it.
+    const targetY = TARGET_Y;
 
     // Snap to nearest cardinal direction — but never TOWARD the portal
     // quarry. Bots at the stash face the portal (they commute there), and
