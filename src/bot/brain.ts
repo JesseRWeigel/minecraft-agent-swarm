@@ -186,6 +186,7 @@ export class BotBrain {
   private lastTradeMs = 0;
   private lastBastionMs = 0;
   private lastArmorCraftMs = 0;
+  private lastFrontierMs = 0;
   private lastPocketShedMs = 0;
   private lastWalkHomeMs = 0;
 
@@ -1183,6 +1184,41 @@ export class BotBrain {
           result,
           /complete|harvest|planted/i.test(result),
         );
+        return;
+      }
+    }
+
+    // Frontier-mine override — RUNS BEFORE base strip_mine. The village
+    // ground is a mined-out honeycomb ringed by water: strip_mine there logs
+    // "couldn't reach fresh rock" trip after trip and the swarm produced
+    // almost no ore for days. An RCON survey found solid un-mined ore-bearing
+    // rock in the fresh forest the roamers reach (~450,-420). So the miner
+    // ferries out there and mines fresh ground instead of shafting the dead
+    // base. Long cooldown — it is a full round-trip — and only while short on
+    // iron, since the whole point is to restart the iron→armour supply.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.bot.username === "Forge" &&
+      this.roleConfig.allowedSkills.includes("mine_frontier") &&
+      /overworld/.test(String(this.bot.game.dimension))
+    ) {
+      const ironHeld = this.bot.inventory
+        .items()
+        .filter((i) => i.name === "iron_ingot" || i.name === "raw_iron")
+        .reduce((s, i) => s + i.count, 0);
+      const cooledFrontier = Date.now() - this.lastFrontierMs > 900_000;
+      const spF = this.roleConfig.stashPos;
+      const nearBaseF =
+        !!spF && Math.hypot(this.bot.entity.position.x - spF.x, this.bot.entity.position.z - spF.z) < 60;
+      if (ironHeld < 8 && cooledFrontier && nearBaseF) {
+        this.lastFrontierMs = Date.now();
+        this.log.info("Brain", "OVERRIDE: base is mined out — ferrying to the frontier for fresh ore");
+        this.events.onThought("Nothing left to dig here. To the fresh rock out east.");
+        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "mine_frontier" });
+        this.events.onAction("mine_frontier", result);
+        this.lastAction = "mine_frontier";
+        this.lastResult = result;
         return;
       }
     }

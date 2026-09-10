@@ -22,6 +22,7 @@ import { craftFlintAndSteelSkill } from "./flint-and-steel.js";
 import { buildNetherPortalSkill, returnFromNetherSkill } from "./nether-portal.js";
 import { tradeWithVillagerSkill } from "./trade-with-villager.js";
 import { lootBastionSkill } from "./loot-bastion.js";
+import { mineFrontierSkill } from "./mine-frontier.js";
 
 export const skillRegistry = new Map<string, Skill>();
 
@@ -53,6 +54,7 @@ register(buildNetherPortalSkill);
 register(returnFromNetherSkill);
 register(tradeWithVillagerSkill);
 register(lootBastionSkill);
+register(mineFrontierSkill);
 
 // Dynamic skills are loaded lazily by calling loadDynamicSkills() from dynamic-loader.ts.
 // The import is intentionally kept out of this file to avoid circular module evaluation:

@@ -187,6 +187,7 @@ export const FORGE_CONFIG: BotRoleConfig = {
   allowedActions: ["mine_block", "gather_wood", "go_to", "eat", "sleep", "craft", "chat", "flee"],
   allowedSkills: [
     "strip_mine",
+    "mine_frontier",
     "smelt_ores",
     "craft_gear",
     "craft_bucket",

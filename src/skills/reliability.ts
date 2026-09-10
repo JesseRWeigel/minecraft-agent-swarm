@@ -42,6 +42,7 @@ const NEVER_RETIRE = new Set([
   "oh_shiny",
   "trade_with_villager",
   "loot_bastion",
+  "mine_frontier",
 ]);
 
 const CACHE_TTL_MS = 60_000;
