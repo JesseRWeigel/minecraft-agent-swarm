@@ -40,12 +40,16 @@ function feet(bot: Bot) {
 /** Longest bare-hand break we will wait for. Stone is 7.5s, deepslate 15s,
  * deepslate ores 22.5s; obsidian (250s) and bedrock (never) are hopeless. */
 const MAX_HAND_DIG_MS = 40_000;
+const MAX_DIG_WAIT_MS = 90_000; // a dig in water runs 5x slower; still worth one wait
 const DIG_MARGIN_MS = 4_000;
 const MIN_DIG_BUDGET_MS = 5_000;
 
 /**
- * How long to wait for one bare-hand dig, given the server's expected break
- * time — or null when the block is not worth trying by hand.
+ * How long to wait for one bare-hand dig — or null when the block is not
+ * worth trying by hand. `baseMs` is the block's break time standing on solid
+ * ground out of water (what decides hopeless: obsidian, bedrock); `actualMs`
+ * is the break time in the bot's current situation (in water it is 5x), which
+ * sizes the wait.
  *
  * This replaced a fixed 12s timeout that was shorter than deepslate's 15s
  * bare-hand break time: every dig below y=0 was aborted just before the block
@@ -53,9 +57,20 @@ const MIN_DIG_BUDGET_MS = 5_000;
  * ceiling to pillar into, and reported "all four sides blocked" from a spot
  * that was plain diggable rock (Flora, y=-45, for two hours).
  */
-export function digBudgetMs(expectedMs: number): number | null {
-  if (!Number.isFinite(expectedMs) || expectedMs > MAX_HAND_DIG_MS) return null;
-  return Math.max(MIN_DIG_BUDGET_MS, expectedMs + DIG_MARGIN_MS);
+export function digBudgetMs(baseMs: number, actualMs: number = baseMs): number | null {
+  if (!Number.isFinite(baseMs) || baseMs > MAX_HAND_DIG_MS) return null;
+  const wait = Math.max(MIN_DIG_BUDGET_MS, actualMs + DIG_MARGIN_MS);
+  return Math.min(wait, MAX_DIG_WAIT_MS);
+}
+
+/** Wait (briefly) for the bot to land. Mineflayer quotes a dig 5x longer
+ * while the bot is airborne, and the staircase jumps every step — a dig
+ * measured mid-hop read deepslate as a hopeless 75s. */
+async function settleOnGround(bot: Bot, maxMs = 1_500): Promise<void> {
+  const until = Date.now() + maxMs;
+  while (!bot.entity.onGround && Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
 }
 
 /** Direct bare-handed dig sized to the block's real break time — bypasses the
@@ -67,11 +82,14 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<boole
   if (!b || b.boundingBox !== "block") return true; // already air/liquid — nothing to break
   if (b.name === "bedrock" || b.name === "water" || b.name === "lava") return false; // never dig these
   if (!bot.canDigBlock(b)) return false; // unbreakable for this bot right now
+  await settleOnGround(bot);
+  const heldType = bot.heldItem?.type ?? null;
+  const base = b.digTime(heldType, false, false, false, [], {});
   const expected = bot.digTime(b);
-  const budget = digBudgetMs(expected);
+  const budget = digBudgetMs(base, expected);
   if (budget === null) {
     console.log(
-      `[EscapeDebug] ${bot.username}: skipping ${b.name} at ${x},${y},${z} — ${Math.round(expected / 1000)}s by hand is hopeless`,
+      `[EscapeDebug] ${bot.username}: skipping ${b.name} at ${x},${y},${z} — ${Math.round(base / 1000)}s by hand is hopeless`,
     );
     return false;
   }
@@ -213,6 +231,20 @@ export const escapeToSurfaceSkill: Skill = {
       return { success: true, message: "Already at the surface." };
     }
 
+    // A death mid-climb respawns the bot at its bed or spawn — on the surface,
+    // but the escape did not do that. Report it plainly instead of claiming
+    // the staircase reached daylight (Flora, shot by a skeleton at y=-32).
+    let died = false;
+    const onDeath = () => {
+      died = true;
+    };
+    bot.once("death", onDeath);
+    const diedResult = (): SkillResult => ({
+      success: false,
+      message: `Died at y=${lastY} on the way up and respawned; the climb did not finish.`,
+      stats: { fromY: startY, toY: lastY, died: 1 },
+    });
+
     // March the staircase toward the four cardinals in turn, so a wall on one
     // side just makes it turn rather than jam. Prefer heading roughly toward
     // the village (west/north here) but any direction that ascends is a win.
@@ -229,8 +261,10 @@ export const escapeToSurfaceSkill: Skill = {
     let stallCount = 0;
 
     while (!signal.aborted && Date.now() < deadline) {
+      if (died) return diedResult();
       const f = feet(bot);
       if (f.y >= SURFACE_Y || canSeeSky(bot)) {
+        bot.removeListener("death", onDeath);
         return {
           success: true,
           message: `Climbed out to y=${f.y} — back on the surface.`,
@@ -288,8 +322,10 @@ export const escapeToSurfaceSkill: Skill = {
           // with a scaffold block. Atlas and Flora stalled exactly here.
           step(`Boxed in at y=${feet(bot).y} — pillaring straight up...`, 0.5);
           const rose = await pillarUp(bot);
+          if (died) return diedResult();
           if (!rose) {
             const fy = feet(bot).y;
+            bot.removeListener("death", onDeath);
             return {
               success: false,
               message: `Stuck at y=${fy} — no solid step to climb and no scaffold block to pillar with. invoke_skill {"skill":"escape_to_surface"} again to keep trying.`,
@@ -300,6 +336,8 @@ export const escapeToSurfaceSkill: Skill = {
       }
     }
 
+    bot.removeListener("death", onDeath);
+    if (died) return diedResult();
     const endY = feet(bot).y;
     return {
       success: endY >= SURFACE_Y,

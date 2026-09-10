@@ -18,6 +18,12 @@ test("dig budget skips blocks that are hopeless by hand", () => {
   assert.equal(digBudgetMs(Infinity), null); // bedrock
 });
 
+test("a slow situation (in water) lengthens the wait but does not make rock hopeless", () => {
+  // deepslate is 15s on dry ground and 75s submerged: still diggable, capped wait
+  assert.equal(digBudgetMs(15_000, 75_000), 79_000);
+  assert.equal(digBudgetMs(22_500, 112_500), 90_000);
+});
+
 import { isBuried, BURIED_CEILING_SCAN } from "./escape-to-surface.js";
 
 const column = (solidAt: Set<number>) => (_x: number, y: number, _z: number) =>
