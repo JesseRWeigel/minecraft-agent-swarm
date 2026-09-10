@@ -232,7 +232,7 @@ the exact SHA-256. Runtime also rechecks the current successful verification and
 sandbox-policy fingerprint before every execution.
 
 Generated execution is disabled by default and fails closed without Linux x64,
-Bubblewrap, `prlimit`, the configured Node executable, or a passing
-`npm run test:sandbox`. Generation and refinement never promote, rewrite an
+Bubblewrap, `prlimit`, and the configured Node executable. Operators must run
+the separate, fail-closed `npm run test:sandbox` preflight before enabling it. Generation and refinement never promote, rewrite an
 authored skill, or hot reload a candidate. Restart the application after an
 operator promotes or rolls back an approved generated skill.

@@ -375,6 +375,16 @@ npm run generated-skill -- rollback <skill-name>
 
 Verification, promotion, runtime loading, and each execution bind the same candidate hash and current sandbox-policy fingerprint. A policy/runtime change or later failed verification revokes execution. Restart the swarm after promote or rollback so the registry picks up the selected version. Promotion/rollback uses an exclusive fail-closed lock; after a crash, inspect the store and remove a stale `.lock` only while all generated-skill operator commands are stopped.
 
+The containment boundary trusts the host kernel, Node executable, Bubblewrap,
+`prlimit`, seccomp installation, and the local operator. It does not protect
+against the same local account or root modifying the store, runtime, or policy,
+and authored TypeScript/Voyager code remains trusted. The allowed capabilities
+can deliberately change the Minecraft world within their distance and quota
+limits. Candidate verification is a deterministic isolated smoke test of the
+protocol and completion path; it does not prove that a skill is useful or
+correct on a live server, so review the code and exact hash before promotion.
+
+
 ### Freeze Protection (Watchdogs)
 
 A bot's brain loop awaits its current skill/action, so a single unbounded `await` on a server response (`pathfinder.goto` to an unreachable spot, `bot.dig` on a bad block state, a furnace GUI that never opens) used to freeze a bot **forever** — online and healthy-looking, but brain-dead. This is now impossible, enforced in layers:

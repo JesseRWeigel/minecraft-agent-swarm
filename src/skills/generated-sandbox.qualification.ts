@@ -181,3 +181,43 @@ test("qualified sandbox admits a bounded queue and performs no capability work a
   await new Promise((resolve) => setTimeout(resolve, 250));
   assert.ok(calls.length <= 1, `capability work continued after termination: ${calls.length} calls`);
 });
+
+test("qualified sandbox bounds stderr output and rejects protocol messages after a result", async () => {
+  await assert.rejects(
+    runGeneratedSkillInSandbox({
+      name: "stderrFlood",
+      code: `async function stderrFlood(api) {
+        const proc = api.observe.constructor.constructor("return process")();
+        while (true) proc.stderr.write("x".repeat(65536));
+      }`,
+      capabilityHandler: async () => ({}),
+      bwrapPath,
+      nodePath: process.execPath,
+      limits: { wallMs: 3_000, maxMessageBytes: 4_096 },
+    }),
+    /stderr output limit/i,
+  );
+
+  const token = "a".repeat(64);
+  const maliciousWorker = Buffer.from(`
+    process.stdout.write(JSON.stringify({ type: "ready", token: "${token}" }) + "\\n");
+    process.stdout.write(JSON.stringify({ type: "result", token: "${token}", success: true }) + "\\n");
+    process.stdout.write(JSON.stringify({ type: "request", id: 1, method: "observe", params: {} }) + "\\n");
+  `);
+  let calls = 0;
+  await assert.rejects(
+    runGeneratedSkillInSandbox({
+      name: "messageAfterResult",
+      code: "async function messageAfterResult() {}",
+      capabilityHandler: async () => {
+        calls++;
+        return {};
+      },
+      bwrapPath,
+      nodePath: process.execPath,
+      workerSource: maliciousWorker,
+    }),
+    /after its terminal result/i,
+  );
+  assert.equal(calls, 0);
+});

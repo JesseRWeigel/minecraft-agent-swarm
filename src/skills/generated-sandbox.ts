@@ -325,6 +325,7 @@ export async function runGeneratedSkillInSandbox(options: {
       });
       let stdout = "";
       let stderr = "";
+      let stderrBytes = 0;
       let requests = 0;
       let readyToken: string | undefined;
       let result: Omit<SandboxResult, "requests" | "sha256" | "policyHash"> | undefined;
@@ -355,7 +356,12 @@ export async function runGeneratedSkillInSandbox(options: {
       child.stdin.on("error", () => {});
       child.stderr.setEncoding("utf8");
       child.stderr.on("data", (chunk: string) => {
-        stderr = (stderr + chunk).slice(-limits.maxMessageBytes);
+        stderrBytes += Buffer.byteLength(chunk);
+        if (stderrBytes > limits.maxMessageBytes * 2) {
+          finishError(new Error("Generated-skill worker exceeded its stderr output limit"));
+          return;
+        }
+        stderr += chunk;
       });
       child.stdout.setEncoding("utf8");
       child.stdout.on("data", (chunk: string) => {
@@ -413,6 +419,7 @@ export async function runGeneratedSkillInSandbox(options: {
           protocolChain = protocolChain
             .then(async () => {
               if (finished || terminationController.signal.aborted) return;
+              if (result) throw new Error("Generated-skill worker sent a protocol message after its terminal result");
               if (message.type === "ready") {
                 if (readyToken || typeof message.token !== "string" || !/^[a-f0-9]{64}$/.test(message.token)) {
                   throw new Error("Generated-skill worker sent an invalid protocol ready message");
