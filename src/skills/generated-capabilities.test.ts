@@ -115,3 +115,33 @@ test("capability abort stops bot operations and prevents a pre-aborted operation
   await assert.rejects(handle("mine", { block: "oak_log", count: 1 }), /aborted/i);
   assert.equal(digs, 0);
 });
+
+test("a timed-out mutating capability poisons the invocation before caught-error follow-up work", async () => {
+  const { bot, calls } = fakeBot();
+  let releasePlacement: (() => void) | undefined;
+  bot.placeBlock = () =>
+    new Promise<void>((resolve) => {
+      releasePlacement = resolve;
+    });
+  let fatalCalls = 0;
+  const handle = createGeneratedCapabilityHandler(bot, {
+    operationTimeoutMs: 10,
+    onFatal: () => {
+      fatalCalls++;
+    },
+  });
+
+  const keepEventLoopAlive = setTimeout(() => {}, 100);
+  try {
+    await assert.rejects(handle("place", { block: "oak_log", x: 2, y: 64, z: 2 }), /timed out/i);
+    assert.equal(fatalCalls, 1);
+    const callsAfterTimeout = [...calls];
+
+    // Candidate code may catch the RPC error, but the broker must reject its next mutation.
+    await assert.rejects(handle("consume", { item: "apple" }), /terminated/i);
+    assert.deepEqual(calls, callsAfterTimeout);
+  } finally {
+    clearTimeout(keepEventLoopAlive);
+    releasePlacement?.();
+  }
+});

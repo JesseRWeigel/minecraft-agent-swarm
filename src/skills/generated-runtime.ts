@@ -126,7 +126,10 @@ function generatedSkill(
         if (fresh.candidateId !== artifact.candidateId || fresh.sha256 !== artifact.sha256) {
           return { success: false, message: `${artifact.name} approval changed; restart before executing it.` };
         }
-        const handler = createGeneratedCapabilityHandler(bot, { signal: invocationController.signal });
+        const handler = createGeneratedCapabilityHandler(bot, {
+          signal: invocationController.signal,
+          onFatal: abortInvocation,
+        });
         const terminationSignals = new WeakSet<AbortSignal>();
         const result = await options.runner({
           name: artifact.name,
@@ -141,7 +144,7 @@ function generatedSkill(
           },
           bwrapPath: options.bwrapPath,
           nodePath: options.nodePath,
-          signal,
+          signal: invocationController.signal,
           expectedPolicyHash: options.policyHash,
         });
         if (result.sha256 !== artifact.sha256 || result.policyHash !== options.policyHash) {
