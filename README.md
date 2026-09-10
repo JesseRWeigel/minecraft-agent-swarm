@@ -345,6 +345,7 @@ Each decision executes a gated action (restricted to the bot's allowed actions/s
 - `smelt_ores` — smelt raw ore into ingots, crafts a furnace from cobblestone if needed
 - `light_area` — place torches in a radius
 - `go_fishing` — cast and reel a fishing rod
+- `wax_copper` — craft a copper block and shears, walk to the bee nest by waypoints, wait until its honey level reads 5, seat a campfire under it so the bees survive the harvest, shear a honeycomb and wax the block (Wax On)
 - `escape_to_surface` — hand-carve a staircase (or pillar) up to daylight when a bot is buried with no pickaxe; each dig waits the block's real bare-hand break time (deepslate 15s), a brain reflex fires it for any pickless bot with rock overhead, and a death mid-climb is reported as a failure
 - `setup_stash` — bootstrap shared chest area
 - `neural_combat` — 50ms tick reactive combat via Python server
