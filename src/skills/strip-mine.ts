@@ -351,6 +351,14 @@ export const stripMineSkill: Skill = {
         const hikeDeadline = Date.now() + 150_000;
         for (let attempt = 0; Date.now() < hikeDeadline && !signal.aborted; attempt++) {
           const moves = baseMoves(bot);
+          // Fall safety on the horizontal hike — Forge fell to his death four
+          // times an hour walking the frontier route, off ravine lips and into
+          // cave mouths, because baseMoves lets the pathfinder take fatal drops.
+          // The DOWNWARD descent below is intentional and keeps its own moves;
+          // here, on flat travel, cap drops and forbid parkour leaps so it
+          // routes AROUND the hole instead of stepping into it.
+          moves.maxDropDown = 3;
+          moves.allowParkour = false;
           if (attempt > 0) {
             moves.canDig = true;
             moves.allow1by1towers = true;
