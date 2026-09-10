@@ -886,6 +886,14 @@ export class BotBrain {
     // Flora is the designated ROAMER now that her farm and breeding work are
     // done — walk-home would tether her to the village and defeat the point,
     // so she is exempt. Everyone else still re-clusters.
+    // Forge is exempt too: his work is out EAST now — the fresh-ore frontier
+    // (450,-420) and the bee hive (472,-445) that wax_on needs are both ~250+
+    // blocks from the village, and walk-home kept hauling him back across the
+    // obstructed base terrain between attempts, so the wax skill fired from
+    // 400 blocks out and could never walk in. Let him hold the eastern ground
+    // where the copper and the hive both are; the frontier-mine reflex still
+    // carries him out, and wax_copper now finishes a short hop instead of a
+    // stalled marathon.
     const inOverworld = /overworld/.test(String(this.bot.game.dimension));
     if (
       config.bot.allowStrategyOverrides &&
@@ -893,7 +901,8 @@ export class BotBrain {
       this.roleConfig.stashPos &&
       inOverworld &&
       this.bot.username !== "Flora" &&
-      this.bot.username !== "Atlas"
+      this.bot.username !== "Atlas" &&
+      this.bot.username !== "Forge"
     ) {
       const sp = this.roleConfig.stashPos;
       const homeGap = Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z);
