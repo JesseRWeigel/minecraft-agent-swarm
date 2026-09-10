@@ -221,3 +221,19 @@ test("qualified sandbox bounds stderr output and rejects protocol messages after
   );
   assert.equal(calls, 0);
 });
+
+test("qualified sandbox applies the task limit inside its user namespace", async () => {
+  const result = await run(
+    "taskLimit",
+    `async function taskLimit(api) {
+      const proc = api.observe.constructor.constructor("return process")();
+      return proc.report.getReport().userLimits.max_user_processes;
+    }`,
+  );
+  assert.equal(result.success, true, result.error);
+  assert.deepEqual(result.value, { soft: 64, hard: 64 });
+  assert.equal(
+    (await run("healthyAfterTaskLimit", "async function healthyAfterTaskLimit() { return 'ok'; }")).value,
+    "ok",
+  );
+});

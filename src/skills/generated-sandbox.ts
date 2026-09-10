@@ -30,7 +30,7 @@ export type TerminationAwareCapabilityHandler = (
 ) => Promise<unknown>;
 
 export const GENERATED_CAPABILITY_POLICY = {
-  version: 1,
+  version: 2,
   maxDistance: 64,
   methodQuotas: {
     observe: 16,
@@ -55,8 +55,8 @@ export const GENERATED_CAPABILITY_POLICY = {
 } as const;
 
 const SANDBOX_LAUNCH_POLICY = {
-  version: 2,
-  mounts: "exact-node-and-ldd-libraries",
+  version: 3,
+  mounts: "exact-node-prlimit-and-ldd-libraries",
   namespaces: "all",
   network: "none",
   environment: "clear",
@@ -64,6 +64,7 @@ const SANDBOX_LAUNCH_POLICY = {
   devices: ["/dev/null", "/dev/urandom"],
   capabilities: "drop-all",
   nodePermissions: "read-worker-and-candidate-only",
+  taskLimit: "inner-namespace-prlimit",
 } as const;
 
 export type SandboxLimits = {
@@ -72,6 +73,7 @@ export type SandboxLimits = {
   addressSpaceBytes: number;
   fileBytes: number;
   openFiles: number;
+  maxTasks: number;
   maxRequests: number;
   maxMessageBytes: number;
 };
@@ -82,6 +84,7 @@ const DEFAULT_LIMITS: SandboxLimits = {
   addressSpaceBytes: 512 * 1024 * 1024,
   fileBytes: 1024 * 1024,
   openFiles: 64,
+  maxTasks: 64,
   maxRequests: 32,
   maxMessageBytes: 64 * 1024,
 };
@@ -151,6 +154,7 @@ export async function getSandboxPolicyHash(
   const limits = resolvedLimits(options.limits);
   const policy = createSandboxSeccompPolicy();
   const runtime = resolveNodeRuntime(options.nodePath ?? process.execPath);
+  const prlimitRuntime = resolvePrlimitRuntime();
   return hash([
     "minecraft-agent-swarm-generated-sandbox",
     String(GENERATED_CAPABILITY_SCHEMA_VERSION),
@@ -160,6 +164,9 @@ export async function getSandboxPolicyHash(
     runtime.executable,
     runtime.version,
     JSON.stringify(runtime.libraries),
+    prlimitRuntime.executable,
+    prlimitRuntime.version,
+    JSON.stringify(prlimitRuntime.libraries),
     policy,
     worker,
   ]);
@@ -171,16 +178,18 @@ function assertPlainParams(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function resolveNodeRuntime(nodePath: string): { executable: string; version: string; libraries: string[] } {
+type ExecutableRuntime = { executable: string; version: string; libraries: string[] };
+
+function resolveExecutableRuntime(executable: string, versionArgs: string[], label: string): ExecutableRuntime {
   let lddOutput: string;
   let version: string;
   try {
-    lddOutput = execFileSync("/usr/bin/ldd", [nodePath], { encoding: "utf8", env: { PATH: "/usr/bin:/bin" } });
-    version = execFileSync(nodePath, ["--version"], { encoding: "utf8", env: {} }).trim();
+    lddOutput = execFileSync("/usr/bin/ldd", [executable], { encoding: "utf8", env: { PATH: "/usr/bin:/bin" } });
+    version = execFileSync(executable, versionArgs, { encoding: "utf8", env: {} }).split("\n")[0].trim();
   } catch (error) {
-    throw new Error(`Could not inspect configured Node runtime: ${(error as Error).message}`, { cause: error });
+    throw new Error(`Could not inspect configured ${label} runtime: ${(error as Error).message}`, { cause: error });
   }
-  if (lddOutput.includes("not found")) throw new Error("Configured Node runtime has an unresolved shared library");
+  if (lddOutput.includes("not found")) throw new Error(`Configured ${label} runtime has an unresolved shared library`);
   const libraries = new Set<string>();
   for (const line of lddOutput.split("\n")) {
     const mapped = line.match(/=>\s+(\/\S+)\s+\(/)?.[1];
@@ -188,8 +197,16 @@ function resolveNodeRuntime(nodePath: string): { executable: string; version: st
     const library = mapped ?? loader;
     if (library) libraries.add(library);
   }
-  if (libraries.size === 0) throw new Error("Could not resolve configured Node runtime libraries");
-  return { executable: path.resolve(nodePath), version, libraries: Array.from(libraries).sort() };
+  if (libraries.size === 0) throw new Error(`Could not resolve configured ${label} runtime libraries`);
+  return { executable: path.resolve(executable), version, libraries: Array.from(libraries).sort() };
+}
+
+function resolveNodeRuntime(nodePath: string): ExecutableRuntime {
+  return resolveExecutableRuntime(nodePath, ["--version"], "Node");
+}
+
+function resolvePrlimitRuntime(): ExecutableRuntime {
+  return resolveExecutableRuntime("/usr/bin/prlimit", ["--version"], "prlimit");
 }
 
 function parentDirectories(filePaths: string[]): string[] {
@@ -213,20 +230,25 @@ function sandboxArguments(
   limits: SandboxLimits,
 ): { command: string; args: string[] } {
   const runtime = resolveNodeRuntime(nodePath);
+  const prlimitRuntime = resolvePrlimitRuntime();
   const nodeMajor = Number.parseInt(runtime.version.replace(/^v/, "").split(".")[0], 10);
   if (!Number.isSafeInteger(nodeMajor) || nodeMajor < 20) {
     throw new Error("Generated-skill sandbox requires Node 20 or newer");
   }
   const permissionFlag = nodeMajor >= 22 ? "--permission" : "--experimental-permission";
   const bwrap: string[] = ["--unshare-all", "--die-with-parent", "--new-session", "--clearenv", "--cap-drop", "ALL"];
-  for (const directory of parentDirectories(runtime.libraries)) bwrap.push("--dir", directory);
-  for (const library of runtime.libraries) bwrap.push("--ro-bind", library, library);
+  const runtimeLibraries = Array.from(new Set([...runtime.libraries, ...prlimitRuntime.libraries])).sort();
+  for (const directory of parentDirectories(runtimeLibraries)) bwrap.push("--dir", directory);
+  for (const library of runtimeLibraries) bwrap.push("--ro-bind", library, library);
   bwrap.push(
     "--dir",
     "/sandbox",
     "--ro-bind",
     nodePath,
     "/sandbox/node",
+    "--ro-bind",
+    prlimitRuntime.executable,
+    "/sandbox/prlimit",
     "--ro-bind",
     path.join(stagingDir, "worker.mjs"),
     "/sandbox/worker.mjs",
@@ -260,6 +282,9 @@ function sandboxArguments(
     "/",
     "--seccomp",
     "3",
+    "--",
+    "/sandbox/prlimit",
+    `--nproc=${limits.maxTasks}`,
     "--",
     "/sandbox/node",
     permissionFlag,
