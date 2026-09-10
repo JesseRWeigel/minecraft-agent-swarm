@@ -187,6 +187,7 @@ export class BotBrain {
   private lastBastionMs = 0;
   private lastArmorCraftMs = 0;
   private lastFrontierMs = 0;
+  private lastWaxMs = 0;
   private lastPocketShedMs = 0;
   private lastWalkHomeMs = 0;
 
@@ -1184,6 +1185,40 @@ export class BotBrain {
           result,
           /complete|harvest|planted/i.test(result),
         );
+        return;
+      }
+    }
+
+    // Wax-copper override — RUNS BEFORE frontier mining. Once Forge has banked
+    // enough copper and iron (or the finished shears/block), stop mining and go
+    // earn Wax On: it needs only a copper block, a honeycomb sheared from the
+    // full hive the roamers reach, and no Nether or piglins at all. Fires ahead
+    // of mine_frontier so a stocked bot cashes in instead of digging forever.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.bot.username === "Forge" &&
+      this.roleConfig.allowedSkills.includes("wax_copper") &&
+      /overworld/.test(String(this.bot.game.dimension))
+    ) {
+      const earnedWax = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+      const waxDone = earnedWax.has("husbandry/wax_on") || earnedWax.has("minecraft:husbandry/wax_on");
+      const held = (n: string) =>
+        this.bot.inventory
+          .items()
+          .filter((i) => i.name === n)
+          .reduce((s, i) => s + i.count, 0);
+      const hasCopper = held("copper_block") >= 1 || held("copper_ingot") >= 9;
+      const hasShearMakings = held("shears") >= 1 || held("iron_ingot") >= 2;
+      const cooledWax = Date.now() - this.lastWaxMs > 600_000;
+      if (!waxDone && hasCopper && hasShearMakings && cooledWax) {
+        this.lastWaxMs = Date.now();
+        this.log.info("Brain", "OVERRIDE: enough copper banked — going to wax a block for Wax On");
+        this.events.onThought("Copper in my pack and a hive full of honeycomb. Time to earn Wax On.");
+        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "wax_copper" });
+        this.events.onAction("wax_copper", result);
+        this.lastAction = "wax_copper";
+        this.lastResult = result;
         return;
       }
     }

@@ -198,6 +198,7 @@ export const FORGE_CONFIG: BotRoleConfig = {
     "setup_enchanting",
     "trade_with_villager",
     "loot_bastion",
+    "wax_copper",
   ],
   keepItems: [
     { name: "sapling", minCount: 16 },

@@ -1,0 +1,158 @@
+import type { Bot } from "mineflayer";
+import type { Block } from "prismarine-block";
+import type { Skill, SkillResult } from "./types.js";
+import pkg from "mineflayer-pathfinder";
+const { goals } = pkg;
+import { explorerMoves, safeGoto } from "../bot/navigation.js";
+
+/**
+ * wax_copper — Wax On (husbandry/wax_on), which fires the first time a bot
+ * applies honeycomb to a copper block.
+ *
+ * No piglin wall, no Nether, no distant village — everything it needs is
+ * reachable from home. Copper the frontier miners pull in quantity; the bee
+ * hive the roamers already reach at (472,71,-445) is full (honey_level 5) and
+ * gives honeycomb to a shear; and a copper block plus the honeycomb is the
+ * whole recipe. So this skill crafts a copper block and shears from ore in
+ * pocket, walks to the hive, shears out a honeycomb, places the block, and
+ * waxes it.
+ */
+
+const HIVE = { x: 472, y: 71, z: -445 };
+
+function count(bot: Bot, name: string): number {
+  return bot.inventory
+    .items()
+    .filter((i) => i.name === name)
+    .reduce((s, i) => s + i.count, 0);
+}
+
+async function craftItem(bot: Bot, name: string): Promise<boolean> {
+  const mcData = (await import("minecraft-data")).default(bot.version);
+  const item = mcData.itemsByName[name];
+  if (!item) return false;
+  const table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 6 });
+  const recipe = bot.recipesFor(item.id, null, 1, table ?? null)[0];
+  if (!recipe) return false;
+  try {
+    await bot.craft(recipe, 1, table ?? undefined);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const waxCopperSkill: Skill = {
+  name: "wax_copper",
+  description:
+    "Craft a copper block and shears, shear a honeycomb from the bee hive, and wax the block. Earns Wax On — no Nether, no piglins.",
+  params: {},
+  timeoutMs: 300_000,
+
+  estimateMaterials(): Record<string, number> {
+    return { copper_ingot: 9, iron_ingot: 2 };
+  },
+
+  async execute(bot, _params, signal, onProgress): Promise<SkillResult> {
+    const step = (message: string, progress: number) =>
+      onProgress({ skillName: "wax_copper", phase: "Wax", progress, message, active: true });
+    const resumable = (msg: string) => `${msg} invoke_skill {"skill":"wax_copper"} again to continue.`;
+
+    // --- Ensure a copper block ---
+    step("Checking materials...", 0.05);
+    if (count(bot, "copper_block") < 1) {
+      if (count(bot, "copper_ingot") < 9) {
+        return {
+          success: false,
+          message: resumable(`Only ${count(bot, "copper_ingot")} copper — need 9 for a block.`),
+        };
+      }
+      if (!(await craftItem(bot, "copper_block"))) {
+        return { success: false, message: resumable("Couldn't craft the copper block (no table in reach?).") };
+      }
+    }
+
+    // --- Ensure shears (honeycomb needs a shear) ---
+    if (count(bot, "shears") < 1) {
+      if (count(bot, "iron_ingot") < 2) {
+        return { success: false, message: resumable(`Only ${count(bot, "iron_ingot")} iron — need 2 for shears.`) };
+      }
+      if (!(await craftItem(bot, "shears"))) {
+        return { success: false, message: resumable("Couldn't craft shears.") };
+      }
+    }
+
+    // --- Walk to the hive (surface, like the roamers) ---
+    bot.pathfinder.setMovements(explorerMoves(bot));
+    const gap = () => Math.hypot(bot.entity.position.x - HIVE.x, bot.entity.position.z - HIVE.z);
+    const walkUntil = Date.now() + 180_000;
+    let guard = 0;
+    while (gap() > 4 && !signal.aborted && Date.now() < walkUntil) {
+      step(`Walking to the bee hive — ${Math.round(gap())} blocks out...`, 0.2 + Math.min(0.4, (250 - gap()) / 625));
+      const before = gap();
+      await safeGoto(bot, new goals.GoalNear(HIVE.x, HIVE.y, HIVE.z, 3), 45_000, 12_000).catch(() => {});
+      if (before - gap() < 6 && ++guard >= 3) break;
+      else if (before - gap() >= 6) guard = 0;
+    }
+    const hive = bot.blockAt(new (await import("vec3")).Vec3(HIVE.x, HIVE.y, HIVE.z));
+    if (!hive || (hive.name !== "bee_nest" && hive.name !== "beehive")) {
+      return { success: false, message: resumable(`No hive at ${HIVE.x},${HIVE.y},${HIVE.z} (found ${hive?.name}).`) };
+    }
+
+    // --- Shear a honeycomb out of the full hive ---
+    if (count(bot, "honeycomb") < 1) {
+      step("Shearing honeycomb from the hive...", 0.7);
+      const shears = bot.inventory.items().find((i) => i.name === "shears");
+      if (shears) await bot.equip(shears, "hand").catch(() => {});
+      await bot.activateBlock(hive).catch(() => {});
+      await new Promise((r) => setTimeout(r, 1500));
+      if (count(bot, "honeycomb") < 1) {
+        return {
+          success: false,
+          message: resumable("Sheared the hive but got no honeycomb — it may not be full yet."),
+        };
+      }
+    }
+
+    // --- Place the copper block and wax it ---
+    step("Placing the copper block to wax...", 0.85);
+    const below = bot.blockAt(bot.entity.position.offset(0, -1, 0));
+    const target = bot.blockAt(bot.entity.position.offset(1, 0, 0));
+    let placedAt: Block | null = null;
+    if (below && target && target.name === "air") {
+      const copperItem = bot.inventory.items().find((i) => i.name === "copper_block");
+      if (copperItem) {
+        await bot.equip(copperItem, "hand").catch(() => {});
+        try {
+          await bot.placeBlock(below, new (await import("vec3")).Vec3(1, 0, 0));
+          placedAt = bot.blockAt(bot.entity.position.offset(1, 0, 0));
+        } catch {
+          /* placement failed — try activating any copper block in reach below */
+        }
+      }
+    }
+    const copperBlock =
+      placedAt && placedAt.name.includes("copper")
+        ? placedAt
+        : bot.findBlock({ matching: (b) => b.name === "copper_block", maxDistance: 4 });
+    if (!copperBlock) {
+      return { success: false, message: resumable("Couldn't place the copper block to wax.") };
+    }
+
+    step("Waxing the copper with honeycomb...", 0.95);
+    const comb = bot.inventory.items().find((i) => i.name === "honeycomb");
+    if (comb) await bot.equip(comb, "hand").catch(() => {});
+    await bot.activateBlock(copperBlock).catch(() => {});
+    await new Promise((r) => setTimeout(r, 1000));
+
+    const waxed = bot.blockAt(copperBlock.position);
+    const success = !!waxed && waxed.name.startsWith("waxed_");
+    return {
+      success,
+      message: success
+        ? "Waxed a copper block with honeycomb — Wax On should be banked."
+        : resumable("Applied the honeycomb but the block didn't read as waxed — retry."),
+      stats: { hiveX: HIVE.x, hiveZ: HIVE.z },
+    };
+  },
+};

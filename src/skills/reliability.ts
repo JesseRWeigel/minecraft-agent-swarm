@@ -43,6 +43,7 @@ const NEVER_RETIRE = new Set([
   "trade_with_villager",
   "loot_bastion",
   "mine_frontier",
+  "wax_copper",
 ]);
 
 const CACHE_TTL_MS = 60_000;
