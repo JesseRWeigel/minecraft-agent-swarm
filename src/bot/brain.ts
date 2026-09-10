@@ -1481,7 +1481,7 @@ export class BotBrain {
     if (
       config.bot.allowStrategyOverrides &&
       !isSkillRunning(this.bot) &&
-      this.bot.username === "Mason" &&
+      (this.bot.username === "Mason" || this.bot.username === "Forge") &&
       this.roleConfig.allowedSkills.includes("loot_bastion")
     ) {
       const earnedBastion = readTeamEarned(BOT_ROSTER.map((b) => b.name));

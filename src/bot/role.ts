@@ -197,6 +197,7 @@ export const FORGE_CONFIG: BotRoleConfig = {
     "return_from_nether",
     "setup_enchanting",
     "trade_with_villager",
+    "loot_bastion",
   ],
   keepItems: [
     { name: "sapling", minCount: 16 },
