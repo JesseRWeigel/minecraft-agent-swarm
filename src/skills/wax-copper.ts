@@ -190,13 +190,27 @@ export const waxCopperSkill: Skill = {
     let guard = 0;
     let digging = false;
     while (gap() > 4 && !signal.aborted && Date.now() < walkUntil) {
+      const g = gap();
       step(
-        `Walking to the bee hive — ${Math.round(gap())} blocks out${digging ? " (digging through)" : ""}...`,
-        0.2 + Math.min(0.4, (400 - gap()) / 1000),
+        `Walking to the bee hive — ${Math.round(g)} blocks out${digging ? " (digging through)" : ""}...`,
+        0.2 + Math.min(0.4, (400 - g) / 1000),
       );
       bot.pathfinder.setMovements(digging ? digWalk : surfaceWalk);
       const before = gap();
-      await safeGoto(bot, new goals.GoalNear(HIVE.x, HIVE.y, HIVE.z, 3), 45_000, 12_000).catch(() => {});
+      // Step toward a waypoint ~100 blocks ahead, NOT a goal hundreds of blocks
+      // out. The frontier ferry closes ground reliably for exactly this reason:
+      // a near goal is a small pathfinder search it can solve, while a distant
+      // GoalNear makes it search an enormous space, give up, and barely move —
+      // which is why this walk sat at 358 blocks out closing nothing. Only aim
+      // the GoalNear at the hive block itself on the final approach.
+      if (g > 24) {
+        const t = Math.min(1, 100 / g);
+        const wx = Math.round(bot.entity.position.x + (HIVE.x - bot.entity.position.x) * t);
+        const wz = Math.round(bot.entity.position.z + (HIVE.z - bot.entity.position.z) * t);
+        await safeGoto(bot, new goals.GoalNearXZ(wx, wz, 10), 45_000, 12_000).catch(() => {});
+      } else {
+        await safeGoto(bot, new goals.GoalNear(HIVE.x, HIVE.y, HIVE.z, 3), 45_000, 12_000).catch(() => {});
+      }
       if (before - gap() >= 6) {
         guard = 0;
         digging = false;
