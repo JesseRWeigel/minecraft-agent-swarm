@@ -1499,7 +1499,18 @@ export class BotBrain {
       // — which also makes the run wait on the iron→armor pipeline being fixed
       // rather than feeding him to the Nether in the meantime.
       const armoredForBastion = this.wornArmorCount() >= 2;
-      if (!bastionDone && cooledBastion && nearStashBastion && armoredForBastion) {
+      // GOLD gate: iron/diamond armour does NOT neutralise piglins — only gold
+      // does. Armoured Forge reached the bastion twice and both times was shot
+      // dead by piglins before opening a real chest, while the 8 failed cross
+      // attempts cannibalised the frontier mining that armours the swarm in the
+      // first place (a productive session's iron output dropped to zero). So
+      // the raid stands down until the bot carries a gold armour piece to wear
+      // for neutrality; without one it is the same futility as the naked runs.
+      // No gold on any bot today, so this parks the run and lets Forge mine.
+      const hasGoldArmour = this.bot.inventory
+        .items()
+        .some((i) => /^golden_(helmet|chestplate|leggings|boots)$/.test(i.name));
+      if (!bastionDone && cooledBastion && nearStashBastion && armoredForBastion && hasGoldArmour) {
         this.lastBastionMs = Date.now();
         this.log.info("Brain", "OVERRIDE: the bastion is reachable — marching to loot a chest for Those Were the Days");
         this.events.onThought("The fortress is walled off by lava, but the bastion isn't. Time to raid it.");
