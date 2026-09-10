@@ -611,6 +611,23 @@ export function shouldKeep(
     return false;
   }
 
+  // Copper ingots: keep them IN POCKET, do not bank them. The miners pull
+  // copper in quantity at the shallow band (22 raw smelted in one session),
+  // but copper_ingot has no keep rule, so deposit_stash donates every one to
+  // the 87-chest junk pile where it is lost — and wax_on needs a full copper
+  // block (9 ingots) held to craft. 12 covers the block plus a margin. Copper
+  // is used for nothing else, so a held stack is pure progress, never dead
+  // weight. (Raw copper stays banked for the smelter hand-off, like other raw
+  // ore; it is the smelted ingot that must survive to reach the crafting.)
+  if (itemName === "copper_ingot") {
+    const kept = currentCounts.get("__copper") ?? 0;
+    if (kept < 12) {
+      currentCounts.set("__copper", kept + itemCount);
+      return true;
+    }
+    return false;
+  }
+
   const KEEP_MATERIALS = ["gold_ingot"];
   if (KEEP_MATERIALS.includes(itemName)) {
     // An explicit keepItems entry OUTRANKS the generic material reserve.
