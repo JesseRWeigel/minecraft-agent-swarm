@@ -77,6 +77,7 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<boole
   }
   const started = Date.now();
   let timedOut = false;
+  let digError = "";
   await Promise.race([
     bot.dig(b),
     new Promise<void>((_, rej) =>
@@ -85,7 +86,8 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<boole
         rej(new Error("dig timeout"));
       }, budget),
     ),
-  ]).catch(() => {
+  ]).catch((err: unknown) => {
+    digError = err instanceof Error ? err.message : String(err);
     try {
       bot.stopDigging();
     } catch {
@@ -96,7 +98,7 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<boole
   const gone = !after || after.boundingBox !== "block";
   if (!gone) {
     console.log(
-      `[EscapeDebug] ${bot.username}: ${b.name} at ${x},${y},${z} survived a ${Math.round((Date.now() - started) / 1000)}s dig (expected ${Math.round(expected / 1000)}s${timedOut ? ", timed out" : ", dig ended early"})`,
+      `[EscapeDebug] ${bot.username}: ${b.name} at ${x},${y},${z} survived a ${Math.round((Date.now() - started) / 1000)}s dig (expected ${Math.round(expected / 1000)}s${timedOut ? ", timed out" : digError ? `, dig threw: ${digError}` : ", dig ended early"})`,
     );
   }
   return gone;
@@ -145,6 +147,31 @@ async function pillarUp(bot: Bot): Promise<boolean> {
   bot.pathfinder.setMovements(moves);
   await safeGoto(bot, new goals.GoalY(f.y + 3), 15_000, 6_000).catch(() => {});
   return feet(bot).y > startY;
+}
+
+/** How far up the buried check looks for a ceiling. A pocket or cavern can
+ * have several blocks of air overhead and still be sealed rock. */
+export const BURIED_CEILING_SCAN = 24;
+
+/**
+ * True when a bot below the surface band has solid rock somewhere in the
+ * column above it. This replaced a check of the single block two above the
+ * feet, which read Flora's tall pocket at y=-45 as open sky — and which the
+ * pillar fallback itself turned false by hand-clearing that exact block, so a
+ * bot that had just been rescued once stopped qualifying for a second push.
+ */
+export function isBuried(
+  blockAt: (x: number, y: number, z: number) => { boundingBox: string } | null,
+  feetX: number,
+  feetY: number,
+  feetZ: number,
+): boolean {
+  if (feetY >= SURFACE_Y - 7) return false;
+  for (let dy = 2; dy <= BURIED_CEILING_SCAN; dy++) {
+    const b = blockAt(feetX, feetY + dy, feetZ);
+    if (b && b.boundingBox === "block") return true;
+  }
+  return false;
 }
 
 /** True once the column straight above the bot is clear to the sky. */

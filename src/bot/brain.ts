@@ -39,6 +39,7 @@ import { filterContent, filterChatMessage, filterViewerMessage } from "../safety
 import { abortActiveSkill, isSkillRunning, getActiveSkillName, takeSkillOutcome } from "../skills/executor.js";
 import { handsBusy } from "../skills/fluid.js";
 import { skillRegistry } from "../skills/registry.js";
+import { isBuried } from "../skills/escape-to-surface.js";
 import { BotMemoryStore } from "./memory.js";
 import { getAllMemoryStores } from "./memory-registry.js";
 import { updateBulletin, formatTeamBulletin } from "./bulletin.js";
@@ -888,8 +889,7 @@ export class BotBrain {
       Date.now() - this.lastEscapeMs > 60_000
     ) {
       const f = this.bot.entity.position.floored();
-      const ceiling = this.bot.blockAt(f.offset(0, 2, 0));
-      const buried = f.y < 55 && !!ceiling && ceiling.boundingBox === "block";
+      const buried = isBuried((x, y, z) => this.bot.blockAt(new Vec3(x, y, z)), f.x, f.y, f.z);
       const pickless = !this.bot.inventory.items().some((i) => i.name.endsWith("_pickaxe"));
       if (buried && pickless) {
         this.lastEscapeMs = Date.now();
