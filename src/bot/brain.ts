@@ -190,6 +190,7 @@ export class BotBrain {
   private lastWaxMs = 0;
   private lastPocketShedMs = 0;
   private lastWalkHomeMs = 0;
+  private lastEscapeMs = 0;
 
   // Chat dedup — the 8B anchors on its own last thought and re-sends the
   // same demand every strategic cycle ("Give me the logs!" x7 in 2 min)
@@ -869,6 +870,38 @@ export class BotBrain {
     // (Ghast-fireball deflect moved to a 200ms tick handler in start() — the
     // brain override was skill-gated and the fortress hunters are always
     // mid-skill, so it never fired. See "0a. Ghast-fireball deflect".)
+
+    // ESCAPE-TO-SURFACE reflex — RUNS BEFORE walk-home, because a bot stranded
+    // underground can do nothing else first. The softlock this breaks: a miner
+    // whose pickaxe broke ends up below ground surrounded by stone it cannot
+    // break (pickless fails the pathfinder's tool check, so walk-home stalls
+    // instantly), with no wood down there to craft a pick and too far from the
+    // stash to withdraw one. Three bots sat this way at once at 7% action
+    // success. The escape hand-digs a staircase up to daylight — bare hands
+    // still break stone — from where wood and the stash are reachable again.
+    // Gated on being genuinely buried (deep, with a solid ceiling overhead) so
+    // it never fires for a bot working normally near the surface.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      /overworld/.test(String(this.bot.game.dimension)) &&
+      Date.now() - this.lastEscapeMs > 60_000
+    ) {
+      const f = this.bot.entity.position.floored();
+      const ceiling = this.bot.blockAt(f.offset(0, 2, 0));
+      const buried = f.y < 55 && !!ceiling && ceiling.boundingBox === "block";
+      const pickless = !this.bot.inventory.items().some((i) => i.name.endsWith("_pickaxe"));
+      if (buried && pickless) {
+        this.lastEscapeMs = Date.now();
+        this.log.info("Brain", `OVERRIDE: buried pickless at y=${f.y} — hand-digging up to the surface`);
+        this.events.onThought("No pickaxe and walled in down here. Cut a staircase up by hand.");
+        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "escape_to_surface" });
+        this.events.onAction("escape_to_surface", result);
+        this.lastAction = "escape_to_surface";
+        this.lastResult = result;
+        return;
+      }
+    }
 
     // WALK-HOME reflex — the honest replacement for the deleted spawn
     // teleport. Removing the /tp took away the force that kept the swarm

@@ -44,6 +44,7 @@ const NEVER_RETIRE = new Set([
   "loot_bastion",
   "mine_frontier",
   "wax_copper",
+  "escape_to_surface",
 ]);
 
 const CACHE_TTL_MS = 60_000;
