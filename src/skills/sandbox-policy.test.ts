@@ -40,7 +40,8 @@ test("sandbox policy rejects foreign ABI and x32 syscall numbers", () => {
 test("sandbox policy denies processes while permitting shared-memory Node threads", () => {
   for (const nr of [57, 58]) assert.equal(verdict(nr), 0x00050001);
   assert.equal(verdict(56, 0), 0x00050001);
-  assert.equal(verdict(56, 0x10000), 0x7fff0000);
+  assert.equal(verdict(56, 0x10000), 0x00050001);
+  assert.equal(verdict(56, 0x003d0f00), 0x7fff0000);
   assert.equal(verdict(435), 0x00050026, "clone3 must signal ENOSYS for pthread fallback");
 });
 
@@ -69,5 +70,11 @@ test("sandbox policy restricts clone to the intended pthread flags", () => {
     0x00000011, 0x00020000, 0x02000000, 0x04000000, 0x08000000, 0x10000000, 0x20000000, 0x40000000, 0x80000000,
   ]) {
     assert.equal(verdict(56, 0x003d0f00 | extra), 0x00050001, `unexpected clone flag ${extra.toString(16)}`);
+  }
+});
+
+test("sandbox threads must share the same VM, files and filesystem state", () => {
+  for (const missing of [0x100, 0x200, 0x400, 0x800, 0x10000, 0x40000, 0x80000, 0x100000, 0x200000]) {
+    assert.equal(verdict(56, 0x003d0f00 & ~missing), 0x00050001);
   }
 });

@@ -38,13 +38,12 @@ export function createSandboxSeccompPolicy(platform: string = process.platform, 
   for (const syscall of [304, 425, 426, 427]) deny(syscall); // Handle opens and io_uring kernel allocations.
   deny(435, 38); // clone3: ENOSYS makes libc fall back to inspectable clone flags.
 
-  emit(0x15, 0, 6, 56); // clone
+  emit(0x15, 0, 4, 56); // clone
   load(16); // low 32 bits of args[0]: flags
-  // Only the ordinary pthread flags: VM, FS, FILES, SIGHAND, THREAD, SYSVSEM,
-  // SETTLS, PARENT_SETTID and CHILD_CLEARTID. No namespaces, exit signal or unknown bits.
-  emit(0x45, 0, 1, ~0x003d0f00 >>> 0);
-  ret(0x00050001);
-  emit(0x45, 1, 0, 0x00010000); // CLONE_THREAD requires shared VM: no new process budget.
+  // The qualified glibc pthread flags share VM, FS, FILES and SIGHAND, with
+  // THREAD, SYSVSEM, SETTLS, PARENT_SETTID and CHILD_CLEARTID. Requiring the
+  // exact mask prevents separate descriptor tables from multiplying nofile.
+  emit(0x15, 1, 0, 0x003d0f00);
   ret(0x00050001);
   ret(0x7fff0000);
   ret(0x7fff0000); // Ordinary runtime calls stay within namespace/mount/rlimit boundaries.
