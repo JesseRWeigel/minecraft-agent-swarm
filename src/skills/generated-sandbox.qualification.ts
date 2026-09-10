@@ -6,8 +6,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { runGeneratedSkillInSandbox } from "./generated-sandbox.js";
 
-const bwrapPath =
-  process.env.GENERATED_SKILLS_BWRAP || "/home/jesse/Projects/.audit-fixes/sandbox-tools/runtime/usr/bin/bwrap";
+const bwrapPath = process.env.GENERATED_SKILLS_BWRAP || "/usr/bin/bwrap";
 
 const run = (name: string, code: string | Buffer, wallMs = 4_000) =>
   runGeneratedSkillInSandbox({
