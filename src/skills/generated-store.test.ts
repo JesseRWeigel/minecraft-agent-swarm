@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -261,3 +262,33 @@ test("approved loading rejects oversized blob files", async () => {
     await f.cleanup();
   }
 });
+
+test(
+  "candidate reader rejects FIFO paths without blocking on open",
+  { skip: process.platform !== "linux" },
+  async () => {
+    const f = await fixture();
+    try {
+      const candidate = await createGeneratedCandidate(f.root, {
+        name: "fifoFixture",
+        code: "async function fifoFixture() {}",
+        provenance,
+      });
+      const candidatePath = path.join(getGeneratedPaths(f.root).candidates, `${candidate.id}.json`);
+      await rm(candidatePath);
+      execFileSync("mkfifo", [candidatePath]);
+      const source = new URL("./generated-store.ts", import.meta.url).href;
+      const probe = `import assert from 'node:assert/strict';
+      import {readGeneratedCandidate} from ${JSON.stringify(source)};
+      await assert.rejects(readGeneratedCandidate(${JSON.stringify(f.root)}, ${JSON.stringify(candidate.id)}), /non-regular/);
+      console.log('REJECTED_FIFO');`;
+      const output = execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", probe], {
+        timeout: 1500,
+        encoding: "utf8",
+      });
+      assert.match(output, /REJECTED_FIFO/);
+    } finally {
+      await f.cleanup();
+    }
+  },
+);

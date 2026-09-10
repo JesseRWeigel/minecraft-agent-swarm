@@ -102,7 +102,7 @@ async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> 
 }
 
 async function readRegularFile(filePath: string, maxBytes: number): Promise<Buffer> {
-  const handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const info = await handle.stat();
     if (!info.isFile()) throw new Error(`Refusing non-regular generated-skill file: ${filePath}`);

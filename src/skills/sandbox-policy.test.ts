@@ -58,3 +58,16 @@ test("sandbox policy allows bootstrap and ordinary runtime IO", () => {
     assert.equal(verdict(nr), 0x7fff0000, `syscall ${nr} should remain available inside namespaces`);
   }
 });
+
+test("sandbox policy explicitly rejects handle-open and io_uring syscalls", () => {
+  for (const nr of [304, 425, 426, 427]) assert.equal(verdict(nr), 0x00050001);
+});
+
+test("sandbox policy restricts clone to the intended pthread flags", () => {
+  assert.equal(verdict(56, 0x003d0f00), 0x7fff0000);
+  for (const extra of [
+    0x00000011, 0x00020000, 0x02000000, 0x04000000, 0x08000000, 0x10000000, 0x20000000, 0x40000000, 0x80000000,
+  ]) {
+    assert.equal(verdict(56, 0x003d0f00 | extra), 0x00050001, `unexpected clone flag ${extra.toString(16)}`);
+  }
+});

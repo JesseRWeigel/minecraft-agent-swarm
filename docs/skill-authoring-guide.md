@@ -236,3 +236,10 @@ Bubblewrap, `prlimit`, and the configured Node executable. Operators must run
 the separate, fail-closed `npm run test:sandbox` preflight before enabling it. Generation and refinement never promote, rewrite an
 authored skill, or hot reload a candidate. Restart the application after an
 operator promotes or rolls back an approved generated skill.
+
+
+A capability timeout ends the invocation and rejects further capability calls,
+even if generated code catches the timeout. Cancellation stops supported local
+movement and digging operations. Already-issued Minecraft server actions, such
+as placement, consumption or crafting, cannot be rolled back by terminating a
+worker; operators must account for those effects when reviewing a candidate.
