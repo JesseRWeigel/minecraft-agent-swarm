@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { Vec3 } from "vec3";
-import { skillRegistry } from "./registry.js";
+import { getGeneratedSkillNames, skillRegistry } from "./registry.js";
 import type { Skill } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -393,7 +393,7 @@ function buildDynamicSkill(name: string, filePath: string): Skill {
 }
 
 export function getDynamicSkillNames(): string[] {
-  return Array.from(authoredDynamicSkillNames);
+  return [...authoredDynamicSkillNames, ...getGeneratedSkillNames()];
 }
 
 /** Names reserved by trusted Voyager files, including files not loaded due to a collision. */

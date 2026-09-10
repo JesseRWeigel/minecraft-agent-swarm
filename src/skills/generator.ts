@@ -1,75 +1,75 @@
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Ollama } from "ollama";
 import { config } from "../config.js";
-import { loadDynamicSkills } from "./dynamic-loader.js";
+import { getAuthoredSkillNames } from "./dynamic-loader.js";
+import { getBuiltInSkillNames } from "./registry.js";
+import {
+  createGeneratedCandidate,
+  readApprovedGeneratedSkill,
+  type CandidateProvenance,
+  type GeneratedCandidate,
+} from "./generated-store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const GENERATED_DIR = path.resolve(__dirname, "../../skills/generated");
+export function getGeneratedStoreRoot(): string {
+  return config.generatedSkills.storeDir || path.resolve(__dirname, "../../skills/generated/store");
+}
 
 const ollama = new Ollama({ host: config.ollama.host });
 
-const GENERATION_PROMPT = `You are writing a Mineflayer bot skill in JavaScript.
+const GENERATION_PROMPT = `You are writing an isolated Minecraft bot skill in JavaScript.
 
 RULES:
-- Write ONE async function named exactly SKILL_NAME that takes a single bot parameter
-- Works with no arguments other than bot. Return nothing (void). Under 60 lines.
+- Write ONE async function named exactly SKILL_NAME that takes a single api parameter
+- Works with no arguments other than api. Return nothing (void). Under 60 lines.
 - DO NOT use try/catch — let errors throw so the caller can detect failures
 - NO markdown, NO backticks, NO explanation — ONLY the JavaScript function
 - NO while(true) or any infinite loops — the skill MUST complete and return
-- ALL require() calls must be INSIDE the function body (not at the top/file level)
-
-NAVIGATION — require goals INSIDE the function:
-  async function SKILL_NAME(bot) {
-    const { goals } = require('mineflayer-pathfinder');
-    await bot.pathfinder.goto(new goals.GoalNear(x, y, z, 2));
-  }
-  NEVER use bot.pathfinder.setGoal or bot.pathfinder.waitForGoal — those APIs do not exist
-
-INVENTORY API — CRITICAL:
-  bot.inventory.items()                              // items() is a FUNCTION, always call with ()
-  bot.inventory.items().find(i => i.name === 'x')   // correct
-  bot.inventory.items().filter(i => ...)             // correct
-  bot.inventory.items.find(...)                      // WRONG — crashes with "is not a function"
-
-CRAFTING API — CRITICAL (ONLY use bot.recipesFor):
-  const mcData = require('minecraft-data')(bot.version);
-  const item = mcData.itemsByName['wooden_pickaxe'];         // use itemsByName[] only
-  const table = bot.findBlock({ matching: b => b.name === 'crafting_table', maxDistance: 16 });
-  const recipes = bot.recipesFor(item.id, null, 1, table);   // use recipesFor()
-  if (recipes.length) await bot.craft(recipes[0], 1, table);
-  // NEVER call bot.craft('item_name') — first arg must be a recipe object, not a string
-  // NEVER use mcData.recipesByName — does NOT exist in the API
-  // NEVER use mcData.findRecipes — does NOT exist in the API
-  // NEVER use bot.canCraft — does NOT exist in the API
-
-BLOCK PLACEMENT — CRITICAL:
-  // CORRECT pattern — use bot.placeBlock(referenceBlock, faceVector):
-  const refBlock = bot.blockAt(bot.entity.position.offset(0, -1, 0));
-  if (refBlock) await bot.placeBlock(refBlock, new Vec3(0, 1, 0));
-  // NEVER use bot.place(...) — does NOT exist
-  // NEVER use bot.build(...) — does NOT exist
-
-EQUIP:
-  const item = bot.inventory.items().find(i => i.name === 'wooden_pickaxe');
-  if (item) await bot.equip(item, 'hand');  // always null-check before equip
-
-AVAILABLE GLOBALS: bot, Vec3 (from require('vec3')), require, console, Math, JSON, setTimeout
-  Note: for minecraft-data, use require('minecraft-data')(bot.version) as shown above
+- Never use require, import, process, fetch, WebSocket, filesystem, child processes, timers, or bot.chat
+- Every operation is an awaited call on the capability object:
+  api.observe({ blocks?: string[], includeEntities?: boolean, radius?: number })
+  api.navigate({ x: number, y: number, z: number, radius?: number })
+  api.mine({ block: string, count?: number })
+  api.craft({ item: string, count?: number })
+  api.equip({ item: string, destination?: 'hand'|'head'|'torso'|'legs'|'feet'|'off-hand' })
+  api.consume({ item: string })
+  api.place({ block: string, x: number, y: number, z: number })
+  api.look({ x: number, y: number, z: number })
+  api.attack({ entityId: number })
+  api.wait({ ticks: number })
+- observe returns plain JSON: position, health, food, inventory, blocks, and entities
+- Keep operations bounded. Never issue more than 20 total calls.
 
 TASK: TASK_DESCRIPTION
 
 Write ONLY the JavaScript function:`;
 
-export async function saveGeneratedSkill(name: string, code: string): Promise<string> {
-  await mkdir(GENERATED_DIR, { recursive: true });
-  await writeFile(path.join(GENERATED_DIR, `${name}.js`), code, "utf-8");
-  console.log(`[Generator] Saved skill '${name}'`);
-  return name;
+function trustedSkillNames(): Set<string> {
+  return new Set([...getBuiltInSkillNames(), ...getAuthoredSkillNames()]);
 }
 
-export async function generateSkill(task: string): Promise<string> {
+export async function saveGeneratedSkill(
+  name: string,
+  code: string,
+  options: { root?: string; provenance: CandidateProvenance },
+): Promise<GeneratedCandidate> {
+  const candidate = await createGeneratedCandidate(options.root ?? getGeneratedStoreRoot(), {
+    name,
+    code,
+    provenance: options.provenance,
+    reservedNames: trustedSkillNames(),
+  });
+  console.log(`[Generator] Quarantined candidate '${name}' at SHA-256 ${candidate.sha256}`);
+  return candidate;
+}
+
+export async function generateSkill(task: string): Promise<GeneratedCandidate> {
+  if (!config.generatedSkills.enabled) {
+    throw new Error(
+      "Generated skills are disabled; set GENERATED_SKILLS_ENABLED=true to create quarantined candidates",
+    );
+  }
   const trimmedTask = task.trim();
   if (!trimmedTask) {
     throw new Error("Task description cannot be empty");
@@ -106,12 +106,12 @@ export async function generateSkill(task: string): Promise<string> {
     .trim();
 
   if (!code.includes(`async function ${skillName}`)) {
-    code = `async function ${skillName}(bot) {\n  bot.chat("I tried ${skillName} but the code didn't generate cleanly!");\n}`;
+    throw new Error(`Generator did not return the required async function '${skillName}'`);
   }
 
-  await saveGeneratedSkill(skillName, code);
-  loadDynamicSkills();
-  return skillName;
+  return saveGeneratedSkill(skillName, code, {
+    provenance: { kind: "generation", task: trimmedTask.slice(0, 2_000), model: config.ollama.model },
+  });
 }
 
 const REFINEMENT_PROMPT = `You are fixing a buggy Mineflayer bot skill written in JavaScript.
@@ -147,29 +147,18 @@ const MAX_REFINEMENTS_PER_SKILL = 2;
  * back to the LLM and replace it with the fixed version (old code kept as
  * .bak.N). Returns true when a refined version was installed.
  */
-export async function refineSkill(name: string, errorMessage: string): Promise<boolean> {
+export async function refineSkill(name: string, errorMessage: string): Promise<GeneratedCandidate | false> {
+  if (!config.generatedSkills.enabled) return false;
   const attempts = refinementAttempts.get(name) ?? 0;
   if (attempts >= MAX_REFINEMENTS_PER_SKILL) return false;
   refinementAttempts.set(name, attempts + 1);
 
-  // Locate the skill source (generated dir first, then voyager library)
-  const { readFile, copyFile } = await import("node:fs/promises");
-  const candidates = [
-    path.join(GENERATED_DIR, `${name}.js`),
-    path.resolve(__dirname, "../../skills/voyager", `${name}.js`),
-  ];
-  let sourcePath: string | null = null;
-  let source = "";
-  for (const p of candidates) {
-    try {
-      source = await readFile(p, "utf-8");
-      sourcePath = p;
-      break;
-    } catch {
-      /* try next */
-    }
+  let source: string;
+  try {
+    source = (await readApprovedGeneratedSkill(getGeneratedStoreRoot(), name)).code;
+  } catch {
+    return false;
   }
-  if (!sourcePath) return false;
 
   console.log(
     `[Generator] Refining '${name}' (attempt ${attempts + 1}/${MAX_REFINEMENTS_PER_SKILL}): ${errorMessage.slice(0, 120)}`,
@@ -194,11 +183,14 @@ export async function refineSkill(name: string, errorMessage: string): Promise<b
     return false;
   }
 
-  // Back up the failing version, install the fix (always into generated/ so
-  // voyager library files are never mutated in place)
-  await copyFile(sourcePath, `${sourcePath}.bak.${attempts + 1}`).catch(() => {});
-  await saveGeneratedSkill(name, code);
-  loadDynamicSkills();
-  console.log(`[Generator] Installed refined '${name}'`);
-  return true;
+  const candidate = await saveGeneratedSkill(name, code, {
+    provenance: {
+      kind: "refinement",
+      task: errorMessage.slice(0, 500),
+      model: config.ollama.model,
+      sourceName: name,
+    },
+  });
+  console.log(`[Generator] Quarantined refinement '${name}' as candidate ${candidate.id}`);
+  return candidate;
 }

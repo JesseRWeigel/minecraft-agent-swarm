@@ -5,8 +5,9 @@ import path from "node:path";
 
 const STORE_VERSION = 1;
 const MAX_CODE_BYTES = 64 * 1024;
-const NAME_PATTERN = /^[a-z][A-Za-z0-9]{0,39}$/;
+const NAME_PATTERN = /^[a-z][A-Za-z0-9_]{0,39}$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
+const PROTOTYPE_KEYS = new Set(Object.getOwnPropertyNames(Object.prototype));
 
 export type CandidateProvenance = {
   kind: "generation" | "refinement";
@@ -39,6 +40,7 @@ export type GeneratedVerification = {
 type ApprovedVersion = {
   candidateId: string;
   sha256: string;
+  policyHash: string;
   promotedAt: string;
 };
 
@@ -63,8 +65,11 @@ function sha256(bytes: string | Buffer): string {
 
 function assertName(name: string, reservedNames: ReadonlySet<string> = new Set()): void {
   if (!NAME_PATTERN.test(name)) {
-    throw new Error("Generated skill name must start with a lowercase letter and contain at most 40 ASCII letters or digits");
+    throw new Error(
+      "Generated skill name must start with a lowercase letter and contain at most 40 ASCII letters, digits, or underscores",
+    );
   }
+  if (PROTOTYPE_KEYS.has(name)) throw new Error(`Generated skill name '${name}' is reserved`);
   if (reservedNames.has(name)) throw new Error(`Generated skill name '${name}' is reserved by a trusted skill`);
 }
 
@@ -102,7 +107,9 @@ async function readRegularFile(filePath: string, maxBytes: number): Promise<Buff
     const info = await handle.stat();
     if (!info.isFile()) throw new Error(`Refusing non-regular generated-skill file: ${filePath}`);
     if (info.size > maxBytes) throw new Error(`Generated-skill file exceeds ${maxBytes} bytes`);
-    return await handle.readFile();
+    const bytes = await handle.readFile();
+    if (bytes.length > maxBytes) throw new Error(`Generated-skill file exceeds ${maxBytes} bytes`);
+    return bytes;
   } finally {
     await handle.close();
   }
@@ -117,6 +124,14 @@ async function readCandidateBytes(root: string, candidate: GeneratedCandidate): 
   const bytes = await readRegularFile(path.join(p.blobs, `${candidate.sha256}.js`), MAX_CODE_BYTES);
   if (sha256(bytes) !== candidate.sha256) throw new Error("Candidate blob hash does not match its recorded SHA-256");
   return bytes;
+}
+
+export async function readGeneratedCandidateArtifact(
+  root: string,
+  candidateId: string,
+): Promise<{ candidate: GeneratedCandidate; code: Buffer }> {
+  const candidate = await readGeneratedCandidate(root, candidateId);
+  return { candidate, code: await readCandidateBytes(root, candidate) };
 }
 
 export async function createGeneratedCandidate(
@@ -164,8 +179,11 @@ export async function createGeneratedCandidate(
 
 export async function readGeneratedCandidate(root: string, candidateId: string): Promise<GeneratedCandidate> {
   if (!/^[a-f0-9-]{36}$/.test(candidateId)) throw new Error("Invalid generated candidate ID");
-  const candidate = await readJson<GeneratedCandidate>(path.join(getGeneratedPaths(root).candidates, `${candidateId}.json`));
-  if (candidate.version !== STORE_VERSION || candidate.id !== candidateId) throw new Error("Malformed generated candidate record");
+  const candidate = await readJson<GeneratedCandidate>(
+    path.join(getGeneratedPaths(root).candidates, `${candidateId}.json`),
+  );
+  if (candidate.version !== STORE_VERSION || candidate.id !== candidateId)
+    throw new Error("Malformed generated candidate record");
   assertName(candidate.name);
   assertHash(candidate.sha256);
   return candidate;
@@ -230,9 +248,15 @@ async function withManifestLock<T>(root: string, operation: () => Promise<T>): P
 
 export async function promoteGeneratedCandidate(
   root: string,
-  input: { candidateId: string; expectedSha256: string; reservedNames?: ReadonlySet<string> },
+  input: {
+    candidateId: string;
+    expectedSha256: string;
+    policyHash: string;
+    reservedNames?: ReadonlySet<string>;
+  },
 ): Promise<ApprovedVersion> {
   assertHash(input.expectedSha256);
+  if (!input.policyHash.trim()) throw new Error("Promotion requires the current sandbox policy hash");
   return withManifestLock(root, async () => {
     const candidate = await readGeneratedCandidate(root, input.candidateId);
     assertName(candidate.name, input.reservedNames);
@@ -250,6 +274,7 @@ export async function promoteGeneratedCandidate(
     if (
       verification.candidateId !== candidate.id ||
       verification.sha256 !== candidate.sha256 ||
+      verification.policyHash !== input.policyHash ||
       !verification.passed ||
       verification.checks.length === 0 ||
       verification.checks.some((check) => !check.passed)
@@ -261,11 +286,22 @@ export async function promoteGeneratedCandidate(
     const approved: ApprovedVersion = {
       candidateId: candidate.id,
       sha256: candidate.sha256,
+      policyHash: verification.policyHash,
       promotedAt: new Date().toISOString(),
     };
     manifest.skills[candidate.name] = {
       ...approved,
-      history: prior ? [...prior.history, { candidateId: prior.candidateId, sha256: prior.sha256, promotedAt: prior.promotedAt }] : [],
+      history: prior
+        ? [
+            ...prior.history,
+            {
+              candidateId: prior.candidateId,
+              sha256: prior.sha256,
+              policyHash: prior.policyHash,
+              promotedAt: prior.promotedAt,
+            },
+          ]
+        : [],
     };
     await writeJsonAtomic(getGeneratedPaths(root).manifest, manifest);
     return approved;
@@ -275,25 +311,53 @@ export async function promoteGeneratedCandidate(
 export async function readApprovedGeneratedSkill(
   root: string,
   name: string,
+  policyHash?: string,
 ): Promise<ApprovedVersion & { name: string; code: string }> {
   assertName(name);
   const entry = (await readManifest(root)).skills[name];
   if (!entry) throw new Error(`Generated skill '${name}' is not approved`);
+  if (policyHash !== undefined && entry.policyHash !== policyHash) {
+    throw new Error(`Generated skill '${name}' was approved under a different sandbox policy`);
+  }
   assertHash(entry.sha256);
   const bytes = await readRegularFile(path.join(getGeneratedPaths(root).blobs, `${entry.sha256}.js`), MAX_CODE_BYTES);
   if (sha256(bytes) !== entry.sha256) throw new Error("Approved generated-skill hash mismatch");
-  return { name, candidateId: entry.candidateId, sha256: entry.sha256, promotedAt: entry.promotedAt, code: bytes.toString("utf8") };
+  return {
+    name,
+    candidateId: entry.candidateId,
+    sha256: entry.sha256,
+    policyHash: entry.policyHash,
+    promotedAt: entry.promotedAt,
+    code: bytes.toString("utf8"),
+  };
 }
 
-export async function rollbackGeneratedSkill(root: string, name: string): Promise<ApprovedVersion> {
+export async function listApprovedGeneratedSkills(
+  root: string,
+  policyHash?: string,
+): Promise<Array<ApprovedVersion & { name: string; code: string }>> {
+  const manifest = await readManifest(root);
+  return Promise.all(Object.keys(manifest.skills).map((name) => readApprovedGeneratedSkill(root, name, policyHash)));
+}
+
+export async function rollbackGeneratedSkill(
+  root: string,
+  name: string,
+  policyHash?: string,
+): Promise<ApprovedVersion> {
   assertName(name);
   return withManifestLock(root, async () => {
     const manifest = await readManifest(root);
     const current = manifest.skills[name];
-    if (!current || current.history.length === 0) throw new Error(`Generated skill '${name}' has no approved rollback target`);
+    if (!current || current.history.length === 0)
+      throw new Error(`Generated skill '${name}' has no approved rollback target`);
     const previous = current.history[current.history.length - 1];
+    if (policyHash !== undefined && previous.policyHash !== policyHash) {
+      throw new Error("Rollback target was approved under a different sandbox policy");
+    }
     const candidate = await readGeneratedCandidate(root, previous.candidateId);
-    if (candidate.sha256 !== previous.sha256) throw new Error("Rollback candidate hash does not match approval history");
+    if (candidate.sha256 !== previous.sha256)
+      throw new Error("Rollback candidate hash does not match approval history");
     await readCandidateBytes(root, candidate);
     manifest.skills[name] = { ...previous, history: current.history.slice(0, -1) };
     await writeJsonAtomic(getGeneratedPaths(root).manifest, manifest);

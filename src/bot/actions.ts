@@ -19,10 +19,9 @@ import { isHostile } from "./perception.js";
 import { travelBudgetMs } from "./mine-budget.js";
 import { canHarvest, harvestAdvice } from "./tool-tier.js";
 import { tooHighForFurniture, furnitureRefusal } from "./place-guard.js";
-import { skillRegistry } from "../skills/registry.js";
+import { getGeneratedSkillNames, skillRegistry } from "../skills/registry.js";
 import { runSkill } from "../skills/executor.js";
 import { checkRetiredWithParole, getSkillStats } from "../skills/reliability.js";
-import { getDynamicSkillNames } from "../skills/dynamic-loader.js";
 import { runNeuralCombat } from "../neural/combat.js";
 import { LOG_TYPES } from "../skills/materials.js";
 import { depositStash, withdrawStash } from "../skills/stash.js";
@@ -173,9 +172,12 @@ async function executeActionInner(bot: Bot, action: string, params: Record<strin
       }
       case "generate_skill": {
         if (!params.task || !String(params.task).trim()) return "generate_skill needs a non-empty 'task' param.";
+        if (!config.generatedSkills.enabled) {
+          return "Generated skills are disabled. An operator must explicitly enable the isolated candidate workflow.";
+        }
         const { generateSkill } = await import("../skills/generator.js");
-        const name = await generateSkill(params.task as string);
-        return `Generated skill '${name}'! I can now use it with invoke_skill.`;
+        const candidate = await generateSkill(params.task as string);
+        return `Quarantined candidate '${candidate.name}' (${candidate.id}, SHA-256 ${candidate.sha256}). It cannot run until an operator verifies and promotes this exact hash.`;
       }
       case "invoke_skill": {
         const name = params.skill as string;
@@ -234,7 +236,7 @@ async function executeActionInner(bot: Bot, action: string, params: Record<strin
         const looksLikePrecondition = /need|missing|not enough|no trees|no water|gather|explore first/i.test(
           skillResult,
         );
-        if (looksLikeCodeBug && !looksLikePrecondition && getDynamicSkillNames().includes(name)) {
+        if (looksLikeCodeBug && !looksLikePrecondition && getGeneratedSkillNames().includes(name)) {
           import("../skills/generator.js")
             .then(({ refineSkill }) => refineSkill(name, skillResult))
             .catch((e) => console.warn(`[Refine] ${name}:`, e.message));

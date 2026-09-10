@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { reloadDynamicSkill } from "./dynamic-loader.js";
-import { skillRegistry } from "./registry.js";
+import { registerTrustedHotReloadSkill, skillRegistry } from "./registry.js";
 import type { Skill } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,7 +33,7 @@ export async function reloadTypeScriptSkills(filePath: string): Promise<string[]
 
   // Import and validate every export before replacing anything. Running skills
   // retain their old object; future invocations read the new registry entries.
-  for (const skill of skills) skillRegistry.set(skill.name, skill);
+  for (const skill of skills) registerTrustedHotReloadSkill(skill);
   return names;
 }
 

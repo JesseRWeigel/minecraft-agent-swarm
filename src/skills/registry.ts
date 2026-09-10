@@ -27,6 +27,7 @@ import { waxCopperSkill } from "./wax-copper.js";
 import { escapeToSurfaceSkill } from "./escape-to-surface.js";
 
 export const skillRegistry = new Map<string, Skill>();
+const generatedSkillNames = new Set<string>();
 
 function register(skill: Skill) {
   skillRegistry.set(skill.name, skill);
@@ -59,6 +60,37 @@ register(lootBastionSkill);
 register(mineFrontierSkill);
 register(waxCopperSkill);
 register(escapeToSurfaceSkill);
+
+const builtInSkillNames = new Set(skillRegistry.keys());
+
+/** Every TypeScript skill explicitly registered by this source tree. */
+export function getBuiltInSkillNames(): Set<string> {
+  return new Set(builtInSkillNames);
+}
+
+export function registerGeneratedSkill(skill: Skill): void {
+  if (skillRegistry.has(skill.name) && !generatedSkillNames.has(skill.name)) {
+    throw new Error(`Generated skill '${skill.name}' collides with a trusted skill`);
+  }
+  skillRegistry.set(skill.name, skill);
+  generatedSkillNames.add(skill.name);
+}
+
+export function clearGeneratedSkills(): void {
+  for (const name of generatedSkillNames) skillRegistry.delete(name);
+  generatedSkillNames.clear();
+}
+
+export function getGeneratedSkillNames(): string[] {
+  return Array.from(generatedSkillNames);
+}
+
+export function registerTrustedHotReloadSkill(skill: Skill): void {
+  if (generatedSkillNames.has(skill.name)) {
+    throw new Error(`Trusted skill '${skill.name}' collides with an approved generated skill`);
+  }
+  skillRegistry.set(skill.name, skill);
+}
 
 // Dynamic skills are loaded lazily by calling loadDynamicSkills() from dynamic-loader.ts.
 // The import is intentionally kept out of this file to avoid circular module evaluation:

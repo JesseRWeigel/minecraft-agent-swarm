@@ -204,6 +204,10 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
 
     // Eval commands
     if (message.startsWith("/eval ") || message === "/eval") {
+      if (!config.bot.commandWhitelist.includes(username)) {
+        console.warn(`[EVAL] Ignored untrusted eval request from ${username}`);
+        return;
+      }
       const parts = message.trim().split(/\s+/);
       const { evalSkill, evalAll } = await import("../eval/runner.js");
       if (parts[1] === "all") {

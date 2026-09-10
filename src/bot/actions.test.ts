@@ -130,6 +130,11 @@ test("executeAction: generate_skill with no task param", async () => {
   assert.ok(result.includes("non-empty"), `Got: ${result}`);
 });
 
+test("executeAction: generated skills are disabled by default before any model call", async () => {
+  const result = await executeAction(mockBot(), "generate_skill", { task: "read a secret file" });
+  assert.match(result, /disabled/i);
+});
+
 // ── Action routing: navigate variants ───────────────────────────────────────
 
 test("executeAction: navigate alias routes to go_to", async () => {

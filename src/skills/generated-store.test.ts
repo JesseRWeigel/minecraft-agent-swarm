@@ -41,7 +41,7 @@ test("candidate bytes are immutable, content-addressed, and not installed by nam
 test("candidate names reject traversal and every trusted-name collision", async () => {
   const f = await fixture();
   try {
-    for (const name of ["../escape", "bad-name", "build_house"]) {
+    for (const name of ["../escape", "bad-name", "constructor", "build_house"]) {
       await assert.rejects(
         createGeneratedCandidate(f.root, {
           name,
@@ -66,7 +66,11 @@ test("promotion requires successful checks for the exact expected candidate hash
       provenance,
     });
     await assert.rejects(
-      promoteGeneratedCandidate(f.root, { candidateId: candidate.id, expectedSha256: candidate.sha256 }),
+      promoteGeneratedCandidate(f.root, {
+        candidateId: candidate.id,
+        expectedSha256: candidate.sha256,
+        policyHash: "policy-v1",
+      }),
       /verification/i,
     );
 
@@ -78,12 +82,20 @@ test("promotion requires successful checks for the exact expected candidate hash
       checks: [{ name: "sandbox execution", passed: false, detail: "candidate threw" }],
     });
     await assert.rejects(
-      promoteGeneratedCandidate(f.root, { candidateId: candidate.id, expectedSha256: candidate.sha256 }),
+      promoteGeneratedCandidate(f.root, {
+        candidateId: candidate.id,
+        expectedSha256: candidate.sha256,
+        policyHash: "policy-v1",
+      }),
       /did not pass/i,
     );
 
     await assert.rejects(
-      promoteGeneratedCandidate(f.root, { candidateId: candidate.id, expectedSha256: "0".repeat(64) }),
+      promoteGeneratedCandidate(f.root, {
+        candidateId: candidate.id,
+        expectedSha256: "0".repeat(64),
+        policyHash: "policy-v1",
+      }),
       /hash/i,
     );
   } finally {
@@ -111,7 +123,11 @@ test("promotion rejects bytes changed after verification and loads only hash-mat
     await writeFile(blob, "async function verifiedCandidate() { throw new Error('changed'); }");
 
     await assert.rejects(
-      promoteGeneratedCandidate(f.root, { candidateId: candidate.id, expectedSha256: candidate.sha256 }),
+      promoteGeneratedCandidate(f.root, {
+        candidateId: candidate.id,
+        expectedSha256: candidate.sha256,
+        policyHash: "policy-v1",
+      }),
       /hash/i,
     );
   } finally {
@@ -140,12 +156,22 @@ test("promotion is exclusive, preserves history, and rollback restores the previ
     const first = await make("await api.observe({});");
     const second = await make("await api.wait({ ticks: 1 });");
 
-    await promoteGeneratedCandidate(f.root, { candidateId: first.id, expectedSha256: first.sha256 });
-    await promoteGeneratedCandidate(f.root, { candidateId: second.id, expectedSha256: second.sha256 });
-    assert.equal((await readApprovedGeneratedSkill(f.root, "evolvingSkill")).sha256, second.sha256);
+    await promoteGeneratedCandidate(f.root, {
+      candidateId: first.id,
+      expectedSha256: first.sha256,
+      policyHash: "policy-v1",
+    });
+    await promoteGeneratedCandidate(f.root, {
+      candidateId: second.id,
+      expectedSha256: second.sha256,
+      policyHash: "policy-v1",
+    });
+    assert.equal((await readApprovedGeneratedSkill(f.root, "evolvingSkill", "policy-v1")).sha256, second.sha256);
+    await assert.rejects(readApprovedGeneratedSkill(f.root, "evolvingSkill", "policy-v2"), /different sandbox policy/);
 
-    await rollbackGeneratedSkill(f.root, "evolvingSkill");
-    const restored = await readApprovedGeneratedSkill(f.root, "evolvingSkill");
+    await assert.rejects(rollbackGeneratedSkill(f.root, "evolvingSkill", "policy-v2"), /different sandbox policy/);
+    await rollbackGeneratedSkill(f.root, "evolvingSkill", "policy-v1");
+    const restored = await readApprovedGeneratedSkill(f.root, "evolvingSkill", "policy-v1");
     assert.equal(restored.sha256, first.sha256);
     assert.match(restored.code, /observe/);
   } finally {

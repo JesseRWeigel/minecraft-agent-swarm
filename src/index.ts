@@ -9,6 +9,9 @@ import { abortActiveSkill, getActiveSkillName } from "./skills/executor.js";
 import type { Bot } from "mineflayer";
 import { assertProviderConfigured } from "./llm/provider.js";
 import { startSkillHotReload } from "./skills/hot-reload.js";
+import { getGeneratedStoreRoot } from "./skills/generator.js";
+import { loadApprovedGeneratedSkills } from "./skills/generated-runtime.js";
+import { assertGeneratedSandboxAvailable, getSandboxPolicyHash } from "./skills/generated-sandbox.js";
 
 /** Live bot handles, so the heap guard can abort a runaway skill. */
 const LIVE_BOTS = new Map<string, Bot>();
@@ -168,6 +171,19 @@ async function main() {
   // ordinary LLM-failure handler catches it and the bots fall back silently —
   // looking like a dumb swarm rather than a misconfigured one.
   assertProviderConfigured();
+
+  if (config.generatedSkills.enabled) {
+    await assertGeneratedSandboxAvailable(config.generatedSkills.bwrapPath, config.generatedSkills.nodePath);
+    const policyHash = await getSandboxPolicyHash();
+    const loaded = await loadApprovedGeneratedSkills({
+      enabled: true,
+      root: getGeneratedStoreRoot(),
+      policyHash,
+      bwrapPath: config.generatedSkills.bwrapPath,
+      nodePath: config.generatedSkills.nodePath,
+    });
+    console.log(`[GeneratedSkill] Loaded ${loaded.length} approved isolated skill(s)`);
+  }
 
   // Start the unified viewer server before any bots — it needs to be ready
   // to accept registerBot() calls when bots spawn. This serves the viewer

@@ -92,4 +92,11 @@ export const config = {
     enabled: process.env.ENABLE_MULTI_BOT === "true",
     count: parseInt(process.env.BOT_COUNT || "1"),
   },
+  generatedSkills: {
+    /** Model-authored code is inert unless an operator enables its isolated runtime. */
+    enabled: process.env.GENERATED_SKILLS_ENABLED === "true",
+    storeDir: process.env.GENERATED_SKILLS_DIR || "",
+    bwrapPath: process.env.GENERATED_SKILLS_BWRAP || "/usr/bin/bwrap",
+    nodePath: process.env.GENERATED_SKILLS_NODE || process.execPath,
+  },
 };
