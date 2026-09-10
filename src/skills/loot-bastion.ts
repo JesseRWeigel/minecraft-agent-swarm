@@ -74,6 +74,15 @@ export const lootBastionSkill: Skill = {
       if (!crossed) return { success: false, message: resumable("Couldn't cross the portal this trip.") };
     }
 
+    // Belt-and-suspenders: crossPortal has resolved true while the bot was
+    // still in the overworld (a dimension-event race), and the chest search
+    // below then matched a BASE chest at the village — Forge "opened a bastion
+    // chest at 285,69,-322", an overworld chest by the stash, and of course
+    // Those Were the Days never fired. Only loot when genuinely in the Nether.
+    if (!inNether(bot)) {
+      return { success: false, message: resumable("Cross reported success but I'm still overworld — retry.") };
+    }
+
     const homePortal = bot.findBlock({ matching: (b) => b.name === "nether_portal", maxDistance: 32 });
 
     // --- March to the bastion in ~100-block hops (inside the searchRadius cap) ---
