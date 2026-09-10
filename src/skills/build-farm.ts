@@ -254,11 +254,39 @@ export const buildFarmSkill: Skill = {
       }
       return targets;
     };
+    // count 200 (was 40): the nearest 40 water blocks are all one pond, and
+    // when that pond is ringed by sand or cobble the search never reached the
+    // lake behind it. The FarmDebug line says what the search actually saw —
+    // RCON found water 3 blocks from the farm site while this reported none.
     const findSurfaceWater = () => {
-      const waters = bot.findBlocks({ matching: (b) => b.name === "water", maxDistance: 96, count: 40 });
+      const waters = bot.findBlocks({ matching: (b) => b.name === "water", maxDistance: 96, count: 200 });
+      let bestN = -1;
+      let bestWp: Vec3 | null = null;
       for (const wp of waters) {
-        if (scanTillable(wp).length >= 4) return bot.blockAt(wp);
+        const n = scanTillable(wp).length;
+        if (n >= 4) return bot.blockAt(wp);
+        if (n > bestN) {
+          bestN = n;
+          bestWp = wp;
+        }
       }
+      const here = bot.entity.position.floored();
+      const ring = bestWp
+        ? [
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1],
+          ]
+            .map(([dx, dz]) => bot.blockAt(bestWp!.offset(dx, 0, dz))?.name ?? "?")
+            .join("/")
+        : "-";
+      console.log(
+        `[FarmDebug] ${bot.username} at ${here.x},${here.y},${here.z}: ${waters.length} water blocks within 96` +
+          (waters.length ? ` (nearest ${waters[0].x},${waters[0].y},${waters[0].z})` : "") +
+          `, best had ${Math.max(bestN, 0)} tillable neighbours` +
+          (bestWp ? ` at ${bestWp.x},${bestWp.y},${bestWp.z} ring ${ring}` : ""),
+      );
       return null;
     };
 

@@ -109,6 +109,91 @@ async function craftItem(bot: Bot, name: string): Promise<boolean> {
   }
 }
 
+/** Honey level a nest must reach before shearing yields a honeycomb. */
+export const FULL_HONEY = 5;
+
+/** The nest's honey level from its block state, or null if unreadable. */
+export function honeyLevel(props: Record<string, unknown> | undefined): number | null {
+  const raw = props?.honey_level;
+  const n = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Where a campfire can go under the hive: the first solid block within 5
+ * below it (air between it and the hive, since it is the first solid). Returns
+ * the y of the block to place ON, or null when the hive hangs over open air.
+ */
+export function campfireSeatY(
+  blockAt: (x: number, y: number, z: number) => { name: string; boundingBox: string } | null,
+  hx: number,
+  hy: number,
+  hz: number,
+): number | null {
+  for (let dy = 2; dy <= 5; dy++) {
+    const seat = blockAt(hx, hy - dy, hz);
+    if (seat && seat.boundingBox === "block") return hy - dy;
+  }
+  return null;
+}
+
+/**
+ * A lit campfire under the hive keeps the bees calm when the comb is taken.
+ * Without it every harvest angers the colony, the bees sting and die, and the
+ * nest stops refilling — the hive at 472,71,-445 was down to one bee and
+ * honey level 0 after four bare shears. Crafts the campfire from pocket coal
+ * and sticks plus three logs chopped nearby, and seats it below the nest.
+ */
+async function ensureCampfire(bot: Bot, hive: Block): Promise<string | null> {
+  const { Vec3 } = await import("vec3");
+  const at = (x: number, y: number, z: number) => bot.blockAt(new Vec3(x, y, z));
+  const hx = hive.position.x;
+  const hy = hive.position.y;
+  const hz = hive.position.z;
+  for (let dy = 1; dy <= 5; dy++) {
+    if (at(hx, hy - dy, hz)?.name === "campfire") return null; // already protected
+  }
+  const seatY = campfireSeatY(at, hx, hy, hz);
+  if (seatY === null) return "no clear spot for a campfire under the hive";
+  if (count(bot, "campfire") < 1) {
+    // 3 logs + 3 sticks + 1 coal/charcoal. Chop logs from the trees around the hive.
+    const logsHeld = () =>
+      bot.inventory
+        .items()
+        .filter((i) => i.name.endsWith("_log"))
+        .reduce((s, i) => s + i.count, 0);
+    for (let tries = 0; logsHeld() < 3 && tries < 6; tries++) {
+      const log = bot.findBlock({ matching: (b) => b.name.endsWith("_log"), maxDistance: 16 });
+      if (!log) break;
+      await safeGoto(bot, new goals.GoalNear(log.position.x, log.position.y, log.position.z, 2), 20_000, 8_000).catch(
+        () => {},
+      );
+      await bot.dig(log).catch(() => {});
+      await new Promise((r) => setTimeout(r, 800));
+    }
+    if (logsHeld() < 3) return `need 3 logs for a campfire, have ${logsHeld()} and no tree within 16 blocks`;
+    if (count(bot, "stick") < 3) {
+      const planks = bot.inventory.items().find((i) => i.name.endsWith("_planks"));
+      if (planks) await craftItem(bot, "stick").catch(() => {});
+    }
+    if (count(bot, "coal") + count(bot, "charcoal") < 1) return "need coal or charcoal for a campfire";
+    if (!(await craftItem(bot, "campfire"))) return "couldn't craft a campfire (table or recipe)";
+  }
+  const campfire = bot.inventory.items().find((i) => i.name === "campfire");
+  if (!campfire) return "campfire missing after crafting";
+  const seat = at(hx, seatY, hz);
+  if (!seat) return "campfire seat block unloaded";
+  await safeGoto(bot, new goals.GoalNear(hx, seatY + 1, hz, 2), 20_000, 8_000).catch(() => {});
+  await bot.equip(campfire, "hand").catch(() => {});
+  try {
+    await bot.placeBlock(seat, new Vec3(0, 1, 0));
+  } catch (err) {
+    return `couldn't place the campfire: ${err instanceof Error ? err.message : String(err)}`;
+  }
+  await new Promise((r) => setTimeout(r, 500));
+  return at(hx, seatY + 1, hz)?.name === "campfire" ? null : "campfire didn't land under the hive";
+}
+
 export const waxCopperSkill: Skill = {
   name: "wax_copper",
   description:
@@ -231,6 +316,29 @@ export const waxCopperSkill: Skill = {
 
     // --- Shear a honeycomb out of the full hive ---
     if (count(bot, "honeycomb") < 1) {
+      // Shearing does nothing below honey level 5, and the bees only refill
+      // the nest while alive — so read the level first instead of clicking.
+      const level = honeyLevel(hive.getProperties() as Record<string, unknown>);
+      if (level !== null && level < FULL_HONEY) {
+        return {
+          success: false,
+          message: resumable(
+            `Hive is at honey ${level}/${FULL_HONEY} — not full yet. Let the bee work; come back later.`,
+          ),
+          stats: { honeyLevel: level },
+        };
+      }
+      step("Seating a campfire under the hive so the bees stay calm...", 0.65);
+      const fireProblem = await ensureCampfire(bot, hive);
+      if (fireProblem) {
+        console.log(`[WaxDebug] ${bot.username}: ${fireProblem}`);
+        return {
+          success: false,
+          message: resumable(
+            `Won't harvest without a campfire under the hive (${fireProblem}) — it would kill the last bee.`,
+          ),
+        };
+      }
       step("Shearing honeycomb from the hive...", 0.7);
       const shears = bot.inventory.items().find((i) => i.name === "shears");
       if (shears) await bot.equip(shears, "hand").catch(() => {});
