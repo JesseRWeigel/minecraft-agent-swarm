@@ -1,5 +1,8 @@
 import type { Bot } from "mineflayer";
 import type { Skill, SkillResult } from "./types.js";
+import pkg from "mineflayer-pathfinder";
+const { goals } = pkg;
+import { baseMoves, safeGoto } from "../bot/navigation.js";
 
 /**
  * escape_to_surface — free a bot that has softlocked underground.
@@ -18,8 +21,11 @@ import type { Skill, SkillResult } from "./types.js";
  * the bot can see sky. Then the normal walk-home/mining reflexes take over
  * from the surface, where wood and the stash are reachable again.
  *
- * No blocks are consumed (unlike pillaring, which would run out of cobble long
- * before the ~44-block climb), so it works even for a bot carrying nothing.
+ * The staircase consumes no blocks, so it works for a bot carrying nothing
+ * across the whole ~44-block climb through solid stone. Where there is no
+ * solid block to step onto — an open cave or a pocket — it falls back to
+ * pillaring straight up on a scaffold block from the pack (Atlas and Flora
+ * stalled exactly in those open spots).
  */
 
 const SURFACE_Y = 62; // sea level-ish; above this the overworld is open sky here
@@ -45,6 +51,51 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<void>
       /* wasn't digging */
     }
   });
+}
+
+/** Full solid blocks a bot can pillar up on — anything a miner or roamer picks
+ * up in quantity. Excludes gravel/sand (fall) and non-full blocks. */
+const PILLAR_BLOCKS = new Set([
+  "cobblestone",
+  "cobbled_deepslate",
+  "dirt",
+  "netherrack",
+  "stone",
+  "deepslate",
+  "andesite",
+  "diorite",
+  "granite",
+  "tuff",
+  "blackstone",
+  "end_stone",
+]);
+
+/**
+ * Pillar straight up one push when the staircase is boxed in — an open cave or
+ * a pocket with no solid block to step onto. Hand-clears the stone ceiling
+ * (bare hands break it), then lets the pathfinder tower up into the cleared
+ * air using a scaffold block from the pack. Returns true if it gained height.
+ * Needs a placeable block; a bot carrying none can't pillar and stays put.
+ */
+async function pillarUp(bot: Bot): Promise<boolean> {
+  const startY = feet(bot).y;
+  const scaffold = bot.inventory.items().find((i) => PILLAR_BLOCKS.has(i.name));
+  if (!scaffold) return false;
+  const f = feet(bot);
+  // Clear the reachable ceiling straight up so there is air to rise into.
+  for (const dy of [2, 3, 4]) await handDig(bot, f.x, f.y + dy, f.z);
+  try {
+    await bot.equip(scaffold, "hand");
+  } catch {
+    /* equip best-effort */
+  }
+  const moves = baseMoves(bot);
+  moves.canDig = false; // don't fight the tool check — we hand-cleared the shaft
+  moves.allow1by1towers = true;
+  moves.allowParkour = false;
+  bot.pathfinder.setMovements(moves);
+  await safeGoto(bot, new goals.GoalY(f.y + 3), 15_000, 6_000).catch(() => {});
+  return feet(bot).y > startY;
 }
 
 /** True once the column straight above the bot is clear to the sky. */
@@ -156,14 +207,19 @@ export const escapeToSurfaceSkill: Skill = {
         dirIdx = (dirIdx + 1) % dirs.length;
         stallCount = 0;
         if (dirIdx === 0) {
-          // tried all four without gaining a block — genuinely boxed
-          const fy = feet(bot).y;
-          if (fy <= lastY) {
+          // Tried all four cardinals without gaining a block: no solid step to
+          // climb (open cave or a pocket). Fall back to pillaring straight up
+          // with a scaffold block. Atlas and Flora stalled exactly here.
+          step(`Boxed in at y=${feet(bot).y} — pillaring straight up...`, 0.5);
+          const rose = await pillarUp(bot);
+          if (!rose) {
+            const fy = feet(bot).y;
             return {
               success: false,
-              message: `Stuck at y=${fy} — couldn't carve a staircase up (all four sides blocked). invoke_skill {"skill":"escape_to_surface"} again to keep trying.`,
+              message: `Stuck at y=${fy} — no solid step to climb and no scaffold block to pillar with. invoke_skill {"skill":"escape_to_surface"} again to keep trying.`,
             };
           }
+          lastY = feet(bot).y;
         }
       }
     }
