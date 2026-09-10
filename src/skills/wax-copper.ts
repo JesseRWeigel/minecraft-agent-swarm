@@ -3,7 +3,7 @@ import type { Block } from "prismarine-block";
 import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
-import { explorerMoves, safeGoto } from "../bot/navigation.js";
+import { baseMoves, explorerMoves, safeGoto } from "../bot/navigation.js";
 
 /**
  * wax_copper — Wax On (husbandry/wax_on), which fires the first time a bot
@@ -173,17 +173,42 @@ export const waxCopperSkill: Skill = {
       }
     }
 
-    // --- Walk to the hive (surface, like the roamers) ---
-    bot.pathfinder.setMovements(explorerMoves(bot));
+    // --- Walk to the hive: hybrid surface-then-dig, like the frontier ferry ---
+    // A plain surface walk stalled 409 blocks out on a ridge (the wax reflex
+    // fires from wherever Forge banked his copper, often far from the hive),
+    // and at that range the hive chunk isn't even loaded — blockAt returned
+    // undefined. So walk on the surface by default and dig through when a hop
+    // stalls, on a generous budget, until the hive column is close enough to
+    // load and read.
+    const surfaceWalk = explorerMoves(bot);
+    const digWalk = baseMoves(bot);
+    (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).canDig = true;
+    (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).allow1by1towers = true;
+    (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).maxDropDown = 3;
     const gap = () => Math.hypot(bot.entity.position.x - HIVE.x, bot.entity.position.z - HIVE.z);
-    const walkUntil = Date.now() + 180_000;
+    const walkUntil = Date.now() + 240_000;
     let guard = 0;
+    let digging = false;
     while (gap() > 4 && !signal.aborted && Date.now() < walkUntil) {
-      step(`Walking to the bee hive — ${Math.round(gap())} blocks out...`, 0.2 + Math.min(0.4, (250 - gap()) / 625));
+      step(
+        `Walking to the bee hive — ${Math.round(gap())} blocks out${digging ? " (digging through)" : ""}...`,
+        0.2 + Math.min(0.4, (400 - gap()) / 1000),
+      );
+      bot.pathfinder.setMovements(digging ? digWalk : surfaceWalk);
       const before = gap();
       await safeGoto(bot, new goals.GoalNear(HIVE.x, HIVE.y, HIVE.z, 3), 45_000, 12_000).catch(() => {});
-      if (before - gap() < 6 && ++guard >= 3) break;
-      else if (before - gap() >= 6) guard = 0;
+      if (before - gap() >= 6) {
+        guard = 0;
+        digging = false;
+      } else if (++guard >= 3) {
+        if (!digging) {
+          digging = true;
+          guard = 0;
+        } else break;
+      }
+    }
+    if (gap() > 8) {
+      return { success: false, message: resumable(`Couldn't reach the hive — still ${Math.round(gap())} blocks out.`) };
     }
     const hive = bot.blockAt(new (await import("vec3")).Vec3(HIVE.x, HIVE.y, HIVE.z));
     if (!hive || (hive.name !== "bee_nest" && hive.name !== "beehive")) {
