@@ -886,14 +886,20 @@ export class BotBrain {
     // Flora is the designated ROAMER now that her farm and breeding work are
     // done — walk-home would tether her to the village and defeat the point,
     // so she is exempt. Everyone else still re-clusters.
-    // Forge is exempt too: his work is out EAST now — the fresh-ore frontier
-    // (450,-420) and the bee hive (472,-445) that wax_on needs are both ~250+
-    // blocks from the village, and walk-home kept hauling him back across the
-    // obstructed base terrain between attempts, so the wax skill fired from
-    // 400 blocks out and could never walk in. Let him hold the eastern ground
-    // where the copper and the hive both are; the frontier-mine reflex still
-    // carries him out, and wax_copper now finishes a short hop instead of a
-    // stalled marathon.
+    // Forge re-clusters like everyone EXCEPT while he is out east doing his
+    // real work: the fresh-ore frontier (450,-420) and the bee hive (472,-445)
+    // wax_on needs are both ~250 blocks from the village, and walk-home would
+    // tether him off them. But a BLANKET exemption stranded him the other way —
+    // he got stuck underground at (172,26,-251), far WEST of base, and with no
+    // walk-home to rescue him the wax reflex pinned him there firing 54 times
+    // at a hive he could never path to (357 blocks across the base's water),
+    // while mine_frontier never once fired. So exempt him ONLY when he is near
+    // the hive/frontier; when he strands anywhere else, walk-home marches him
+    // back to base, from where the frontier ferry can carry him east again.
+    const HIVE_XZ = { x: 472, z: -445 };
+    const forgeHoldingEast =
+      this.bot.username === "Forge" &&
+      Math.hypot(this.bot.entity.position.x - HIVE_XZ.x, this.bot.entity.position.z - HIVE_XZ.z) < 200;
     const inOverworld = /overworld/.test(String(this.bot.game.dimension));
     if (
       config.bot.allowStrategyOverrides &&
@@ -902,7 +908,7 @@ export class BotBrain {
       inOverworld &&
       this.bot.username !== "Flora" &&
       this.bot.username !== "Atlas" &&
-      this.bot.username !== "Forge"
+      !forgeHoldingEast
     ) {
       const sp = this.roleConfig.stashPos;
       const homeGap = Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z);
@@ -1220,7 +1226,14 @@ export class BotBrain {
       const hasCopper = held("copper_block") >= 1 || held("copper_ingot") >= 9;
       const hasShearMakings = held("shears") >= 1 || held("iron_ingot") >= 2;
       const cooledWax = Date.now() - this.lastWaxMs > 600_000;
-      if (!waxDone && hasCopper && hasShearMakings && cooledWax) {
+      // Only fire near the hive. Wax fired from anywhere pinned a stranded
+      // Forge in a dead loop 357 blocks out that the walk could never close —
+      // the route from the west side of base to the hive crosses impassable
+      // water. Gated to the hive/frontier neighbourhood, wax runs the short,
+      // roamer-proven hop it was designed for; when Forge is elsewhere, the
+      // walk-home + frontier-ferry reflexes reposition him east first.
+      const nearHive = Math.hypot(this.bot.entity.position.x - 472, this.bot.entity.position.z - -445) < 140;
+      if (!waxDone && hasCopper && hasShearMakings && cooledWax && nearHive) {
         this.lastWaxMs = Date.now();
         this.log.info("Brain", "OVERRIDE: enough copper banked — going to wax a block for Wax On");
         this.events.onThought("Copper in my pack and a hive full of honeycomb. Time to earn Wax On.");
@@ -1255,7 +1268,21 @@ export class BotBrain {
       const spF = this.roleConfig.stashPos;
       const nearBaseF =
         !!spF && Math.hypot(this.bot.entity.position.x - spF.x, this.bot.entity.position.z - spF.z) < 60;
-      if (ironHeld < 8 && cooledFrontier && nearBaseF) {
+      // The frontier is also Forge's ride EAST toward the hive: it drops him at
+      // (450,-420), ~34 blocks from the bee nest. A Forge already stocked with
+      // iron but carrying the copper for an un-earned Wax On would otherwise
+      // have no reflex to carry him out there, so ferry him regardless of iron
+      // when he has a wax to go do — the frontier trip lands him next to the
+      // hive, where the (now hive-gated) wax reflex takes over.
+      const copperForWax =
+        this.bot.inventory
+          .items()
+          .filter((i) => i.name === "copper_block" || i.name === "copper_ingot")
+          .reduce((s, i) => s + (i.name === "copper_block" ? 9 : i.count), 0) >= 9;
+      const earnedF = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+      const waxStillOpen = !earnedF.has("husbandry/wax_on") && !earnedF.has("minecraft:husbandry/wax_on");
+      const wantsFrontier = ironHeld < 8 || (copperForWax && waxStillOpen);
+      if (wantsFrontier && cooledFrontier && nearBaseF) {
         this.lastFrontierMs = Date.now();
         this.log.info("Brain", "OVERRIDE: base is mined out — ferrying to the frontier for fresh ore");
         this.events.onThought("Nothing left to dig here. To the fresh rock out east.");
