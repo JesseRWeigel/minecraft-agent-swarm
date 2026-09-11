@@ -1,3 +1,4 @@
+import { Vec3 } from "vec3";
 import type { Bot } from "mineflayer";
 import pkg from "mineflayer-pathfinder";
 import { chooseDrownEscape } from "./drown-escape.js";
@@ -278,6 +279,39 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
           console.log(
             `[Nav] ${bot.username} ${WEDGE_BLOCKS.has(feetName) ? `wedged in ${feetName}` : "path held with no keys"} at ${currentPos.floored()} — nudging along (${unwedges}/3)`,
           );
+          // Aim the hop at a neighbour the bot can stand on (air at its level
+          // or one step up, solid beneath) rather than wherever it faces:
+          // twenty facing-direction hops left Mason on the same chest top.
+          const f = currentPos.floored();
+          const standable = (x: number, y: number, z: number) => {
+            const feetB = bot.blockAt(new Vec3(x, y, z));
+            const headB = bot.blockAt(new Vec3(x, y + 1, z));
+            const floorB = bot.blockAt(new Vec3(x, y - 1, z));
+            return (
+              !!feetB &&
+              feetB.boundingBox === "empty" &&
+              !!headB &&
+              headB.boundingBox === "empty" &&
+              !!floorB &&
+              floorB.boundingBox === "block" &&
+              !WEDGE_BLOCKS.has(floorB.name)
+            );
+          };
+          let aim: Vec3 | null = null;
+          outer: for (const dy of [1, 0]) {
+            for (const [dx, dz] of [
+              [1, 0],
+              [-1, 0],
+              [0, 1],
+              [0, -1],
+            ] as const) {
+              if (standable(f.x + dx, f.y + dy, f.z + dz)) {
+                aim = new Vec3(f.x + dx + 0.5, f.y + dy, f.z + dz + 0.5);
+                break outer;
+              }
+            }
+          }
+          if (aim) bot.lookAt(aim, true).catch(() => {});
           bot.setControlState("jump", true);
           bot.setControlState("forward", true);
           setTimeout(() => {
