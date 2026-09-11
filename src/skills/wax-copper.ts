@@ -18,21 +18,8 @@ import { baseMoves, explorerMoves, safeGoto } from "../bot/navigation.js";
  * waxes it.
  */
 
-/**
- * Every bee nest the swarm knows. The first one found (472,71,-445) was
- * sheared dry and its colony killed; RCON on 2026-09-11 showed the one
- * surviving bee's home is the SECOND nest at 452,72,-361, ninety blocks
- * away. The skill reads both and goes to whichever is full.
- */
-export const NESTS: Array<{ x: number; y: number; z: number }> = [
-  { x: 452, y: 72, z: -361 },
-  { x: 472, y: 71, z: -445 },
-];
-
-/** The known nest closest to a position (XZ), for reflexes that gate on "near the hive". */
-export function nearestNest(x: number, z: number): { x: number; y: number; z: number } {
-  return [...NESTS].sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
-}
+import { knownNests, nearestNest } from "../bot/nests.js";
+export { nearestNest };
 
 export type NestCandidate = { x: number; y: number; z: number; level: number | null; dist: number };
 
@@ -403,7 +390,7 @@ export const waxCopperSkill: Skill = {
       (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).allow1by1towers = true;
       (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).maxDropDown = 3;
       const { Vec3: V3 } = await import("vec3");
-      const cands: NestCandidate[] = NESTS.map((n) => {
+      const cands: NestCandidate[] = knownNests().map((n) => {
         const b = bot.blockAt(new V3(n.x, n.y, n.z));
         const isNest = !!b && (b.name === "bee_nest" || b.name === "beehive");
         const level = isNest ? honeyLevel(b!.getProperties() as Record<string, unknown>) : null;

@@ -10,6 +10,7 @@
  * `PASSIVE_MOBS`. New wording should be covered in `perception.test.ts` because
  * it becomes part of the model's behavioral contract.
  */
+import { recordNest } from "./nests.js";
 import type { Bot } from "mineflayer";
 import type { Entity } from "prismarine-entity";
 import { recordOre } from "./memory.js";
@@ -232,6 +233,8 @@ const NOTABLE_BLOCKS = new Set([
   "brewing_stand",
   "spawner",
   "village_bell",
+  "bee_nest",
+  "beehive",
 ]);
 
 function getNearbyBlockTypes(bot: Bot): string[] {
@@ -242,6 +245,9 @@ function getNearbyBlockTypes(bot: Bot): string[] {
     for (let dy = -4; dy <= 4; dy += 2) {
       for (let dz = -8; dz <= 8; dz += 2) {
         const block = bot.blockAt(pos.offset(dx, dy, dz));
+        if (block && (block.name === "bee_nest" || block.name === "beehive")) {
+          recordNest(block.position.x, block.position.y, block.position.z);
+        }
         if (block && NOTABLE_BLOCKS.has(block.name)) {
           found.add(block.name);
           if (block.name.includes("ore")) {

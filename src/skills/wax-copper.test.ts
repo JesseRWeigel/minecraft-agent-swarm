@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { honeyLevel, campfireSeatY, chooseNest, nearestNest, NESTS, FULL_HONEY } from "./wax-copper.js";
+import { honeyLevel, campfireSeatY, chooseNest, nearestNest, FULL_HONEY } from "./wax-copper.js";
+import { STATIC_NESTS as NESTS } from "../bot/nests.js";
 
 test("honey level reads numeric or string block state", () => {
   assert.equal(honeyLevel({ honey_level: 0 }), 0);

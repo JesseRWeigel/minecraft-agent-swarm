@@ -20,3 +20,4 @@ finetune/dataset.jsonl
 finetune/*-lora*/
 finetune/*.gguf
 .advancement-extract/
+logs/known-nests.json
