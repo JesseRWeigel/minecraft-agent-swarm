@@ -508,6 +508,16 @@ export const buildFarmSkill: Skill = {
     let planted = 0;
     const target = Math.min(seedCount, farmTargets.length, 32);
 
+    // Why plots are skipped, for the FarmDebug summary: of ~21 targets a pass
+    // tilled 11 and seeded 1-3, and the rest fell through silent continues.
+    const skips = {
+      notPlot: 0,
+      reach: 0,
+      standing: 0,
+      noHoe: 0,
+      placeRejected: 0,
+      errors: {} as Record<string, number>,
+    };
     for (const targetPos of farmTargets) {
       if (planted >= target || signal.aborted) break;
 
@@ -516,8 +526,10 @@ export const buildFarmSkill: Skill = {
       if (
         !currentBlock ||
         (currentBlock.name !== "dirt" && currentBlock.name !== "grass_block" && currentBlock.name !== "farmland")
-      )
+      ) {
+        skips.notPlot++;
         continue;
+      }
       const alreadyTilled = currentBlock.name === "farmland";
 
       try {
@@ -535,7 +547,10 @@ export const buildFarmSkill: Skill = {
             }, 8000),
           ),
         ]);
-        if (targetPos.distanceTo(bot.entity.position) > 4.4) continue; // out of till reach
+        if (targetPos.distanceTo(bot.entity.position) > 4.4) {
+          skips.reach++;
+          continue; // out of till reach
+        }
 
         // Step OFF the plot before tilling. GoalNear(2) happily parks the bot
         // ON the target block, and a bot standing on its own fresh farmland
@@ -567,13 +582,19 @@ export const buildFarmSkill: Skill = {
             break;
           }
           const f2 = bot.entity.position.floored();
-          if (f2.x === targetPos.x && f2.z === targetPos.z) continue; // still on it — skip, don't trample
+          if (f2.x === targetPos.x && f2.z === targetPos.z) {
+            skips.standing++;
+            continue; // still on it — skip, don't trample
+          }
         }
 
         // Equip hoe and till (skip the hoe on a plot that is already farmland)
         if (!alreadyTilled) {
           hoe = bot.inventory.items().find((it) => it.name.endsWith("_hoe"));
-          if (!hoe) break;
+          if (!hoe) {
+            skips.noHoe++;
+            break;
+          }
           await bot.equip(hoe, "hand");
           await bot.lookAt(targetPos.offset(0.5, 0.5, 0.5));
           await bot.activateBlock(currentBlock);
@@ -611,15 +632,22 @@ export const buildFarmSkill: Skill = {
               if (crop && crop.name === "wheat") {
                 planted++;
               } else {
+                skips.placeRejected++;
                 console.log(`[FarmDebug] plant failed at ${targetPos.x},${targetPos.z}: ${(e as Error).message}`);
               }
             }
           }
         }
-      } catch {
+      } catch (e) {
+        const m = (e instanceof Error ? e.message : String(e)).slice(0, 60);
+        skips.errors[m] = (skips.errors[m] ?? 0) + 1;
         continue;
       }
     }
+    const skipSummary = `reach=${skips.reach} standing=${skips.standing} notPlot=${skips.notPlot} noHoe=${skips.noHoe} placeRejected=${skips.placeRejected} errors=${JSON.stringify(skips.errors)}`;
+    console.log(
+      `[FarmDebug] ${bot.username} planting: ${planted}/${target} of ${farmTargets.length} plots; skipped ${skipSummary}`,
+    );
 
     if (planted === 0) {
       return {
