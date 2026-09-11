@@ -173,6 +173,7 @@ export class BotBrain {
   private lastFishOverrideMs = 0;
   private lastHuntFoodOverrideMs = 0;
   private lastWaxOffMs = 0;
+  private lastHoneyMs = 0;
   private lastToolReturnMs = 0;
   private lastLeatherHuntMs = 0;
   private lastBedPrepMs = 0;
@@ -1365,6 +1366,48 @@ export class BotBrain {
         this.lastAction = "wax_off";
         this.lastResult = result;
         this.trackFailure("skill:wax_off", { action: "wax_off", params: {} }, result, /Scraped/.test(result));
+        return;
+      }
+    }
+
+    // Bee Our Guest override — Forge only, after Wax Off. Phase A needs the
+    // stash (glass), phase B needs the nest (campfire + bottle).
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.bot.username === "Forge" &&
+      this.roleConfig.allowedSkills.includes("harvest_honey") &&
+      /overworld/.test(String(this.bot.game.dimension))
+    ) {
+      const e = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+      const honeyDone = e.has("husbandry/safely_harvest_honey") || e.has("minecraft:husbandry/safely_harvest_honey");
+      const offDone = e.has("husbandry/wax_off") || e.has("minecraft:husbandry/wax_off");
+      const cooled = Date.now() - this.lastHoneyMs > 600_000;
+      const hasBottle = this.bot.inventory.items().some((i) => i.name === "glass_bottle");
+      const sp = this.roleConfig.stashPos;
+      const nearStash = !!sp && Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 60;
+      const nest = nearestNest(this.bot.entity.position.x, this.bot.entity.position.z);
+      const nearNest = Math.hypot(this.bot.entity.position.x - nest.x, this.bot.entity.position.z - nest.z) < 220;
+      const fit = this.bot.food > 6 && this.bot.health > 8;
+      if (offDone && !honeyDone && cooled && fit && (hasBottle ? nearNest : nearStash)) {
+        this.lastHoneyMs = Date.now();
+        this.log.info(
+          "Brain",
+          `OVERRIDE: Bee Our Guest open — ${hasBottle ? "bottling honey at the nest" : "fetching glass for a bottle"}`,
+        );
+        this.events.onThought(
+          hasBottle ? "Bottle in hand. The bees owe me some honey." : "A glass bottle first, then the hive.",
+        );
+        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "harvest_honey" });
+        this.events.onAction("harvest_honey", result);
+        this.lastAction = "harvest_honey";
+        this.lastResult = result;
+        this.trackFailure(
+          "skill:harvest_honey",
+          { action: "harvest_honey", params: {} },
+          result,
+          /Bottled honey/.test(result),
+        );
         return;
       }
     }

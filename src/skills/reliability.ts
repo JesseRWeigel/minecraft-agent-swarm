@@ -36,6 +36,7 @@ const RETIRE_RATE = 0.1;
  */
 const NEVER_RETIRE = new Set([
   "wax_off",
+  "harvest_honey",
   "wax_copper",
   "hunt_food",
   "build_nether_portal",

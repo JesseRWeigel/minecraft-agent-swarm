@@ -207,7 +207,7 @@ export function campfireSeatY(
  * honey level 0 after four bare shears. Crafts the campfire from pocket coal
  * and sticks plus three logs chopped nearby, and seats it below the nest.
  */
-async function ensureCampfire(bot: Bot, hive: Block): Promise<string | null> {
+export async function ensureCampfire(bot: Bot, hive: Block): Promise<string | null> {
   const { Vec3 } = await import("vec3");
   const at = (x: number, y: number, z: number) => bot.blockAt(new Vec3(x, y, z));
   const hx = hive.position.x;

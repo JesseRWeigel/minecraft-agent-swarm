@@ -200,6 +200,7 @@ export const FORGE_CONFIG: BotRoleConfig = {
     "loot_bastion",
     "wax_copper",
     "wax_off",
+    "harvest_honey",
   ],
   keepItems: [
     { name: "sapling", minCount: 16 },
