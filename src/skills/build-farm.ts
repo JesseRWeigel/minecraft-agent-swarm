@@ -48,7 +48,10 @@ async function harvestAndBake(
         .items()
         .filter((i) => i.name === "bread")
         .reduce((s, i) => s + i.count, 0);
-    if (stashPos && !signal.aborted && breadHeld() > 6) {
+    // Keep 2 loaves, bank the rest: the bakers made five loaves an hour and
+    // ate every one while three bots that cannot bake asked the stash for
+    // bread and got 'No bread in the stash'.
+    if (stashPos && !signal.aborted && breadHeld() > 2) {
       try {
         const { depositStash } = await import("./stash.js");
         const keep = [
@@ -57,7 +60,7 @@ async function harvestAndBake(
           { name: "sword", minCount: 1 },
           { name: "axe", minCount: 1 },
         ];
-        await depositStash(bot, stashPos, keep, 0, false);
+        await depositStash(bot, stashPos, keep, 0, false, 2);
         bankedNote = " Surplus bread banked to the pantry.";
       } catch {
         /* stash unreachable this pass — bread stays in the pack, banks next time */

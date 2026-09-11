@@ -438,6 +438,10 @@ export function shouldKeep(
    *  Blade, a bot with no mining ability (run 374). Pass the bot's best
    *  pickaxe name to keep exactly that one, or null to bank them all. */
   pickaxeKeep?: string | null,
+  /** Food items to hold before banking the rest. 6 by default; a farmer
+   *  fresh from baking passes 2 so the loaves reach the bots that cannot
+   *  bake (five loaves an hour were being eaten by the bakers alone). */
+  foodKeep = 6,
 ): boolean {
   // Explicit pickaxe policy trumps every blanket rule below, including the
   // always-keep-iron-gear one — that blanket is what stranded the team's only
@@ -725,7 +729,7 @@ export function shouldKeep(
     "rabbit",
   ]);
   if (FOOD.has(itemName)) {
-    const KEEP_FOOD = 6;
+    const KEEP_FOOD = foodKeep;
     const kept = currentCounts.get("__food") ?? 0;
     if (kept < KEEP_FOOD) {
       currentCounts.set("__food", kept + 1);
@@ -775,6 +779,8 @@ export async function depositStash(
   /** Whether this bot can mine (mine_block action or strip_mine skill).
    *  Non-miners bank every pickaxe; miners keep only their best one. */
   canMine = true,
+  /** See shouldKeep: food items to hold back from the bank. */
+  foodKeep = 6,
 ): Promise<string> {
   const PICK_RANK: Record<string, number> = {
     wooden_pickaxe: 0,
@@ -867,7 +873,7 @@ export async function depositStash(
   const byCategory = new Map<string, typeof itemsToDeposit>();
   const keptNames: string[] = [];
   for (const item of itemsToDeposit) {
-    if (shouldKeep(item.name, keepItems, keptCounts, item.count, materialReserve, pickaxeKeep)) {
+    if (shouldKeep(item.name, keepItems, keptCounts, item.count, materialReserve, pickaxeKeep, foodKeep)) {
       keptNames.push(item.name);
       continue;
     }
@@ -1218,7 +1224,8 @@ export async function depositStash(
           const expansionKept = new Map<string, number>();
           for (const item of bot.inventory.items()) {
             if (item.name === "chest") continue; // keep spare chests for next expansion
-            if (shouldKeep(item.name, keepItems, expansionKept, item.count, materialReserve, pickaxeKeep)) continue;
+            if (shouldKeep(item.name, keepItems, expansionKept, item.count, materialReserve, pickaxeKeep, foodKeep))
+              continue;
             try {
               await container.deposit(item.type, null, item.count);
               deposited += item.count;
