@@ -41,6 +41,7 @@ import { handsBusy } from "../skills/fluid.js";
 import { skillRegistry } from "../skills/registry.js";
 import { isBuried } from "../skills/escape-to-surface.js";
 import { nearestNest } from "../skills/wax-copper.js";
+import { knownWaxedBlocks } from "./nests.js";
 import { BotMemoryStore } from "./memory.js";
 import { getAllMemoryStores } from "./memory-registry.js";
 import { updateBulletin, formatTeamBulletin } from "./bulletin.js";
@@ -1347,9 +1348,15 @@ export class BotBrain {
       const onDone = e.has("husbandry/wax_on") || e.has("minecraft:husbandry/wax_on");
       const offDone = e.has("husbandry/wax_off") || e.has("minecraft:husbandry/wax_off");
       const cooled = Date.now() - this.lastWaxOffMs > 600_000;
-      const nest = nearestNest(this.bot.entity.position.x, this.bot.entity.position.z);
-      const nearHive = Math.hypot(this.bot.entity.position.x - nest.x, this.bot.entity.position.z - nest.z) < 160;
-      if (onDone && !offDone && cooled && nearHive) {
+      const waxed = knownWaxedBlocks().sort(
+        (a, b) =>
+          Math.hypot(a.x - this.bot.entity.position.x, a.z - this.bot.entity.position.z) -
+          Math.hypot(b.x - this.bot.entity.position.x, b.z - this.bot.entity.position.z),
+      )[0];
+      const nearBlock =
+        !!waxed && Math.hypot(this.bot.entity.position.x - waxed.x, this.bot.entity.position.z - waxed.z) < 220;
+      const fitWax = this.bot.food > 6 && this.bot.health > 8;
+      if (onDone && !offDone && cooled && nearBlock && fitWax) {
         this.lastWaxOffMs = Date.now();
         this.log.info("Brain", "OVERRIDE: Wax On banked, Wax Off open — scraping the block by the nest");
         this.events.onThought("That waxed block by the hive owes me one more point. Axe time.");
@@ -1399,7 +1406,11 @@ export class BotBrain {
       const earnedF = readTeamEarned(BOT_ROSTER.map((b) => b.name));
       const waxStillOpen = !earnedF.has("husbandry/wax_on") && !earnedF.has("minecraft:husbandry/wax_on");
       const wantsFrontier = ironHeld < 8 || (copperForWax && waxStillOpen);
-      if (wantsFrontier && cooledFrontier && nearBaseF) {
+      // Fed and healthy first: run 530 ferried Forge out and dove him to
+      // y=-38 at 2 hearts and 0 food while the hunger override waited for
+      // daylight.
+      const fitF = this.bot.food > 6 && this.bot.health > 8;
+      if (wantsFrontier && cooledFrontier && nearBaseF && fitF) {
         this.lastFrontierMs = Date.now();
         this.log.info("Brain", "OVERRIDE: base is mined out — ferrying to the frontier for fresh ore");
         this.events.onThought("Nothing left to dig here. To the fresh rock out east.");
@@ -1480,7 +1491,8 @@ export class BotBrain {
       const carryingDiamondForSmith =
         !this.roleConfig.primarySmith && this.bot.inventory.items().some((i) => i.name === "diamond");
       const cooledDown = Date.now() - this.lastIronOverrideMs > 180_000 && !(this.waxWaiting() && !pickless);
-      if ((!hasIron || wantsDive || pickless) && !carryingDiamondForSmith && cooledDown) {
+      const fitDive = this.bot.food > 6 && this.bot.health > 8;
+      if ((!hasIron || wantsDive || pickless) && !carryingDiamondForSmith && cooledDown && fitDive) {
         this.lastIronOverrideMs = Date.now();
         this.log.info(
           "Brain",

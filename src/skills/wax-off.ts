@@ -59,9 +59,27 @@ export const waxOffSkill: Skill = {
     );
     const target = known[0] ?? nearestNest(here.x, here.z);
     if (!block) {
-      step(`Walking to the waxed block at ${target.x},${target.z}...`, 0.3);
+      // Waypoints, the way the hive walk and the frontier ferry close ground:
+      // a goal 190 blocks out is a search the planner gives up on (run 530:
+      // two attempts, "I am 192 out" both times, no movement). Step toward a
+      // point ~100 blocks ahead until the last stretch.
       bot.pathfinder.setMovements(explorerMoves(bot));
-      await safeGoto(bot, new goals.GoalNear(target.x, target.y, target.z, 3), 120_000, 12_000).catch(() => {});
+      const gapXZ = () => Math.hypot(bot.entity.position.x - target.x, bot.entity.position.z - target.z);
+      const deadline = Date.now() + 170_000;
+      let guard = 0;
+      while (gapXZ() > 24 && Date.now() < deadline && !signal.aborted) {
+        step(`Walking to the waxed block — ${Math.round(gapXZ())} blocks out...`, 0.3);
+        const before = gapXZ();
+        const t = Math.min(1, 100 / before);
+        const wx = Math.round(bot.entity.position.x + (target.x - bot.entity.position.x) * t);
+        const wz = Math.round(bot.entity.position.z + (target.z - bot.entity.position.z) * t);
+        await safeGoto(bot, new goals.GoalNearXZ(wx, wz, 10), 45_000, 12_000).catch(() => {});
+        if (before - gapXZ() >= 6) guard = 0;
+        else if (++guard >= 3) break;
+      }
+      if (gapXZ() <= 40) {
+        await safeGoto(bot, new goals.GoalNear(target.x, target.y, target.z, 3), 45_000, 12_000).catch(() => {});
+      }
       block = bot.findBlock({ matching: (b) => isWaxed(b.name), maxDistance: 32 });
     }
     if (!block) {

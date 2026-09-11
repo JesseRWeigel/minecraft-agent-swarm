@@ -35,6 +35,9 @@ const RETIRE_RATE = 0.1;
  * a dark doorway with no way to relight it.
  */
 const NEVER_RETIRE = new Set([
+  "wax_off",
+  "wax_copper",
+  "hunt_food",
   "build_nether_portal",
   "setup_enchanting",
   "return_from_nether",
