@@ -143,6 +143,11 @@ const WEDGE_BLOCKS = new Set(["chest", "trapped_chest", "ender_chest", "barrel"]
 const lastPath = new WeakMap<Bot, { status: string; length: number; at: number }>();
 /** Why the pathfinder last threw its path away, and how often it has done so. */
 const lastReset = new WeakMap<Bot, { reason: string; at: number; count: number }>();
+/** The pathfinder's other lifecycle events, for the same diagnostics. Run
+ *  531: Forge stalled with moving=false two seconds after a 23-node path was
+ *  computed and no path_reset for 15 minutes; only a stop flag or a
+ *  goal_reached clears a path silently. */
+const lastEvents = new WeakMap<Bot, Record<string, { at: number; count: number }>>();
 const pathTracked = new WeakSet<Bot>();
 function trackPaths(bot: Bot): void {
   if (pathTracked.has(bot)) return;
@@ -154,6 +159,21 @@ function trackPaths(bot: Bot): void {
     const prev = lastReset.get(bot);
     lastReset.set(bot, { reason: String(reason), at: Date.now(), count: (prev?.count ?? 0) + 1 });
   });
+  for (const ev of ["path_stop", "goal_updated", "goal_reached"]) {
+    bot.on(ev as any, () => {
+      const m = lastEvents.get(bot) ?? {};
+      m[ev] = { at: Date.now(), count: (m[ev]?.count ?? 0) + 1 };
+      lastEvents.set(bot, m);
+    });
+  }
+}
+
+function eventsNote(bot: Bot): string {
+  const m = lastEvents.get(bot);
+  if (!m) return "";
+  return Object.entries(m)
+    .map(([k, v]) => ` ${k}=${Math.round((Date.now() - v.at) / 1000)}s/${v.count}`)
+    .join("");
 }
 
 /** One line naming why a walk failed: how far the goal was and what the
@@ -172,6 +192,7 @@ function navDiag(bot: Bot, goal: any, reason: string): string {
   const lp = lastPath.get(bot);
   const age = lp ? `${Math.round((Date.now() - lp.at) / 1000)}s ago` : "none";
   const lr = lastReset.get(bot);
+  const evNote = eventsNote(bot);
   const resetNote = lr
     ? ` lastReset=${lr.reason}(${Math.round((Date.now() - lr.at) / 1000)}s ago, ${lr.count} total)`
     : " lastReset=none";
@@ -196,7 +217,7 @@ function navDiag(bot: Bot, goal: any, reason: string): string {
     maxDistance: 3,
   });
   const doorNote = door ? ` door=${door.name}@${door.position.x},${door.position.y},${door.position.z}` : "";
-  return `[NavDiag] ${bot.username} ${reason}: goal=${goal?.constructor?.name ?? "?"}(${gx},${gy},${gz}) dist=${dist} lastPath=${lp?.status ?? "-"}/${lp?.length ?? 0} (${age}) moving=${moving}${resetNote} ${pfState} ctrl=${ctrl} vel=${vel} feet=${feet} on=${below}${doorNote}`;
+  return `[NavDiag] ${bot.username} ${reason}: goal=${goal?.constructor?.name ?? "?"}(${gx},${gy},${gz}) dist=${dist} lastPath=${lp?.status ?? "-"}/${lp?.length ?? 0} (${age}) moving=${moving}${resetNote} ${pfState} ctrl=${ctrl} vel=${vel} feet=${feet} on=${below}${doorNote}${evNote}`;
 }
 export function bumpNavGeneration(bot: Bot): void {
   navGeneration.set(bot, (navGeneration.get(bot) ?? 0) + 1);
@@ -544,6 +565,8 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
           }
           settled = true;
           finishTimers();
+          if (!interrupted)
+            console.log(`[Nav] ${bot.username} goto rejected: ${String(err?.message ?? err).slice(0, 90)}`);
           reject(err);
         });
     };
