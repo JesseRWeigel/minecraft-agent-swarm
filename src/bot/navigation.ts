@@ -120,6 +120,12 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
     let stallTicks = 0;
     let settled = false;
     let retries = 0;
+    // Every new walk is a new generation. Without this, a walk interrupted
+    // by the caller's next walk retried itself 3s later with the OLD goal,
+    // cancelling the new walk, which then retried too: 324 'interrupted
+    // externally' lines for Blade in one hour while it stepped through the
+    // stash chests, and every farm walk in the same boat.
+    bumpNavGeneration(bot);
     const genAtStart = getNavGeneration(bot);
     let stallActive = stallStartDelayMs === 0;
     const STALL_CHECK_MS = 1000;
