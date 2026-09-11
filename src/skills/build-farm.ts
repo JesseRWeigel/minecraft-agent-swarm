@@ -531,6 +531,31 @@ export const buildFarmSkill: Skill = {
         continue;
       }
       const alreadyTilled = currentBlock.name === "farmland";
+      if (alreadyTilled) {
+        // The harvest's replant path seeds 3 of 3 with a plain 15s walk and a
+        // placement from wherever the bot stops; the till path below seeded
+        // 0 of 14 (six walks stopped at 8s, two placements rejected). Use the
+        // replant method for plots that are already farmland.
+        const seeds = bot.inventory.items().find((it) => it.name === "wheat_seeds");
+        if (!seeds) break;
+        try {
+          setMovements(bot);
+          await gotoT(bot, new goals.GoalNear(targetPos.x, targetPos.y, targetPos.z, 2));
+          await bot.equip(seeds, "hand");
+          await bot.placeBlock(currentBlock, new Vec3(0, 1, 0));
+          planted++;
+        } catch (e) {
+          await bot.waitForTicks(4);
+          const crop = bot.blockAt(targetPos.offset(0, 1, 0));
+          if (crop && crop.name === "wheat") {
+            planted++;
+          } else {
+            const m = (e instanceof Error ? e.message : String(e)).slice(0, 60);
+            skips.errors[m] = (skips.errors[m] ?? 0) + 1;
+          }
+        }
+        continue;
+      }
 
       try {
         setMovements(bot);
@@ -544,7 +569,7 @@ export const buildFarmSkill: Skill = {
             setTimeout(() => {
               bot.pathfinder.stop();
               rej(new Error("timeout"));
-            }, 8000),
+            }, 15000),
           ),
         ]);
         if (targetPos.distanceTo(bot.entity.position) > 4.4) {
@@ -610,6 +635,8 @@ export const buildFarmSkill: Skill = {
         console.log(
           `[FarmDebug] till ${targetPos.x},${targetPos.y},${targetPos.z}: was=${currentBlock.name} became=${result?.name} above=${above?.name} dist=${targetPos.distanceTo(bot.entity.position).toFixed(1)}`,
         );
+        if (!result || result.name !== "farmland")
+          skips.errors["till did not yield farmland"] = (skips.errors["till did not yield farmland"] ?? 0) + 1;
         if (result && result.name === "farmland") {
           const seeds = bot.inventory.items().find((it) => it.name === "wheat_seeds");
           if (seeds) {
