@@ -69,6 +69,8 @@ function pick(role: string, candidates: AdvancementNode[]): AdvancementNode | nu
  */
 const GATED_ON: Record<string, string[]> = {
   "story/follow_ender_eye": ["nether/find_fortress"],
+  // A weakness potion needs a brewing stand, which needs a blaze rod.
+  "story/cure_zombie_villager": ["nether/find_fortress"],
 };
 const NO_PATH_YET = new Set([
   "adventure/minecraft_trials_edition",
