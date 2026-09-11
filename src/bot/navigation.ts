@@ -99,12 +99,18 @@ const WEDGE_BLOCKS = new Set(["chest", "trapped_chest", "ender_chest", "barrel"]
 
 /** Last pathfinder result per bot, for the failure diagnostics below. */
 const lastPath = new WeakMap<Bot, { status: string; length: number; at: number }>();
+/** Why the pathfinder last threw its path away, and how often it has done so. */
+const lastReset = new WeakMap<Bot, { reason: string; at: number; count: number }>();
 const pathTracked = new WeakSet<Bot>();
 function trackPaths(bot: Bot): void {
   if (pathTracked.has(bot)) return;
   pathTracked.add(bot);
   bot.on("path_update" as any, (r: any) => {
     lastPath.set(bot, { status: String(r?.status ?? "?"), length: r?.path?.length ?? 0, at: Date.now() });
+  });
+  bot.on("path_reset" as any, (reason: any) => {
+    const prev = lastReset.get(bot);
+    lastReset.set(bot, { reason: String(reason), at: Date.now(), count: (prev?.count ?? 0) + 1 });
   });
 }
 
@@ -123,6 +129,10 @@ function navDiag(bot: Bot, goal: any, reason: string): string {
       : "?";
   const lp = lastPath.get(bot);
   const age = lp ? `${Math.round((Date.now() - lp.at) / 1000)}s ago` : "none";
+  const lr = lastReset.get(bot);
+  const resetNote = lr
+    ? ` lastReset=${lr.reason}(${Math.round((Date.now() - lr.at) / 1000)}s ago, ${lr.count} total)`
+    : " lastReset=none";
   // What the bot was physically doing: every failure so far had a full path
   // (lastPath=success), so the loss is in execution, and these fields say
   // whether it was moving, what it stood in, and whether a door was in the way.
@@ -144,7 +154,7 @@ function navDiag(bot: Bot, goal: any, reason: string): string {
     maxDistance: 3,
   });
   const doorNote = door ? ` door=${door.name}@${door.position.x},${door.position.y},${door.position.z}` : "";
-  return `[NavDiag] ${bot.username} ${reason}: goal=${goal?.constructor?.name ?? "?"}(${gx},${gy},${gz}) dist=${dist} lastPath=${lp?.status ?? "-"}/${lp?.length ?? 0} (${age}) moving=${moving} ${pfState} ctrl=${ctrl} vel=${vel} feet=${feet} on=${below}${doorNote}`;
+  return `[NavDiag] ${bot.username} ${reason}: goal=${goal?.constructor?.name ?? "?"}(${gx},${gy},${gz}) dist=${dist} lastPath=${lp?.status ?? "-"}/${lp?.length ?? 0} (${age}) moving=${moving}${resetNote} ${pfState} ctrl=${ctrl} vel=${vel} feet=${feet} on=${below}${doorNote}`;
 }
 export function bumpNavGeneration(bot: Bot): void {
   navGeneration.set(bot, (navGeneration.get(bot) ?? 0) + 1);
