@@ -302,10 +302,16 @@ async function collectDroppedHoneycomb(
     }
     const d = drops[0].position;
     console.log(`[WaxDebug] ${bot.username}: honeycomb on the ground at ${d.floored()} — collecting`);
-    await safeGoto(bot, new goals.GoalBlock(Math.floor(d.x), Math.floor(d.y), Math.floor(d.z)), 8_000, 4_000).catch(
+    await safeGoto(bot, new goals.GoalNear(Math.floor(d.x), Math.floor(d.y), Math.floor(d.z), 1), 12_000, 5_000).catch(
       () => {},
     );
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 900));
+    if (count(bot, "honeycomb") < 1 && bot.entity.position.distanceTo(d) < 2.5) {
+      // standing beside it and still nothing: nudge through it
+      bot.setControlState("forward", true);
+      await new Promise((r) => setTimeout(r, 400));
+      bot.setControlState("forward", false);
+    }
   }
   if (count(bot, "honeycomb") < 1 && Math.hypot(bot.entity.position.x - near.x, bot.entity.position.z - near.z) > 6) {
     await safeGoto(bot, new goals.GoalNear(near.x, near.y, near.z, 3), 10_000, 5_000).catch(() => {});
@@ -379,6 +385,10 @@ export const waxCopperSkill: Skill = {
     // A comb already in the pack means the hive work is done: go straight to
     // waxing. The first collected comb was thrown away because the retry
     // re-read the (now empty) nest and stood down before looking in the pack.
+    // A comb from the last harvest may be lying right here: pick it up before
+    // any nest logic, or a retry reads the emptied nest and stands down with
+    // the comb three blocks away (06:44Z, comb at 452,70,-364).
+    if (count(bot, "honeycomb") < 1) await collectDroppedHoneycomb(bot, bot.entity.position, 12_000);
     if (count(bot, "honeycomb") < 1) {
       // --- Walk to the hive: hybrid surface-then-dig, like the frontier ferry ---
       // A plain surface walk stalled 409 blocks out on a ridge (the wax reflex
@@ -528,7 +538,7 @@ export const waxCopperSkill: Skill = {
         // pack by itself. The first live harvest (02:41Z, 2026-09-11) emptied
         // the nest 5→0 and left the honeycomb on the grass while the bot
         // walked off to mine; it despawned. Walk over the drops.
-        await collectDroppedHoneycomb(bot, hive.position, 15_000);
+        await collectDroppedHoneycomb(bot, hive.position, 30_000);
         if (count(bot, "honeycomb") < 1) {
           return {
             success: false,
