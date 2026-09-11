@@ -192,8 +192,19 @@ export class BotBrain {
   private lastWaxMs = 0;
   /** Until when a known nest is refilling near Forge: hold him there instead of sending him mining. */
   private waxWaitingUntil = 0;
+  /**
+   * Hold the mining reflexes while a wax is pending: either a nest is
+   * refilling nearby (20-min window set from the skill's result), or the
+   * whole kit is in hand. Forge carried the block and shears past a full
+   * nest and got sent 66 blocks underground by strip_mine between attempts.
+   */
   private waxWaiting(): boolean {
-    return Date.now() < this.waxWaitingUntil;
+    if (Date.now() < this.waxWaitingUntil) return true;
+    if (this.bot.username !== "Forge" || !this.roleConfig.allowedSkills.includes("wax_copper")) return false;
+    const names = new Set(this.bot.inventory.items().map((i) => i.name));
+    if (!names.has("copper_block") || !names.has("shears")) return false;
+    const earned = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+    return !(earned.has("husbandry/wax_on") || earned.has("minecraft:husbandry/wax_on"));
   }
   private lastPocketShedMs = 0;
   private lastWalkHomeMs = 0;

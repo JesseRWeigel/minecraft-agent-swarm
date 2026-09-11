@@ -19,6 +19,7 @@ import { baseMoves, explorerMoves, safeGoto } from "../bot/navigation.js";
  */
 
 import { knownNests, nearestNest } from "../bot/nests.js";
+import { escapeToSurfaceSkill } from "./escape-to-surface.js";
 export { nearestNest };
 
 export type NestCandidate = { x: number; y: number; z: number; level: number | null; dist: number };
@@ -437,6 +438,14 @@ export const waxCopperSkill: Skill = {
       const gapXZ = () => Math.hypot(bot.entity.position.x - HIVE.x, bot.entity.position.z - HIVE.z);
       const gap = () =>
         Math.hypot(bot.entity.position.x - HIVE.x, bot.entity.position.y - HIVE.y, bot.entity.position.z - HIVE.z);
+      // Far BELOW the target (a mining trip between attempts): climb out
+      // first with the escape staircase, which a pick makes quick, instead of
+      // asking the pathfinder for a 66-block ascent it never finds.
+      if (HIVE.y - bot.entity.position.y > 16) {
+        step(`Under the hive by ${Math.round(HIVE.y - bot.entity.position.y)} blocks — climbing out first...`, 0.15);
+        const climb = await escapeToSurfaceSkill.execute(bot, {}, signal, onProgress);
+        console.log(`[WaxDebug] ${bot.username}: pre-walk climb → ${climb.message}`);
+      }
       const walkUntil = Date.now() + 240_000;
       let guard = 0;
       let digging = false;
