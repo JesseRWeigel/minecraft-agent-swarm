@@ -58,6 +58,51 @@ function pick(role: string, candidates: AdvancementNode[]): AdvancementNode | nu
  * and the entire point of routing by role was to walk it in parallel.
  */
 /** A gateway is worth abandoning category taste for. */
+
+/**
+ * Advancements the swarm has no path to yet. GATED_ON: the real prerequisite
+ * is another advancement (an Eye of Ender needs blaze powder, so "Eye Spy"
+ * waits for a fortress). NO_PATH_YET: needs a structure, biome or mob nobody
+ * has found and no skill hunts for. Run 527: every role's line read "Eye
+ * Spy" while Wax Off sat one axe swing away, and the bots spent their turns
+ * withdrawing ender eyes that do not exist.
+ */
+const GATED_ON: Record<string, string[]> = {
+  "story/follow_ender_eye": ["nether/find_fortress"],
+};
+const NO_PATH_YET = new Set([
+  "adventure/minecraft_trials_edition",
+  "adventure/salvage_sherd",
+  "adventure/throw_trident",
+  "adventure/spyglass_at_parrot",
+  "adventure/brush_armadillo",
+  "adventure/walk_on_powder_snow_with_leather_boots",
+  "adventure/play_jukebox_in_meadows",
+  "adventure/lightning_rod_with_villager_no_fire",
+  "adventure/totem_of_undying",
+  "adventure/hero_of_the_village",
+  "adventure/kill_mob_near_sculk_catalyst",
+  "adventure/avoid_vibration",
+  "adventure/trim_with_any_armor_pattern",
+  "adventure/read_power_of_chiseled_bookshelf",
+  "husbandry/obtain_sniffer_egg",
+  "husbandry/tadpole_in_a_bucket",
+  "husbandry/allay_deliver_item_to_player",
+  "husbandry/obtain_netherite_hoe",
+  "husbandry/ride_a_boat_with_a_goat",
+  "husbandry/remove_wolf_armor",
+  "husbandry/repair_wolf_armor",
+  "husbandry/whole_pack",
+  "nether/obtain_ancient_debris",
+  "nether/ride_strider",
+  "nether/charge_respawn_anchor",
+]);
+
+export function feasibleNow(frontier: AdvancementNode[], earned: Set<string>): AdvancementNode[] {
+  const has = (id: string) => earned.has(id) || earned.has(`minecraft:${id}`);
+  return frontier.filter((a) => !NO_PATH_YET.has(a.id) && (GATED_ON[a.id] ?? []).every(has));
+}
+
 const GATEWAY_MIN_UNLOCKS = 10;
 const GATEWAY_DOMINANCE = 3;
 

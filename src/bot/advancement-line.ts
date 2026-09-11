@@ -5,7 +5,7 @@
 // where a model given a long list picks the familiar item every time.
 
 import { frontierOf, TOTAL_ADVANCEMENTS } from "./advancement-tree.js";
-import { assignFor } from "./advancement-routing.js";
+import { assignFor, feasibleNow } from "./advancement-routing.js";
 import { withinReach } from "./advancement-gating.js";
 import { hintFor } from "./advancement-hints.js";
 
@@ -29,7 +29,7 @@ export function advancementLine(role: string, earned: Set<string>): string {
   // Gate before routing, not after: a dangerous advancement should never win
   // the ranking and then be discarded, because that would leave the bot with
   // nothing while the next-best option was still available.
-  const reachable = frontierOf(earned).filter((a) => withinReach(a.id, earned));
+  const reachable = feasibleNow(frontierOf(earned), earned).filter((a) => withinReach(a.id, earned));
 
   const target = assignFor(role, reachable, claimedByOthers(role), claims.get(role));
   if (!target) {

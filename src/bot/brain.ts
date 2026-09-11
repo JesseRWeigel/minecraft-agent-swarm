@@ -171,6 +171,7 @@ export class BotBrain {
   private lastBreedOverrideMs = 0;
   private lastFishOverrideMs = 0;
   private lastHuntFoodOverrideMs = 0;
+  private lastWaxOffMs = 0;
   private lastToolReturnMs = 0;
   private lastLeatherHuntMs = 0;
   private lastBedPrepMs = 0;
@@ -1329,6 +1330,34 @@ export class BotBrain {
         this.events.onAction("wax_copper", result);
         this.lastAction = "wax_copper";
         this.lastResult = result;
+        return;
+      }
+    }
+
+    // Wax Off override — Forge only, after Wax On. The waxed block stands by
+    // the third nest; one axe swing earns the point.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.bot.username === "Forge" &&
+      this.roleConfig.allowedSkills.includes("wax_off") &&
+      /overworld/.test(String(this.bot.game.dimension))
+    ) {
+      const e = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+      const onDone = e.has("husbandry/wax_on") || e.has("minecraft:husbandry/wax_on");
+      const offDone = e.has("husbandry/wax_off") || e.has("minecraft:husbandry/wax_off");
+      const cooled = Date.now() - this.lastWaxOffMs > 600_000;
+      const nest = nearestNest(this.bot.entity.position.x, this.bot.entity.position.z);
+      const nearHive = Math.hypot(this.bot.entity.position.x - nest.x, this.bot.entity.position.z - nest.z) < 160;
+      if (onDone && !offDone && cooled && nearHive) {
+        this.lastWaxOffMs = Date.now();
+        this.log.info("Brain", "OVERRIDE: Wax On banked, Wax Off open — scraping the block by the nest");
+        this.events.onThought("That waxed block by the hive owes me one more point. Axe time.");
+        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "wax_off" });
+        this.events.onAction("wax_off", result);
+        this.lastAction = "wax_off";
+        this.lastResult = result;
+        this.trackFailure("skill:wax_off", { action: "wax_off", params: {} }, result, /Scraped/.test(result));
         return;
       }
     }
