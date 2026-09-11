@@ -330,163 +330,193 @@ export const waxCopperSkill: Skill = {
       }
     }
 
-    // --- Walk to the hive: hybrid surface-then-dig, like the frontier ferry ---
-    // A plain surface walk stalled 409 blocks out on a ridge (the wax reflex
-    // fires from wherever Forge banked his copper, often far from the hive),
-    // and at that range the hive chunk isn't even loaded — blockAt returned
-    // undefined. So walk on the surface by default and dig through when a hop
-    // stalls, on a generous budget, until the hive column is close enough to
-    // load and read.
-    const surfaceWalk = explorerMoves(bot);
-    const digWalk = baseMoves(bot);
-    (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).canDig = true;
-    (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).allow1by1towers = true;
-    (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).maxDropDown = 3;
-    const { Vec3: V3 } = await import("vec3");
-    const cands: NestCandidate[] = NESTS.map((n) => {
-      const b = bot.blockAt(new V3(n.x, n.y, n.z));
-      const isNest = !!b && (b.name === "bee_nest" || b.name === "beehive");
-      const level = isNest ? honeyLevel(b!.getProperties() as Record<string, unknown>) : null;
-      return { ...n, level, dist: Math.hypot(bot.entity.position.x - n.x, bot.entity.position.z - n.z) };
-    });
-    let HIVE = chooseNest(cands);
-    if (!HIVE) {
-      // Every known nest is loaded and below full. If one is refilling (level
-      // above zero) and we are standing at it, wait here and poll: a bee adds
-      // a level every few minutes, and walking away costs the trip back.
-      const best = [...cands].sort((a, b) => (b.level ?? 0) - (a.level ?? 0) || a.dist - b.dist)[0];
-      if (best && (best.level ?? 0) >= 1 && best.dist <= 8) {
-        const until = Date.now() + 180_000;
-        let level = best.level ?? 0;
-        while (Date.now() < until && !signal.aborted && level < FULL_HONEY) {
-          step(`Nest at honey ${level}/${FULL_HONEY} — waiting beside it for the bees...`, 0.6);
-          await new Promise((r) => setTimeout(r, 10_000));
-          const b = bot.blockAt(new V3(best.x, best.y, best.z));
-          level = (b && honeyLevel(b.getProperties() as Record<string, unknown>)) ?? level;
-        }
-        if (level >= FULL_HONEY) {
-          HIVE = { ...best, level };
+    // A comb already in the pack means the hive work is done: go straight to
+    // waxing. The first collected comb was thrown away because the retry
+    // re-read the (now empty) nest and stood down before looking in the pack.
+    if (count(bot, "honeycomb") < 1) {
+      // --- Walk to the hive: hybrid surface-then-dig, like the frontier ferry ---
+      // A plain surface walk stalled 409 blocks out on a ridge (the wax reflex
+      // fires from wherever Forge banked his copper, often far from the hive),
+      // and at that range the hive chunk isn't even loaded — blockAt returned
+      // undefined. So walk on the surface by default and dig through when a hop
+      // stalls, on a generous budget, until the hive column is close enough to
+      // load and read.
+      const surfaceWalk = explorerMoves(bot);
+      const digWalk = baseMoves(bot);
+      (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).canDig = true;
+      (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).allow1by1towers = true;
+      (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).maxDropDown = 3;
+      const { Vec3: V3 } = await import("vec3");
+      const cands: NestCandidate[] = NESTS.map((n) => {
+        const b = bot.blockAt(new V3(n.x, n.y, n.z));
+        const isNest = !!b && (b.name === "bee_nest" || b.name === "beehive");
+        const level = isNest ? honeyLevel(b!.getProperties() as Record<string, unknown>) : null;
+        return { ...n, level, dist: Math.hypot(bot.entity.position.x - n.x, bot.entity.position.z - n.z) };
+      });
+      let HIVE = chooseNest(cands);
+      if (!HIVE) {
+        // Every known nest is loaded and below full. If one is refilling (level
+        // above zero) and we are standing at it, wait here and poll: a bee adds
+        // a level every few minutes, and walking away costs the trip back.
+        const best = [...cands].sort((a, b) => (b.level ?? 0) - (a.level ?? 0) || a.dist - b.dist)[0];
+        if (best && (best.level ?? 0) >= 1 && best.dist <= 8) {
+          const until = Date.now() + 180_000;
+          let level = best.level ?? 0;
+          while (Date.now() < until && !signal.aborted && level < FULL_HONEY) {
+            step(`Nest at honey ${level}/${FULL_HONEY} — waiting beside it for the bees...`, 0.6);
+            await new Promise((r) => setTimeout(r, 10_000));
+            const b = bot.blockAt(new V3(best.x, best.y, best.z));
+            level = (b && honeyLevel(b.getProperties() as Record<string, unknown>)) ?? level;
+          }
+          if (level >= FULL_HONEY) {
+            HIVE = { ...best, level };
+          } else {
+            return {
+              success: false,
+              message: resumable(
+                `Nest at ${best.x},${best.y},${best.z} is at honey ${level}/${FULL_HONEY} — refilling. Stay near; come back shortly.`,
+              ),
+              stats: { bestHoney: level },
+            };
+          }
         } else {
+          const report = cands.map((c) => `${c.x},${c.y},${c.z} at ${c.level}/${FULL_HONEY}`).join("; ");
+          return {
+            success: false,
+            message: resumable(`No nest is full yet (${report}). Let the bees work; come back later.`),
+            stats: { bestHoney: Math.max(...cands.map((c) => c.level ?? 0)) },
+          };
+        }
+      }
+      const gap = () => Math.hypot(bot.entity.position.x - HIVE.x, bot.entity.position.z - HIVE.z);
+      const walkUntil = Date.now() + 240_000;
+      let guard = 0;
+      let digging = false;
+      while (gap() > 4 && !signal.aborted && Date.now() < walkUntil) {
+        const g = gap();
+        step(
+          `Walking to the bee hive — ${Math.round(g)} blocks out${digging ? " (digging through)" : ""}...`,
+          0.2 + Math.min(0.4, (400 - g) / 1000),
+        );
+        bot.pathfinder.setMovements(digging ? digWalk : surfaceWalk);
+        const before = gap();
+        // Step toward a waypoint ~100 blocks ahead, NOT a goal hundreds of blocks
+        // out. The frontier ferry closes ground reliably for exactly this reason:
+        // a near goal is a small pathfinder search it can solve, while a distant
+        // GoalNear makes it search an enormous space, give up, and barely move —
+        // which is why this walk sat at 358 blocks out closing nothing. Only aim
+        // the GoalNear at the hive block itself on the final approach.
+        if (g > 24) {
+          const t = Math.min(1, 100 / g);
+          const wx = Math.round(bot.entity.position.x + (HIVE.x - bot.entity.position.x) * t);
+          const wz = Math.round(bot.entity.position.z + (HIVE.z - bot.entity.position.z) * t);
+          await safeGoto(bot, new goals.GoalNearXZ(wx, wz, 10), 45_000, 12_000).catch(() => {});
+        } else {
+          await safeGoto(bot, new goals.GoalNear(HIVE.x, HIVE.y, HIVE.z, 3), 45_000, 12_000).catch(() => {});
+        }
+        if (before - gap() >= 6) {
+          guard = 0;
+          digging = false;
+        } else if (++guard >= 3) {
+          if (!digging) {
+            digging = true;
+            guard = 0;
+          } else break;
+        }
+      }
+      if (gap() > 8) {
+        return {
+          success: false,
+          message: resumable(`Couldn't reach the hive — still ${Math.round(gap())} blocks out.`),
+        };
+      }
+      const hive = bot.blockAt(new (await import("vec3")).Vec3(HIVE.x, HIVE.y, HIVE.z));
+      if (!hive || (hive.name !== "bee_nest" && hive.name !== "beehive")) {
+        return {
+          success: false,
+          message: resumable(`No hive at ${HIVE.x},${HIVE.y},${HIVE.z} (found ${hive?.name}).`),
+        };
+      }
+
+      // --- Shear a honeycomb out of the full hive ---
+      // A comb from an earlier harvest may still be lying here (they last 5 min).
+      if (count(bot, "honeycomb") < 1) await collectDroppedHoneycomb(bot, hive.position, 6_000);
+      if (count(bot, "honeycomb") < 1) {
+        // Shearing does nothing below honey level 5, and the bees only refill
+        // the nest while alive — so read the level first instead of clicking.
+        const level = honeyLevel(hive.getProperties() as Record<string, unknown>);
+        if (level !== null && level < FULL_HONEY) {
           return {
             success: false,
             message: resumable(
-              `Nest at ${best.x},${best.y},${best.z} is at honey ${level}/${FULL_HONEY} — refilling. Stay near; come back shortly.`,
+              `Hive is at honey ${level}/${FULL_HONEY} — not full yet. Let the bee work; come back later.`,
             ),
-            stats: { bestHoney: level },
+            stats: { honeyLevel: level },
           };
         }
-      } else {
-        const report = cands.map((c) => `${c.x},${c.y},${c.z} at ${c.level}/${FULL_HONEY}`).join("; ");
-        return {
-          success: false,
-          message: resumable(`No nest is full yet (${report}). Let the bees work; come back later.`),
-          stats: { bestHoney: Math.max(...cands.map((c) => c.level ?? 0)) },
-        };
-      }
-    }
-    const gap = () => Math.hypot(bot.entity.position.x - HIVE.x, bot.entity.position.z - HIVE.z);
-    const walkUntil = Date.now() + 240_000;
-    let guard = 0;
-    let digging = false;
-    while (gap() > 4 && !signal.aborted && Date.now() < walkUntil) {
-      const g = gap();
-      step(
-        `Walking to the bee hive — ${Math.round(g)} blocks out${digging ? " (digging through)" : ""}...`,
-        0.2 + Math.min(0.4, (400 - g) / 1000),
-      );
-      bot.pathfinder.setMovements(digging ? digWalk : surfaceWalk);
-      const before = gap();
-      // Step toward a waypoint ~100 blocks ahead, NOT a goal hundreds of blocks
-      // out. The frontier ferry closes ground reliably for exactly this reason:
-      // a near goal is a small pathfinder search it can solve, while a distant
-      // GoalNear makes it search an enormous space, give up, and barely move —
-      // which is why this walk sat at 358 blocks out closing nothing. Only aim
-      // the GoalNear at the hive block itself on the final approach.
-      if (g > 24) {
-        const t = Math.min(1, 100 / g);
-        const wx = Math.round(bot.entity.position.x + (HIVE.x - bot.entity.position.x) * t);
-        const wz = Math.round(bot.entity.position.z + (HIVE.z - bot.entity.position.z) * t);
-        await safeGoto(bot, new goals.GoalNearXZ(wx, wz, 10), 45_000, 12_000).catch(() => {});
-      } else {
-        await safeGoto(bot, new goals.GoalNear(HIVE.x, HIVE.y, HIVE.z, 3), 45_000, 12_000).catch(() => {});
-      }
-      if (before - gap() >= 6) {
-        guard = 0;
-        digging = false;
-      } else if (++guard >= 3) {
-        if (!digging) {
-          digging = true;
-          guard = 0;
-        } else break;
-      }
-    }
-    if (gap() > 8) {
-      return { success: false, message: resumable(`Couldn't reach the hive — still ${Math.round(gap())} blocks out.`) };
-    }
-    const hive = bot.blockAt(new (await import("vec3")).Vec3(HIVE.x, HIVE.y, HIVE.z));
-    if (!hive || (hive.name !== "bee_nest" && hive.name !== "beehive")) {
-      return { success: false, message: resumable(`No hive at ${HIVE.x},${HIVE.y},${HIVE.z} (found ${hive?.name}).`) };
-    }
-
-    // --- Shear a honeycomb out of the full hive ---
-    // A comb from an earlier harvest may still be lying here (they last 5 min).
-    if (count(bot, "honeycomb") < 1) await collectDroppedHoneycomb(bot, hive.position, 6_000);
-    if (count(bot, "honeycomb") < 1) {
-      // Shearing does nothing below honey level 5, and the bees only refill
-      // the nest while alive — so read the level first instead of clicking.
-      const level = honeyLevel(hive.getProperties() as Record<string, unknown>);
-      if (level !== null && level < FULL_HONEY) {
-        return {
-          success: false,
-          message: resumable(
-            `Hive is at honey ${level}/${FULL_HONEY} — not full yet. Let the bee work; come back later.`,
-          ),
-          stats: { honeyLevel: level },
-        };
-      }
-      step("Seating a campfire under the hive so the bees stay calm...", 0.65);
-      const fireProblem = await ensureCampfire(bot, hive);
-      if (fireProblem) {
-        // Best effort only. The second nest sits in a treeless meadow (an RCON
-        // scan found no log within 64 blocks), so refusing here would leave a
-        // full nest and a ready copper block unused forever. Harvest anyway
-        // and say so: the colony may sting and die, and later honey work will
-        // need one of the other bees in the world.
-        console.log(`[WaxDebug] ${bot.username}: harvesting WITHOUT a campfire (${fireProblem}) — bees may be lost`);
-        step("No campfire possible here — harvesting anyway...", 0.68);
-      }
-      step("Shearing honeycomb from the hive...", 0.7);
-      const shears = bot.inventory.items().find((i) => i.name === "shears");
-      if (shears) await bot.equip(shears, "hand").catch(() => {});
-      await bot.activateBlock(hive).catch(() => {});
-      await new Promise((r) => setTimeout(r, 800));
-      // Shearing pops the combs out as ITEM ENTITIES; nothing lands in the
-      // pack by itself. The first live harvest (02:41Z, 2026-09-11) emptied
-      // the nest 5→0 and left the honeycomb on the grass while the bot
-      // walked off to mine; it despawned. Walk over the drops.
-      await collectDroppedHoneycomb(bot, hive.position, 15_000);
-      if (count(bot, "honeycomb") < 1) {
-        return {
-          success: false,
-          message: resumable("Sheared the hive but got no honeycomb — it may not be full yet."),
-        };
+        step("Seating a campfire under the hive so the bees stay calm...", 0.65);
+        const fireProblem = await ensureCampfire(bot, hive);
+        if (fireProblem) {
+          // Best effort only. The second nest sits in a treeless meadow (an RCON
+          // scan found no log within 64 blocks), so refusing here would leave a
+          // full nest and a ready copper block unused forever. Harvest anyway
+          // and say so: the colony may sting and die, and later honey work will
+          // need one of the other bees in the world.
+          console.log(`[WaxDebug] ${bot.username}: harvesting WITHOUT a campfire (${fireProblem}) — bees may be lost`);
+          step("No campfire possible here — harvesting anyway...", 0.68);
+        }
+        step("Shearing honeycomb from the hive...", 0.7);
+        const shears = bot.inventory.items().find((i) => i.name === "shears");
+        if (shears) await bot.equip(shears, "hand").catch(() => {});
+        await bot.activateBlock(hive).catch(() => {});
+        await new Promise((r) => setTimeout(r, 800));
+        // Shearing pops the combs out as ITEM ENTITIES; nothing lands in the
+        // pack by itself. The first live harvest (02:41Z, 2026-09-11) emptied
+        // the nest 5→0 and left the honeycomb on the grass while the bot
+        // walked off to mine; it despawned. Walk over the drops.
+        await collectDroppedHoneycomb(bot, hive.position, 15_000);
+        if (count(bot, "honeycomb") < 1) {
+          return {
+            success: false,
+            message: resumable("Sheared the hive but got no honeycomb — it may not be full yet."),
+          };
+        }
       }
     }
 
     // --- Place the copper block and wax it ---
+    // Reference the FLOOR UNDER THE TARGET and place on its top face. The old
+    // code placed against the block under the bot's own feet on its east face,
+    // which is the solid ground one level down beside it, so nothing was ever
+    // placed and the comb went to waste.
     step("Placing the copper block to wax...", 0.85);
-    const below = bot.blockAt(bot.entity.position.offset(0, -1, 0));
-    const target = bot.blockAt(bot.entity.position.offset(1, 0, 0));
+    const { Vec3: PV } = await import("vec3");
     let placedAt: Block | null = null;
-    if (below && target && target.name === "air") {
-      const copperItem = bot.inventory.items().find((i) => i.name === "copper_block");
-      if (copperItem) {
-        await bot.equip(copperItem, "hand").catch(() => {});
+    const copperItem = bot.inventory.items().find((i) => i.name === "copper_block");
+    if (copperItem) {
+      await bot.equip(copperItem, "hand").catch(() => {});
+      const feetPos = bot.entity.position.floored();
+      for (const [dx, dz] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const) {
+        const floor = bot.blockAt(feetPos.offset(dx, -1, dz));
+        const spot = bot.blockAt(feetPos.offset(dx, 0, dz));
+        if (!floor || floor.boundingBox !== "block" || !spot || (spot.name !== "air" && spot.name !== "cave_air"))
+          continue;
         try {
-          await bot.placeBlock(below, new (await import("vec3")).Vec3(1, 0, 0));
-          placedAt = bot.blockAt(bot.entity.position.offset(1, 0, 0));
-        } catch {
-          /* placement failed — try activating any copper block in reach below */
+          await bot.placeBlock(floor, new PV(0, 1, 0));
+          const now = bot.blockAt(feetPos.offset(dx, 0, dz));
+          if (now && now.name.includes("copper")) {
+            placedAt = now;
+            break;
+          }
+        } catch (err) {
+          console.log(
+            `[WaxDebug] ${bot.username}: place at ${feetPos.offset(dx, 0, dz)} failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       }
     }
@@ -511,7 +541,7 @@ export const waxCopperSkill: Skill = {
       message: success
         ? "Waxed a copper block with honeycomb — Wax On should be banked."
         : resumable("Applied the honeycomb but the block didn't read as waxed — retry."),
-      stats: { hiveX: HIVE.x, hiveZ: HIVE.z },
+      stats: { waxedX: copperBlock.position.x, waxedZ: copperBlock.position.z },
     };
   },
 };

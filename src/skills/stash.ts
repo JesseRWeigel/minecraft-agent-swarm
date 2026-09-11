@@ -628,6 +628,13 @@ export function shouldKeep(
     return false;
   }
 
+  // Wax On kit: a crafted copper block, the shears, a harvested honeycomb and
+  // a campfire are single-purpose progress items; banking them to the junk
+  // pile (or shedding them) has cost the chain twice. Always keep them.
+  if (itemName === "copper_block" || itemName === "honeycomb" || itemName === "shears" || itemName === "campfire") {
+    return true;
+  }
+
   const KEEP_MATERIALS = ["gold_ingot"];
   if (KEEP_MATERIALS.includes(itemName)) {
     // An explicit keepItems entry OUTRANKS the generic material reserve.

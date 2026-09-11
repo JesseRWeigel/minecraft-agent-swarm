@@ -587,6 +587,13 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
       "flint",
       "gold_ingot",
       "golden_boots",
+      // Wax On kit (2026-09-11): a crafted copper block, shears and a harvested
+      // honeycomb vanished from Forge's pack twice with keepInventory on and
+      // no deposit logged; watch them so the next loss names the action.
+      "copper_block",
+      "honeycomb",
+      "shears",
+      "campfire",
     ]);
     bot.inventory.on("updateSlot", (slot: number, oldItem: any, newItem: any) => {
       const was = oldItem && KIT_ITEMS.has(oldItem.name) ? `${oldItem.count}x ${oldItem.name}` : null;
