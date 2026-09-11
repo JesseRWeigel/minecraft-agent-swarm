@@ -354,7 +354,13 @@ export function obstructsChest(blockName: string | undefined | null): boolean {
  *  deposit — the drowning dig-out already learned that lesson by destroying team
  *  storage to save one bot. */
 export function canClearObstruction(blockName: string | undefined | null): boolean {
-  return obstructsChest(blockName) && !isPreciousBlock(blockName!);
+  if (!obstructsChest(blockName)) return false;
+  // A crafting table on a chest seals it (opaque block above), and the stash
+  // has several: chest 281,68,-317 sat under one and timed out from 2 blocks
+  // away, in reach, all run. Breaking a table drops it as an item, so it is
+  // safe to clear; containers, beds and the like stay off limits.
+  if (blockName === "crafting_table") return true;
+  return !isPreciousBlock(blockName!);
 }
 
 /** What to say when a bot walked to the stash and banked nothing, with no
@@ -1441,6 +1447,7 @@ export async function withdrawStash(
     }
     try {
       await safeGoto(bot, new goals.GoalNear(chest.position.x, chest.position.y, chest.position.z, 2), 8000);
+      if (withinReach(bot.entity.position.distanceTo(chest.position))) await clearChestRoof(bot, chest.position);
       const container = await openContainerTimed(bot, chest);
 
       for (const slot of container.containerItems()) {
