@@ -274,11 +274,12 @@ export const buildFarmSkill: Skill = {
       // Surface water only: with the site walk dropping bots into old shafts,
       // the search once picked an aquifer at y=22 and Flora tilled and seeded
       // dirt at y=37 in the dark, where wheat never grows.
-      const waters = bot.findBlocks({
-        matching: (b) => b.name === "water" && b.position.y >= SURFACE_WATER_MIN_Y,
-        maxDistance: 96,
-        count: 200,
-      });
+      // (Filter on the returned positions: findBlocks also runs `matching`
+      // against palette blocks that carry no position, and reading .position
+      // there crashed the skill and got it retired.)
+      const waters = bot
+        .findBlocks({ matching: (b) => b.name === "water", maxDistance: 96, count: 200 })
+        .filter((p) => p.y >= SURFACE_WATER_MIN_Y);
       let bestN = -1;
       let bestWp: Vec3 | null = null;
       for (const wp of waters) {
