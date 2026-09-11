@@ -130,7 +130,18 @@ async function clearChestRoof(bot: Bot, chestPos: Vec3): Promise<boolean> {
   }
 }
 
+/** Refuse to open a chest the bot never reached: run 509 logged opens from
+ *  74 and 181 blocks away after walks that ended without arriving, each one
+ *  burning a 10s timeout. */
+function assertInReach(bot: Bot, block: { position?: Vec3 | null }): void {
+  const p = block.position;
+  if (!p) return;
+  const dist = bot.entity.position.distanceTo(p);
+  if (!withinReach(dist)) throw new Error(`chest not in reach (${dist.toFixed(1)} blocks) — walk did not arrive`);
+}
+
 async function openContainerTimed(bot: Bot, block: Parameters<Bot["openContainer"]>[0]) {
+  assertInReach(bot, block as { position?: Vec3 | null });
   // A window left open from an earlier chest makes every later open request
   // time out silently: run 508 logged 28 'openContainer timeout' in a row for
   // two bots at chests with air above them. Close whatever is open first.
