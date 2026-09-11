@@ -109,14 +109,14 @@ async function safeGotoWithSignal(bot: Bot, goal: any, signal: AbortSignal, time
 
     const onAbort = () => {
       cleanup();
-      bot.pathfinder.stop();
+      bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
       reject(new Error("Aborted"));
     };
     signal.addEventListener("abort", onAbort, { once: true });
 
     const timeout = setTimeout(() => {
       cleanup();
-      bot.pathfinder.stop();
+      bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
       reject(new Error("Navigation timed out"));
     }, timeoutMs);
 
@@ -126,7 +126,7 @@ async function safeGotoWithSignal(bot: Bot, goal: any, signal: AbortSignal, time
         stallTicks++;
         if (stallTicks >= 5) {
           cleanup();
-          bot.pathfinder.stop();
+          bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
           reject(new Error("Stuck"));
         }
       } else {

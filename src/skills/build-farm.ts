@@ -459,7 +459,7 @@ export const buildFarmSkill: Skill = {
         bot.pathfinder.goto(new goals.GoalNear(navigationTarget.x, navigationTarget.y, navigationTarget.z, 3)),
         new Promise<void>((_, rej) =>
           setTimeout(() => {
-            bot.pathfinder.stop();
+            bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
             rej(new Error("timeout"));
           }, 15000),
         ),
@@ -570,7 +570,7 @@ export const buildFarmSkill: Skill = {
           bot.pathfinder.goto(new goals.GoalNear(targetPos.x, targetPos.y, targetPos.z, 2)),
           new Promise<void>((_, rej) =>
             setTimeout(() => {
-              bot.pathfinder.stop();
+              bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
               rej(new Error("timeout"));
             }, 15000),
           ),
@@ -602,7 +602,7 @@ export const buildFarmSkill: Skill = {
               bot.pathfinder.goto(new goals.GoalBlock(targetPos.x + ox, targetPos.y + 1, targetPos.z + oz)),
               new Promise<void>((_, rej) =>
                 setTimeout(() => {
-                  bot.pathfinder.stop();
+                  bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
                   rej(new Error("timeout"));
                 }, 5000),
               ),
@@ -731,7 +731,7 @@ async function gotoT(bot: Bot, goal: InstanceType<typeof goals.GoalNear>, ms = 1
     bot.pathfinder.goto(goal),
     new Promise<void>((_, rej) =>
       setTimeout(() => {
-        bot.pathfinder.stop();
+        bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
         rej(new Error("goto timeout"));
       }, ms),
     ),

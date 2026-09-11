@@ -195,7 +195,7 @@ export async function runSkill(bot: Bot, skill: Skill, params: Record<string, an
       // Deliberate takeover: the skill being killed must not retry its walks.
       bumpNavGeneration(bot);
       try {
-        bot.pathfinder.stop();
+        bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
       } catch {
         /* best effort */
       }

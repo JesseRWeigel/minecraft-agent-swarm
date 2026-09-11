@@ -58,7 +58,7 @@ function distance(a: { x: number; y: number; z: number }, b: { x: number; y: num
 
 function stopBotOperations(bot: Bot): void {
   try {
-    bot.pathfinder.stop();
+    bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
   } catch {
     // Best-effort stop: the bot may be disconnecting.
   }

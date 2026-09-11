@@ -109,7 +109,7 @@ export const lightAreaSkill: Skill = {
             bot.pathfinder.goto(new goals.GoalNear(pos.x, pos.y, pos.z, 3)),
             new Promise<void>((_, rej) =>
               setTimeout(() => {
-                bot.pathfinder.stop();
+                bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
                 rej(new Error("nav timeout"));
               }, 8000),
             ),

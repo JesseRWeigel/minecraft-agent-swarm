@@ -387,7 +387,7 @@ export const stripMineSkill: Skill = {
             await safeGoto(bot, new goals.GoalXZ(wx, wz), 45_000, 12_000);
           } catch (err) {
             console.log(`[Skill] strip_mine hike attempt ${attempt + 1} failed: ${(err as Error).message}`);
-            bot.pathfinder.stop();
+            bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
           }
           if (hikeDist() >= 80) break;
           await new Promise((r) => setTimeout(r, 2000)); // let a flee finish before rewalking
@@ -445,7 +445,7 @@ export const stripMineSkill: Skill = {
           bot.pathfinder.goto(new goals.GoalY(targetY)),
           new Promise<void>((_, rej) =>
             setTimeout(() => {
-              bot.pathfinder.stop();
+              bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
               rej(new Error("descend timeout"));
             }, 60000),
           ),
@@ -514,7 +514,7 @@ export const stripMineSkill: Skill = {
               new Promise<void>((_, rej) => setTimeout(() => rej(new Error("shift timeout")), 12_000)),
             ]);
           } catch {
-            bot.pathfinder.stop();
+            bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
           }
         }
         const fallback = await digDownTo(bot, targetY);
@@ -649,7 +649,7 @@ export const stripMineSkill: Skill = {
               new Promise<void>((_, rej) => setTimeout(() => rej(new Error("chase timeout")), 12_000)),
             ]);
           } catch {
-            bot.pathfinder.stop();
+            bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
             continue;
           }
           await equipBestPickaxe(bot);
@@ -962,7 +962,7 @@ async function moveToPosition(bot: Bot, targetPos: Vec3): Promise<void> {
       bot.pathfinder.goto(new goals.GoalBlock(targetPos.x, targetPos.y, targetPos.z)),
       new Promise<void>((_, rej) =>
         setTimeout(() => {
-          bot.pathfinder.stop();
+          bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
           rej(new Error("moveToPosition timeout"));
         }, 8000),
       ),

@@ -296,17 +296,23 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
           // or one step up, solid beneath) rather than wherever it faces:
           // twenty facing-direction hops left Mason on the same chest top.
           const f = currentPos.floored();
+          // Collision shapes, not just boundingBox: a fence or wall is a
+          // 'block' whose shape rises 1.5, so it is neither a floor nor an
+          // empty foot space (run 521: five hops toward blocks beside the
+          // chest at 289,70,-314 with the bot never moving).
+          const topOf = (b: { shapes?: number[][] } | null) =>
+            b?.shapes && b.shapes.length ? Math.max(...b.shapes.map((sh) => sh[4])) : 0;
+          const clear = (b: ReturnType<typeof bot.blockAt>) => !!b && (b.boundingBox === "empty" || topOf(b) === 0);
           const standable = (x: number, y: number, z: number) => {
             const feetB = bot.blockAt(new Vec3(x, y, z));
             const headB = bot.blockAt(new Vec3(x, y + 1, z));
             const floorB = bot.blockAt(new Vec3(x, y - 1, z));
             return (
-              !!feetB &&
-              feetB.boundingBox === "empty" &&
-              !!headB &&
-              headB.boundingBox === "empty" &&
+              clear(feetB) &&
+              clear(headB) &&
               !!floorB &&
               floorB.boundingBox === "block" &&
+              topOf(floorB) <= 1.0 &&
               !WEDGE_BLOCKS.has(floorB.name)
             );
           };
@@ -450,15 +456,37 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
             console.log(
               `[Nav] ${bot.username} hop from ${bot.entity.position.floored()} toward ${aim ? aim.floored() : "facing"}${inWater ? " (in water)" : ""}`,
             );
+            const from = bot.entity.position.clone();
             if (aim) bot.lookAt(aim, true).catch(() => {});
             const hold = setInterval(() => {
               bot.setControlState("jump", true);
               bot.setControlState("forward", true);
             }, 50);
+            // Instrumented (third fix on this hop): what the body did mid-hop.
+            setTimeout(
+              () => {
+                const e = bot.entity;
+                console.log(
+                  `[HopDebug] ${bot.username} mid-hop: yaw=${e.yaw.toFixed(2)} vel=${e.velocity.x.toFixed(2)},${e.velocity.y.toFixed(2)},${e.velocity.z.toFixed(2)} onGround=${e.onGround} ctrl=${Object.entries(
+                    bot.controlState ?? {},
+                  )
+                    .filter(([, v]) => v)
+                    .map(([k]) => k)
+                    .join(
+                      ",",
+                    )} pfMoving=${!!(bot.pathfinder as any)?.isMoving?.()} goal=${(bot.pathfinder as any)?.goal ? "set" : "none"}`,
+                );
+              },
+              Math.floor(holdMs / 2),
+            );
             setTimeout(() => {
               clearInterval(hold);
               bot.setControlState("jump", false);
               bot.setControlState("forward", false);
+              const moved = bot.entity.position.distanceTo(from);
+              console.log(
+                `[HopDebug] ${bot.username} hop end: moved ${moved.toFixed(2)} to ${bot.entity.position.floored()}`,
+              );
               lastPos = bot.entity.position.clone();
               setTimeout(attempt, 400);
             }, holdMs);

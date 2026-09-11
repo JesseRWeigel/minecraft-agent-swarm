@@ -277,7 +277,7 @@ export const escapeToSurfaceSkill: Skill = {
     // a goal exists ("survived a 0s dig, Digging aborted" in a flooded shaft).
     try {
       bot.pathfinder.setGoal(null);
-      bot.pathfinder.stop();
+      bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
     } catch {
       /* no goal */
     }

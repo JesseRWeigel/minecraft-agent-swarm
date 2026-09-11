@@ -76,7 +76,7 @@ export async function executeAction(bot: Bot, action: string, params: Record<str
       // Deliberate takeover: the timed-out action's walk must not retry itself.
       bumpNavGeneration(bot);
       try {
-        bot.pathfinder.stop();
+        bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
       } catch {
         /* best effort */
       }
@@ -475,7 +475,7 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
       const Y_FLOOR = 60;
       const yGuard = setInterval(() => {
         if (bot.entity.position.y < Y_FLOOR) {
-          bot.pathfinder.stop();
+          bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
         }
       }, 400);
       try {

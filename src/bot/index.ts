@@ -234,7 +234,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
         abortActiveSkill: () => abortActiveSkill(bot),
         stopMovement: () => {
           bumpNavGeneration(bot);
-          bot.pathfinder.stop();
+          bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
           bot.clearControlStates();
         },
         goToPlayer: async (playerName) => {

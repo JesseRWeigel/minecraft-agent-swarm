@@ -390,7 +390,7 @@ export const craftGearSkill: Skill = {
               bot.pathfinder.goto(new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2)),
               new Promise<void>((_, rej) =>
                 setTimeout(() => {
-                  bot.pathfinder.stop();
+                  bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
                   rej(new Error("goto timeout"));
                 }, 15000),
               ),

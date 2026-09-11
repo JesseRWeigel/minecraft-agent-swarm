@@ -33,6 +33,7 @@ function fakeBot() {
       setMovements: () => calls.push("movements"),
       goto: async () => calls.push("navigate"),
       stop: () => calls.push("stop"),
+      setGoal: () => calls.push("stop"), // abort resets the goal synchronously; stop() only raises a flag
     },
     dig: async () => calls.push("dig"),
     stopDigging: () => calls.push("stopDigging"),
