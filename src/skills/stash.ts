@@ -131,9 +131,37 @@ async function clearChestRoof(bot: Bot, chestPos: Vec3): Promise<boolean> {
 }
 
 async function openContainerTimed(bot: Bot, block: Parameters<Bot["openContainer"]>[0]) {
+  // A window left open from an earlier chest makes every later open request
+  // time out silently: run 508 logged 28 'openContainer timeout' in a row for
+  // two bots at chests with air above them. Close whatever is open first.
+  const stale = bot.currentWindow;
+  if (stale) {
+    console.log(`[Stash] ${bot.username}: closing a leftover ${stale.type} window before opening the chest`);
+    try {
+      bot.closeWindow(stale);
+    } catch {
+      /* already gone */
+    }
+  }
   return (await Promise.race([
     bot.openContainer(block),
-    new Promise((_, rej) => setTimeout(() => rej(new Error("openContainer timeout")), 10000)),
+    new Promise((_, rej) =>
+      setTimeout(() => {
+        const p = block.position;
+        const dist = p ? bot.entity.position.distanceTo(p).toFixed(1) : "?";
+        let seen = "?";
+        try {
+          seen = String((bot as any).canSeeBlock?.(block) ?? "?");
+        } catch {
+          /* optional API */
+        }
+        rej(
+          new Error(
+            `openContainer timeout (dist=${dist} canSee=${seen} window=${bot.currentWindow?.type ?? "none"} onGround=${bot.entity.onGround})`,
+          ),
+        );
+      }, 10000),
+    ),
   ])) as Awaited<ReturnType<Bot["openContainer"]>>;
 }
 
