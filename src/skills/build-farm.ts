@@ -124,6 +124,7 @@ export const buildFarmSkill: Skill = {
         // farm run died "Couldn't reach the farm site" at the NEW site too.
         // The farm only needs to be near the spot horizontally; the 96-block
         // water search finds the pond from whatever height the bot walks in at.
+        setMovements(bot); // no digging, no big drops: the straight line to the site crosses old shafts
         await safeGoto(bot, new goals.GoalNearXZ(fx0, fz0, 8), 60000);
       } catch {
         /* walk failed — exact teleport below */
@@ -399,19 +400,27 @@ export const buildFarmSkill: Skill = {
     if (!waterPos) {
       return { success: false, message: "Water block has no position — chunk may not be loaded. Try again." };
     }
+    // Gather plots from EVERY surface water block in range, nearest first:
+    // the field spans several water blocks at different heights (RCON: 23
+    // farmland blocks around 300-310,-308..-320 at y56-60), and the old
+    // 13x13 ring around a single water block yielded 4 targets from a field
+    // of 23.
+    const seen = new Set<string>();
     const farmTargets: Vec3[] = [];
-    // 13x13 around the water (was 9x9): a bigger plot = bigger harvests = enough
-    // bread to actually feed the team. Food scarcity (workers starving, unable
-    // to mine/build) is the universal bottleneck; the farm is the only renewable
-    // source, so make each pass yield more.
-    for (let dx = -6; dx <= 6; dx++) {
-      for (let dz = -6; dz <= 6; dz++) {
-        if (dx === 0 && dz === 0) continue; // skip water block itself
-        const pos = waterPos.offset(dx, 0, dz);
-        if (tillable(pos)) farmTargets.push(pos.clone());
+    const waterCols = bot
+      .findBlocks({ matching: (b) => b.name === "water", maxDistance: 96, count: 200 })
+      .filter((p) => p.y >= SURFACE_WATER_MIN_Y)
+      .sort((a, b) => a.distanceTo(waterPos) - b.distanceTo(waterPos));
+    for (const wp of [waterPos, ...waterCols]) {
+      for (const pos of scanTillable(wp)) {
+        const key = `${pos.x},${pos.y},${pos.z}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        farmTargets.push(pos);
       }
+      if (farmTargets.length >= 48) break;
     }
-
+    farmTargets.sort((a, b) => a.distanceTo(bot.entity.position) - b.distanceTo(bot.entity.position));
     if (farmTargets.length === 0) {
       return {
         success: false,
@@ -640,6 +649,7 @@ export const buildFarmSkill: Skill = {
 function setMovements(bot: Bot) {
   const moves = baseMoves(bot);
   moves.canDig = false;
+  moves.maxDropDown = 3; // the shore slope is fine; an old shaft is not (Flora "ended up underground at y=16")
   moves.allow1by1towers = false;
   moves.allowFreeMotion = false;
   moves.scafoldingBlocks = [];
