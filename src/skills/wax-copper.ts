@@ -349,14 +349,40 @@ export const waxCopperSkill: Skill = {
       const level = isNest ? honeyLevel(b!.getProperties() as Record<string, unknown>) : null;
       return { ...n, level, dist: Math.hypot(bot.entity.position.x - n.x, bot.entity.position.z - n.z) };
     });
-    const HIVE = chooseNest(cands);
+    let HIVE = chooseNest(cands);
     if (!HIVE) {
-      const report = cands.map((c) => `${c.x},${c.y},${c.z} at ${c.level}/${FULL_HONEY}`).join("; ");
-      return {
-        success: false,
-        message: resumable(`No nest is full yet (${report}). Let the bees work; come back later.`),
-        stats: { bestHoney: Math.max(...cands.map((c) => c.level ?? 0)) },
-      };
+      // Every known nest is loaded and below full. If one is refilling (level
+      // above zero) and we are standing at it, wait here and poll: a bee adds
+      // a level every few minutes, and walking away costs the trip back.
+      const best = [...cands].sort((a, b) => (b.level ?? 0) - (a.level ?? 0) || a.dist - b.dist)[0];
+      if (best && (best.level ?? 0) >= 1 && best.dist <= 8) {
+        const until = Date.now() + 180_000;
+        let level = best.level ?? 0;
+        while (Date.now() < until && !signal.aborted && level < FULL_HONEY) {
+          step(`Nest at honey ${level}/${FULL_HONEY} — waiting beside it for the bees...`, 0.6);
+          await new Promise((r) => setTimeout(r, 10_000));
+          const b = bot.blockAt(new V3(best.x, best.y, best.z));
+          level = (b && honeyLevel(b.getProperties() as Record<string, unknown>)) ?? level;
+        }
+        if (level >= FULL_HONEY) {
+          HIVE = { ...best, level };
+        } else {
+          return {
+            success: false,
+            message: resumable(
+              `Nest at ${best.x},${best.y},${best.z} is at honey ${level}/${FULL_HONEY} — refilling. Stay near; come back shortly.`,
+            ),
+            stats: { bestHoney: level },
+          };
+        }
+      } else {
+        const report = cands.map((c) => `${c.x},${c.y},${c.z} at ${c.level}/${FULL_HONEY}`).join("; ");
+        return {
+          success: false,
+          message: resumable(`No nest is full yet (${report}). Let the bees work; come back later.`),
+          stats: { bestHoney: Math.max(...cands.map((c) => c.level ?? 0)) },
+        };
+      }
     }
     const gap = () => Math.hypot(bot.entity.position.x - HIVE.x, bot.entity.position.z - HIVE.z);
     const walkUntil = Date.now() + 240_000;

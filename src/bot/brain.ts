@@ -190,6 +190,11 @@ export class BotBrain {
   private lastArmorCraftMs = 0;
   private lastFrontierMs = 0;
   private lastWaxMs = 0;
+  /** Until when a known nest is refilling near Forge: hold him there instead of sending him mining. */
+  private waxWaitingUntil = 0;
+  private waxWaiting(): boolean {
+    return Date.now() < this.waxWaitingUntil;
+  }
   private lastPocketShedMs = 0;
   private lastWalkHomeMs = 0;
   private lastEscapeMs = 0;
@@ -1259,7 +1264,9 @@ export class BotBrain {
           .reduce((s, i) => s + i.count, 0);
       const hasCopper = held("copper_block") >= 1 || held("copper_ingot") >= 9;
       const hasShearMakings = held("shears") >= 1 || held("iron_ingot") >= 2;
-      const cooledWax = Date.now() - this.lastWaxMs > 600_000;
+      // While a nest is refilling nearby, retry every 2.5 min instead of 10:
+      // the nest at 452,72,-361 went 0→2 in ten minutes after a harvest.
+      const cooledWax = Date.now() - this.lastWaxMs > (this.waxWaiting() ? 150_000 : 600_000);
       // Only fire near the hive. Wax fired from anywhere pinned a stranded
       // Forge in a dead loop 357 blocks out that the walk could never close —
       // the route from the west side of base to the hive crosses impassable
@@ -1273,6 +1280,11 @@ export class BotBrain {
         this.log.info("Brain", "OVERRIDE: enough copper banked — going to wax a block for Wax On");
         this.events.onThought("Copper in my pack and a hive full of honeycomb. Time to earn Wax On.");
         const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "wax_copper" });
+        // "not full yet" with a level above zero means bees are working it:
+        // stay in the neighbourhood for 20 min rather than going underground.
+        const refilling = /at [1-4]\/5/.test(result) || /honey [1-4]\/5/.test(result);
+        this.waxWaitingUntil = refilling ? Date.now() + 1_200_000 : 0;
+        if (refilling) this.log.info("Brain", "Wax: a nest is refilling — holding near it, mining reflexes paused");
         this.events.onAction("wax_copper", result);
         this.lastAction = "wax_copper";
         this.lastResult = result;
@@ -1299,7 +1311,7 @@ export class BotBrain {
         .items()
         .filter((i) => i.name === "iron_ingot" || i.name === "raw_iron")
         .reduce((s, i) => s + i.count, 0);
-      const cooledFrontier = Date.now() - this.lastFrontierMs > 900_000;
+      const cooledFrontier = Date.now() - this.lastFrontierMs > 900_000 && !this.waxWaiting();
       const spF = this.roleConfig.stashPos;
       const nearBaseF =
         !!spF && Math.hypot(this.bot.entity.position.x - spF.x, this.bot.entity.position.z - spF.z) < 60;
@@ -1397,7 +1409,7 @@ export class BotBrain {
       // mining for one tick and let the diamond route first.
       const carryingDiamondForSmith =
         !this.roleConfig.primarySmith && this.bot.inventory.items().some((i) => i.name === "diamond");
-      const cooledDown = Date.now() - this.lastIronOverrideMs > 180_000;
+      const cooledDown = Date.now() - this.lastIronOverrideMs > 180_000 && !(this.waxWaiting() && !pickless);
       if ((!hasIron || wantsDive || pickless) && !carryingDiamondForSmith && cooledDown) {
         this.lastIronOverrideMs = Date.now();
         this.log.info(
