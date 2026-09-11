@@ -311,13 +311,26 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
               }
             }
           }
-          if (aim) bot.lookAt(aim, true).catch(() => {});
-          bot.setControlState("jump", true);
-          bot.setControlState("forward", true);
+          // Take the controls away from the pathfinder first. Its monitor
+          // runs every physics tick and, in the branch that stalled us, sets
+          // forward and jump OFF, so a hop issued underneath it is overwritten
+          // twenty times a second (66 nudges in run 516, Mason still in a
+          // one-block trench at 206,68,-327). stop() rejects this walk with
+          // 'Path was stopped'; the retry below re-plans from the new spot.
+          try {
+            bot.pathfinder.stop();
+          } catch {
+            /* no path */
+          }
           setTimeout(() => {
-            bot.setControlState("jump", false);
-            bot.setControlState("forward", false);
-          }, 700);
+            if (aim) bot.lookAt(aim, true).catch(() => {});
+            bot.setControlState("jump", true);
+            bot.setControlState("forward", true);
+            setTimeout(() => {
+              bot.setControlState("jump", false);
+              bot.setControlState("forward", false);
+            }, 700);
+          }, 60);
           stallTicks = 0;
           lastPos = currentPos.clone();
           return;
