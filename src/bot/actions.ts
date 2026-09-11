@@ -993,29 +993,76 @@ async function goTo(bot: Bot, x: number, y: number, z: number): Promise<string> 
   const cy = isFinite(y) ? y : bot.entity.position.y;
   const cz = isFinite(z) ? z : bot.entity.position.z;
 
+  // The model picks heights it cannot see: "climb up to the sunlit groves"
+  // came with y=120 three times in run 517, and the rescue tower below then
+  // built a cobblestone column to y=115 above the stash at 287,-314, where
+  // three bots later stood stalled at y=91..96. Snap the target to a spot the
+  // bot can stand on in that column before walking.
+  const snapped = snapToStandable(bot, cx, cy, cz);
+  if (snapped !== null && Math.abs(snapped - cy) >= 2) {
+    console.log(
+      `[GoTo] ${bot.username}: y ${cy.toFixed(0)} is not standable at ${cx.toFixed(0)},${cz.toFixed(0)}; using y ${snapped}`,
+    );
+  }
+  const ty = snapped ?? cy;
+
   // Reject unreasonable distances — LLM often hallucinates coordinates
-  const dist = bot.entity.position.distanceTo(new Vec3(cx, cy, cz));
+  const dist = bot.entity.position.distanceTo(new Vec3(cx, ty, cz));
   if (dist > 200) return `That's ${dist.toFixed(0)} blocks away — too far! Try explore instead for shorter trips.`;
   if (dist < 2) return "Already here!";
 
   bot.pathfinder.setMovements(safeMoves(bot));
   try {
-    await safeGoto(bot, new goals.GoalNear(cx, cy, cz, 2));
+    await safeGoto(bot, new goals.GoalNear(cx, ty, cz, 2));
   } catch (err) {
     // Rescue mode: safe movements can't dig or tower, so a bot standing in a
     // pit (or behind one block of dirt) is permanently stuck. Retry once with
-    // digging + 1x1 towers enabled before giving up.
+    // digging + 1x1 towers enabled before giving up. Towers only for a target
+    // a few blocks up: a pit is a few blocks deep, a sky target is a mistake.
     const rescue = baseMoves(bot);
     rescue.canDig = true;
-    rescue.allow1by1towers = true;
+    rescue.allow1by1towers = ty - bot.entity.position.y <= 6;
     bot.pathfinder.setMovements(rescue);
     try {
-      await safeGoto(bot, new goals.GoalNear(cx, cy, cz, 2), 30000);
+      await safeGoto(bot, new goals.GoalNear(cx, ty, cz, 2), 30000);
     } finally {
       bot.pathfinder.setMovements(safeMoves(bot));
     }
   }
-  return `Arrived at ${cx.toFixed(0)}, ${cy.toFixed(0)}, ${cz.toFixed(0)}.`;
+  return `Arrived at ${cx.toFixed(0)}, ${ty.toFixed(0)}, ${cz.toFixed(0)}.`;
+}
+
+/**
+ * The nearest y in the column at (x, z) where a bot can stand: air for feet
+ * and head, a solid floor, and the floor attached to something sideways so a
+ * 1x1 rescue tower's top does not count. Searches down first (a sky target
+ * lands on the surface, a cave target on its floor), then up. Returns null
+ * when the column is not loaded, in which case the caller keeps its y.
+ */
+export function snapToStandable(bot: Bot, x: number, y: number, z: number): number | null {
+  const bx = Math.floor(x);
+  const bz = Math.floor(z);
+  const at = (yy: number) => bot.blockAt(new Vec3(bx, yy, bz));
+  const solid = (b: ReturnType<typeof at>) => !!b && b.boundingBox === "block";
+  const empty = (b: ReturnType<typeof at>) => !!b && b.boundingBox === "empty";
+  const attached = (yy: number) =>
+    [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ].some(([dx, dz]) => solid(bot.blockAt(new Vec3(bx + dx, yy, bz + dz))));
+  const standable = (yy: number) => empty(at(yy)) && empty(at(yy + 1)) && solid(at(yy - 1)) && attached(yy - 1);
+  const y0 = Math.floor(y);
+  if (!at(y0)) return null;
+  if (standable(y0)) return y0;
+  // Nearest first, so a target that IS a block (a bed, a chest) resolves to
+  // the spot beside it rather than to a cave floor far below.
+  for (let d = 1; d <= 96; d++) {
+    if (at(y0 + d) && standable(y0 + d)) return y0 + d;
+    if (at(y0 - d) && standable(y0 - d)) return y0 - d;
+  }
+  return null;
 }
 
 /**

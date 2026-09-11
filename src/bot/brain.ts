@@ -1844,8 +1844,19 @@ export class BotBrain {
       const spBed = this.roleConfig.stashPos;
       const nearStashBed =
         !!spBed && Math.hypot(this.bot.entity.position.x - spBed.x, this.bot.entity.position.z - spBed.z) < 40;
+      // Ground-level beds only. Run 518: a bed placed on top of a rescue
+      // tower at (281, 114, -316) was the nearest bed to the stash by 3D
+      // distance, and three bots in turn walked up the tower and stalled at
+      // y=91..96 trying to reach it.
       const bed = nearStashBed
-        ? this.bot.findBlock({ matching: (b) => b.name.endsWith("_bed"), maxDistance: 48 })
+        ? (() => {
+            const groundY = spBed!.y;
+            const spots = this.bot
+              .findBlocks({ matching: (b) => b.name.endsWith("_bed"), maxDistance: 48, count: 24 })
+              .filter((p) => Math.abs(p.y - groundY) <= 10)
+              .sort((a, b) => a.distanceTo(this.bot.entity.position) - b.distanceTo(this.bot.entity.position));
+            return spots.length > 0 ? this.bot.blockAt(spots[0]) : null;
+          })()
         : null;
       const cooledClaim = Date.now() - this.lastBedClaimMs > 180_000;
       if (bed && cooledClaim) {
