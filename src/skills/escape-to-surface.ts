@@ -129,7 +129,7 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<boole
   const gone = !after || after.boundingBox !== "block";
   if (!gone) {
     console.log(
-      `[EscapeDebug] ${bot.username}: ${b.name} at ${x},${y},${z} survived a ${Math.round((Date.now() - started) / 1000)}s dig (expected ${Math.round(expected / 1000)}s${timedOut ? ", timed out" : digError ? `, dig threw: ${digError}` : ", dig ended early"})`,
+      `[EscapeDebug] ${bot.username}: ${b.name} at ${x},${y},${z} survived a ${Math.round((Date.now() - started) / 1000)}s dig (expected ${Math.round(expected / 1000)}s${timedOut ? ", timed out" : digError ? `, dig threw: ${digError}` : ", dig ended early"}; goal=${(bot.pathfinder as { goal?: unknown }).goal ? "set" : "none"}, floating=${floating})`,
     );
   }
   return gone;
@@ -216,14 +216,20 @@ function inWater(bot: Bot): boolean {
   return !!b && (b.name === "water" || b.name === "flowing_water" || b.name === "bubble_column");
 }
 
+/** True when the bot's head is already above the water: nothing more to gain by swimming. */
+function headAboveWater(bot: Bot): boolean {
+  const head = bot.blockAt(bot.entity.position.offset(0, 1, 0));
+  return !!head && head.name !== "water" && head.name !== "flowing_water" && head.name !== "bubble_column";
+}
+
 async function swimUp(bot: Bot): Promise<number> {
   const startY = feet(bot).y;
-  if (!inWater(bot)) return 0;
+  if (!inWater(bot) || headAboveWater(bot)) return 0; // at the surface: bobbing reads as +1 forever
   let lastY = bot.entity.position.y;
   let stalls = 0;
   bot.setControlState("jump", true);
   try {
-    for (let i = 0; i < 40 && inWater(bot); i++) {
+    for (let i = 0; i < 40 && inWater(bot) && !headAboveWater(bot); i++) {
       await new Promise((r) => setTimeout(r, 250));
       const y = bot.entity.position.y;
       if (y > lastY + 0.05) {
@@ -266,8 +272,11 @@ export const escapeToSurfaceSkill: Skill = {
     const step = (message: string, progress: number) =>
       onProgress({ skillName: "escape_to_surface", phase: "Escape", progress, message, active: true });
 
-    // Stop any pathfinder goal fighting us for the controls.
+    // Stop any pathfinder goal fighting us for the controls. stop() alone
+    // leaves the goal set, and the pathfinder tick cancels foreign digs while
+    // a goal exists ("survived a 0s dig, Digging aborted" in a flooded shaft).
     try {
+      bot.pathfinder.setGoal(null);
       bot.pathfinder.stop();
     } catch {
       /* no goal */
