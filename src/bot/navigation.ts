@@ -126,7 +126,11 @@ function navDiag(bot: Bot, goal: any, reason: string): string {
   // What the bot was physically doing: every failure so far had a full path
   // (lastPath=success), so the loss is in execution, and these fields say
   // whether it was moving, what it stood in, and whether a door was in the way.
-  const moving = (bot.pathfinder as any)?.isMoving?.() ?? "?";
+  const pf = bot.pathfinder as any;
+  const moving = pf?.isMoving?.() ?? "?";
+  // The pathfinder holds a path yet sets no keys: name which of its internal
+  // states (mining, building, a dig in flight, busy hands) is holding it.
+  const pfState = `mining=${pf?.isMining?.() ?? "?"} building=${pf?.isBuilding?.() ?? "?"} digTarget=${bot.targetDigBlock ? "yes" : "no"} held=${bot.heldItem?.name ?? "none"} window=${bot.currentWindow?.type ?? "none"}`;
   const ctrl =
     Object.entries(bot.controlState ?? {})
       .filter(([, v]) => v)
@@ -140,7 +144,7 @@ function navDiag(bot: Bot, goal: any, reason: string): string {
     maxDistance: 3,
   });
   const doorNote = door ? ` door=${door.name}@${door.position.x},${door.position.y},${door.position.z}` : "";
-  return `[NavDiag] ${bot.username} ${reason}: goal=${goal?.constructor?.name ?? "?"}(${gx},${gy},${gz}) dist=${dist} lastPath=${lp?.status ?? "-"}/${lp?.length ?? 0} (${age}) moving=${moving} ctrl=${ctrl} vel=${vel} feet=${feet} on=${below}${doorNote}`;
+  return `[NavDiag] ${bot.username} ${reason}: goal=${goal?.constructor?.name ?? "?"}(${gx},${gy},${gz}) dist=${dist} lastPath=${lp?.status ?? "-"}/${lp?.length ?? 0} (${age}) moving=${moving} ${pfState} ctrl=${ctrl} vel=${vel} feet=${feet} on=${below}${doorNote}`;
 }
 export function bumpNavGeneration(bot: Bot): void {
   navGeneration.set(bot, (navGeneration.get(bot) ?? 0) + 1);
