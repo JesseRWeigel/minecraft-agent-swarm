@@ -193,6 +193,10 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
     let settled = false;
     let retries = 0;
     let unwedges = 0;
+    // A hop-out in flight: set by the stall check before it stops the
+    // pathfinder, consumed by the goto rejection handler, which performs the
+    // hop once the pathfinder has actually let go of the controls.
+    let hopPending: { aim: Vec3 | null } | null = null;
     // Every new walk is a new generation. Without this, a walk interrupted
     // by the caller's next walk retried itself 3s later with the OLD goal,
     // cancelling the new walk, which then retried too: 324 'interrupted
@@ -297,17 +301,33 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
               !WEDGE_BLOCKS.has(floorB.name)
             );
           };
+          // Candidates: the eight neighbours one step up, level, or one step
+          // down (a chest pile is left by stepping DOWN off it; the level-only
+          // scan found nothing at 289,70,-314 with solid walls either side).
+          // Pick the one nearest the goal so the hop makes progress instead
+          // of bouncing between two chest tops (run 517: 41 hops between
+          // 281,69,-323 and 282,69,-323).
+          const g = goal as unknown as { x?: number; y?: number; z?: number };
+          const goalPos = typeof g?.x === "number" && typeof g?.z === "number" ? new Vec3(g.x, g.y ?? f.y, g.z) : null;
           let aim: Vec3 | null = null;
-          outer: for (const dy of [1, 0]) {
+          let best = Infinity;
+          for (const dy of [0, -1, 1]) {
             for (const [dx, dz] of [
               [1, 0],
               [-1, 0],
               [0, 1],
               [0, -1],
+              [1, 1],
+              [1, -1],
+              [-1, 1],
+              [-1, -1],
             ] as const) {
-              if (standable(f.x + dx, f.y + dy, f.z + dz)) {
-                aim = new Vec3(f.x + dx + 0.5, f.y + dy, f.z + dz + 0.5);
-                break outer;
+              if (!standable(f.x + dx, f.y + dy, f.z + dz)) continue;
+              const c = new Vec3(f.x + dx + 0.5, f.y + dy, f.z + dz + 0.5);
+              const score = goalPos ? c.distanceTo(goalPos) : Math.abs(dy) * 10;
+              if (score < best) {
+                best = score;
+                aim = c;
               }
             }
           }
@@ -315,22 +335,18 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
           // runs every physics tick and, in the branch that stalled us, sets
           // forward and jump OFF, so a hop issued underneath it is overwritten
           // twenty times a second (66 nudges in run 516, Mason still in a
-          // one-block trench at 206,68,-327). stop() rejects this walk with
-          // 'Path was stopped'; the retry below re-plans from the new spot.
+          // one-block trench at 206,68,-327). stop() takes effect on the NEXT
+          // physics tick, where resetPath('stop') calls clearControlStates()
+          // and rejects this walk with 'Path was stopped'. A hop issued on a
+          // fixed 60ms timer raced that tick and lost (run 517: 60 hops, same
+          // chest top before and after). So the hop is performed by the
+          // rejection handler below, once the pathfinder has let go.
+          hopPending = { aim };
           try {
             bot.pathfinder.stop();
           } catch {
             /* no path */
           }
-          setTimeout(() => {
-            if (aim) bot.lookAt(aim, true).catch(() => {});
-            bot.setControlState("jump", true);
-            bot.setControlState("forward", true);
-            setTimeout(() => {
-              bot.setControlState("jump", false);
-              bot.setControlState("forward", false);
-            }, 700);
-          }, 60);
           stallTicks = 0;
           lastPos = currentPos.clone();
           return;
@@ -398,6 +414,30 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
           // on THIS route. Walk again — unless the generation advanced, which
           // means the stop was deliberate and this walk should stay dead.
           const interrupted = /stopped before it could be completed|goal was changed/i.test(err?.message ?? "");
+          if (interrupted && hopPending && getNavGeneration(bot) === genAtStart) {
+            // Our own stall hop: the pathfinder has released the controls, so
+            // the keys we set now stick. Re-assert them every tick for the
+            // hop's duration in case anything else clears them, then re-plan
+            // from wherever the bot landed. Hops are budgeted by unwedges,
+            // never by the interruption retries (run 517: three hops spent
+            // both retries and the walk surfaced 'Path was stopped' to the
+            // planting loop, 1 of 17 plots planted).
+            const { aim } = hopPending;
+            hopPending = null;
+            if (aim) bot.lookAt(aim, true).catch(() => {});
+            const hold = setInterval(() => {
+              bot.setControlState("jump", true);
+              bot.setControlState("forward", true);
+            }, 50);
+            setTimeout(() => {
+              clearInterval(hold);
+              bot.setControlState("jump", false);
+              bot.setControlState("forward", false);
+              lastPos = bot.entity.position.clone();
+              setTimeout(attempt, 400);
+            }, 700);
+            return;
+          }
           if (interrupted && retries < 2 && getNavGeneration(bot) === genAtStart) {
             retries++;
             console.log(`[Nav] ${bot.username} goto interrupted externally — retry ${retries}/2`);

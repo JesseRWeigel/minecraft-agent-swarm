@@ -130,6 +130,22 @@ async function clearChestRoof(bot: Bot, chestPos: Vec3): Promise<boolean> {
   }
 }
 
+/** Walk to a chest, but accept a failed walk that still ended in reach. On the
+ *  stash's chest pile the pathfinder stalls with the bot standing ON a chest
+ *  two blocks from its target (run 517: 46 "Navigation timed out" opens at
+ *  290,69,-313 from 289,70,-314), and the open was never even attempted. */
+async function walkToChest(bot: Bot, pos: Vec3, timeoutMs: number): Promise<void> {
+  try {
+    await safeGoto(bot, new goals.GoalNear(pos.x, pos.y, pos.z, 2), timeoutMs);
+  } catch (e) {
+    const dist = bot.entity.position.distanceTo(pos);
+    if (!withinReach(dist)) throw e;
+    console.log(
+      `[Stash] walk to chest at ${pos} failed (${(e as Error).message}) but it is ${dist.toFixed(1)} blocks away, opening anyway`,
+    );
+  }
+}
+
 /** Refuse to open a chest the bot never reached: run 509 logged opens from
  *  74 and 181 blocks away after walks that ended without arriving, each one
  *  burning a 10s timeout. */
@@ -1052,7 +1068,7 @@ export async function depositStash(
         // failures after deploy were both this case with zero roofs cleared.
         let navErr: Error | null = null;
         try {
-          await safeGoto(bot, new goals.GoalNear(chest.position.x, chest.position.y, chest.position.z, 2), 10000);
+          await walkToChest(bot, chest.position, 10000);
         } catch (e) {
           navErr = e as Error;
         }
@@ -1072,7 +1088,7 @@ export async function depositStash(
           digApproach.allow1by1towers = false; // no pillaring: that is the fall risk
           bot.pathfinder.setMovements(digApproach);
           try {
-            await safeGoto(bot, new goals.GoalNear(chest.position.x, chest.position.y, chest.position.z, 2), 12000);
+            await walkToChest(bot, chest.position, 12000);
             navErr = null;
           } catch (e) {
             navErr = e as Error;
@@ -1446,7 +1462,7 @@ export async function withdrawStash(
       break;
     }
     try {
-      await safeGoto(bot, new goals.GoalNear(chest.position.x, chest.position.y, chest.position.z, 2), 8000);
+      await walkToChest(bot, chest.position, 8000);
       if (withinReach(bot.entity.position.distanceTo(chest.position))) await clearChestRoof(bot, chest.position);
       const container = await openContainerTimed(bot, chest);
 
