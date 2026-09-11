@@ -30,6 +30,14 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   // Deliberate crossings use manual controls and are unaffected.
   const portalId = bot.registry.blocksByName.nether_portal?.id;
   if (portalId !== undefined) moves.blocksToAvoid.add(portalId);
+  // Chests are 14/16 of a block: a path that steps onto one leaves the bot
+  // standing inside it with no way to step off (NavDiag run 504: every stall
+  // read feet=chest, ctrl=none). The village centre is carpeted with stash
+  // chests, so plan around them.
+  for (const n of ["chest", "trapped_chest", "ender_chest", "barrel"]) {
+    const id = bot.registry.blocksByName[n]?.id;
+    if (id !== undefined) moves.blocksToAvoid.add(id);
+  }
   return moves;
 }
 
@@ -89,6 +97,9 @@ export function explorerMoves(bot: Bot): InstanceType<typeof Movements> {
  * current. A zombie's own goto sees the bumped generation and stays dead.
  */
 const navGeneration = new WeakMap<Bot, number>();
+
+/** Short blocks a bot can end up standing inside, where the pathfinder stalls. */
+const WEDGE_BLOCKS = new Set(["chest", "trapped_chest", "ender_chest", "barrel"]);
 
 /** Last pathfinder result per bot, for the failure diagnostics below. */
 const lastPath = new WeakMap<Bot, { status: string; length: number; at: number }>();
@@ -170,6 +181,7 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
     let stallTicks = 0;
     let settled = false;
     let retries = 0;
+    let unwedges = 0;
     // Every new walk is a new generation. Without this, a walk interrupted
     // by the caller's next walk retried itself 3s later with the OLD goal,
     // cancelling the new walk, which then retried too: 324 'interrupted
@@ -217,6 +229,25 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
       const moved = currentPos.distanceTo(lastPos);
       if (moved < 0.3) {
         stallTicks++;
+        // Standing inside a chest (or similar short block): the pathfinder
+        // cannot step the bot out, so hop it out ourselves and let the walk
+        // resume. Two hops, then the stall is real.
+        const feetName = bot.blockAt(currentPos)?.name ?? "";
+        if (WEDGE_BLOCKS.has(feetName) && unwedges < 2 && stallTicks >= 2) {
+          unwedges++;
+          console.log(
+            `[Nav] ${bot.username} wedged in ${feetName} at ${currentPos.floored()} — hopping out (${unwedges}/2)`,
+          );
+          bot.setControlState("jump", true);
+          bot.setControlState("forward", true);
+          setTimeout(() => {
+            bot.setControlState("jump", false);
+            bot.setControlState("forward", false);
+          }, 700);
+          stallTicks = 0;
+          lastPos = currentPos.clone();
+          return;
+        }
         if (stallTicks >= STALL_THRESHOLD) {
           clearTimeout(timeout);
           clearInterval(stallCheck);
