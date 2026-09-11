@@ -31,8 +31,11 @@ export const harvestHoneySkill: Skill = {
     "Bottle honey from a bee nest with a campfire under it (earns Bee Our Guest). Needs a glass bottle: withdraws glass at the stash and crafts one first.",
   params: {},
 
+  // Empty on purpose: the executor refuses a skill whose estimate is
+  // unmet before execute() runs, and this skill supplies its own bottle
+  // (run 533: "Still missing glass_bottle: have 0, need 1" at 0%).
   estimateMaterials(): Record<string, number> {
-    return { glass_bottle: 1 };
+    return {};
   },
 
   async execute(bot, _params, signal, onProgress): Promise<SkillResult> {
