@@ -2740,7 +2740,7 @@ export class BotBrain {
       // leave the spot: Atlas logged it 674 times in one hour from a flooded
       // shaft under a lake at y=16, and it never counted as a walk failure.
       if (
-        /Navigation timed out|Stuck — not making progress|No path to the goal|Couldn't reach|Couldn't move|path blocked/i.test(
+        /Navigation timed out|Stuck — not making progress|No path to the goal|No route from here|Couldn't reach|Couldn't move|path blocked/i.test(
           result,
         )
       ) {

@@ -490,6 +490,37 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
         .then(() => {
           gotoActive = false;
           if (settled) return;
+          // Phantom arrival: the library resolves an EMPTY path as success
+          // (goto.js checks path.length === 0 before status), which is what
+          // a bot with no valid start node gets: sealed in stone (Flora,
+          // 363,62,-281) or standing inside a short block in a pit (Blade,
+          // 207,65,-310). Every walk "arrived" instantly and nothing ever
+          // stalled. Verify the goal, jump once toward it, and fail loudly.
+          const g = goal as unknown as { x?: number; y?: number; z?: number; isEnd?: (p: Vec3) => boolean };
+          const here = bot.entity.position;
+          const flat =
+            typeof g?.x === "number" && typeof g?.z === "number" ? Math.hypot(here.x - g.x, here.z - g.z) : 0;
+          const reached = typeof g?.isEnd === "function" ? g.isEnd(here.floored()) : true;
+          if (!reached && flat > 4) {
+            console.log(
+              `[Nav] ${bot.username} phantom arrival at ${here.floored()}: goal ${flat.toFixed(0)} blocks away, no route from here`,
+            );
+            if (typeof g.x === "number" && typeof g.z === "number") {
+              bot.lookAt(new Vec3(g.x, here.y + 1.6, g.z), true).catch(() => {});
+            }
+            bot.setControlState("jump", true);
+            bot.setControlState("forward", true);
+            setTimeout(() => {
+              bot.setControlState("jump", false);
+              bot.setControlState("forward", false);
+              settled = true;
+              finishTimers();
+              reject(
+                new Error("No route from here — the pathfinder found no valid start (sealed in or inside a block)."),
+              );
+            }, 700);
+            return;
+          }
           settled = true;
           finishTimers();
           resolve();

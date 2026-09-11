@@ -299,7 +299,9 @@ export const escapeToSurfaceSkill: Skill = {
     }
 
     const startY = feet(bot).y;
-    if (startY >= SURFACE_Y) {
+    // Height alone is not the surface: Flora sat at y=62 under ten blocks
+    // of stone through runs 537 to 540 while this line sent her back.
+    if (startY >= SURFACE_Y && canSeeSky(bot)) {
       return { success: true, message: "Already at the surface." };
     }
 
