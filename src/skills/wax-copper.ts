@@ -58,6 +58,53 @@ async function ensureTable(bot: Bot): Promise<Block | null> {
   const near = () => bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 5 });
   let table = near();
   if (table) return table;
+  // Walk to an existing table first (nearest three within 48): the wax run
+  // fired with Forge standing in a pond, where there is no dry floor to place
+  // a table on, while the village tables sat well within walking range.
+  const { Vec3: TV } = await import("vec3");
+  const known = bot
+    .findBlocks({ matching: (b) => b.name === "crafting_table", maxDistance: 48, count: 3 })
+    .sort((a, b) => a.distanceTo(bot.entity.position) - b.distanceTo(bot.entity.position));
+  for (const tp of known) {
+    await safeGoto(bot, new goals.GoalNear(tp.x, tp.y, tp.z, 2), 20_000, 8_000).catch(() => {});
+    table = near();
+    if (table) return table;
+  }
+  // No table walkable: get onto dry ground before placing our own.
+  const feetBlock = bot.blockAt(bot.entity.position.offset(0, -1, 0));
+  if (!feetBlock || feetBlock.boundingBox !== "block") {
+    const f = bot.entity.position.floored();
+    let dry: InstanceType<typeof TV> | null = null;
+    outer: for (let r = 1; r <= 10; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dz = -r; dz <= r; dz++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          for (let dy = -2; dy <= 2; dy++) {
+            const ground = bot.blockAt(f.offset(dx, dy - 1, dz));
+            const stand = bot.blockAt(f.offset(dx, dy, dz));
+            const head = bot.blockAt(f.offset(dx, dy + 1, dz));
+            if (
+              ground &&
+              ground.boundingBox === "block" &&
+              ground.name !== "water" &&
+              stand &&
+              (stand.name === "air" || stand.name === "cave_air") &&
+              head &&
+              (head.name === "air" || head.name === "cave_air")
+            ) {
+              dry = f.offset(dx, dy, dz);
+              break outer;
+            }
+          }
+        }
+      }
+    }
+    if (dry) {
+      await safeGoto(bot, new goals.GoalBlock(dry.x, dry.y, dry.z), 15_000, 6_000).catch(() => {});
+    } else {
+      console.log(`[WaxDebug] ${bot.username}: standing on ${feetBlock?.name} and no dry ground within 10 blocks`);
+    }
+  }
   const mcData = (await import("minecraft-data")).default(bot.version);
   const planksHeld = bot.inventory
     .items()
