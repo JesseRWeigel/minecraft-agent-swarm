@@ -30,14 +30,10 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   // Deliberate crossings use manual controls and are unaffected.
   const portalId = bot.registry.blocksByName.nether_portal?.id;
   if (portalId !== undefined) moves.blocksToAvoid.add(portalId);
-  // Chests are 14/16 of a block: a path that steps onto one leaves the bot
-  // standing inside it with no way to step off (NavDiag run 504: every stall
-  // read feet=chest, ctrl=none). The village centre is carpeted with stash
-  // chests, so plan around them.
-  for (const n of ["chest", "trapped_chest", "ender_chest", "barrel"]) {
-    const id = bot.registry.blocksByName[n]?.id;
-    if (id !== undefined) moves.blocksToAvoid.add(id);
-  }
+  // (Tried avoiding chests as walkable blocks on 2026-09-11: in a village
+  // carpeted with stash chests that made every route long enough to blow the
+  // walk budget, stash failures went from 0 to 17 in ten minutes. Reverted;
+  // the stall detector hops a wedged bot out instead.)
   return moves;
 }
 
@@ -204,14 +200,32 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
           }, stallStartDelayMs)
         : null;
 
-    const timeout = setTimeout(() => {
+    const onTimeout = () => {
       settled = true;
       clearInterval(stallCheck);
       if (stallDelayTimer) clearTimeout(stallDelayTimer);
+      console.log(navDiag(bot, goal, "timed out")); // before stop(): stop clears the keys
+      offPath();
       bot.pathfinder.stop();
-      console.log(navDiag(bot, goal, "timed out"));
       reject(new Error("Navigation timed out — goal may be unreachable."));
-    }, timeoutMs);
+    };
+    let timeout = setTimeout(onTimeout, timeoutMs);
+    // Budget follows the plan: a 47-node path needs 10s+ of plain walking, and
+    // stash and farm walks were being cut off at 15s with a valid path in
+    // hand. When the planner reports a path, extend the timeout to cover it
+    // (0.8s per node, capped at 60s), once per walk.
+    let extended = false;
+    const onPath = (r: any) => {
+      if (settled || extended || r?.status !== "success" || !Array.isArray(r.path)) return;
+      const need = Math.min(60_000, r.path.length * 800);
+      if (need > timeoutMs) {
+        extended = true;
+        clearTimeout(timeout);
+        timeout = setTimeout(onTimeout, need);
+      }
+    };
+    bot.on("path_update" as any, onPath);
+    const offPath = () => bot.removeListener("path_update" as any, onPath);
 
     const stallCheck = setInterval(() => {
       if (!stallActive) return;
@@ -252,6 +266,8 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
           clearTimeout(timeout);
           clearInterval(stallCheck);
           if (stallDelayTimer) clearTimeout(stallDelayTimer);
+          console.log(navDiag(bot, goal, "stalled")); // before stop(): stop clears the keys
+          offPath();
           bot.pathfinder.stop();
           // Where, and wedged in what.
           //
@@ -278,7 +294,6 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
               `sides=${around} onGround=${bot.entity.onGround}`,
           );
           settled = true;
-          console.log(navDiag(bot, goal, "stalled"));
           reject(new Error("Stuck — not making progress toward goal."));
         }
       } else {
@@ -291,6 +306,7 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
       clearTimeout(timeout);
       clearInterval(stallCheck);
       if (stallDelayTimer) clearTimeout(stallDelayTimer);
+      offPath();
     };
     const attempt = () => {
       if (settled) return; // outer timeout/stall fired during the retry delay
