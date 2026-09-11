@@ -192,6 +192,40 @@ export function isBuried(
   return false;
 }
 
+/**
+ * Float up through water before digging. Digging while swimming runs 25x
+ * slower (5x in water, 5x airborne), so a bot in an aquifer pocket spent whole
+ * 240s runs on one block (Forge, y=26, "expected 188s"). Swimming up is free
+ * height; take all of it first. Returns the blocks gained.
+ */
+function inWater(bot: Bot): boolean {
+  const b = bot.blockAt(bot.entity.position);
+  return !!b && (b.name === "water" || b.name === "flowing_water" || b.name === "bubble_column");
+}
+
+async function swimUp(bot: Bot): Promise<number> {
+  const startY = feet(bot).y;
+  if (!inWater(bot)) return 0;
+  let lastY = bot.entity.position.y;
+  let stalls = 0;
+  bot.setControlState("jump", true);
+  try {
+    for (let i = 0; i < 40 && inWater(bot); i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      const y = bot.entity.position.y;
+      if (y > lastY + 0.05) {
+        lastY = y;
+        stalls = 0;
+      } else if (++stalls >= 6) break; // ceiling or surface reached
+    }
+  } finally {
+    bot.setControlState("jump", false);
+  }
+  const gained = feet(bot).y - startY;
+  if (gained > 0) console.log(`[EscapeDebug] ${bot.username}: swam up ${gained} blocks to y=${feet(bot).y}`);
+  return gained;
+}
+
 /** True once the column straight above the bot is clear to the sky. */
 function canSeeSky(bot: Bot): boolean {
   const f = feet(bot);
@@ -262,6 +296,14 @@ export const escapeToSurfaceSkill: Skill = {
 
     while (!signal.aborted && Date.now() < deadline) {
       if (died) return diedResult();
+      if (inWater(bot)) {
+        const swam = await swimUp(bot);
+        if (swam > 0) {
+          lastY = Math.max(lastY, feet(bot).y);
+          stallCount = 0;
+          continue;
+        }
+      }
       const f = feet(bot);
       if (f.y >= SURFACE_Y || canSeeSky(bot)) {
         bot.removeListener("death", onDeath);

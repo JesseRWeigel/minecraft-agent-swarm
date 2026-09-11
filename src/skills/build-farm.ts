@@ -7,6 +7,8 @@ const { goals, Movements } = pkg;
 import mcDataLoader from "minecraft-data";
 import { getBotMemoryStore } from "../bot/memory-registry.js";
 import { config } from "../config.js";
+/** Below this the water is an aquifer and the dirt is unlit; the farm belongs on the surface. */
+const SURFACE_WATER_MIN_Y = 50;
 
 export const buildFarmSkill: Skill = {
   name: "build_farm",
@@ -125,6 +127,16 @@ export const buildFarmSkill: Skill = {
           };
         }
       }
+    }
+
+    // The XZ-only site walk accepts any depth, and the ground around the
+    // village is riddled with old shafts, so a bot can "arrive" forty blocks
+    // under the pond. Farming there wastes seeds in the dark; say so.
+    if (bot.entity.position.y < SURFACE_WATER_MIN_Y) {
+      return {
+        success: false,
+        message: `Ended up underground at y=${Math.floor(bot.entity.position.y)} on the way to the farm site — the pond is on the surface. Climb out first, then try build_farm again.`,
+      };
     }
 
     // --- Step 1: Ensure we have a hoe ---
@@ -259,7 +271,14 @@ export const buildFarmSkill: Skill = {
     // lake behind it. The FarmDebug line says what the search actually saw —
     // RCON found water 3 blocks from the farm site while this reported none.
     const findSurfaceWater = () => {
-      const waters = bot.findBlocks({ matching: (b) => b.name === "water", maxDistance: 96, count: 200 });
+      // Surface water only: with the site walk dropping bots into old shafts,
+      // the search once picked an aquifer at y=22 and Flora tilled and seeded
+      // dirt at y=37 in the dark, where wheat never grows.
+      const waters = bot.findBlocks({
+        matching: (b) => b.name === "water" && b.position.y >= SURFACE_WATER_MIN_Y,
+        maxDistance: 96,
+        count: 200,
+      });
       let bestN = -1;
       let bestWp: Vec3 | null = null;
       for (const wp of waters) {

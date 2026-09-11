@@ -40,6 +40,7 @@ import { abortActiveSkill, isSkillRunning, getActiveSkillName, takeSkillOutcome 
 import { handsBusy } from "../skills/fluid.js";
 import { skillRegistry } from "../skills/registry.js";
 import { isBuried } from "../skills/escape-to-surface.js";
+import { nearestNest } from "../skills/wax-copper.js";
 import { BotMemoryStore } from "./memory.js";
 import { getAllMemoryStores } from "./memory-registry.js";
 import { updateBulletin, formatTeamBulletin } from "./bulletin.js";
@@ -929,7 +930,7 @@ export class BotBrain {
     // while mine_frontier never once fired. So exempt him ONLY when he is near
     // the hive/frontier; when he strands anywhere else, walk-home marches him
     // back to base, from where the frontier ferry can carry him east again.
-    const HIVE_XZ = { x: 472, z: -445 };
+    const HIVE_XZ = nearestNest(this.bot.entity.position.x, this.bot.entity.position.z);
     const forgeHoldingEast =
       this.bot.username === "Forge" &&
       Math.hypot(this.bot.entity.position.x - HIVE_XZ.x, this.bot.entity.position.z - HIVE_XZ.z) < 200;
@@ -1265,7 +1266,8 @@ export class BotBrain {
       // water. Gated to the hive/frontier neighbourhood, wax runs the short,
       // roamer-proven hop it was designed for; when Forge is elsewhere, the
       // walk-home + frontier-ferry reflexes reposition him east first.
-      const nearHive = Math.hypot(this.bot.entity.position.x - 472, this.bot.entity.position.z - -445) < 140;
+      const nest = nearestNest(this.bot.entity.position.x, this.bot.entity.position.z);
+      const nearHive = Math.hypot(this.bot.entity.position.x - nest.x, this.bot.entity.position.z - nest.z) < 140;
       if (!waxDone && hasCopper && hasShearMakings && cooledWax && nearHive) {
         this.lastWaxMs = Date.now();
         this.log.info("Brain", "OVERRIDE: enough copper banked — going to wax a block for Wax On");

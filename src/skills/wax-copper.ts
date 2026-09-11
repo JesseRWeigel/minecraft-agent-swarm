@@ -18,7 +18,33 @@ import { baseMoves, explorerMoves, safeGoto } from "../bot/navigation.js";
  * waxes it.
  */
 
-const HIVE = { x: 472, y: 71, z: -445 };
+/**
+ * Every bee nest the swarm knows. The first one found (472,71,-445) was
+ * sheared dry and its colony killed; RCON on 2026-09-11 showed the one
+ * surviving bee's home is the SECOND nest at 452,72,-361, ninety blocks
+ * away. The skill reads both and goes to whichever is full.
+ */
+export const NESTS: Array<{ x: number; y: number; z: number }> = [
+  { x: 452, y: 72, z: -361 },
+  { x: 472, y: 71, z: -445 },
+];
+
+/** The known nest closest to a position (XZ), for reflexes that gate on "near the hive". */
+export function nearestNest(x: number, z: number): { x: number; y: number; z: number } {
+  return [...NESTS].sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+}
+
+export type NestCandidate = { x: number; y: number; z: number; level: number | null; dist: number };
+
+/**
+ * Which nest to walk to: the nearest one that reads full; else the nearest
+ * whose level is unknown (chunk not loaded yet, so go look); else null when
+ * every nest is loaded and below full — nothing to harvest anywhere.
+ */
+export function chooseNest(cands: NestCandidate[]): NestCandidate | null {
+  const byDist = [...cands].sort((a, b) => a.dist - b.dist);
+  return byDist.find((c) => c.level !== null && c.level >= FULL_HONEY) ?? byDist.find((c) => c.level === null) ?? null;
+}
 
 function count(bot: Bot, name: string): number {
   return bot.inventory
@@ -270,6 +296,22 @@ export const waxCopperSkill: Skill = {
     (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).canDig = true;
     (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).allow1by1towers = true;
     (digWalk as unknown as { canDig: boolean; allow1by1towers: boolean; maxDropDown: number }).maxDropDown = 3;
+    const { Vec3: V3 } = await import("vec3");
+    const cands: NestCandidate[] = NESTS.map((n) => {
+      const b = bot.blockAt(new V3(n.x, n.y, n.z));
+      const isNest = !!b && (b.name === "bee_nest" || b.name === "beehive");
+      const level = isNest ? honeyLevel(b!.getProperties() as Record<string, unknown>) : null;
+      return { ...n, level, dist: Math.hypot(bot.entity.position.x - n.x, bot.entity.position.z - n.z) };
+    });
+    const HIVE = chooseNest(cands);
+    if (!HIVE) {
+      const report = cands.map((c) => `${c.x},${c.y},${c.z} at ${c.level}/${FULL_HONEY}`).join("; ");
+      return {
+        success: false,
+        message: resumable(`No nest is full yet (${report}). Let the bees work; come back later.`),
+        stats: { bestHoney: Math.max(...cands.map((c) => c.level ?? 0)) },
+      };
+    }
     const gap = () => Math.hypot(bot.entity.position.x - HIVE.x, bot.entity.position.z - HIVE.z);
     const walkUntil = Date.now() + 240_000;
     let guard = 0;
