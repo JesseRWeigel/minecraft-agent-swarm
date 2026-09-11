@@ -2631,7 +2631,12 @@ export class BotBrain {
       // firing it whenever a bot is unarmoured and has a working pick lets it
       // pull the accumulated iron and forge a piece. A 5-minute cooldown
       // bounds the wasted table trip on the runs where the stash is dry.
-      if (hasPick && cooledArmor) {
+      // An unarmed bot forges a sword the same way (craft_gear crafts every
+      // tool type it has materials for): run 543 lost seven bots in fifteen
+      // minutes to a five-pillager patrol camped on the stash, with one stone
+      // sword in the whole swarm and 5,000 cobblestone banked.
+      const noSword = !this.bot.inventory.items().some((i) => i.name.endsWith("_sword"));
+      if ((hasPick || noSword) && cooledArmor) {
         this.lastArmorCraftMs = Date.now();
         this.log.info("Brain", "OVERRIDE: unarmoured with a pick in hand — running craft_gear to forge armour");
         this.events.onThought("A pick in hand but nothing on my back. Time to forge some armour.");
