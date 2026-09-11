@@ -136,6 +136,61 @@ export function explorerMoves(bot: Bot): InstanceType<typeof Movements> {
  */
 const navGeneration = new WeakMap<Bot, number>();
 
+/** Blocks bare hands clear quickly, for a bot wedged in a pit or a bush. */
+const SOFT_BLOCKS = new Set([
+  "dirt",
+  "grass_block",
+  "coarse_dirt",
+  "rooted_dirt",
+  "podzol",
+  "mud",
+  "sand",
+  "red_sand",
+  "gravel",
+  "clay",
+  "snow",
+  "snow_block",
+  "moss_block",
+]);
+const phantomStreak = new WeakMap<Bot, { key: string; n: number }>();
+
+/** Dig the hand-diggable blocks around a wedged bot: the four neighbours at
+ *  feet and head level, and the two blocks overhead. Leaves, saplings and
+ *  bushes count too. Bounded to eight blocks; returns how many were cleared. */
+async function clearExit(bot: Bot): Promise<number> {
+  const f = bot.entity.position.floored();
+  const soft = (name: string) =>
+    SOFT_BLOCKS.has(name) ||
+    name.endsWith("_leaves") ||
+    name.endsWith("_sapling") ||
+    name.endsWith("_bush") ||
+    name === "short_grass" ||
+    name === "tall_grass" ||
+    name === "fern";
+  const targets: Vec3[] = [f.offset(0, 2, 0), f.offset(0, 1, 0)];
+  for (const [dx, dz] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ] as const) {
+    targets.push(f.offset(dx, 1, dz), f.offset(dx, 0, dz));
+  }
+  let cleared = 0;
+  for (const p of targets) {
+    if (cleared >= 8) break;
+    const b = bot.blockAt(p);
+    if (!b || !soft(b.name) || !bot.canDigBlock(b)) continue;
+    try {
+      await bot.dig(b);
+      cleared++;
+    } catch {
+      /* next block */
+    }
+  }
+  return cleared;
+}
+
 /** Short blocks a bot can end up standing inside, where the pathfinder stalls. */
 const WEDGE_BLOCKS = new Set(["chest", "trapped_chest", "ender_chest", "barrel"]);
 
@@ -508,17 +563,38 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
             if (typeof g.x === "number" && typeof g.z === "number") {
               bot.lookAt(new Vec3(g.x, here.y + 1.6, g.z), true).catch(() => {});
             }
-            bot.setControlState("jump", true);
-            bot.setControlState("forward", true);
-            setTimeout(() => {
-              bot.setControlState("jump", false);
-              bot.setControlState("forward", false);
-              settled = true;
-              finishTimers();
-              reject(
-                new Error("No route from here — the pathfinder found no valid start (sealed in or inside a block)."),
-              );
-            }, 700);
+            // Third phantom in a row at the same spot: the hop is not enough
+            // (Blade, 46 phantoms in a sapling pit with dirt on four sides
+            // and leaves overhead, run 541). Clear the soft blocks around
+            // head and feet by hand, then hop.
+            const key = here.floored().toString();
+            const ph = phantomStreak.get(bot);
+            const streak = ph && ph.key === key ? ph.n + 1 : 1;
+            phantomStreak.set(bot, { key, n: streak });
+            const finish = () => {
+              bot.setControlState("jump", true);
+              bot.setControlState("forward", true);
+              setTimeout(() => {
+                bot.setControlState("jump", false);
+                bot.setControlState("forward", false);
+                settled = true;
+                finishTimers();
+                reject(
+                  new Error("No route from here — the pathfinder found no valid start (sealed in or inside a block)."),
+                );
+              }, 700);
+            };
+            if (streak >= 3 && streak % 3 === 0) {
+              clearExit(bot)
+                .then((n) => {
+                  if (n > 0)
+                    console.log(`[Nav] ${bot.username} cleared ${n} soft blocks around ${here.floored()} to get out`);
+                })
+                .catch(() => {})
+                .finally(finish);
+            } else {
+              finish();
+            }
             return;
           }
           settled = true;
