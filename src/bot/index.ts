@@ -148,6 +148,40 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
       capPathfinder();
     });
   }
+  // Network handshake diagnostics (run 539: the server held Flora's
+  // position, rotation and hotbar slot frozen for hours while her client
+  // walked and crafted; the server discards movement until the client
+  // confirms its last teleport, so count both directions).
+  {
+    const net = { posSent: 0, confirmSent: 0, tpRecv: 0, last: "" };
+    const client = bot._client as unknown as {
+      write: (name: string, params: unknown) => void;
+      on: (ev: string, fn: (p: any) => void) => void;
+    };
+    const origWrite = client.write.bind(client);
+    client.write = (name: string, params: unknown) => {
+      if (name === "position" || name === "position_look" || name === "look") net.posSent++;
+      else if (name === "teleport_confirm") net.confirmSent++;
+      return origWrite(name, params);
+    };
+    client.on("position", (p: any) => {
+      net.tpRecv++;
+      net.last = `${Number(p?.x).toFixed(1)},${Number(p?.y).toFixed(1)},${Number(p?.z).toFixed(1)} id=${p?.teleportId}`;
+      if (net.tpRecv <= 3 || net.tpRecv % 25 === 0) {
+        console.log(`[NetDebug] ${roleConfig.name} server teleport #${net.tpRecv}: ${net.last}`);
+      }
+    });
+    const timer = setInterval(() => {
+      const e = bot.entity?.position;
+      console.log(
+        `[NetDebug] ${roleConfig.name}: sent pos=${net.posSent} confirm=${net.confirmSent} recv teleports=${net.tpRecv} (last ${net.last || "none"}) client at ${e ? e.floored() : "?"}`,
+      );
+      net.posSent = 0;
+      net.confirmSent = 0;
+    }, 120_000);
+    bot.once("end", () => clearInterval(timer));
+  }
+
   bot.once("spawn", () => {
     capPathfinder();
   });
