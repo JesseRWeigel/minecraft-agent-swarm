@@ -198,10 +198,20 @@ export function isBuried(
   feetZ: number,
   scan: number = BURIED_CEILING_SCAN,
 ): boolean {
-  if (feetY >= SURFACE_Y - 7) return false;
+  // Deep down, any roof means buried. Near the surface the old rule was
+  // "never buried", which spared bots under trees and house roofs but also
+  // left Flora sealed in a two-block pocket at y=62 under ten blocks of
+  // stone for hours (run 537, pickless, 363,62,-281). Up here, count the
+  // solid blocks overhead: a canopy or a roof is one to three, a hillside
+  // is many.
+  const deep = feetY < SURFACE_Y - 7;
+  let solid = 0;
   for (let dy = 2; dy <= scan; dy++) {
     const b = blockAt(feetX, feetY + dy, feetZ);
-    if (b && b.boundingBox === "block") return true;
+    if (b && b.boundingBox === "block") {
+      solid++;
+      if (deep || solid >= 4) return true;
+    }
   }
   return false;
 }
