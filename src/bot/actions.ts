@@ -867,11 +867,17 @@ async function mineBlock(
   };
 
   // Ore can be tens of blocks below the surface, so search wider for it.
-  const block = bot.findBlock({
-    matching: (b) => match(b.name),
-    maxDistance: isOre ? 64 : 32,
-    useExtraInfo: (b) => !protectedAt(b.position),
-  });
+  // Prefer a block the held pickaxe can actually harvest: "stone" matched a
+  // gold_ore first and the refusal below fired 256 times in one hour (Atlas,
+  // wooden pickaxe, run 524) while plain stone sat all around him.
+  const held = bestPickaxe(bot)?.name ?? null;
+  const search = (harvestableOnly: boolean) =>
+    bot.findBlock({
+      matching: (b) => match(b.name),
+      maxDistance: isOre ? 64 : 32,
+      useExtraInfo: (b) => !protectedAt(b.position) && (!harvestableOnly || canHarvest(b.name, held)),
+    });
+  const block = search(true) ?? search(false);
 
   if (!block)
     return protectPos
@@ -890,7 +896,6 @@ async function mineBlock(
   // The advice matters more than the refusal: stone IS minable with wood, so
   // saying which pickaxe is missing and how to get it turns a permanent deadlock
   // into a two-step plan the brain can actually follow.
-  const held = bestPickaxe(bot)?.name ?? null;
   if (!canHarvest(block.name, held)) return harvestAdvice(block.name, held);
 
   // Allow digging so pathfinder can reach underground ores through stone
