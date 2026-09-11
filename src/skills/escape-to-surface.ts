@@ -345,7 +345,9 @@ export const escapeToSurfaceSkill: Skill = {
         }
       }
       const f = feet(bot);
-      if (f.y >= SURFACE_Y || canSeeSky(bot)) {
+      // Sky, not height: Flora at y=62 under ten blocks of stone and Atlas
+      // at y=61 "1 to go" both ended here with rock still overhead (run 541).
+      if (canSeeSky(bot)) {
         bot.removeListener("death", onDeath);
         return {
           success: true,
@@ -354,8 +356,8 @@ export const escapeToSurfaceSkill: Skill = {
         };
       }
       step(
-        `Carving a staircase up — y=${f.y}, ${SURFACE_Y - f.y} to go...`,
-        Math.min(0.95, (f.y - startY) / (SURFACE_Y - startY)),
+        `Carving a staircase up — y=${f.y}, ${Math.max(1, SURFACE_Y - f.y)} to go...`,
+        Math.min(0.95, Math.max(0, f.y - startY) / Math.max(1, SURFACE_Y - startY)),
       );
 
       const [dx, dz] = dirs[dirIdx];
@@ -422,7 +424,7 @@ export const escapeToSurfaceSkill: Skill = {
     if (died) return diedResult();
     const endY = feet(bot).y;
     return {
-      success: endY >= SURFACE_Y,
+      success: endY >= SURFACE_Y && canSeeSky(bot),
       message:
         endY >= SURFACE_Y
           ? `Reached the surface at y=${endY}.`
