@@ -1,3 +1,4 @@
+import type { Block } from "prismarine-block";
 import type { Bot } from "mineflayer";
 import { baseMoves, collectNearbyDrops, safeGoto } from "../bot/navigation.js";
 import type { Skill, SkillResult } from "./types.js";
@@ -756,6 +757,77 @@ async function harvestMatureWheat(bot: Bot, signal: AbortSignal, onProgress: (p:
  * table (3-wide recipe). This is the step that finally closes the farm->food
  * loop. Done in-skill to dodge the blacklisted `craft:bread` action.
  */
+/** Crafting only works with the table within about 4.5 blocks. */
+const TABLE_REACH = 4.5;
+
+/**
+ * A crafting table the bot can actually use: walk to the nearest ones in
+ * turn and return the first within reach; if none is reachable (the village
+ * tables sit among chests and cobble the pathfinder times out on — Flora
+ * stood 8 blocks from one and the craft window never opened), craft and
+ * place a new table from pocket planks beside the bot.
+ */
+async function reachTable(bot: Bot): Promise<Block | null> {
+  const near = () =>
+    bot
+      .findBlocks({ matching: (b) => b.name === "crafting_table", maxDistance: 48, count: 6 })
+      .map((p) => bot.blockAt(p))
+      .filter((b): b is Block => !!b)
+      .sort((a, b) => a.position.distanceTo(bot.entity.position) - b.position.distanceTo(bot.entity.position));
+  for (const table of near()) {
+    if (bot.entity.position.distanceTo(table.position) <= TABLE_REACH) return table;
+    setMovements(bot);
+    try {
+      await gotoT(bot, new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2), 12_000);
+    } catch {
+      /* try the next table */
+    }
+    if (bot.entity.position.distanceTo(table.position) <= TABLE_REACH) return table;
+    console.log(
+      `[FarmDebug] ${bot.username}: table at ${table.position} unreachable (${Math.round(bot.entity.position.distanceTo(table.position))} blocks) — trying the next`,
+    );
+  }
+  // Place our own.
+  const mcData = mcDataLoader(bot.version);
+  const planks = bot.inventory
+    .items()
+    .filter((i) => i.name.endsWith("_planks"))
+    .reduce((s, i) => s + i.count, 0);
+  if (!bot.inventory.items().some((i) => i.name === "crafting_table")) {
+    if (planks < 4) {
+      console.log(`[FarmDebug] ${bot.username}: no reachable table and only ${planks} planks to make one`);
+      return null;
+    }
+    const rec = bot.recipesFor(mcData.itemsByName.crafting_table.id, null, 1, null)[0];
+    if (rec) await bot.craft(rec, 1).catch(() => {});
+  }
+  const item = bot.inventory.items().find((i) => i.name === "crafting_table");
+  if (!item) return null;
+  await bot.equip(item, "hand").catch(() => {});
+  for (const [dx, dz] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ] as const) {
+    const floor = bot.blockAt(bot.entity.position.offset(dx, -1, dz));
+    const spot = bot.blockAt(bot.entity.position.offset(dx, 0, dz));
+    if (floor && floor.boundingBox === "block" && spot && (spot.name === "air" || spot.name === "cave_air")) {
+      try {
+        await bot.placeBlock(floor, new Vec3(0, 1, 0));
+        const placed = bot.blockAt(bot.entity.position.offset(dx, 0, dz));
+        if (placed && placed.name === "crafting_table") {
+          console.log(`[FarmDebug] ${bot.username}: placed a fresh crafting table at ${placed.position}`);
+          return placed;
+        }
+      } catch {
+        /* next side */
+      }
+    }
+  }
+  return null;
+}
+
 async function bakeBread(
   bot: Bot,
   signal: AbortSignal,
@@ -785,9 +857,9 @@ async function bakeBread(
   const count = Math.floor(wheat / 3);
 
   // Bread is a 3-wide recipe → requires a crafting table.
-  const table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 48 });
+  const table = await reachTable(bot);
   if (!table || !table.position) {
-    lastBakeProblem = `no crafting table within 48 blocks of ${bot.entity.position.floored()}`;
+    lastBakeProblem = `no reachable crafting table near ${bot.entity.position.floored()} and no planks to place one`;
     console.log(`[FarmDebug] ${bot.username}: bake skipped — ${lastBakeProblem}`);
     return 0;
   }
@@ -913,14 +985,8 @@ async function craftHoe(bot: Bot, signal: AbortSignal): Promise<void> {
       }
     }
 
-    const table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 32 });
+    const table = await reachTable(bot);
     if (table) {
-      setMovements(bot);
-      try {
-        await gotoT(bot, new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2));
-      } catch {
-        /* try anyway */
-      }
       recipe = bot.recipesFor(mcItem.id, null, 1, table)[0];
       if (recipe) {
         try {
