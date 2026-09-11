@@ -85,6 +85,35 @@ export function explorerMoves(bot: Bot): InstanceType<typeof Movements> {
  * current. A zombie's own goto sees the bumped generation and stays dead.
  */
 const navGeneration = new WeakMap<Bot, number>();
+
+/** Last pathfinder result per bot, for the failure diagnostics below. */
+const lastPath = new WeakMap<Bot, { status: string; length: number; at: number }>();
+const pathTracked = new WeakSet<Bot>();
+function trackPaths(bot: Bot): void {
+  if (pathTracked.has(bot)) return;
+  pathTracked.add(bot);
+  bot.on("path_update" as any, (r: any) => {
+    lastPath.set(bot, { status: String(r?.status ?? "?"), length: r?.path?.length ?? 0, at: Date.now() });
+  });
+}
+
+/** One line naming why a walk failed: how far the goal was and what the
+ *  planner last said (noPath / timeout / partial / success). Stash chests and
+ *  farm plots a few blocks away were failing 'Navigation timed out' by the
+ *  dozen with no way to tell "no path exists" from "too slow". */
+function navDiag(bot: Bot, goal: any, reason: string): string {
+  const p = bot.entity.position;
+  const gx = goal?.x,
+    gy = goal?.y,
+    gz = goal?.z;
+  const dist =
+    Number.isFinite(gx) && Number.isFinite(gz)
+      ? Math.hypot(p.x - gx, Number.isFinite(gy) ? p.y - gy : 0, p.z - gz).toFixed(1)
+      : "?";
+  const lp = lastPath.get(bot);
+  const age = lp ? `${Math.round((Date.now() - lp.at) / 1000)}s ago` : "none";
+  return `[NavDiag] ${bot.username} ${reason}: goal=${goal?.constructor?.name ?? "?"}(${gx},${gy},${gz}) dist=${dist} lastPath=${lp?.status ?? "-"}/${lp?.length ?? 0} (${age})`;
+}
 export function bumpNavGeneration(bot: Bot): void {
   navGeneration.set(bot, (navGeneration.get(bot) ?? 0) + 1);
 }
@@ -126,6 +155,7 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
     // externally' lines for Blade in one hour while it stepped through the
     // stash chests, and every farm walk in the same boat.
     bumpNavGeneration(bot);
+    trackPaths(bot);
     const genAtStart = getNavGeneration(bot);
     let stallActive = stallStartDelayMs === 0;
     const STALL_CHECK_MS = 1000;
@@ -146,6 +176,7 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
       clearInterval(stallCheck);
       if (stallDelayTimer) clearTimeout(stallDelayTimer);
       bot.pathfinder.stop();
+      console.log(navDiag(bot, goal, "timed out"));
       reject(new Error("Navigation timed out — goal may be unreachable."));
     }, timeoutMs);
 
@@ -195,6 +226,7 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
               `sides=${around} onGround=${bot.entity.onGround}`,
           );
           settled = true;
+          console.log(navDiag(bot, goal, "stalled"));
           reject(new Error("Stuck — not making progress toward goal."));
         }
       } else {
