@@ -548,3 +548,10 @@ test("one flint_and_steel stays; spares are banked", () => {
   assert.equal(shouldKeep("flint_and_steel", [], counts), true);
   assert.equal(shouldKeep("flint_and_steel", [], counts), false);
 });
+
+test("shouldDigToChest refuses chests on another level", () => {
+  assert.equal(shouldDigToChest(6, true, 0), true);
+  assert.equal(shouldDigToChest(6, true, 1), true);
+  assert.equal(shouldDigToChest(6, true, -5), false, "a chest five blocks down means a pit");
+  assert.equal(shouldDigToChest(6, true, 6), false, "a chest six blocks up means a shaft");
+});

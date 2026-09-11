@@ -53,11 +53,16 @@ export const CHEST_CANDIDATES = 4;
  *  around them rather than through them.
  *
  *  Bounded by distance so a failed path never becomes a cross-map tunnel. */
-export function shouldDigToChest(distToChest: number, navFailed: boolean): boolean {
+export function shouldDigToChest(distToChest: number, navFailed: boolean, dy = 0): boolean {
   if (!navFailed) return false;
   if (!Number.isFinite(distToChest)) return false;
   // Already close enough to open it — digging would be pointless and destructive.
   if (withinReach(distToChest)) return false;
+  // Sideways only. The stash sprawls from y64 to y76, and digging toward a
+  // chest a level up or down carved the village into a honeycomb of pits
+  // the bots then fell into (27 dig events in one run; Blade in a cave at
+  // y64 under the chest floor). A chest on another level is skipped.
+  if (Math.abs(dy) > 1) return false;
   return distToChest <= DIG_APPROACH_MAX;
 }
 
@@ -1015,9 +1020,10 @@ export async function depositStash(
         // against 16 successful deposits. Tunnel the last few blocks instead of
         // abandoning the load. Chests are in the pathfinder's blocksCantBreak set,
         // so this routes around storage rather than through it.
-        if (shouldDigToChest(distToChest, navErr !== null)) {
+        if (shouldDigToChest(distToChest, navErr !== null, chest.position.y - bot.entity.position.y)) {
           const digApproach = baseMoves(bot);
           digApproach.canDig = true;
+          digApproach.maxDropDown = 1; // never dig a pit to reach a chest
           digApproach.allow1by1towers = false; // no pillaring: that is the fall risk
           bot.pathfinder.setMovements(digApproach);
           try {
