@@ -12,6 +12,60 @@ const SURFACE_WATER_MIN_Y = 50;
 /** Tillable dirt/grass blocks a water block needs around it to count as a farm site. */
 const MIN_TILLABLE_RING = 3;
 
+/**
+ * Cut ripe wheat within 20 blocks and bake what we hold; returns the skill
+ * result when anything was harvested or baked, else null.
+ */
+async function harvestAndBake(
+  bot: Bot,
+  signal: AbortSignal,
+  onProgress: (p: any) => void,
+  stashPos: { x: number; y: number; z: number } | undefined,
+): Promise<SkillResult | null> {
+  const harvested = await harvestMatureWheat(bot, signal, onProgress);
+  const baked = await bakeBread(bot, signal, onProgress, stashPos);
+  if (harvested > 0 || baked > 0) {
+    const breadNote =
+      baked > 0
+        ? `Baked ${baked} bread — food secured! 🍞`
+        : "Not enough wheat to bake bread yet (need 3+); farm is still growing.";
+    // STOCK THE PANTRY. Baking closed the wheat→bread gap, but the loaves
+    // sat in the baker's pack (shouldKeep holds 6 food) and never reached
+    // the shared chests — an RCON audit found 3 cooked items across 60
+    // chests while miners starved 300 blocks out. Deposit the surplus now,
+    // beside the crafting table where baking just happened. shouldKeep keeps
+    // the baker's own 6-food buffer; everything over that pools for the team.
+    let bankedNote = "";
+    const breadHeld = () =>
+      bot.inventory
+        .items()
+        .filter((i) => i.name === "bread")
+        .reduce((s, i) => s + i.count, 0);
+    if (stashPos && !signal.aborted && breadHeld() > 6) {
+      try {
+        const { depositStash } = await import("./stash.js");
+        const keep = [
+          { name: "sapling", minCount: 16 },
+          { name: "hoe", minCount: 1 },
+          { name: "sword", minCount: 1 },
+          { name: "axe", minCount: 1 },
+        ];
+        await depositStash(bot, stashPos, keep, 0, false);
+        bankedNote = " Surplus bread banked to the pantry.";
+      } catch {
+        /* stash unreachable this pass — bread stays in the pack, banks next time */
+      }
+    }
+    return {
+      success: true,
+      message: `${harvested > 0 ? `Harvested ${harvested} wheat. ` : ""}${breadNote}${bankedNote} The farm cycle continues!`,
+      stats: { wheatHarvested: harvested, breadBaked: baked },
+    };
+  }
+
+  return null;
+}
+
 export const buildFarmSkill: Skill = {
   name: "build_farm",
   description:
@@ -34,47 +88,9 @@ export const buildFarmSkill: Skill = {
     // bread (wheat isn't edible), so the team starved beside a working farm.
     // Bake any accumulated wheat (>=3) into bread — done inside the skill so it
     // bypasses the blacklisted `craft:bread` action.
-    const harvested = await harvestMatureWheat(bot, signal, onProgress);
     const stashPos = params?.stashPos as { x: number; y: number; z: number } | undefined;
-    const baked = await bakeBread(bot, signal, onProgress, stashPos);
-    if (harvested > 0 || baked > 0) {
-      const breadNote =
-        baked > 0
-          ? `Baked ${baked} bread — food secured! 🍞`
-          : "Not enough wheat to bake bread yet (need 3+); farm is still growing.";
-      // STOCK THE PANTRY. Baking closed the wheat→bread gap, but the loaves
-      // sat in the baker's pack (shouldKeep holds 6 food) and never reached
-      // the shared chests — an RCON audit found 3 cooked items across 60
-      // chests while miners starved 300 blocks out. Deposit the surplus now,
-      // beside the crafting table where baking just happened. shouldKeep keeps
-      // the baker's own 6-food buffer; everything over that pools for the team.
-      let bankedNote = "";
-      const breadHeld = () =>
-        bot.inventory
-          .items()
-          .filter((i) => i.name === "bread")
-          .reduce((s, i) => s + i.count, 0);
-      if (stashPos && !signal.aborted && breadHeld() > 6) {
-        try {
-          const { depositStash } = await import("./stash.js");
-          const keep = [
-            { name: "sapling", minCount: 16 },
-            { name: "hoe", minCount: 1 },
-            { name: "sword", minCount: 1 },
-            { name: "axe", minCount: 1 },
-          ];
-          await depositStash(bot, stashPos, keep, 0, false);
-          bankedNote = " Surplus bread banked to the pantry.";
-        } catch {
-          /* stash unreachable this pass — bread stays in the pack, banks next time */
-        }
-      }
-      return {
-        success: true,
-        message: `${harvested > 0 ? `Harvested ${harvested} wheat. ` : ""}${breadNote}${bankedNote} The farm cycle continues!`,
-        stats: { wheatHarvested: harvested, breadBaked: baked },
-      };
-    }
+    const early = await harvestAndBake(bot, signal, onProgress, stashPos);
+    if (early) return early;
 
     // --- Step 0: Get to the farm site FIRST ---
     // Tree-gathering and water-finding both only see loaded chunks; from the
@@ -140,6 +156,13 @@ export const buildFarmSkill: Skill = {
         message: `Ended up underground at y=${Math.floor(bot.entity.position.y)} on the way to the farm site — the pond is on the surface. Climb out first, then try build_farm again.`,
       };
     }
+
+    // Harvest AGAIN now that we stand at the field. The scan above ran from
+    // wherever the bot started (often the village, 30 blocks off) with a
+    // 20-block radius, so ripe wheat at the site was never cut: RCON found
+    // five age-7 plots while every bot sat at food 0.
+    const late = await harvestAndBake(bot, signal, onProgress, stashPos);
+    if (late) return late;
 
     // --- Step 1: Ensure we have a hoe ---
     onProgress({
@@ -691,14 +714,13 @@ async function harvestMatureWheat(bot: Bot, signal: AbortSignal, onProgress: (p:
     let replanted = 0;
     const replantStart = Date.now();
     for (let i = 0; i < 40 && !signal.aborted && Date.now() - replantStart < 45000; i++) {
-      const farmland = bot.findBlock({
-        matching: (b) => {
-          if (b.name !== "farmland" || !b.position) return false;
-          const above = bot.blockAt(b.position.offset(0, 1, 0));
-          return above !== null && above.name === "air";
-        },
-        maxDistance: 20,
-      });
+      // (Positions first, then look above: a findBlock predicate that calls
+      // bot.blockAt silently matches nothing, so replanting never ran.)
+      const farmland =
+        bot
+          .findBlocks({ matching: (b) => b.name === "farmland", maxDistance: 20, count: 64 })
+          .map((p) => bot.blockAt(p))
+          .find((b) => !!b && bot.blockAt(b.position.offset(0, 1, 0))?.name === "air") ?? null;
       if (!farmland) break;
 
       const seeds = bot.inventory.items().find((it) => it.name === "wheat_seeds");
