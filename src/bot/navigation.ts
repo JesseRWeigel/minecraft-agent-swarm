@@ -261,10 +261,22 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
         // cannot step the bot out, so hop it out ourselves and let the walk
         // resume. Two hops, then the stall is real.
         const feetName = bot.blockAt(currentPos)?.name ?? "";
-        if (WEDGE_BLOCKS.has(feetName) && unwedges < 2 && stallTicks >= 2) {
+        // The pathfinder's own dead loop (run 514, lastReset=stuck x28): it
+        // looks at the next node, runs its physics simulation, and when
+        // neither the straight-line nor the walk-jump simulation reaches
+        // the node it RELEASES the forward key, stands still for 3.5s,
+        // declares "stuck", re-plans the same path and repeats. On a chest
+        // top or in water that is a silent standstill with no keys held.
+        // Give it the step it will not take: forward and jump the way it is
+        // already facing, three times at most per walk.
+        const pfAny = bot.pathfinder as any;
+        const keysHeld = Object.values(bot.controlState ?? {}).some(Boolean);
+        const pfIdle =
+          !!pfAny?.isMoving?.() && !pfAny?.isMining?.() && !pfAny?.isBuilding?.() && !keysHeld && !bot.targetDigBlock;
+        if ((WEDGE_BLOCKS.has(feetName) || pfIdle) && unwedges < 3 && stallTicks >= 2) {
           unwedges++;
           console.log(
-            `[Nav] ${bot.username} wedged in ${feetName} at ${currentPos.floored()} — hopping out (${unwedges}/2)`,
+            `[Nav] ${bot.username} ${WEDGE_BLOCKS.has(feetName) ? `wedged in ${feetName}` : "path held with no keys"} at ${currentPos.floored()} — nudging along (${unwedges}/3)`,
           );
           bot.setControlState("jump", true);
           bot.setControlState("forward", true);
