@@ -283,7 +283,10 @@ export const buildFarmSkill: Skill = {
     const CLEAR_ABOVE = new Set(["air", "cave_air", "short_grass", "tall_grass", "grass", "fern"]);
     const tillable = (pos: Vec3): boolean => {
       const b = bot.blockAt(pos);
-      if (!b || (b.name !== "dirt" && b.name !== "grass_block")) return false;
+      // Empty farmland counts: RCON found 23 tilled plots with only 9 planted
+      // while the farmer held 78 seeds, because a tilled plot is no longer
+      // "dirt" and was skipped by both the site scan and the planting loop.
+      if (!b || (b.name !== "dirt" && b.name !== "grass_block" && b.name !== "farmland")) return false;
       const above = bot.blockAt(pos.offset(0, 1, 0));
       return !!above && CLEAR_ABOVE.has(above.name);
     };
@@ -501,7 +504,12 @@ export const buildFarmSkill: Skill = {
 
       // Skip if block was already tilled by a previous iteration
       const currentBlock = bot.blockAt(targetPos);
-      if (!currentBlock || (currentBlock.name !== "dirt" && currentBlock.name !== "grass_block")) continue;
+      if (
+        !currentBlock ||
+        (currentBlock.name !== "dirt" && currentBlock.name !== "grass_block" && currentBlock.name !== "farmland")
+      )
+        continue;
+      const alreadyTilled = currentBlock.name === "farmland";
 
       try {
         setMovements(bot);
@@ -553,13 +561,15 @@ export const buildFarmSkill: Skill = {
           if (f2.x === targetPos.x && f2.z === targetPos.z) continue; // still on it — skip, don't trample
         }
 
-        // Equip hoe and till
-        hoe = bot.inventory.items().find((it) => it.name.endsWith("_hoe"));
-        if (!hoe) break;
-        await bot.equip(hoe, "hand");
-        await bot.lookAt(targetPos.offset(0.5, 0.5, 0.5));
-        await bot.activateBlock(currentBlock);
-        await bot.waitForTicks(4);
+        // Equip hoe and till (skip the hoe on a plot that is already farmland)
+        if (!alreadyTilled) {
+          hoe = bot.inventory.items().find((it) => it.name.endsWith("_hoe"));
+          if (!hoe) break;
+          await bot.equip(hoe, "hand");
+          await bot.lookAt(targetPos.offset(0.5, 0.5, 0.5));
+          await bot.activateBlock(currentBlock);
+          await bot.waitForTicks(4);
+        }
 
         // Check if it became farmland
         const result = bot.blockAt(targetPos);
