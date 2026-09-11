@@ -1957,10 +1957,15 @@ async function sleepInBed(bot: Bot): Promise<string> {
   // endsWith("_bed"), never includes("bed"): the old match caught BEDROCK,
   // and every underground bot spent its night reflex trying to tuck itself
   // into the bottom of the world ("wrong block: not a bed block").
-  let bed = bot.findBlock({
-    matching: (b) => b.name.endsWith("_bed"),
-    maxDistance: 64,
-  });
+  // Ground-level only (run 519: the bed a bot placed on top of a rescue
+  // tower at 281,114,-316 was the nearest bed by 3D distance, and the night
+  // reflex walked three bots up the tower to it).
+  const here = bot.entity.position;
+  const bedSpots = bot
+    .findBlocks({ matching: (b) => b.name.endsWith("_bed"), maxDistance: 64, count: 32 })
+    .filter((p) => Math.abs(p.y - here.y) <= 12)
+    .sort((a, b) => a.distanceTo(here) - b.distanceTo(here));
+  let bed = bedSpots.length > 0 ? bot.blockAt(bedSpots[0]) : null;
 
   // Auto-place bed from inventory if none found nearby
   if (!bed) {

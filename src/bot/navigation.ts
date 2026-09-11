@@ -225,7 +225,7 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
       if (stallDelayTimer) clearTimeout(stallDelayTimer);
       console.log(navDiag(bot, goal, "timed out")); // before stop(): stop clears the keys
       offPath();
-      bot.pathfinder.stop();
+      bot.pathfinder.setGoal(null);
       reject(new Error("Navigation timed out — goal may be unreachable."));
     };
     let timeout = setTimeout(onTimeout, timeoutMs);
@@ -343,7 +343,7 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
           // rejection handler below, once the pathfinder has let go.
           hopPending = { aim };
           try {
-            bot.pathfinder.stop();
+            bot.pathfinder.setGoal(null);
           } catch {
             /* no path */
           }
@@ -357,7 +357,7 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
           if (stallDelayTimer) clearTimeout(stallDelayTimer);
           console.log(navDiag(bot, goal, "stalled")); // before stop(): stop clears the keys
           offPath();
-          bot.pathfinder.stop();
+          bot.pathfinder.setGoal(null);
           // Where, and wedged in what.
           //
           // One bot produced 154 of 156 stuck events in a single hour while the
@@ -399,6 +399,14 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
     };
     const attempt = () => {
       if (settled) return; // outer timeout/stall fired during the retry delay
+      // pathfinder.stop() only raises a flag; the library acts on it at the
+      // next node arrival or path reset, and a flag raised during a stall
+      // (never arriving) lands on the NEXT walk, whose first path reset then
+      // emits path_stop and kills it ("Path was stopped" x13 per planting
+      // pass in run 519). setGoal(null) resets synchronously and consumes any
+      // lingering flag, so every walk starts clean. That is also why the
+      // stall handlers above use setGoal(null) rather than stop().
+      bot.pathfinder.setGoal(null);
       bot.pathfinder
         .goto(goal)
         .then(() => {
@@ -638,7 +646,7 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   // head-submerged means trouble, never a routine lake crossing.
   if (air < 16) {
     try {
-      bot.pathfinder.stop();
+      bot.pathfinder.setGoal(null);
     } catch {
       /* best effort */
     }
