@@ -928,7 +928,10 @@ export class BotBrain {
       Date.now() - this.lastEscapeMs > 60_000
     ) {
       const f = this.bot.entity.position.floored();
-      const buried = isBuried((x, y, z) => this.bot.blockAt(new Vec3(x, y, z)), f.x, f.y, f.z);
+      // Scan 64 up, not 24: Atlas sat at y=16 in a shaft whose stone roof
+      // was 35 blocks above him (a lake on top of that), and read as not
+      // buried while his walks failed 930 times in an hour.
+      const buried = isBuried((x, y, z) => this.bot.blockAt(new Vec3(x, y, z)), f.x, f.y, f.z, 64);
       const pickless = !this.bot.inventory.items().some((i) => i.name.endsWith("_pickaxe"));
       const walledIn = this.navFailStreak >= 3;
       if (buried && (pickless || walledIn)) {
@@ -2634,10 +2637,25 @@ export class BotBrain {
     this.activeAction = action;
     try {
       const result = await executeAction(this.bot, action, params);
-      if (/Navigation timed out|Stuck — not making progress|No path to the goal|Couldn't reach/i.test(result)) {
+      // "Couldn't move ... path blocked" is the explore action failing to
+      // leave the spot: Atlas logged it 674 times in one hour from a flooded
+      // shaft under a lake at y=16, and it never counted as a walk failure.
+      if (
+        /Navigation timed out|Stuck — not making progress|No path to the goal|Couldn't reach|Couldn't move|path blocked/i.test(
+          result,
+        )
+      ) {
         this.navFailStreak++;
       } else if (/Arrived|Explored|reached|Walked|Deposited|Withdrew|Harvested|Farm planted/i.test(result)) {
         this.navFailStreak = 0;
+      }
+      // A tool the bot does not have is structural: Atlas asked to mine
+      // gold_ore with a wooden pickaxe 256 times in an hour. Block that ore
+      // for this bot until the blacklist expires (the key carries the block
+      // name, see getActionKey, so other blocks stay allowed).
+      const noTool = /Can't harvest (\w+) with/.exec(result);
+      if (noTool) {
+        this.blockAction(`mine_block:${noTool[1]}`, result.slice(0, 120), BotBrain.FAILURE_TTL_STRUCTURAL_MS);
       }
       return result;
     } finally {
@@ -3084,6 +3102,10 @@ export class BotBrain {
     }
     if (decision.action === "craft" && decision.params?.item) {
       return `craft:${decision.params.item}`;
+    }
+    if (decision.action === "mine_block") {
+      const b = decision.params?.block ?? decision.params?.blockType ?? decision.params?.item;
+      if (typeof b === "string" && b) return `mine_block:${b}`;
     }
     return decision.action;
   }

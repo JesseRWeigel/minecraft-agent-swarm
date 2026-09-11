@@ -196,9 +196,10 @@ export function isBuried(
   feetX: number,
   feetY: number,
   feetZ: number,
+  scan: number = BURIED_CEILING_SCAN,
 ): boolean {
   if (feetY >= SURFACE_Y - 7) return false;
-  for (let dy = 2; dy <= BURIED_CEILING_SCAN; dy++) {
+  for (let dy = 2; dy <= scan; dy++) {
     const b = blockAt(feetX, feetY + dy, feetZ);
     if (b && b.boundingBox === "block") return true;
   }
