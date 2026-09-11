@@ -9,6 +9,8 @@ import { getBotMemoryStore } from "../bot/memory-registry.js";
 import { config } from "../config.js";
 /** Below this the water is an aquifer and the dirt is unlit; the farm belongs on the surface. */
 const SURFACE_WATER_MIN_Y = 50;
+/** Tillable dirt/grass blocks a water block needs around it to count as a farm site. */
+const MIN_TILLABLE_RING = 3;
 
 export const buildFarmSkill: Skill = {
   name: "build_farm",
@@ -284,7 +286,9 @@ export const buildFarmSkill: Skill = {
       let bestWp: Vec3 | null = null;
       for (const wp of waters) {
         const n = scanTillable(wp).length;
-        if (n >= 4) return bot.blockAt(wp);
+        // 3 plots (was 4): FarmDebug at the site pond read "best had 3
+        // tillable neighbours" three runs in a row and called it no water.
+        if (n >= MIN_TILLABLE_RING) return bot.blockAt(wp);
         if (n > bestN) {
           bestN = n;
           bestWp = wp;
@@ -342,7 +346,16 @@ export const buildFarmSkill: Skill = {
         }
       }
       if (!water) {
-        return { success: false, message: "No water found within 96 blocks! Explore to find a river or pond." };
+        const seen = bot
+          .findBlocks({ matching: (b) => b.name === "water", maxDistance: 96, count: 200 })
+          .filter((p) => p.y >= SURFACE_WATER_MIN_Y).length;
+        return {
+          success: false,
+          message:
+            seen > 0
+              ? `Found ${seen} surface water blocks within 96 but none with ${MIN_TILLABLE_RING}+ clear dirt beside it to till. Try a grassy shoreline.`
+              : "No water found within 96 blocks! Explore to find a river or pond.",
+        };
       }
     }
 
