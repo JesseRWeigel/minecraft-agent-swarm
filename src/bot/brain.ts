@@ -929,9 +929,14 @@ export class BotBrain {
       const f = this.bot.entity.position.floored();
       const buried = isBuried((x, y, z) => this.bot.blockAt(new Vec3(x, y, z)), f.x, f.y, f.z);
       const pickless = !this.bot.inventory.items().some((i) => i.name.endsWith("_pickaxe"));
-      if (buried && pickless) {
+      const walledIn = this.navFailStreak >= 3;
+      if (buried && (pickless || walledIn)) {
         this.lastEscapeMs = Date.now();
-        this.log.info("Brain", `OVERRIDE: buried pickless at y=${f.y} — hand-digging up to the surface`);
+        this.navFailStreak = 0;
+        this.log.info(
+          "Brain",
+          `OVERRIDE: buried ${pickless ? "pickless" : `with a pick but ${walledIn ? "walks keep failing" : ""}`} at y=${f.y} — digging up to the surface`,
+        );
         this.events.onThought("No pickaxe and walled in down here. Cut a staircase up by hand.");
         const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "escape_to_surface" });
         this.events.onAction("escape_to_surface", result);
@@ -2579,11 +2584,22 @@ export class BotBrain {
 
   // ─── Action execution ─────────────────────────────────────────────────────
 
+  /** Consecutive walk failures, for the escape reflex: a bot with a pick can
+   *  still be stuck in a shaft (Mason, 17 blocks under the stash, every chest
+   *  walk timing out with zero velocity) and the pickless gate ignored him. */
+  private navFailStreak = 0;
+
   private async executeActionUnlessPaused(action: string, params: Record<string, any>): Promise<string> {
     if (this.paused) return "Paused by player command";
     this.activeAction = action;
     try {
-      return await executeAction(this.bot, action, params);
+      const result = await executeAction(this.bot, action, params);
+      if (/Navigation timed out|Stuck — not making progress|No path to the goal|Couldn't reach/i.test(result)) {
+        this.navFailStreak++;
+      } else if (/Arrived|Explored|reached|Walked|Deposited|Withdrew|Harvested|Farm planted/i.test(result)) {
+        this.navFailStreak = 0;
+      }
+      return result;
     } finally {
       this.activeAction = "";
     }
