@@ -135,6 +135,9 @@ async function craftItem(bot: Bot, name: string): Promise<boolean> {
   }
 }
 
+/** How far the campfire step will walk for logs. The nest's own tree is gone. */
+const CAMPFIRE_LOG_RADIUS = 64;
+
 /** Honey level a nest must reach before shearing yields a honeycomb. */
 export const FULL_HONEY = 5;
 
@@ -182,22 +185,34 @@ async function ensureCampfire(bot: Bot, hive: Block): Promise<string | null> {
   const seatY = campfireSeatY(at, hx, hy, hz);
   if (seatY === null) return "no clear spot for a campfire under the hive";
   if (count(bot, "campfire") < 1) {
-    // 3 logs + 3 sticks + 1 coal/charcoal. Chop logs from the trees around the hive.
+    // 3 logs + 3 sticks + 1 coal/charcoal. The campfire recipe takes any log
+    // or wood block. The nest's own tree is gone (air under the nest — the
+    // bots cut it for planks), so look 64 blocks out and walk to the tree.
+    const isLog = (n: string) =>
+      n.endsWith("_log") || n.endsWith("_wood") || n.endsWith("_stem") || n.endsWith("_hyphae");
     const logsHeld = () =>
       bot.inventory
         .items()
-        .filter((i) => i.name.endsWith("_log"))
+        .filter((i) => isLog(i.name))
         .reduce((s, i) => s + i.count, 0);
-    for (let tries = 0; logsHeld() < 3 && tries < 6; tries++) {
-      const log = bot.findBlock({ matching: (b) => b.name.endsWith("_log"), maxDistance: 16 });
+    for (let tries = 0; logsHeld() < 3 && tries < 8; tries++) {
+      const log = bot.findBlock({ matching: (b) => isLog(b.name), maxDistance: CAMPFIRE_LOG_RADIUS });
       if (!log) break;
-      await safeGoto(bot, new goals.GoalNear(log.position.x, log.position.y, log.position.z, 2), 20_000, 8_000).catch(
+      await safeGoto(bot, new goals.GoalNear(log.position.x, log.position.y, log.position.z, 2), 40_000, 12_000).catch(
         () => {},
       );
-      await bot.dig(log).catch(() => {});
-      await new Promise((r) => setTimeout(r, 800));
+      const again = bot.blockAt(log.position);
+      if (again && isLog(again.name) && bot.canDigBlock(again)) {
+        await bot.dig(again).catch(() => {});
+        await new Promise((r) => setTimeout(r, 1200));
+      }
     }
-    if (logsHeld() < 3) return `need 3 logs for a campfire, have ${logsHeld()} and no tree within 16 blocks`;
+    if (logsHeld() < 3) {
+      await safeGoto(bot, new goals.GoalNear(hx, hy, hz, 3), 40_000, 12_000).catch(() => {});
+      return `need 3 logs for a campfire, have ${logsHeld()} and no tree within ${CAMPFIRE_LOG_RADIUS} blocks`;
+    }
+    // Back to the nest with the logs before crafting and placing.
+    await safeGoto(bot, new goals.GoalNear(hx, hy, hz, 3), 40_000, 12_000).catch(() => {});
     if (count(bot, "stick") < 3) {
       const planks = bot.inventory.items().find((i) => i.name.endsWith("_planks"));
       if (planks) await craftItem(bot, "stick").catch(() => {});
@@ -373,13 +388,13 @@ export const waxCopperSkill: Skill = {
       step("Seating a campfire under the hive so the bees stay calm...", 0.65);
       const fireProblem = await ensureCampfire(bot, hive);
       if (fireProblem) {
-        console.log(`[WaxDebug] ${bot.username}: ${fireProblem}`);
-        return {
-          success: false,
-          message: resumable(
-            `Won't harvest without a campfire under the hive (${fireProblem}) — it would kill the last bee.`,
-          ),
-        };
+        // Best effort only. The second nest sits in a treeless meadow (an RCON
+        // scan found no log within 64 blocks), so refusing here would leave a
+        // full nest and a ready copper block unused forever. Harvest anyway
+        // and say so: the colony may sting and die, and later honey work will
+        // need one of the other bees in the world.
+        console.log(`[WaxDebug] ${bot.username}: harvesting WITHOUT a campfire (${fireProblem}) — bees may be lost`);
+        step("No campfire possible here — harvesting anyway...", 0.68);
       }
       step("Shearing honeycomb from the hive...", 0.7);
       const shears = bot.inventory.items().find((i) => i.name === "shears");
