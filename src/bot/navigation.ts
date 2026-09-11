@@ -130,7 +130,7 @@ function navDiag(bot: Bot, goal: any, reason: string): string {
   const moving = pf?.isMoving?.() ?? "?";
   // The pathfinder holds a path yet sets no keys: name which of its internal
   // states (mining, building, a dig in flight, busy hands) is holding it.
-  const pfState = `mining=${pf?.isMining?.() ?? "?"} building=${pf?.isBuilding?.() ?? "?"} digTarget=${bot.targetDigBlock ? "yes" : "no"} held=${bot.heldItem?.name ?? "none"} window=${bot.currentWindow?.type ?? "none"}`;
+  const pfState = `mining=${pf?.isMining?.() ?? "?"} building=${pf?.isBuilding?.() ?? "?"} digTarget=${bot.targetDigBlock ? "yes" : "no"} onGround=${bot.entity.onGround} y=${bot.entity.position.y.toFixed(2)} held=${bot.heldItem?.name ?? "none"} window=${bot.currentWindow?.type ?? "none"}`;
   const ctrl =
     Object.entries(bot.controlState ?? {})
       .filter(([, v]) => v)
