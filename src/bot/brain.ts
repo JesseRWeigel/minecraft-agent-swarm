@@ -1357,7 +1357,7 @@ export class BotBrain {
       )[0];
       const nearBlock =
         !!waxed && Math.hypot(this.bot.entity.position.x - waxed.x, this.bot.entity.position.z - waxed.z) < 220;
-      const fitWax = this.bot.food > 6 && this.bot.health > 8;
+      const fitWax = this.bot.food >= 10;
       if (onDone && !offDone && cooled && nearBlock && fitWax) {
         this.lastWaxOffMs = Date.now();
         this.log.info("Brain", "OVERRIDE: Wax On banked, Wax Off open — scraping the block by the nest");
@@ -1389,7 +1389,7 @@ export class BotBrain {
       const nearStash = !!sp && Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 60;
       const nest = nearestNest(this.bot.entity.position.x, this.bot.entity.position.z);
       const nearNest = Math.hypot(this.bot.entity.position.x - nest.x, this.bot.entity.position.z - nest.z) < 220;
-      const fit = this.bot.food > 6 && this.bot.health > 8;
+      const fit = this.bot.food >= 10;
       if (offDone && !honeyDone && cooled && fit && (hasBottle ? nearNest : nearStash)) {
         this.lastHoneyMs = Date.now();
         this.log.info(
@@ -1453,7 +1453,7 @@ export class BotBrain {
       // Fed and healthy first: run 530 ferried Forge out and dove him to
       // y=-38 at 2 hearts and 0 food while the hunger override waited for
       // daylight.
-      const fitF = this.bot.food > 6 && this.bot.health > 8;
+      const fitF = this.bot.food >= 10; // health only returns above 18 food, so gate on food alone
       if (wantsFrontier && cooledFrontier && nearBaseF && fitF) {
         this.lastFrontierMs = Date.now();
         this.log.info("Brain", "OVERRIDE: base is mined out — ferrying to the frontier for fresh ore");
@@ -1535,7 +1535,7 @@ export class BotBrain {
       const carryingDiamondForSmith =
         !this.roleConfig.primarySmith && this.bot.inventory.items().some((i) => i.name === "diamond");
       const cooledDown = Date.now() - this.lastIronOverrideMs > 180_000 && !(this.waxWaiting() && !pickless);
-      const fitDive = this.bot.food > 6 && this.bot.health > 8;
+      const fitDive = this.bot.food >= 10;
       if ((!hasIron || wantsDive || pickless) && !carryingDiamondForSmith && cooledDown && fitDive) {
         this.lastIronOverrideMs = Date.now();
         this.log.info(

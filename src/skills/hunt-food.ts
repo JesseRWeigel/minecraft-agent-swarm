@@ -209,7 +209,12 @@ export const huntFoodSkill: Skill = {
     let swings = 0;
     let lastSpecies = target.name ?? "animal";
     let escaped = false;
-    while (target && kills < 3 && countMeat(bot) < 4 && Date.now() < outingUntil && !signal.aborted) {
+    // Natural healing only runs at 18 food or more, so an outing that stops
+    // at 6 to 11 leaves a bot at one heart for hours (run 536: Forge and
+    // Atlas parked at 1 hp for an hour with food 10 to 12). Keep hunting
+    // while the meat aboard cannot lift hunger to 18.
+    const projected = () => bot.food + 3 * countMeat(bot);
+    while (target && kills < 6 && projected() < 18 && Date.now() < outingUntil && !signal.aborted) {
       const species = target.name ?? "animal";
       lastSpecies = species;
       const startDist = bot.entity.position.distanceTo(target.position);
@@ -242,6 +247,9 @@ export const huntFoodSkill: Skill = {
     step("Cooking what is easy, then eating...", 0.9);
     const cooked = gained > 0 ? await cookIfEasy(bot, signal) : 0;
     const eaten = gained > 0 ? await eatMeat(bot, signal) : 0;
+    // The food packet lands a moment after consume() resolves (run 536:
+    // "ate 4, hunger 0 -> 0" while RCON read food 12 seconds later).
+    await new Promise((r) => setTimeout(r, 800));
     console.log(
       `[HuntDebug] ${bot.username} food hunt: kills=${kills} last=${lastSpecies} swings=${swings} ` +
         `meat +${gained} cooked=${cooked} ate=${eaten} hunger ${foodBefore}->${bot.food}`,
