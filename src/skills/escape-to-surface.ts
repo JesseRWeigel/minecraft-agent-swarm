@@ -39,6 +39,7 @@ function feet(bot: Bot) {
 
 /** Longest bare-hand break we will wait for. Stone is 7.5s, deepslate 15s,
  * deepslate ores 22.5s; obsidian (250s) and bedrock (never) are hopeless. */
+const PICK_RANK = ["wooden_pickaxe", "stone_pickaxe", "iron_pickaxe", "diamond_pickaxe", "netherite_pickaxe"];
 const MAX_HAND_DIG_MS = 40_000;
 const MAX_DIG_WAIT_MS = 90_000; // a dig in water runs 5x slower; still worth one wait
 const DIG_MARGIN_MS = 4_000;
@@ -82,6 +83,13 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<boole
   if (!b || b.boundingBox !== "block") return true; // already air/liquid — nothing to break
   if (b.name === "bedrock" || b.name === "water" || b.name === "lava") return false; // never dig these
   if (!bot.canDigBlock(b)) return false; // unbreakable for this bot right now
+  // A bot that DOES hold a pickaxe (sent here from a flooded shaft by another
+  // skill) digs with it: stone in water goes from 188s bare-handed to ~29s.
+  const pick = bot.inventory
+    .items()
+    .filter((i) => i.name.endsWith("_pickaxe"))
+    .sort((a, b) => PICK_RANK.indexOf(b.name) - PICK_RANK.indexOf(a.name))[0];
+  if (pick && bot.heldItem?.name !== pick.name) await bot.equip(pick, "hand").catch(() => {});
   await settleOnGround(bot);
   const heldType = bot.heldItem?.type ?? null;
   const base = b.digTime(heldType, false, false, false, [], []);
@@ -96,6 +104,10 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<boole
   const started = Date.now();
   let timedOut = false;
   let digError = "";
+  // Swimming sinks the bot mid-dig and the server aborts the dig ("Digging
+  // aborted" at 416,13,-312, seven times). Float at the surface while digging.
+  const floating = inWater(bot);
+  if (floating) bot.setControlState("jump", true);
   await Promise.race([
     bot.dig(b),
     new Promise<void>((_, rej) =>
@@ -112,6 +124,7 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<boole
       /* wasn't digging */
     }
   });
+  if (floating) bot.setControlState("jump", false);
   const after = bot.blockAt(pos);
   const gone = !after || after.boundingBox !== "block";
   if (!gone) {
