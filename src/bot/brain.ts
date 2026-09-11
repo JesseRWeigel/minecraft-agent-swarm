@@ -835,6 +835,27 @@ export class BotBrain {
 
     const decision = await queryReactive(this.roleConfig.name, situation, this.roleConfig.allowedActions);
     if (this.paused) return;
+    // A reactive MOVE while a skill is walking steals the pathfinder: the
+    // skill's goto rejects with "goal was changed", and run 500 logged 324
+    // such interruptions for Blade and 130 for Flora in one hour, killing
+    // farm walks, plantings and stash trips. If the bot is in real danger,
+    // abort the skill first so the flee owns the controls; otherwise let the
+    // skill finish and only allow actions that do not move.
+    const MOVING = new Set(["flee", "attack", "go_to", "explore", "hunt", "gather_wood", "mine_block"]);
+    if (isSkillRunning(this.bot) && MOVING.has(decision.action)) {
+      const critical = this.bot.health <= 8 && (decision.action === "flee" || decision.action === "attack");
+      if (critical) {
+        this.log.info(
+          "Brain",
+          `Reactive ${decision.action} at ${this.bot.health}/20 — aborting ${getActiveSkillName(this.bot)} first`,
+        );
+        abortActiveSkill(this.bot);
+        await new Promise((r) => setTimeout(r, 300));
+      } else {
+        this.log.info("Brain", `Reactive ${decision.action} deferred — ${getActiveSkillName(this.bot)} is walking`);
+        return;
+      }
+    }
     await this.executeDecision(decision);
   }
 
