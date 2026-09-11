@@ -197,6 +197,11 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
     // pathfinder, consumed by the goto rejection handler, which performs the
     // hop once the pathfinder has actually let go of the controls.
     let hopPending: { aim: Vec3 | null } | null = null;
+    // True while a pathfinder.goto() is outstanding. During the 3s retry
+    // delay there is none, so a hop requested then has no rejection to ride
+    // on (run 520: Mason floated in a water pocket at 403,61,-302 through
+    // six hop requests, none of which ran).
+    let gotoActive = false;
     // Every new walk is a new generation. Without this, a walk interrupted
     // by the caller's next walk retried itself 3s later with the OLD goal,
     // cancelling the new walk, which then retried too: 324 'interrupted
@@ -279,6 +284,10 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
         const pfIdle =
           !!pfAny?.isMoving?.() && !pfAny?.isMining?.() && !pfAny?.isBuilding?.() && !keysHeld && !bot.targetDigBlock;
         if ((WEDGE_BLOCKS.has(feetName) || pfIdle) && unwedges < 3 && stallTicks >= 2) {
+          if (!gotoActive) {
+            stallTicks = 0; // a retry is about to start a fresh walk
+            return;
+          }
           unwedges++;
           console.log(
             `[Nav] ${bot.username} ${WEDGE_BLOCKS.has(feetName) ? `wedged in ${feetName}` : "path held with no keys"} at ${currentPos.floored()} — nudging along (${unwedges}/3)`,
@@ -407,15 +416,18 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
       // lingering flag, so every walk starts clean. That is also why the
       // stall handlers above use setGoal(null) rather than stop().
       bot.pathfinder.setGoal(null);
+      gotoActive = true;
       bot.pathfinder
         .goto(goal)
         .then(() => {
+          gotoActive = false;
           if (settled) return;
           settled = true;
           finishTimers();
           resolve();
         })
         .catch((err: any) => {
+          gotoActive = false;
           if (settled) return;
           // "Path was stopped" / "The goal was changed" are external one-shot
           // interruptions (usually a zombie skill's cleanup), never a verdict
@@ -432,6 +444,12 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
             // planting loop, 1 of 17 plots planted).
             const { aim } = hopPending;
             hopPending = null;
+            const inWater = (bot.blockAt(bot.entity.position)?.name ?? "") === "water";
+            // Climbing out of water onto a block takes longer than a dry hop.
+            const holdMs = inWater ? 1300 : 700;
+            console.log(
+              `[Nav] ${bot.username} hop from ${bot.entity.position.floored()} toward ${aim ? aim.floored() : "facing"}${inWater ? " (in water)" : ""}`,
+            );
             if (aim) bot.lookAt(aim, true).catch(() => {});
             const hold = setInterval(() => {
               bot.setControlState("jump", true);
@@ -443,7 +461,7 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
               bot.setControlState("forward", false);
               lastPos = bot.entity.position.clone();
               setTimeout(attempt, 400);
-            }, 700);
+            }, holdMs);
             return;
           }
           if (interrupted && retries < 2 && getNavGeneration(bot) === genAtStart) {
