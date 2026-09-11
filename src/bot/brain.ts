@@ -42,6 +42,7 @@ import { skillRegistry } from "../skills/registry.js";
 import { isBuried } from "../skills/escape-to-surface.js";
 import { nearestNest } from "../skills/wax-copper.js";
 import { knownWaxedBlocks } from "./nests.js";
+import { nearestFoodAnimal } from "../skills/hunt-food.js";
 import { BotMemoryStore } from "./memory.js";
 import { getAllMemoryStores } from "./memory-registry.js";
 import { updateBulletin, formatTeamBulletin } from "./bulletin.js";
@@ -2452,7 +2453,11 @@ export class BotBrain {
         /(bread|cooked_|raw_cod|raw_salmon|apple|carrot|potato|baked|melon_slice|cookie|beef|porkchop|mutton|chicken|rabbit)/;
       const hasEdible = this.bot.inventory.items().some((i) => edible.test(i.name));
       const cooled = Date.now() - this.lastHuntFoodOverrideMs > 240_000;
-      if (this.bot.food <= 8 && !hasEdible && cooled && this.bot.time.isDay) {
+      // At night the skill will not scout, but an animal already in view is
+      // a safe kill (run 535: Atlas, Flora and Forge at 1 to 3 hearts with 0
+      // food through the night while the override waited for daylight).
+      const animalInView = !this.bot.time.isDay && !!nearestFoodAnimal(this.bot);
+      if (this.bot.food <= 8 && !hasEdible && cooled && (this.bot.time.isDay || animalInView)) {
         this.lastHuntFoodOverrideMs = Date.now();
         this.log.info("Brain", `OVERRIDE: hunger ${this.bot.food}/20 with nothing edible aboard — hunting for food`);
         this.events.onThought("Nothing to eat and my stomach is empty. Time to find an animal.");

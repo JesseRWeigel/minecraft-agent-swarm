@@ -43,7 +43,7 @@ const RAW_TO_COOKED: Record<string, string> = {
   rabbit: "cooked_rabbit",
 };
 
-function nearestFoodAnimal(bot: Bot) {
+export function nearestFoodAnimal(bot: Bot) {
   let best: ReturnType<Bot["nearestEntity"]> = null;
   let bestScore = 0;
   for (const e of Object.values(bot.entities)) {
