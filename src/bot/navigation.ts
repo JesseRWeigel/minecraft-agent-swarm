@@ -55,6 +55,26 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
       enumerable: true,
     });
     void wanted;
+    // ...and never plans a step DOWN into a block the sky does not reach.
+    // Cave mouths and the pits under the village are free downhill walking
+    // to the planner (drops of 3 cost nothing), so XZ goals routed Flora
+    // from the village surface to y=29 in the first minute of a biome roam
+    // (run 527). Level and upward moves stay open so houses and bed rooms
+    // remain reachable; a bot already underground can still walk out.
+    const world = bot.world as unknown as { getSkyLight?: (p: Vec3) => number };
+    const origNeighbors = moves.getNeighbors.bind(moves);
+    moves.getNeighbors = (node: any) => {
+      const out = origNeighbors(node);
+      if (typeof world.getSkyLight !== "function") return out;
+      return out.filter((n: any) => {
+        if (n.y >= node.y) return true;
+        try {
+          return world.getSkyLight!(new Vec3(n.x, n.y + 1, n.z)) > 0;
+        } catch {
+          return true; // unloaded column: no opinion
+        }
+      });
+    };
   }
   return moves;
 }
