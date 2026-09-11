@@ -35,6 +35,27 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   // carpeted with stash chests that made every route long enough to blow the
   // walk budget, stash failures went from 0 to 17 in ten minutes. Reverted;
   // the stall detector hops a wedged bot out instead.)
+  //
+  // A bot without a pickaxe never digs on a planned route. Every caller that
+  // sets canDig = true (walk-home, explore below y=67, gather_wood below
+  // y=63, the flee tunnel) let bare hands punch through dirt into a cave the
+  // bot then could not leave: 13 "buried pickless" rescues in run 524 and 8
+  // more in the first 15 minutes of run 526, each following one of those
+  // walks, with Flora rescued from y=-38. Callers assign canDig after this
+  // returns, so the guard is an accessor that keeps reading false.
+  const pickless = !bot.inventory.items().some((i) => i.name.endsWith("_pickaxe"));
+  if (pickless) {
+    let wanted = moves.canDig;
+    Object.defineProperty(moves, "canDig", {
+      get: () => false,
+      set: (v: boolean) => {
+        wanted = v;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+    void wanted;
+  }
   return moves;
 }
 
