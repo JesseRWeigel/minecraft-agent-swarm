@@ -170,6 +170,7 @@ export class BotBrain {
   private lastEnchantOverrideMs = 0;
   private lastBreedOverrideMs = 0;
   private lastFishOverrideMs = 0;
+  private lastHuntFoodOverrideMs = 0;
   private lastToolReturnMs = 0;
   private lastLeatherHuntMs = 0;
   private lastBedPrepMs = 0;
@@ -2349,6 +2350,34 @@ export class BotBrain {
           { action: "go_fishing", params: {} },
           result,
           /caught|fish/i.test(result),
+        );
+        return;
+      }
+    }
+
+    // Hunger override, every role. Run 517: four of five bots at 0 food and
+    // 20 deaths in an hour while "eat" found nothing 54 times; the fishing
+    // pantry is retired (no string) and the bakers eat the bread. A bot that
+    // is hungry with nothing edible aboard goes and kills a food animal,
+    // scouting outward in daylight when none is in sight, and eats it there.
+    if (config.bot.allowStrategyOverrides && !isSkillRunning(this.bot)) {
+      const edible =
+        /(bread|cooked_|raw_cod|raw_salmon|apple|carrot|potato|baked|melon_slice|cookie|beef|porkchop|mutton|chicken|rabbit)/;
+      const hasEdible = this.bot.inventory.items().some((i) => edible.test(i.name));
+      const cooled = Date.now() - this.lastHuntFoodOverrideMs > 240_000;
+      if (this.bot.food <= 8 && !hasEdible && cooled && this.bot.time.isDay) {
+        this.lastHuntFoodOverrideMs = Date.now();
+        this.log.info("Brain", `OVERRIDE: hunger ${this.bot.food}/20 with nothing edible aboard — hunting for food`);
+        this.events.onThought("Nothing to eat and my stomach is empty. Time to find an animal.");
+        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "hunt_food" });
+        this.events.onAction("hunt_food", result);
+        this.lastAction = "hunt_food";
+        this.lastResult = result;
+        this.trackFailure(
+          "skill:hunt_food",
+          { action: "hunt_food", params: {} },
+          result,
+          /Hunger \d+ -> \d+/.test(result),
         );
         return;
       }
