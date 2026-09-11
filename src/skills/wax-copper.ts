@@ -61,7 +61,6 @@ async function ensureTable(bot: Bot): Promise<Block | null> {
   // Walk to an existing table first (nearest three within 48): the wax run
   // fired with Forge standing in a pond, where there is no dry floor to place
   // a table on, while the village tables sat well within walking range.
-  const { Vec3: TV } = await import("vec3");
   const known = bot
     .findBlocks({ matching: (b) => b.name === "crafting_table", maxDistance: 48, count: 3 })
     .sort((a, b) => a.distanceTo(bot.entity.position) - b.distanceTo(bot.entity.position));
@@ -74,7 +73,7 @@ async function ensureTable(bot: Bot): Promise<Block | null> {
   const feetBlock = bot.blockAt(bot.entity.position.offset(0, -1, 0));
   if (!feetBlock || feetBlock.boundingBox !== "block") {
     const f = bot.entity.position.floored();
-    let dry: InstanceType<typeof TV> | null = null;
+    let dry: { x: number; y: number; z: number } | null = null;
     outer: for (let r = 1; r <= 10; r++) {
       for (let dx = -r; dx <= r; dx++) {
         for (let dz = -r; dz <= r; dz++) {
@@ -435,7 +434,12 @@ export const waxCopperSkill: Skill = {
           };
         }
       }
-      const gap = () => Math.hypot(bot.entity.position.x - HIVE.x, bot.entity.position.z - HIVE.z);
+      // Arrival is THREE-dimensional: Forge once stood at y=12 directly under
+      // the nest at y=72, the XZ gap read 7, the walk stopped and the shear
+      // clicked sixty blocks of rock.
+      const gapXZ = () => Math.hypot(bot.entity.position.x - HIVE.x, bot.entity.position.z - HIVE.z);
+      const gap = () =>
+        Math.hypot(bot.entity.position.x - HIVE.x, bot.entity.position.y - HIVE.y, bot.entity.position.z - HIVE.z);
       const walkUntil = Date.now() + 240_000;
       let guard = 0;
       let digging = false;
@@ -453,8 +457,8 @@ export const waxCopperSkill: Skill = {
         // GoalNear makes it search an enormous space, give up, and barely move —
         // which is why this walk sat at 358 blocks out closing nothing. Only aim
         // the GoalNear at the hive block itself on the final approach.
-        if (g > 24) {
-          const t = Math.min(1, 100 / g);
+        if (gapXZ() > 24) {
+          const t = Math.min(1, 100 / gapXZ());
           const wx = Math.round(bot.entity.position.x + (HIVE.x - bot.entity.position.x) * t);
           const wz = Math.round(bot.entity.position.z + (HIVE.z - bot.entity.position.z) * t);
           await safeGoto(bot, new goals.GoalNearXZ(wx, wz, 10), 45_000, 12_000).catch(() => {});
@@ -472,9 +476,12 @@ export const waxCopperSkill: Skill = {
         }
       }
       if (gap() > 8) {
+        const dy = Math.round(HIVE.y - bot.entity.position.y);
         return {
           success: false,
-          message: resumable(`Couldn't reach the hive — still ${Math.round(gap())} blocks out.`),
+          message: resumable(
+            `Couldn't reach the hive — still ${Math.round(gap())} blocks out${Math.abs(dy) > 4 ? ` (${Math.abs(dy)} blocks ${dy > 0 ? "below" : "above"} it)` : ""}.`,
+          ),
         };
       }
       const hive = bot.blockAt(new (await import("vec3")).Vec3(HIVE.x, HIVE.y, HIVE.z));
