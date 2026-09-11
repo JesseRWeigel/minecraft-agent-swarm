@@ -945,6 +945,16 @@ export class BotBrain {
           "Brain",
           `OVERRIDE: buried ${pickless ? "pickless" : `with a pick but ${walledIn ? "walks keep failing" : ""}`} at y=${f.y} — digging up to the surface`,
         );
+        // The client's own view of the column overhead, for the desync seen
+        // in run 537/538: the server held Flora at 363,62,-281 under stone
+        // while her client walked to y=79 through it.
+        const column = Array.from(
+          { length: 18 },
+          (_, i) => this.bot.blockAt(new Vec3(f.x, f.y + 1 + i, f.z))?.name ?? "?",
+        )
+          .map((n) => (n === "air" || n === "cave_air" ? "." : n === "stone" ? "s" : n.slice(0, 4)))
+          .join(" ");
+        this.log.info("Brain", `[EscapeDebug] client column above ${f}: ${column}`);
         this.events.onThought("No pickaxe and walled in down here. Cut a staircase up by hand.");
         const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "escape_to_surface" });
         this.events.onAction("escape_to_surface", result);

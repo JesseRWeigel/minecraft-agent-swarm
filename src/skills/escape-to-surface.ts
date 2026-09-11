@@ -1,4 +1,5 @@
 import type { Bot } from "mineflayer";
+import { Vec3 } from "vec3";
 import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
@@ -259,6 +260,10 @@ async function swimUp(bot: Bot): Promise<number> {
 /** True once the column straight above the bot is clear to the sky. */
 function canSeeSky(bot: Bot): boolean {
   const f = feet(bot);
+  // A sealed pocket at surface height is still a pocket: the reflex that
+  // invoked us just counted four or more solid blocks overhead (run 538:
+  // "Already at the surface" for Flora at y=62 under ten blocks of stone).
+  if (isBuried((x, y, z) => bot.blockAt(new Vec3(x, y, z)), f.x, f.y, f.z, 64)) return false;
   if (f.y >= SURFACE_Y) return true;
   for (let dy = 2; dy <= 6; dy++) {
     const b = bot.blockAt(f.offset(0, dy, 0));
