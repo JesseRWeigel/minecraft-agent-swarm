@@ -25,10 +25,16 @@ async function harvestAndBake(
   const harvested = await harvestMatureWheat(bot, signal, onProgress);
   const baked = await bakeBread(bot, signal, onProgress, stashPos);
   if (harvested > 0 || baked > 0) {
+    const wheatNow = bot.inventory
+      .items()
+      .filter((i) => i.name === "wheat")
+      .reduce((s, i) => s + i.count, 0);
     const breadNote =
       baked > 0
         ? `Baked ${baked} bread — food secured! 🍞`
-        : "Not enough wheat to bake bread yet (need 3+); farm is still growing.";
+        : wheatNow >= 3 && lastBakeProblem
+          ? `Bake failed: ${lastBakeProblem}.`
+          : "Not enough wheat to bake bread yet (need 3+); farm is still growing.";
     // STOCK THE PANTRY. Baking closed the wheat→bread gap, but the loaves
     // sat in the baker's pack (shouldKeep holds 6 food) and never reached
     // the shared chests — an RCON audit found 3 cooked items across 60
@@ -711,6 +717,9 @@ async function harvestMatureWheat(bot: Bot, signal: AbortSignal, onProgress: (p:
 
   // Replant seeds on empty farmland after harvesting
   if (harvested > 0) {
+    lastBakeProblem = "";
+    const picked = await collectDrops(bot, new Set(["wheat", "wheat_seeds"]), 10, 20_000);
+    if (picked > 0) console.log(`[FarmDebug] ${bot.username}: walked to ${picked} dropped wheat/seed stacks`);
     let replanted = 0;
     const replantStart = Date.now();
     for (let i = 0; i < 40 && !signal.aborted && Date.now() - replantStart < 45000; i++) {
@@ -777,7 +786,11 @@ async function bakeBread(
 
   // Bread is a 3-wide recipe → requires a crafting table.
   const table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 48 });
-  if (!table || !table.position) return 0; // no table in reach — bake next cycle near one
+  if (!table || !table.position) {
+    lastBakeProblem = `no crafting table within 48 blocks of ${bot.entity.position.floored()}`;
+    console.log(`[FarmDebug] ${bot.username}: bake skipped — ${lastBakeProblem}`);
+    return 0;
+  }
 
   onProgress({
     skillName: "build_farm",
@@ -790,20 +803,62 @@ async function bakeBread(
   setMovements(bot);
   try {
     await gotoT(bot, new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2));
-  } catch {
-    /* try crafting from where we are */
+  } catch (err) {
+    console.log(
+      `[FarmDebug] ${bot.username}: couldn't reach the table at ${table.position} (${err instanceof Error ? err.message : String(err)}) — trying from ${Math.round(bot.entity.position.distanceTo(table.position))} blocks`,
+    );
   }
 
   const recipe = bot.recipesFor(breadItem.id, null, count, table)[0];
-  if (!recipe) return 0;
+  if (!recipe) {
+    lastBakeProblem = `no bread recipe resolved with ${wheat} wheat`;
+    console.log(`[FarmDebug] ${bot.username}: ${lastBakeProblem}`);
+    return 0;
+  }
 
   const before = countItem(bot, "bread");
   try {
     await craftT(bot, recipe, count, table);
-  } catch {
+  } catch (err) {
+    lastBakeProblem = `craft threw: ${err instanceof Error ? err.message : String(err)} (table ${Math.round(bot.entity.position.distanceTo(table.position))} blocks away)`;
+    console.log(`[FarmDebug] ${bot.username}: ${lastBakeProblem}`);
     return 0;
   }
-  return countItem(bot, "bread") - before;
+  const made = countItem(bot, "bread") - before;
+  if (made <= 0) {
+    lastBakeProblem = `craft returned but bread count did not rise (wheat now ${countItem(bot, "wheat")})`;
+    console.log(`[FarmDebug] ${bot.username}: ${lastBakeProblem}`);
+  }
+  return made;
+}
+
+/** Why the last bake produced nothing, for the skill's result message. */
+let lastBakeProblem = "";
+
+/** Walk over dropped items of the given names nearby and pick them up. Wheat
+ * and seeds fly a block or two from a cut plant; the harvester stood 2 blocks
+ * off and left 2 of 5 wheat on the ground. */
+async function collectDrops(bot: Bot, names: Set<string>, radius: number, budgetMs: number): Promise<number> {
+  const until = Date.now() + budgetMs;
+  let walked = 0;
+  while (Date.now() < until) {
+    const drop = Object.values(bot.entities).find((e) => {
+      if (e.name !== "item" || !e.position) return false;
+      const it = e.getDroppedItem?.();
+      return !!it && names.has(it.name) && e.position.distanceTo(bot.entity.position) < radius;
+    });
+    if (!drop) break;
+    const d = drop.position;
+    try {
+      setMovements(bot);
+      await gotoT(bot, new goals.GoalNear(Math.floor(d.x), Math.floor(d.y), Math.floor(d.z), 0));
+      walked++;
+    } catch {
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return walked;
 }
 
 async function craftHoe(bot: Bot, signal: AbortSignal): Promise<void> {
