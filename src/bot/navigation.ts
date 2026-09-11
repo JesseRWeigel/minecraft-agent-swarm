@@ -20,6 +20,10 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   const moves = new Movements(bot);
   moves.maxDropDown = 3; // 3 blocks = no fall damage, 4 = 1.5 hearts
   moves.allowParkour = false;
+  // The pathfinder ships with door opening OFF ("causes issues on non-Paper
+  // servers"). This is Paper. Three bots stalled 3 blocks from a bed inside
+  // a plank house with a 44-node path planned around it (NavDiag, run 503).
+  moves.canOpenDoors = true;
   // The lit village portal sits where everyone idles, and any path that
   // clips the doorway teleports the walker into the ghast gallery — Flora
   // and Forge both took that trip by accident within an hour of ignition.
@@ -112,7 +116,24 @@ function navDiag(bot: Bot, goal: any, reason: string): string {
       : "?";
   const lp = lastPath.get(bot);
   const age = lp ? `${Math.round((Date.now() - lp.at) / 1000)}s ago` : "none";
-  return `[NavDiag] ${bot.username} ${reason}: goal=${goal?.constructor?.name ?? "?"}(${gx},${gy},${gz}) dist=${dist} lastPath=${lp?.status ?? "-"}/${lp?.length ?? 0} (${age})`;
+  // What the bot was physically doing: every failure so far had a full path
+  // (lastPath=success), so the loss is in execution, and these fields say
+  // whether it was moving, what it stood in, and whether a door was in the way.
+  const moving = (bot.pathfinder as any)?.isMoving?.() ?? "?";
+  const ctrl =
+    Object.entries(bot.controlState ?? {})
+      .filter(([, v]) => v)
+      .map(([k]) => k)
+      .join("+") || "none";
+  const vel = bot.entity.velocity ? Math.hypot(bot.entity.velocity.x, bot.entity.velocity.z).toFixed(2) : "?";
+  const feet = bot.blockAt(p)?.name ?? "?";
+  const below = bot.blockAt(p.offset(0, -1, 0))?.name ?? "?";
+  const door = bot.findBlock({
+    matching: (b) => b.name.endsWith("_door") || b.name.endsWith("_trapdoor"),
+    maxDistance: 3,
+  });
+  const doorNote = door ? ` door=${door.name}@${door.position.x},${door.position.y},${door.position.z}` : "";
+  return `[NavDiag] ${bot.username} ${reason}: goal=${goal?.constructor?.name ?? "?"}(${gx},${gy},${gz}) dist=${dist} lastPath=${lp?.status ?? "-"}/${lp?.length ?? 0} (${age}) moving=${moving} ctrl=${ctrl} vel=${vel} feet=${feet} on=${below}${doorNote}`;
 }
 export function bumpNavGeneration(bot: Bot): void {
   navGeneration.set(bot, (navGeneration.get(bot) ?? 0) + 1);
