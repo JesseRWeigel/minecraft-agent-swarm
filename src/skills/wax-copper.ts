@@ -235,6 +235,37 @@ async function ensureCampfire(bot: Bot, hive: Block): Promise<string | null> {
   return at(hx, seatY + 1, hz)?.name === "campfire" ? null : "campfire didn't land under the hive";
 }
 
+/** Walk over any honeycomb item lying near the hive and pick it up. */
+async function collectDroppedHoneycomb(
+  bot: Bot,
+  near: { x: number; y: number; z: number },
+  budgetMs: number,
+): Promise<void> {
+  const until = Date.now() + budgetMs;
+  const nearby = () =>
+    Object.values(bot.entities).filter((e) => {
+      if (e.name !== "item" || !e.position) return false;
+      const dropped = e.getDroppedItem?.();
+      return !!dropped && dropped.name === "honeycomb" && e.position.distanceTo(bot.entity.position) < 16;
+    });
+  while (Date.now() < until && count(bot, "honeycomb") < 1) {
+    const drops = nearby();
+    if (drops.length === 0) {
+      await new Promise((r) => setTimeout(r, 400));
+      continue;
+    }
+    const d = drops[0].position;
+    console.log(`[WaxDebug] ${bot.username}: honeycomb on the ground at ${d.floored()} — collecting`);
+    await safeGoto(bot, new goals.GoalBlock(Math.floor(d.x), Math.floor(d.y), Math.floor(d.z)), 8_000, 4_000).catch(
+      () => {},
+    );
+    await new Promise((r) => setTimeout(r, 600));
+  }
+  if (count(bot, "honeycomb") < 1 && Math.hypot(bot.entity.position.x - near.x, bot.entity.position.z - near.z) > 6) {
+    await safeGoto(bot, new goals.GoalNear(near.x, near.y, near.z, 3), 10_000, 5_000).catch(() => {});
+  }
+}
+
 export const waxCopperSkill: Skill = {
   name: "wax_copper",
   description:
@@ -372,6 +403,8 @@ export const waxCopperSkill: Skill = {
     }
 
     // --- Shear a honeycomb out of the full hive ---
+    // A comb from an earlier harvest may still be lying here (they last 5 min).
+    if (count(bot, "honeycomb") < 1) await collectDroppedHoneycomb(bot, hive.position, 6_000);
     if (count(bot, "honeycomb") < 1) {
       // Shearing does nothing below honey level 5, and the bees only refill
       // the nest while alive — so read the level first instead of clicking.
@@ -400,7 +433,12 @@ export const waxCopperSkill: Skill = {
       const shears = bot.inventory.items().find((i) => i.name === "shears");
       if (shears) await bot.equip(shears, "hand").catch(() => {});
       await bot.activateBlock(hive).catch(() => {});
-      await new Promise((r) => setTimeout(r, 1500));
+      await new Promise((r) => setTimeout(r, 800));
+      // Shearing pops the combs out as ITEM ENTITIES; nothing lands in the
+      // pack by itself. The first live harvest (02:41Z, 2026-09-11) emptied
+      // the nest 5→0 and left the honeycomb on the grass while the bot
+      // walked off to mine; it despawned. Walk over the drops.
+      await collectDroppedHoneycomb(bot, hive.position, 15_000);
       if (count(bot, "honeycomb") < 1) {
         return {
           success: false,
