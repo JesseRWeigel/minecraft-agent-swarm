@@ -65,3 +65,31 @@ export function recordNest(x: number, y: number, z: number): boolean {
 export function nearestNest(x: number, z: number): Nest {
   return [...knownNests()].sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
 }
+
+/** Copper blocks the swarm has waxed (Wax Off scrapes one of these). The
+ *  first was placed by Forge beside the third nest on 2026-09-11 and
+ *  confirmed by RCON at 475,78,-321. */
+export const STATIC_WAXED: Nest[] = [{ x: 475, y: 78, z: -321 }];
+const WAXED_FILE = "logs/known-waxed.json";
+
+function readWaxed(): Nest[] {
+  try {
+    const raw = JSON.parse(fs.readFileSync(WAXED_FILE, "utf8"));
+    return Array.isArray(raw) ? raw.filter((n) => typeof n?.x === "number") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function knownWaxedBlocks(): Nest[] {
+  return mergeNests(STATIC_WAXED, readWaxed());
+}
+
+export function recordWaxedBlock(x: number, y: number, z: number): void {
+  const all = mergeNests(readWaxed(), [{ x, y, z }]);
+  try {
+    fs.writeFileSync(WAXED_FILE, JSON.stringify(all, null, 2));
+  } catch {
+    /* logs dir missing: the static list still covers the first block */
+  }
+}

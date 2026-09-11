@@ -3,7 +3,7 @@ import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
 import { explorerMoves, safeGoto } from "../bot/navigation.js";
-import { nearestNest } from "../bot/nests.js";
+import { nearestNest, knownWaxedBlocks } from "../bot/nests.js";
 import { executeAction } from "../bot/actions.js";
 
 /**
@@ -49,22 +49,26 @@ export const waxOffSkill: Skill = {
       if (!axe) return { success: false, message: `Couldn't craft a stone axe: ${String(r).slice(0, 80)}` };
     }
 
-    // --- Walk to the nest neighbourhood, then find the waxed block ---
+    // --- Walk to the remembered waxed block (run 529: "nearest nest" was a
+    // recorded nest by the village, 200 blocks from the block) ---
     const here = bot.entity.position;
-    const nest = nearestNest(here.x, here.z);
     const isWaxed = (name: string) => name.startsWith("waxed_");
     let block = bot.findBlock({ matching: (b) => isWaxed(b.name), maxDistance: 32 });
+    const known = knownWaxedBlocks().sort(
+      (a, b) => Math.hypot(a.x - here.x, a.z - here.z) - Math.hypot(b.x - here.x, b.z - here.z),
+    );
+    const target = known[0] ?? nearestNest(here.x, here.z);
     if (!block) {
-      step(`Walking to the nest at ${nest.x},${nest.z}...`, 0.3);
+      step(`Walking to the waxed block at ${target.x},${target.z}...`, 0.3);
       bot.pathfinder.setMovements(explorerMoves(bot));
-      await safeGoto(bot, new goals.GoalNear(nest.x, nest.y, nest.z, 4), 90_000, 12_000).catch(() => {});
+      await safeGoto(bot, new goals.GoalNear(target.x, target.y, target.z, 3), 120_000, 12_000).catch(() => {});
       block = bot.findBlock({ matching: (b) => isWaxed(b.name), maxDistance: 32 });
     }
     if (!block) {
-      const d = Math.hypot(bot.entity.position.x - nest.x, bot.entity.position.z - nest.z);
+      const d = Math.hypot(bot.entity.position.x - target.x, bot.entity.position.z - target.z);
       return {
         success: false,
-        message: `No waxed copper block within 32 blocks of the nest (I am ${d.toFixed(0)} out).`,
+        message: `No waxed copper block within 32 blocks of ${target.x},${target.z} (I am ${d.toFixed(0)} out).`,
       };
     }
     if (signal.aborted) return { success: false, message: "Aborted." };

@@ -18,7 +18,7 @@ import { baseMoves, explorerMoves, safeGoto } from "../bot/navigation.js";
  * waxes it.
  */
 
-import { knownNests, nearestNest } from "../bot/nests.js";
+import { knownNests, nearestNest, recordWaxedBlock } from "../bot/nests.js";
 import { escapeToSurfaceSkill } from "./escape-to-surface.js";
 export { nearestNest };
 
@@ -596,6 +596,7 @@ export const waxCopperSkill: Skill = {
 
     const waxed = bot.blockAt(copperBlock.position);
     const success = !!waxed && waxed.name.startsWith("waxed_");
+    if (success) recordWaxedBlock(copperBlock.position.x, copperBlock.position.y, copperBlock.position.z);
     return {
       success,
       message: success

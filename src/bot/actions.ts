@@ -12,6 +12,7 @@
  * `Skill` instead of this dispatcher.
  */
 import type { Bot } from "mineflayer";
+import type { Block } from "prismarine-block";
 import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
 import { Vec3 } from "vec3";
@@ -2058,20 +2059,42 @@ async function sleepInBed(bot: Bot): Promise<string> {
     // 20/hr (zombie-villager massacre) while sleeps failed all night. A
     // flee now pauses the walk; the bot resumes toward the bed until 75s
     // is spent or it arrives.
-    const bedDeadline = Date.now() + 75_000;
-    while (Date.now() < bedDeadline && bot.entity.position.distanceTo(bed.position) > 3) {
-      try {
-        await safeGoto(
-          bot,
-          new goals.GoalNear(bed.position.x, bed.position.y, bed.position.z, 2),
-          Math.max(10_000, bedDeadline - Date.now()),
-        );
-      } catch {
-        await new Promise((r) => setTimeout(r, 2000)); // let the flee finish
+    // Try the nearest bed, then the next two: run 529 logged "cant click the
+    // bed" fifteen times in one night from three bots parked outside the
+    // same house, because the click was attempted from wherever the walk
+    // gave up. mineflayer's sleep() refuses a bed it cannot reach, so check
+    // the distance first and move on to another bed instead of clicking.
+    const candidates = [
+      bed,
+      ...bedSpots
+        .slice(1, 3)
+        .map((p) => bot.blockAt(p))
+        .filter((b): b is Block => !!b),
+    ];
+    let nearestMiss = Infinity;
+    for (const target of candidates) {
+      const bedDeadline = Date.now() + 60_000;
+      while (Date.now() < bedDeadline && bot.entity.position.distanceTo(target.position) > 3) {
+        try {
+          await safeGoto(
+            bot,
+            new goals.GoalNear(target.position.x, target.position.y, target.position.z, 2),
+            Math.max(10_000, bedDeadline - Date.now()),
+          );
+        } catch {
+          await new Promise((r) => setTimeout(r, 2000)); // let the flee finish
+        }
       }
+      const dist = bot.entity.position.distanceTo(target.position);
+      if (dist > 4.5) {
+        nearestMiss = Math.min(nearestMiss, dist);
+        continue;
+      }
+      await bot.lookAt(target.position.offset(0.5, 0.5, 0.5), true).catch(() => {});
+      await bot.sleep(target);
+      return "Sleeping... zzz";
     }
-    await bot.sleep(bed);
-    return "Sleeping... zzz";
+    return `Couldn't reach a bed (closest attempt ended ${nearestMiss.toFixed(1)} blocks away). Walk closer or place one on open ground.`;
   } catch (err: any) {
     if (err.message?.includes("not possible")) {
       return "Can't sleep — not nighttime yet.";
