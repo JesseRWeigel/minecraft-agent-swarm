@@ -43,10 +43,37 @@ export const harvestHoneySkill: Skill = {
       onProgress({ skillName: "harvest_honey", phase: "Honey", progress, message, active: true });
     const resumable = (m: string) => `${m} invoke_skill {"skill":"harvest_honey"} again to continue.`;
 
-    // --- Phase A: a glass bottle ---
+    // --- Phase A: a glass bottle, plus the campfire kit (the meadows around
+    // the nests have no trees, and run 534 stalled at the nest on "need coal
+    // or charcoal for a campfire"; the stash holds coal, logs and sticks) ---
+    const { STASH_POS } = await import("../bot/role.js");
+    const nearStash = Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z) < 60;
+    const isLog = (n: string) => n.endsWith("_log") || n.endsWith("_wood");
+    const logsHeld = () =>
+      bot.inventory
+        .items()
+        .filter((i) => isLog(i.name))
+        .reduce((s, i) => s + i.count, 0);
+    const hasFuel = () => count(bot, "coal") + count(bot, "charcoal") >= 1;
+    if (nearStash && count(bot, "campfire") < 1 && (!hasFuel() || logsHeld() < 3 || count(bot, "stick") < 3)) {
+      step("Withdrawing the campfire kit from the stash...", 0.05);
+      const { withdrawStash } = await import("./stash.js");
+      const want: Array<[string, number]> = [];
+      if (!hasFuel()) want.push(["coal", 2]);
+      if (logsHeld() < 3) want.push(["oak_log", 3]);
+      if (count(bot, "stick") < 3) want.push(["stick", 4]);
+      for (const [name, n] of want) {
+        if (signal.aborted) break;
+        await Promise.race([
+          withdrawStash(bot, STASH_POS, name, n),
+          new Promise<void>((r) => setTimeout(r, 40_000)),
+        ]).catch(() => {});
+      }
+      console.log(
+        `[HoneyDebug] ${bot.username}: kit after stash — coal ${count(bot, "coal")} logs ${logsHeld()} sticks ${count(bot, "stick")} glass ${count(bot, "glass")}`,
+      );
+    }
     if (count(bot, "glass_bottle") < 1) {
-      const { STASH_POS } = await import("../bot/role.js");
-      const nearStash = Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z) < 60;
       if (count(bot, "glass") < 3) {
         if (!nearStash)
           return {
