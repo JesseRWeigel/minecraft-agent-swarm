@@ -62,3 +62,21 @@ Public progress updates carry source timestamps (UTC, from the server log or
 the run log), advancement counts verified by `scripts/advancement-report.ts`
 (per-player server lines are not team advancements), and name the supervisor's
 own contributions separately from what the bots earned.
+
+### Research-window safeguards
+
+Mode writes are staged, validated and atomically renamed. An unreadable,
+missing or unrecognized mode blocks the supervisor and produces
+`OPS_MODE=invalid` / `ALERTS=ops_state_invalid` in the health check.
+The supervisor checks mode again immediately before each launch, including
+after a restart delay. `FORCE_START=1` permits the deliberate initial launch
+in maintenance, but does not authorize subsequent automatic restarts.
+Entering maintenance does not itself stop an already running process; the
+operator must stop it and verify that the GPU workload is gone before the
+research window begins. This is not an inter-process launch lock: do not
+assume an already-passed check can revoke an in-flight launch.
+
+The backup cleanup trap is installed before disabling autosave so a failed
+flush still attempts `save-on`. Failure to restore autosave emits an explicit
+operator error. These script paths are tested with fake npm/RCON commands:
+`python3 -m unittest discover -s tools/ops`.

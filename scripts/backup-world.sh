@@ -11,8 +11,9 @@ out="backups/world-${ts}.tar.zst"
 label="${1:-scheduled}"
 rcon() { node scripts/rcon.mjs "$@"; }
 echo "[backup] $ts label=$label"
+# Install cleanup before save-off: a later flush failure must restore autosave.
+trap 'rcon "save-on" >/dev/null || echo "ERROR: Could not restore autosave; operator must run save-on." >&2' EXIT
 rcon "save-off" "save-all flush" >/dev/null
-trap 'rcon "save-on" >/dev/null || true' EXIT
 sleep 2
 tar -C server --exclude='ai-world/session.lock' --exclude='*/session.lock' -cf - \
   ai-world ai-world_nether ai-world_the_end server.properties usercache.json ops.json whitelist.json \

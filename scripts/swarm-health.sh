@@ -16,7 +16,12 @@ cd "$(dirname "$0")/.." || exit 1
 ALERTS=()
 
 # Study/operations mode (ops/state.json): live | maintenance | evaluation.
-OPS_MODE=$(jq -r .mode ops/state.json 2>/dev/null || echo live)
+source scripts/ops-mode.sh
+if ! OPS_MODE=$(ops_mode); then
+  echo "OPS_MODE=invalid"
+  echo "ALERTS=ops_state_invalid"
+  exit 2
+fi
 echo "OPS_MODE=$OPS_MODE"
 
 # ── Process ────────────────────────────────────────────────────────────────
