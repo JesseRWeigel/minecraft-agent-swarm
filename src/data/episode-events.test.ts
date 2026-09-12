@@ -246,6 +246,28 @@ test("recordEpisodeEvent replaces an unserializable claimed payload with a diagn
   assert.equal(diagnostic.telemetryCapture.originalPayloadCaptured, false);
 });
 
+test("recordEpisodeEvent rejects a foreign run ID without changing the current run", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "episode-events-foreign-run-"));
+  const recorder = new EpisodeEventRecorder({ rootDir: root, runId: "run-a" });
+  const first = recorder.record(event(), { first: true });
+  const original = readFileSync(recorder.eventPath);
+  const foreignPayload = { foreign: true };
+  const foreign = {
+    ...first,
+    eventId: "foreign-event",
+    runId: "run-b",
+    sequence: 2,
+    payloadRef: contentReference(foreignPayload),
+  };
+
+  const refused = recorder.recordEpisodeEvent(foreign, foreignPayload);
+
+  assert.equal(recorder.health.complete, false);
+  assert.match(recorder.health.lastError ?? "", /run ID/i);
+  assert.equal(refused.payloadRef, "unavailable:run_id_mismatch");
+  assert.deepEqual(readFileSync(recorder.eventPath), original);
+});
+
 test("a throwing payload getter becomes a diagnostic instead of escaping capture", () => {
   const root = mkdtempSync(path.join(tmpdir(), "episode-events-getter-"));
   const recorder = new EpisodeEventRecorder({ rootDir: root, runId: "getter-run" });

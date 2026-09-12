@@ -209,6 +209,10 @@ export class EpisodeEventRecorder {
 
   recordEpisodeEvent(event: EpisodeEvent, payload: unknown): EpisodeEvent {
     if (!this.health.complete) return { ...event, payloadRef: UNAVAILABLE_REF };
+    if (event.runId !== this.runId) {
+      this.fail(new Error(`telemetry event run ID does not match ${this.runId}`));
+      return { ...event, payloadRef: "unavailable:run_id_mismatch" };
+    }
 
     const prepared = preparePayload(payload);
     const bytes = prepared.bytes;
