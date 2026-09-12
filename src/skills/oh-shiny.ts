@@ -278,7 +278,17 @@ export const ohShinySkill: Skill = {
     // this trip's evidence exactly (held gold_ingot -> empty at 1.3 blocks,
     // zero advancement). Babies stand about half height.
     const adultPiglin = (e: { name?: string; height?: number }) => e.name === "piglin" && (e.height ?? 2) > 1.2;
-    let piglin = bot.nearestEntity(adultPiglin);
+    // Reachable piglins only: run 553 chose the nearest one, 16 blocks away
+    // across something the planner could not cross ("No path to the goal"),
+    // skipped four hand-offs out of reach and threw three ingots on the
+    // ground that nobody picked up.
+    const tried = new Set<number>();
+    const nextPiglin = () =>
+      Object.values(bot.entities)
+        .filter((e) => adultPiglin(e) && !tried.has(e.id))
+        .sort((a, b) => a.position.distanceTo(bot.entity.position) - b.position.distanceTo(bot.entity.position))[0] ??
+      null;
+    let piglin = nextPiglin();
     const scoutUntil = Date.now() + 90_000;
     while (!piglin && Date.now() < scoutUntil && !signal.aborted) {
       // Short bounded arcs around the portal — never out of walking-home range.
@@ -290,20 +300,37 @@ export const ohShinySkill: Skill = {
         30_000,
         12_000,
       ).catch(() => {});
-      piglin = bot.nearestEntity(adultPiglin);
+      piglin = nextPiglin();
     }
 
     let tossed = 0;
+    let approached = false;
     if (piglin) {
       step(`Piglin spotted — offering gold (${count(bot, "gold_ingot")} ingots aboard)...`, 0.7);
       console.log(`[ShinyDebug] target piglin height=${piglin.height?.toFixed(2)} (adult check passed)`);
+      for (let attempt = 0; attempt < 3 && piglin && !signal.aborted; attempt++) {
+        tried.add(piglin.id);
+        await safeGoto(bot, new goals.GoalFollow(piglin, 2), 20_000).catch(() => {});
+        const d = piglin.isValid ? bot.entity.position.distanceTo(piglin.position) : 99;
+        console.log(`[ShinyDebug] approach ${attempt + 1}: piglin ${piglin.id} at ${d.toFixed(1)} blocks`);
+        if (d <= 3.5) {
+          approached = true;
+          break;
+        }
+        const next = nextPiglin();
+        if (!next) break;
+        piglin = next;
+      }
+      if (!approached) {
+        console.log(`[ShinyDebug] no reachable piglin this trip (tried ${tried.size}); keeping the gold`);
+      }
       // Direct hand-off FIRST: the first expedition's thrown gold bartered
       // beautifully (crying obsidian came back) yet left ZERO criteria
       // progress on distract_piglin — the pickup never credited the thrower.
       // Using the ingot ON the piglin fires distract_piglin_directly, the
       // advancement's other criterion, deterministically.
       const handGold = bot.inventory.items().find((i) => i.name === "gold_ingot");
-      if (handGold && piglin.isValid) {
+      if (approached && handGold && piglin.isValid) {
         await bot.equip(handGold, "hand").catch(() => {});
         await safeGoto(bot, new goals.GoalFollow(piglin, 2), 15_000).catch(() => {});
         if (piglin.isValid) {
@@ -361,7 +388,7 @@ export const ohShinySkill: Skill = {
           await new Promise((r) => setTimeout(r, 7_000));
         }
       }
-      while (tossed < 3 && piglin.isValid && count(bot, "gold_ingot") > 0 && !signal.aborted) {
+      while (approached && tossed < 3 && piglin.isValid && count(bot, "gold_ingot") > 0 && !signal.aborted) {
         await safeGoto(bot, new goals.GoalFollow(piglin, 4), 15_000).catch(() => {});
         if (!piglin.isValid) break;
         const gold = bot.inventory.items().find((i) => i.name === "gold_ingot");
