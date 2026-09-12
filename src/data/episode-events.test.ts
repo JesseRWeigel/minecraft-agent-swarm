@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -115,6 +115,7 @@ test("keeps usage token quantities and repeated references while redacting crede
     apiKey: "key-secret",
     access_token: "access-secret",
     authorization: "Bearer auth-secret",
+    headers: { "x-api-key": "header-key-secret", "x-access-token": "header-access-secret" },
   });
   const payload = JSON.parse(readFileSync(recorder.payloadPath(recorded.payloadRef), "utf8"));
   assert.deepEqual(payload.usage, sharedUsage);
@@ -122,5 +123,144 @@ test("keeps usage token quantities and repeated references while redacting crede
   assert.equal(payload.apiKey, "[REDACTED]");
   assert.equal(payload.access_token, "[REDACTED]");
   assert.equal(payload.authorization, "[REDACTED]");
-  assert.doesNotMatch(JSON.stringify(payload), /key-secret|access-secret|auth-secret/);
+  assert.equal(payload.headers["x-api-key"], "[REDACTED]");
+  assert.equal(payload.headers["x-access-token"], "[REDACTED]");
+  assert.doesNotMatch(JSON.stringify(payload), /key-secret|access-secret|auth-secret|header-key|header-access/);
+});
+
+test("an unterminated valid JSON tail quarantines the run without changing its bytes", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "episode-events-tail-"));
+  const first = new EpisodeEventRecorder({ rootDir: root, runId: "tail-run" });
+  first.record(event(), { one: true });
+  const unterminated = readFileSync(first.eventPath, "utf8").trimEnd();
+  writeFileSync(first.eventPath, unterminated);
+
+  const resumed = new EpisodeEventRecorder({ rootDir: root, runId: "tail-run" });
+  assert.equal(resumed.health.complete, false);
+  assert.match(resumed.health.lastError ?? "", /unterminated|newline/i);
+  const refused = resumed.record(event({ kind: "action_finished" }), { two: true });
+  assert.match(refused.payloadRef, /^unavailable:/);
+  assert.equal(resumed.recoverInterruptedActions(), 0);
+  assert.equal(readFileSync(first.eventPath, "utf8"), unterminated);
+});
+
+test("a malformed tail quarantines the run and refuses subsequent writes", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "episode-events-malformed-"));
+  const first = new EpisodeEventRecorder({ rootDir: root, runId: "malformed-run" });
+  first.record(event(), { one: true });
+  appendFileSync(first.eventPath, "{");
+  const original = readFileSync(first.eventPath);
+
+  const resumed = new EpisodeEventRecorder({ rootDir: root, runId: "malformed-run" });
+  assert.equal(resumed.health.complete, false);
+  const refused = resumed.record(event({ kind: "action_finished" }), { two: true });
+  assert.match(refused.payloadRef, /^unavailable:/);
+  assert.equal(resumed.recoverInterruptedActions(), 0);
+  assert.deepEqual(readFileSync(first.eventPath), original);
+});
+
+test("a damaged run does not prevent a different run from starting cleanly", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "episode-events-new-run-"));
+  const damaged = new EpisodeEventRecorder({ rootDir: root, runId: "old/run" });
+  damaged.record(event(), { old: true });
+  appendFileSync(damaged.eventPath, "{");
+  assert.equal(new EpisodeEventRecorder({ rootDir: root, runId: "old/run" }).health.complete, false);
+
+  const fresh = new EpisodeEventRecorder({ rootDir: root, runId: "new?run" });
+  const recorded = fresh.record(event({ actionId: "fresh" }), { fresh: true });
+  assert.equal(fresh.health.complete, true);
+  assert.notEqual(fresh.eventPath, damaged.eventPath);
+  assert.match(recorded.payloadRef, /^sha256:[a-f0-9]{64}$/);
+});
+
+test("run IDs with the same safe spelling have distinct files and cannot recover each other", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "episode-events-run-id-"));
+  const slash = new EpisodeEventRecorder({ rootDir: root, runId: "trial/a" });
+  slash.record(event({ episodeId: "trial/a:Atlas", actionId: "slash-action" }), { started: true });
+
+  const question = new EpisodeEventRecorder({ rootDir: root, runId: "trial?a" });
+  assert.notEqual(question.eventPath, slash.eventPath);
+  assert.equal(question.recoverInterruptedActions(), 0);
+  assert.equal(question.health.complete, true);
+  assert.equal(readFileSync(slash.eventPath, "utf8").trim().split("\n").length, 1);
+});
+
+test("recovery rejects events whose embedded run ID does not match the requested run", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "episode-events-wrong-run-"));
+  const recorder = new EpisodeEventRecorder({ rootDir: root, runId: "expected-run" });
+  recorder.record(event(), { started: true });
+  const line = JSON.parse(readFileSync(recorder.eventPath, "utf8").trim());
+  line.runId = "different-run";
+  writeFileSync(recorder.eventPath, JSON.stringify(line) + "\n");
+  const original = readFileSync(recorder.eventPath);
+
+  const resumed = new EpisodeEventRecorder({ rootDir: root, runId: "expected-run" });
+  assert.equal(resumed.health.complete, false);
+  assert.match(resumed.health.lastError ?? "", /run ID/i);
+  assert.equal(resumed.recoverInterruptedActions(), 0);
+  assert.deepEqual(readFileSync(recorder.eventPath), original);
+});
+
+test("an unserializable payload records an explicit diagnostic and fails soft", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "episode-events-bigint-"));
+  const recorder = new EpisodeEventRecorder({ rootDir: root, runId: "bigint-run" });
+
+  let recorded!: ReturnType<EpisodeEventRecorder["record"]>;
+  assert.doesNotThrow(() => {
+    recorded = recorder.record(event(), { impossible: 1n });
+  });
+  assert.equal(recorder.health.complete, false);
+  assert.match(recorded.payloadRef, /^sha256:[a-f0-9]{64}$/);
+  const diagnostic = JSON.parse(readFileSync(recorder.payloadPath(recorded.payloadRef), "utf8"));
+  assert.deepEqual(diagnostic.telemetryCapture, {
+    originalPayloadCaptured: false,
+    reason: "payload_serialization_failed",
+  });
+  assert.doesNotMatch(JSON.stringify(diagnostic), /impossible/);
+});
+
+test("recordEpisodeEvent replaces an unserializable claimed payload with a diagnostic reference", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "episode-events-public-bigint-"));
+  const recorder = new EpisodeEventRecorder({ rootDir: root, runId: "public-bigint-run" });
+  const claimed = recorder.record(event(), { serializable: true });
+  const external = {
+    ...claimed,
+    eventId: "external-event",
+    sequence: 2,
+    payloadRef: contentReference({ claimed: "different payload" }),
+  };
+
+  let recorded!: typeof external;
+  assert.doesNotThrow(() => {
+    recorded = recorder.recordEpisodeEvent(external, { impossible: 1n });
+  });
+  assert.equal(recorder.health.complete, false);
+  assert.notEqual(recorded.payloadRef, external.payloadRef);
+  const lines = readFileSync(recorder.eventPath, "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const persisted = lines[lines.length - 1];
+  assert.equal(persisted.payloadRef, recorded.payloadRef);
+  const diagnostic = JSON.parse(readFileSync(recorder.payloadPath(recorded.payloadRef), "utf8"));
+  assert.equal(diagnostic.telemetryCapture.originalPayloadCaptured, false);
+});
+
+test("a throwing payload getter becomes a diagnostic instead of escaping capture", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "episode-events-getter-"));
+  const recorder = new EpisodeEventRecorder({ rootDir: root, runId: "getter-run" });
+  const payload = Object.defineProperty({}, "unsafe", {
+    enumerable: true,
+    get() {
+      throw new Error("getter exploded");
+    },
+  });
+
+  let recorded!: ReturnType<EpisodeEventRecorder["record"]>;
+  assert.doesNotThrow(() => {
+    recorded = recorder.record(event(), payload);
+  });
+  assert.equal(recorder.health.complete, false);
+  const diagnostic = JSON.parse(readFileSync(recorder.payloadPath(recorded.payloadRef), "utf8"));
+  assert.equal(diagnostic.telemetryCapture.originalPayloadCaptured, false);
 });

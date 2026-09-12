@@ -72,6 +72,8 @@ const PRIVATE_KEYS = new Set([
   "password",
   "credential",
   "credentials",
+  "xapikey",
+  "xaccesstoken",
 ]);
 
 function isPrivateKey(key: string): boolean {
@@ -126,14 +128,43 @@ function forEachJsonLine(file: string, visit: (event: EpisodeEvent) => void): vo
         throw new Error(`telemetry event line exceeds ${MAX_EVENT_LINE_BYTES} bytes`);
       pending = Buffer.from(data);
     }
-    if (pending.length) visit(JSON.parse(pending.toString("utf8")) as EpisodeEvent);
+    if (pending.length) throw new Error("telemetry event log has an unterminated final line");
   } finally {
     fs.closeSync(fd);
   }
 }
+
 function safeSegment(value: string): string {
   const safe = value.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160);
   return safe || "unknown";
+}
+
+function runFileName(runId: string): string {
+  const identity = createHash("sha256").update(runId, "utf8").digest("hex");
+  return `${safeSegment(runId)}-${identity}.jsonl`;
+}
+
+interface PreparedPayload {
+  bytes: Buffer;
+  serializationError: unknown | null;
+}
+
+const UNAVAILABLE_REF = "unavailable:telemetry_incomplete";
+
+function preparePayload(payload: unknown): PreparedPayload {
+  try {
+    return { bytes: payloadBytes(payload), serializationError: null };
+  } catch (error) {
+    return {
+      bytes: payloadBytes({
+        telemetryCapture: {
+          originalPayloadCaptured: false,
+          reason: "payload_serialization_failed",
+        },
+      }),
+      serializationError: error,
+    };
+  }
 }
 
 export class EpisodeEventRecorder {
@@ -149,53 +180,58 @@ export class EpisodeEventRecorder {
   constructor(options: EpisodeEventRecorderOptions) {
     this.rootDir = path.resolve(options.rootDir);
     this.runId = options.runId;
-    this.eventPath = path.join(this.rootDir, "events", `${safeSegment(this.runId)}.jsonl`);
+    this.eventPath = path.join(this.rootDir, "events", runFileName(this.runId));
     this.clock = options.clock ?? Date.now;
     this.monotonicClock = options.monotonicClock ?? (() => performance.now());
     this.sequence = this.readLastSequence();
   }
 
   payloadPath(payloadRef: string): string {
-    const hash = payloadRef.replace(/^sha256:/, "");
+    const match = /^sha256:([a-f0-9]{64})$/.exec(payloadRef);
+    if (!match) throw new Error(`telemetry payload reference is unavailable: ${payloadRef}`);
+    const hash = match[1];
     return path.join(this.rootDir, "payloads", hash.slice(0, 2), `${hash}.json`);
   }
 
   record(input: EpisodeEventInput, payload: unknown): EpisodeEvent {
-    const bytes = payloadBytes(payload);
+    if (!this.health.complete) return this.unavailableEvent(input);
+
+    const prepared = preparePayload(payload);
+    const bytes = prepared.bytes;
     const payloadRef = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-    const event: EpisodeEvent = {
-      schemaVersion: 1,
-      eventId: randomUUID(),
-      runId: this.runId,
-      episodeId: input.episodeId,
-      botId: input.botId,
-      sequence: ++this.sequence,
-      actionId: input.actionId,
-      requestId: input.requestId,
-      occurredAt: new Date(this.clock()).toISOString(),
-      monotonicMs: this.monotonicClock(),
-      kind: input.kind,
-      payloadRef,
-    };
-    this.write(event, bytes);
-    return event;
+    const event = this.createEvent(input, payloadRef, ++this.sequence);
+    const persisted = this.write(event, bytes);
+    if (prepared.serializationError !== null && persisted) {
+      this.fail(new Error("payload serialization failed; diagnostic payload stored"));
+    }
+    return persisted ? event : { ...event, payloadRef: UNAVAILABLE_REF };
   }
 
-  recordEpisodeEvent(event: EpisodeEvent, payload: unknown): void {
-    const bytes = payloadBytes(payload);
+  recordEpisodeEvent(event: EpisodeEvent, payload: unknown): EpisodeEvent {
+    if (!this.health.complete) return { ...event, payloadRef: UNAVAILABLE_REF };
+
+    const prepared = preparePayload(payload);
+    const bytes = prepared.bytes;
     const actualRef = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-    if (actualRef !== event.payloadRef) {
+    if (prepared.serializationError === null && actualRef !== event.payloadRef) {
       this.fail(new Error(`telemetry payload reference mismatch for ${event.eventId}`));
-      return;
+      return { ...event, payloadRef: "unavailable:payload_reference_mismatch" };
     }
-    this.sequence = Math.max(this.sequence, event.sequence);
-    this.write(event, bytes);
+    const recorded = prepared.serializationError === null ? event : { ...event, payloadRef: actualRef };
+    const persisted = this.write(recorded, bytes);
+    if (persisted) this.sequence = Math.max(this.sequence, recorded.sequence);
+    if (prepared.serializationError !== null && persisted) {
+      this.fail(new Error("payload serialization failed; diagnostic payload stored"));
+    }
+    return persisted ? recorded : { ...recorded, payloadRef: UNAVAILABLE_REF };
   }
 
   recoverInterruptedActions(): number {
+    if (!this.health.complete) return 0;
     const active = new Map<string, EpisodeEvent>();
     try {
       forEachJsonLine(this.eventPath, (event) => {
+        this.assertMatchingRun(event);
         if (!event.actionId) return;
         if (event.kind === "action_started") active.set(event.actionId, event);
         if (event.kind === "action_finished") active.delete(event.actionId);
@@ -232,6 +268,7 @@ export class EpisodeEventRecorder {
     try {
       let last = 0;
       forEachJsonLine(this.eventPath, (event) => {
+        this.assertMatchingRun(event);
         if (typeof event.sequence === "number") last = Math.max(last, event.sequence);
       });
       return last;
@@ -241,7 +278,34 @@ export class EpisodeEventRecorder {
     }
   }
 
-  private write(event: EpisodeEvent, bytes: Buffer): void {
+  private createEvent(input: EpisodeEventInput, payloadRef: string, sequence: number): EpisodeEvent {
+    return {
+      schemaVersion: 1,
+      eventId: randomUUID(),
+      runId: this.runId,
+      episodeId: input.episodeId,
+      botId: input.botId,
+      sequence,
+      actionId: input.actionId,
+      requestId: input.requestId,
+      occurredAt: new Date(this.clock()).toISOString(),
+      monotonicMs: this.monotonicClock(),
+      kind: input.kind,
+      payloadRef,
+    };
+  }
+
+  private unavailableEvent(input: EpisodeEventInput): EpisodeEvent {
+    return this.createEvent(input, UNAVAILABLE_REF, this.sequence + 1);
+  }
+
+  private assertMatchingRun(event: EpisodeEvent): void {
+    if (!event || typeof event !== "object" || event.runId !== this.runId) {
+      throw new Error(`telemetry event run ID does not match ${this.runId}`);
+    }
+  }
+
+  private write(event: EpisodeEvent, bytes: Buffer): boolean {
     try {
       const blobPath = this.payloadPath(event.payloadRef);
       fs.mkdirSync(path.dirname(blobPath), { recursive: true, mode: 0o700 });
@@ -254,8 +318,10 @@ export class EpisodeEventRecorder {
       }
       fs.mkdirSync(path.dirname(this.eventPath), { recursive: true, mode: 0o700 });
       fs.appendFileSync(this.eventPath, JSON.stringify(event) + "\n", { mode: 0o600 });
+      return true;
     } catch (error) {
       this.fail(error);
+      return false;
     }
   }
 
@@ -298,8 +364,8 @@ export function appendEpisodeEvent(input: EpisodeEventInput, payload: unknown): 
   return getEpisodeEventRecorder().record(input, payload);
 }
 
-export function recordEpisodeEvent(event: EpisodeEvent, payload: unknown): void {
-  getEpisodeEventRecorder().recordEpisodeEvent(event, payload);
+export function recordEpisodeEvent(event: EpisodeEvent, payload: unknown): EpisodeEvent {
+  return getEpisodeEventRecorder().recordEpisodeEvent(event, payload);
 }
 
 export function setEpisodeEventRecorderForTests(recorder: EpisodeEventRecorder | null): void {
