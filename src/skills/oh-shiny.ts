@@ -196,6 +196,18 @@ export const ohShinySkill: Skill = {
       // mines nether gold ore when the pockets are empty — the stash ran
       // completely dry of gold, and waiting on overworld vein luck parked
       // the campaign. The Nether is made of gold; go get it.
+      // Nuggets may sit in the stash (the ledger held 31 on 2026-09-12 after
+      // a deposit reflex banked Blade's haul): fetch them before crafting.
+      if (count(bot, "gold_ingot") < 1 && count(bot, "gold_nugget") < 9) {
+        const nearStashN = Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z) < 60;
+        if (nearStashN) {
+          step("Withdrawing gold nuggets from the stash...", 0.28);
+          const nres = await withdrawStash(bot, STASH_POS, "gold_nugget", 27, 40_000).catch(
+            (e: Error) => `threw: ${e.message}`,
+          );
+          console.log(`[ShinyDebug] nugget withdraw: ${nres} -> ${count(bot, "gold_nugget")} nuggets`);
+        }
+      }
       if (count(bot, "gold_ingot") < 1 && count(bot, "gold_nugget") >= 9) {
         step("Crafting ingots from mined nuggets...", 0.3);
         const crafted = await craftAtTable(bot, "gold_ingot", Math.floor(count(bot, "gold_nugget") / 9));

@@ -319,6 +319,9 @@ export const BLADE_CONFIG: BotRoleConfig = {
     // Piglin-fund pocket: hand-delivered gold must survive Blade's own
     // deposits or the smith's delivery boomerangs into the messy chests.
     { name: "gold_ingot", minCount: 9 },
+    // Mined nuggets are the same fund: run 557 banked 31 of them as
+    // "mining assets this role can't use" minutes after the haul.
+    { name: "gold_nugget", minCount: 27 },
   ],
   priorities: `BLADE PRIORITIES:
 1. If hostile mob within 16 blocks: neural_combat
