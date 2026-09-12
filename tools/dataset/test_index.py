@@ -132,6 +132,12 @@ class IndexTests(unittest.TestCase):
         build_index(self.manifest, self.output)
         self.assertEqual(len(sample_candidates(self.output, 10, 'fixed')), 2)
 
+    def test_lone_surrogate_context_is_hashed_without_aborting_index(self):
+        record = {**row(), 'context': '\ud800'}
+        self.fixture(json.dumps(record).encode()+b'\n')
+        summary = build_index(self.manifest, self.output)
+        self.assertEqual(summary['records'], 1)
+
     def test_boolean_schema_version_is_rejected(self):
         self.fixture(json.dumps(row()).encode()+b'\n')
         doc = json.loads(self.manifest.read_text())

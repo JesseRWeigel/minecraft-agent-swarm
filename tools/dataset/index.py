@@ -175,7 +175,7 @@ def build_index(manifest_path, output_path, max_line_bytes=MAX_LINE_BYTES):
                             label = classify_legacy(row)
                             action = row['decision']['action']
                             action_key = hashlib.sha256(json.dumps([action,row['decision'].get('params',{})],sort_keys=True).encode()).hexdigest()
-                            context_material = json.dumps([row['system'], row['context']], ensure_ascii=False, separators=(',', ':'))
+                            context_material = json.dumps([row['system'], row['context']], ensure_ascii=True, separators=(',', ':'))
                             context_hash = hashlib.sha256(context_material.encode()).hexdigest()
                             record_id = f"{entry['sha256']}:{line_no}"
                             cursor = db.execute('INSERT OR IGNORE INTO records VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', (
