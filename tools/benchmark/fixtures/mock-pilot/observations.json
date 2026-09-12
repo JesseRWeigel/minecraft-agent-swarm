@@ -1,0 +1,2014 @@
+{
+  "generator": "committed deterministic fixture",
+  "runs": [
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 5,
+              "y": 64,
+              "z": 5
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 0,
+              "y": 64,
+              "z": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 111,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1011
+        }
+      },
+      "model_self_report": "I reached the target.",
+      "run_id": "navigate-baseline-11",
+      "scenario_id": "navigate",
+      "seed": 11,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 5,
+              "y": 64,
+              "z": 5
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 0,
+              "y": 64,
+              "z": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": null,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 122,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1022
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "navigate-baseline-22",
+      "scenario_id": "navigate",
+      "seed": 22,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 5,
+              "y": 64,
+              "z": 5
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 0,
+              "y": 64,
+              "z": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 133,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1033
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "navigate-baseline-33",
+      "scenario_id": "navigate",
+      "seed": 33,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 12,
+              "y": 64,
+              "z": 12
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 0,
+              "y": 64,
+              "z": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 144,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1044
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "navigate-baseline-44",
+      "scenario_id": "navigate",
+      "seed": 44,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 12,
+              "y": 64,
+              "z": 12
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 0,
+              "y": 64,
+              "z": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 111,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1011
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "navigate-coordination-11",
+      "scenario_id": "navigate",
+      "seed": 11,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 12,
+              "y": 64,
+              "z": 12
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 0,
+              "y": 64,
+              "z": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 122,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1022
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "navigate-coordination-22",
+      "scenario_id": "navigate",
+      "seed": 22,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 12,
+              "y": 64,
+              "z": 12
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 0,
+              "y": 64,
+              "z": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 133,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1033
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "navigate-coordination-33",
+      "scenario_id": "navigate",
+      "seed": 33,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 5,
+              "y": 64,
+              "z": 5
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 0,
+              "y": 64,
+              "z": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 144,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1044
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "navigate-coordination-44",
+      "scenario_id": "navigate",
+      "seed": 44,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 12,
+              "y": 64,
+              "z": 12
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 0,
+              "y": 64,
+              "z": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 200,
+          "output_tokens": 40,
+          "provider_requests": 2
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 111,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1011
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "navigate-coaching-11",
+      "scenario_id": "navigate",
+      "seed": 11,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 12,
+              "y": 64,
+              "z": 12
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 0,
+              "y": 64,
+              "z": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 200,
+          "output_tokens": 40,
+          "provider_requests": 2
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 122,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1022
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "navigate-coaching-22",
+      "scenario_id": "navigate",
+      "seed": 22,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 12,
+              "y": 64,
+              "z": 12
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 0,
+              "y": 64,
+              "z": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 200,
+          "output_tokens": 40,
+          "provider_requests": 2
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 133,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1033
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "navigate-coaching-33",
+      "scenario_id": "navigate",
+      "seed": 33,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 12,
+              "y": 64,
+              "z": 12
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "dimension": "overworld",
+            "position": {
+              "x": 0,
+              "y": 64,
+              "z": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 200,
+          "output_tokens": 40,
+          "provider_requests": 5
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 144,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1044
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "navigate-coaching-44",
+      "scenario_id": "navigate",
+      "seed": 44,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 2
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 111,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1011
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "acquire-baseline-11",
+      "scenario_id": "acquire",
+      "seed": 11,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 4
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 122,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1022
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "acquire-baseline-22",
+      "scenario_id": "acquire",
+      "seed": 22,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "timed_out",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 4
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 133,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1033
+        }
+      },
+      "model_self_report": "Done before timeout.",
+      "run_id": "acquire-baseline-33",
+      "scenario_id": "acquire",
+      "seed": 33,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 2
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 144,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1044
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "acquire-baseline-44",
+      "scenario_id": "acquire",
+      "seed": 44,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 4
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 111,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1011
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "acquire-coordination-11",
+      "scenario_id": "acquire",
+      "seed": 11,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 4
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 122,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1022
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "acquire-coordination-22",
+      "scenario_id": "acquire",
+      "seed": 22,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 4
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 133,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1033
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "acquire-coordination-33",
+      "scenario_id": "acquire",
+      "seed": 33,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 4
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 144,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1044
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "acquire-coordination-44",
+      "scenario_id": "acquire",
+      "seed": 44,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 4
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 200,
+          "output_tokens": 40,
+          "provider_requests": 2
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 111,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1011
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "acquire-coaching-11",
+      "scenario_id": "acquire",
+      "seed": 11,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 4
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 200,
+          "output_tokens": 40,
+          "provider_requests": 2
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 122,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1022
+        }
+      },
+      "model_self_report": "Collected four logs.",
+      "run_id": "acquire-coaching-22",
+      "scenario_id": "acquire",
+      "seed": 22,
+      "steps": 5,
+      "telemetry_complete": false
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 4
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 200,
+          "output_tokens": 40,
+          "provider_requests": 2
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 133,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1033
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "acquire-coaching-33",
+      "scenario_id": "acquire",
+      "seed": 33,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 4
+            }
+          }
+        }
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "oak_log": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 200,
+          "output_tokens": 40,
+          "provider_requests": 2
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 144,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1044
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "acquire-coaching-44",
+      "scenario_id": "acquire",
+      "seed": 44,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 0
+            }
+          }
+        },
+        "observed_transfers": [
+          {
+            "count": 2,
+            "donor": "atlas",
+            "event_id": "transfer-handoff-baseline-11-gold",
+            "item": "gold_ingot",
+            "observer_id": "synthetic-evaluator",
+            "recipient": "nova"
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 111,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1011
+        }
+      },
+      "model_self_report": "Transferred the iron.",
+      "run_id": "handoff-baseline-11",
+      "scenario_id": "handoff",
+      "seed": 11,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 1
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 4
+            }
+          }
+        },
+        "observed_transfers": [
+          {
+            "count": 2,
+            "donor": "atlas",
+            "event_id": "transfer-handoff-baseline-22",
+            "item": "iron_ingot",
+            "observer_id": "synthetic-evaluator",
+            "recipient": "nova"
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 2
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 122,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1022
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "handoff-baseline-22",
+      "scenario_id": "handoff",
+      "seed": 22,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 0
+            }
+          }
+        },
+        "observed_transfers": []
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 133,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1033
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "handoff-baseline-33",
+      "scenario_id": "handoff",
+      "seed": 33,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 1
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 2
+            }
+          }
+        },
+        "observed_transfers": [
+          {
+            "count": 2,
+            "donor": "atlas",
+            "event_id": "transfer-handoff-baseline-44",
+            "item": "iron_ingot",
+            "observer_id": "synthetic-evaluator",
+            "recipient": "nova"
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 144,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1044
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "handoff-baseline-44",
+      "scenario_id": "handoff",
+      "seed": 44,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 1
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 2
+            }
+          }
+        },
+        "observed_transfers": [
+          {
+            "count": 2,
+            "donor": "atlas",
+            "event_id": "transfer-handoff-coordination-11",
+            "item": "iron_ingot",
+            "observer_id": "synthetic-evaluator",
+            "recipient": "nova"
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 111,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1011
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "handoff-coordination-11",
+      "scenario_id": "handoff",
+      "seed": 11,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 1
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 2
+            }
+          }
+        },
+        "observed_transfers": [
+          {
+            "count": 2,
+            "donor": "atlas",
+            "event_id": "transfer-handoff-coordination-22",
+            "item": "iron_ingot",
+            "observer_id": "synthetic-evaluator",
+            "recipient": "nova"
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 122,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1022
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "handoff-coordination-22",
+      "scenario_id": "handoff",
+      "seed": 22,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 1
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 2
+            }
+          }
+        },
+        "observed_transfers": [
+          {
+            "count": 2,
+            "donor": "atlas",
+            "event_id": "transfer-handoff-coordination-33",
+            "item": "iron_ingot",
+            "observer_id": "synthetic-evaluator",
+            "recipient": "nova"
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 133,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1033
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "handoff-coordination-33",
+      "scenario_id": "handoff",
+      "seed": 33,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "interrupted",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 1
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 2
+            }
+          }
+        },
+        "observed_transfers": [
+          {
+            "count": 2,
+            "donor": "atlas",
+            "event_id": "transfer-handoff-coordination-44",
+            "item": "iron_ingot",
+            "observer_id": "synthetic-evaluator",
+            "recipient": "nova"
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 144,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1044
+        }
+      },
+      "model_self_report": "Transfer interrupted.",
+      "run_id": "handoff-coordination-44",
+      "scenario_id": "handoff",
+      "seed": 44,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 1
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 2
+            }
+          }
+        },
+        "observed_transfers": [
+          {
+            "count": 2,
+            "donor": "atlas",
+            "event_id": "transfer-handoff-coaching-11",
+            "item": "iron_ingot",
+            "observer_id": "synthetic-evaluator",
+            "recipient": "nova"
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 200,
+          "output_tokens": 40,
+          "provider_requests": 2
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 111,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1011
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "handoff-coaching-11",
+      "scenario_id": "handoff",
+      "seed": 11,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 1
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 2
+            }
+          }
+        },
+        "observed_transfers": [
+          {
+            "count": 2,
+            "donor": "atlas",
+            "event_id": "transfer-handoff-coaching-22",
+            "item": "iron_ingot",
+            "observer_id": "synthetic-evaluator",
+            "recipient": "nova"
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 200,
+          "output_tokens": 40,
+          "provider_requests": 2
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 122,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1022
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "handoff-coaching-22",
+      "scenario_id": "handoff",
+      "seed": 22,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 1
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 2
+            }
+          }
+        },
+        "observed_transfers": [
+          {
+            "count": 2,
+            "donor": "atlas",
+            "event_id": "transfer-handoff-coaching-33",
+            "item": "iron_ingot",
+            "observer_id": "synthetic-evaluator",
+            "recipient": "nova"
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 200,
+          "output_tokens": 40,
+          "provider_requests": 2
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 133,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1033
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "handoff-coaching-33",
+      "scenario_id": "handoff",
+      "seed": 33,
+      "steps": 5,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 1
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 2
+            }
+          }
+        },
+        "observed_transfers": [
+          {
+            "count": 2,
+            "donor": "atlas",
+            "event_id": "transfer-handoff-coaching-44",
+            "item": "iron_ingot",
+            "observer_id": "synthetic-evaluator",
+            "recipient": "nova"
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "inventory": {
+              "gold_ingot": 2,
+              "iron_ingot": 3
+            }
+          },
+          "nova": {
+            "inventory": {
+              "gold_ingot": 0,
+              "iron_ingot": 0
+            }
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 200,
+          "output_tokens": 40,
+          "provider_requests": 2
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 144,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1044
+        }
+      },
+      "model_self_report": "Task complete.",
+      "run_id": "handoff-coaching-44",
+      "scenario_id": "handoff",
+      "seed": 44,
+      "steps": 5,
+      "telemetry_complete": true
+    }
+  ],
+  "schema_version": 1,
+  "synthetic": true
+}

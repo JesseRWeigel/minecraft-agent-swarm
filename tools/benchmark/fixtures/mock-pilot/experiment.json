@@ -1,0 +1,74 @@
+{
+  "adapter": "mock",
+  "benchmark_id": "mock-pilot-v1",
+  "budgets": {
+    "max_input_tokens": 1000,
+    "max_output_tokens": 500,
+    "max_provider_requests": 4,
+    "max_steps": 20,
+    "timeout_seconds": 30
+  },
+  "case_study_manifest": {
+    "path": "case-study.json",
+    "sha256": "218321f04f050593f8bc535a3b677f61e3ae63dc29f71b72c101151434cc37bc"
+  },
+  "code": {
+    "dirty_diff_sha256": null,
+    "git_commit": "0000000000000000000000000000000000000000"
+  },
+  "collection_context": {
+    "git_commit": "0000000000000000000000000000000000000000",
+    "operation_mode": "synthetic_fixture",
+    "trial_id": "mock-pilot-v1",
+    "world_snapshot_id": "mock-world-v1"
+  },
+  "conditions": [
+    {
+      "config": {
+        "path": "baseline.json",
+        "sha256": "9dd5f487965812ceb96145928ccfccb8ac24bc133d2322b4a3b9a9a35d1b3c44"
+      },
+      "id": "baseline",
+      "kind": "baseline"
+    },
+    {
+      "config": {
+        "path": "coordination.json",
+        "sha256": "c3ccccf464f584ef1516d69a79f78f94e502e0ab39adbb8582e918986c94cca0"
+      },
+      "id": "coordination",
+      "kind": "coordination"
+    },
+    {
+      "config": {
+        "path": "coaching.json",
+        "sha256": "f36cdce0fb42bbff21f779e4de29fcc73b2bf1ae1f10b6af58a6dfbba1a4e2aa"
+      },
+      "id": "coaching",
+      "kind": "coaching"
+    }
+  ],
+  "model_manifest": {
+    "path": "model.json",
+    "sha256": "98ce8bc7cb917f4d6a5370b9896a512cdaa407e93d3f54db51a4cdfcec07688e"
+  },
+  "observation_manifest": {
+    "path": "observations.json",
+    "sha256": "8668e49785a0f7b8a2a88a84fb759b73dfe074a8d39b754837e74d119fe2b601"
+  },
+  "reset_manifest": {
+    "path": "reset.json",
+    "sha256": "ece1cb692b315972f095c77623b601585c0a75de4b598b546b04c3c1cef51cdd"
+  },
+  "scenario_manifest": {
+    "path": "scenarios.json",
+    "sha256": "f2f2581a712453d2cce79af292adf99cb5f18951b7a0dff078215d5fc375a93c"
+  },
+  "schema_version": 1,
+  "seeds": [
+    11,
+    22,
+    33,
+    44
+  ]
+}

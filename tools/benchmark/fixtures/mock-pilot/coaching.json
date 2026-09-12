@@ -1,0 +1,8 @@
+{
+  "coaching": true,
+  "condition_id": "coaching",
+  "coordination": true,
+  "kind": "coaching",
+  "mode": "coordination_with_coaching",
+  "schema_version": 1
+}

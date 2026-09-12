@@ -1,0 +1,7 @@
+{
+  "inference_billing": "none",
+  "model": "deterministic-fixture",
+  "provider": "mock",
+  "schema_version": 1,
+  "version": "1"
+}

@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "server_version": "synthetic-state-machine-1",
+  "synthetic": true,
+  "world_archive_sha256": "b1e7720a767e5b9c38a499cb3335c95d9f9f4a55641f5076a5d90fc85d945dad",
+  "world_id": "mock-world-v1"
+}

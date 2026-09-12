@@ -1,0 +1,46 @@
+{
+  "scenarios": [
+    {
+      "description": "Move Atlas into a fixed observed cuboid.",
+      "goal": {
+        "actor": "atlas",
+        "dimension": "overworld",
+        "max": [
+          20,
+          80,
+          20
+        ],
+        "min": [
+          10,
+          60,
+          10
+        ]
+      },
+      "id": "navigate",
+      "task": "navigate_to_region"
+    },
+    {
+      "description": "Increase Atlas's observed oak-log inventory by four.",
+      "goal": {
+        "actor": "atlas",
+        "count": 4,
+        "item": "oak_log"
+      },
+      "id": "acquire",
+      "task": "acquire_item"
+    },
+    {
+      "description": "Transfer two observed iron ingots from Atlas to Nova.",
+      "goal": {
+        "count": 2,
+        "donor": "atlas",
+        "item": "iron_ingot",
+        "observer_id": "synthetic-evaluator",
+        "recipient": "nova"
+      },
+      "id": "handoff",
+      "task": "shared_resource_handoff"
+    }
+  ],
+  "schema_version": 1
+}

@@ -1,0 +1,11 @@
+{
+  "after_run_id": "navigate-coordination-11",
+  "before_run_id": "navigate-baseline-11",
+  "claim_limit": "This demonstrates report wiring, not a measured Minecraft improvement.",
+  "diagnosed_failure": "The independent synthetic actor stopped outside the target region.",
+  "evidence_class": "synthetic_mock",
+  "scenario_id": "navigate",
+  "schema_version": 1,
+  "seed": 11,
+  "simulated_change": "The coordination fixture supplied a synthetic shared destination."
+}
