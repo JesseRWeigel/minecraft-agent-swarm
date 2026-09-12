@@ -166,6 +166,17 @@ export const goFishingSkill: Skill = {
         return 0;
       }
     };
+    // Open sky by geometry, since sky light is unreliable client-side: run
+    // 567 read the pond at (338, 62, -330), air straight up, as unlit. A
+    // column of nothing solid for 40 blocks above the water is the real test.
+    const openSky = (p: Vec3): boolean => {
+      for (let dy = 1; dy <= 40; dy++) {
+        const b = bot.blockAt(p.offset(0, dy, 0));
+        if (!b) return false;
+        if (b.boundingBox === "block") return false;
+      }
+      return true;
+    };
     const pickWater = (): ReturnType<typeof bot.blockAt> => {
       const candidates = bot.findBlocks({ matching: (b) => b.name === "water", maxDistance: 64, count: 2000 });
       let best: ReturnType<typeof bot.blockAt> = null;
@@ -173,7 +184,7 @@ export const goFishingSkill: Skill = {
       for (const pos of candidates) {
         const above = bot.blockAt(pos.offset(0, 1, 0));
         if (!above || above.name !== "air") continue;
-        if (sky(pos.offset(0, 1, 0)) < 15) continue;
+        if (!openSky(pos)) continue;
         const below = bot.blockAt(pos.offset(0, -1, 0));
         const deep = below?.name === "water" ? 1 : 0;
         const score = deep * 20 - pos.distanceTo(bot.entity.position);
@@ -189,8 +200,11 @@ export const goFishingSkill: Skill = {
     };
     let water = pickWater();
     if (!water) {
+      // RCON-checked 2026-09-12: (292, 62, -389) is the lake north of the
+      // village, four deep; (338, 62, -330) is a shallow pond. The earlier
+      // (250, 61, -334) entry was a cave pocket under three blocks of stone.
       const KNOWN_LAKES = [
-        { x: 250, y: 61, z: -334 },
+        { x: 292, y: 62, z: -389 },
         { x: 338, y: 62, z: -330 },
       ];
       const p0 = bot.entity.position;
