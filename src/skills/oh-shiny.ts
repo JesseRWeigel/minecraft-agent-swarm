@@ -357,6 +357,14 @@ export const ohShinySkill: Skill = {
             }
             await bot.lookAt(piglin.position.offset(0, 1.6, 0), true).catch(() => {});
             const goldBefore = count(bot, "gold_ingot");
+            // The advancement's fine print (data/minecraft/advancement/nether/
+            // distract_piglin.json): the player must be wearing NO piglin-safe
+            // armor on head, chest, legs or feet at the moment of the
+            // hand-off. Run 554: the piglin took the ingot into its offhand
+            // and nothing was credited, because Blade wore golden boots. Take
+            // them off for the instant of the offer and put them back on.
+            await bot.unequip("feet").catch(() => {});
+            await new Promise((r) => setTimeout(r, 300));
             try {
               await (bot as any).activateEntity(piglin);
             } catch (e) {
@@ -373,6 +381,8 @@ export const ohShinySkill: Skill = {
             // holds it in its offhand and admires it for six seconds, and
             // our stack drops by one. Log both, and give an accepted ingot
             // its six seconds before offering the next.
+            const bootsBack = bot.inventory.items().find((i) => i.name === "golden_boots");
+            if (bootsBack) await bot.equip(bootsBack, "feet").catch(() => {});
             const offhand = (piglin as any).equipment?.[1]?.name ?? "empty";
             const accepted = offhand === "gold_ingot" || count(bot, "gold_ingot") < goldBefore;
             console.log(
@@ -394,6 +404,9 @@ export const ohShinySkill: Skill = {
         const gold = bot.inventory.items().find((i) => i.name === "gold_ingot");
         if (!gold) break;
         await bot.lookAt(piglin.position.offset(0, 1, 0), true);
+        // Same fine print for the thrown route: no gold armor while the
+        // piglin picks the ingot up. Bare feet for a few seconds, then boots.
+        await bot.unequip("feet").catch(() => {});
         await bot.toss(gold.type, null, 1).catch(() => {});
         tossed++;
         // The piglin walks over, picks it up, and admires it for six seconds.
@@ -409,6 +422,8 @@ export const ohShinySkill: Skill = {
           `[ShinyDebug] after toss ${tossed}: piglin offhand=${offAfterToss} goldStillOnGround=${goldOnGround}`,
         );
         await new Promise((r) => setTimeout(r, 5_000));
+        const bootsAgain = bot.inventory.items().find((i) => i.name === "golden_boots");
+        if (bootsAgain) await bot.equip(bootsAgain, "feet").catch(() => {});
       }
     }
 
