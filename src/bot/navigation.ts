@@ -956,6 +956,8 @@ export function headUnderWater(bot: Bot): boolean {
   return watery(eye) || (watery(head) && (bot.oxygenLevel ?? 20) < 20);
 }
 
+const swimTraceActive = new WeakMap<Bot, boolean>();
+
 export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   if (!headUnderWater(bot)) return false; // head not submerged → breathing fine
 
@@ -1107,18 +1109,53 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     }
   }
 
+  // Swim trace (drowning is past three fixes; instrument before patching
+  // again). Run 575: Forge sat at (361, 23, -301) with the shore reported one
+  // block away at (360, 23, -302) for 70 seconds of "swimming for the shore"
+  // and drowned. Every fifth tick for three seconds: where the body is, how
+  // it moves, what keys are down, what the eye and feet are in.
+  if (air < 12 && !swimTraceActive.get(bot)) {
+    swimTraceActive.set(bot, true);
+    let ticks = 0;
+    const target = shore?.position;
+    const onTick = () => {
+      ticks++;
+      if (ticks % 5 === 0) {
+        const e = bot.entity;
+        const b = (dy: number) => bot.blockAt(e.position.offset(0, dy, 0))?.name ?? "?";
+        const keys = ["forward", "back", "left", "right", "jump", "sprint"]
+          .filter((k) => bot.getControlState(k as "forward"))
+          .join("+");
+        console.log(
+          `[DrownTrace] ${bot.username} t=${ticks} air=${bot.oxygenLevel} pos=${e.position.x.toFixed(2)},${e.position.y.toFixed(2)},${e.position.z.toFixed(2)} vel=${e.velocity.x.toFixed(2)},${e.velocity.y.toFixed(2)},${e.velocity.z.toFixed(2)} keys=${keys || "none"} ground=${e.onGround} feet=${b(0)} head=${b(1)} eye=${bot.blockAt(e.position.offset(0, (e as { eyeHeight?: number }).eyeHeight ?? 1.62, 0))?.name ?? "?"} above=${b(2)} yaw=${e.yaw.toFixed(2)} pitch=${e.pitch.toFixed(2)} shore=${target ? `${target.x},${target.y},${target.z}` : "none"} goal=${bot.pathfinder.goal ? "set" : "none"}`,
+        );
+      }
+      if (ticks >= 60) {
+        bot.removeListener("physicsTick", onTick);
+        swimTraceActive.set(bot, false);
+      }
+    };
+    bot.on("physicsTick", onTick);
+  }
+
   try {
     bot.setControlState("jump", true); // swim upward toward the surface for air
     if (shore && shore.position) {
       await bot.lookAt(shore.position.offset(0.5, 1.5, 0.5));
       bot.setControlState("forward", true);
+      bot.setControlState("sprint", true);
     }
     await bot.waitForTicks(40); // ~2s of swimming up/out of the 3s timer period; re-runs if still under
   } catch {
     /* best effort — timer retries */
   } finally {
-    bot.setControlState("forward", false);
-    bot.setControlState("jump", false);
+    // Keep swimming while the head is still under: clearing the keys for the
+    // last second of every 3s period let the bot sink back each time.
+    if (!headUnderWater(bot)) {
+      bot.setControlState("forward", false);
+      bot.setControlState("jump", false);
+      bot.setControlState("sprint", false);
+    }
   }
   return true;
 }
