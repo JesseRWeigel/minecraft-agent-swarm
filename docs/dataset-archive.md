@@ -82,3 +82,14 @@ python3 tools/dataset/archive.py verify \
 ```
 
 Verification rejects unsupported or ambiguous schema values, duplicate JSON keys, duplicate or nonportable paths, traversal, symlinks, missing files, size mismatches, and hash mismatches. A second copy on the same disk is useful for workflow recovery but is not a disaster backup.
+
+## Prospective scale limit
+
+Version-1 manifests are capped at 16 MiB (the legacy index reader caps its
+manifest input at 32 MiB). Content-addressed prospective payloads can create
+many small files, so the current whole-repository capture is not a long-term
+retention system. Run-scoped exports, manifest sharding, early capacity
+checks and file-growth reporting are tracked in
+[issue #33](https://github.com/JesseRWeigel/minecraft-agent-swarm/issues/33).
+Complete that work before scaling the controlled pilot; do not remove raw
+data to make a manifest fit.

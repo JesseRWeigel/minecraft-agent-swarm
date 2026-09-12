@@ -53,3 +53,37 @@ Two reviewers independently inspect each of the first 60 candidates with access 
 Reconcile disagreements without deleting original reviewer decisions. Report agreement and unresolved counts. If primary-outcome agreement is below 95%, revise the rubric and repeat review before expansion. This is a process gate, not a statistical claim of accuracy. Unresolved cases must remain out of gold metrics.
 
 A historical record cannot become replay-verified without an appropriate reproducible snapshot. A later inventory observation from a shared world is not automatically attributable to the preceding action. New controlled scenarios inspired by old failures need separate IDs and provenance. Keep all historical source bytes and original labels intact.
+
+## First calibration result and next gate
+
+On 2026-09-12, two independent AI-assisted reviewers inspected the first 60
+blinded candidates. They agreed on execution status in 45/60 cases (75%) and
+mission progress in 46/60. Twenty candidates had a disagreement on at least
+one axis. This fails the proposed 95% primary-outcome agreement gate. These
+are model reviews, not human validation or controlled replays. Zero records
+were promoted to verified or gold status. Original reviews remain immutable;
+disputed fields are unknown in the separate reconciliation artifact.
+
+Before bulk annotation, revise the review form to record these separately:
+
+- The executor's reported result, including its exact supporting text.
+- The observed postcondition, its timestamp/source and the preceding state.
+- The attribution claim: intervening actions, missing reactive events,
+  teammate effects and the elapsed gap can make causation unknown.
+- The mission predicate and whether it was already satisfied before the
+  sampled action. Existing resources cannot be credited as newly acquired.
+- An attributable outcome or unknown, separate from contradictions and
+  promising but unverified state changes.
+
+Positive prose is a report, not a postcondition. A later same-bot inventory or
+position can be corroboration, but must not automatically become action
+success. Conversely, a conflicting later state does not prove this particular
+action failed when intervening actions or observation semantics are unknown.
+Keep those hypotheses and evidence in the review instead of forcing a label.
+
+Use a common continuation-evidence protocol, calibrate the revised form on a
+fresh independently reviewed batch, and report original agreement before any
+reconciliation. Agreement reached by discussing the same disputed cases is
+not an independent validation score. The existing 300 candidates remain a
+development review queue; no bulk labels, locked test split or training run
+is authorized by this calibration result.
