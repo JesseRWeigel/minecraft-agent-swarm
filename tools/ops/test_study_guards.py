@@ -100,6 +100,14 @@ class StudyGuards(unittest.TestCase):
         ledger = [json.loads(line) for line in (self.root / 'ops/interventions.jsonl').read_text().splitlines()]
         self.assertTrue(all(row['by'] == 'Codex reviewer' for row in ledger))
 
+    def test_invalid_backup_mode_fails_before_rcon_or_backup_creation(self):
+        (self.root / 'ops/state.json').write_text('{')
+        self.fake('node', 'echo invoked >> rcon-calls; exit 7')
+        result = self.run_script('backup-world.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / 'rcon-calls').exists())
+        self.assertFalse((self.root / 'backups').exists())
+
     def test_failed_flush_still_restores_autosave(self):
         self.fake('node', 'echo "$*" >> rcon-calls; if [[ "$*" == *save-off* ]]; then exit 7; fi')
         result = self.run_script('backup-world.sh')
