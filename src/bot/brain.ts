@@ -24,7 +24,7 @@ import { queryStrategic, queryReactive, queryCritic, chatWithLLM, type LLMMessag
 import type { RoleContext } from "../llm/prompts.js";
 import { getWorldContext, isHostile } from "./perception.js";
 import { executeAction } from "./actions.js";
-import { digOutIfStuck, escapeWaterIfDrowning, safeGoto, explorerMoves } from "./navigation.js";
+import { digOutIfStuck, escapeWaterIfDrowning, safeGoto, explorerMoves, GoalNearXZAbove } from "./navigation.js";
 import navPkg from "mineflayer-pathfinder";
 const { goals: navGoals } = navPkg;
 import { isStallResult, shouldForceDigOut, pruneStalls } from "./stall-rescue.js";
@@ -1086,7 +1086,14 @@ export class BotBrain {
           const wx = Math.round(p.x + (sp.x - p.x) * stepFrac);
           const wz = Math.round(p.z + (sp.z - p.z) * stepFrac);
           const before = gap;
-          await safeGoto(this.bot, new navGoals.GoalNearXZ(wx, wz, 6), 40_000, 12_000).catch(() => {});
+          // Surface arrivals only (see GoalNearXZAbove): run 559 delivered
+          // Blade to the village column at y=29 and cost him twenty minutes of
+          // bare-handed stone. Sea level is the floor for intermediate legs;
+          // the last leg must come up to the stash's own height.
+          const legMinY = stepFrac >= 1 ? sp.y - 4 : 62;
+          await safeGoto(this.bot, new GoalNearXZAbove(wx, wz, 6, legMinY), 40_000, 12_000).catch((e: Error) => {
+            this.log.info("Brain", `Walk-home leg to (${wx}, ${wz}) y>=${legMinY} rejected: ${e.message}`);
+          });
           if (before - gapNow() < 5) {
             if (++stallGuard >= 3) {
               this.log.info("Brain", `Walk-home: stalled at ${gapNow().toFixed(0)} blocks — yielding the turn`);

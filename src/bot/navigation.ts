@@ -1,8 +1,39 @@
 import { Vec3 } from "vec3";
 import type { Bot } from "mineflayer";
 import pkg from "mineflayer-pathfinder";
+import type { Move } from "mineflayer-pathfinder";
 import { chooseDrownEscape } from "./drown-escape.js";
 const { goals, Movements } = pkg;
+
+/**
+ * GoalNearXZ that also demands the arrival be at or above `minY`.
+ *
+ * Plain GoalNearXZ is satisfied by ANY y at the target column, and A* takes
+ * the cheapest route there. Run 559: Blade's walk-home march reported "now 6
+ * blocks from the village" at (288, 29, -309) — 41 blocks under the stash,
+ * inside the cave system, pickless, at 2.6 hp. The escape reflex then spent
+ * 20 minutes hand-carving stone to get back up. Requiring y >= minY makes the
+ * pathfinder search for a surface route instead; when none exists the walk
+ * rejects and the caller's stall guard yields, which beats a cave "arrival".
+ * Below the floor the heuristic adds the vertical shortfall so A* climbs.
+ */
+export class GoalNearXZAbove extends goals.GoalNearXZ {
+  constructor(
+    x: number,
+    z: number,
+    range: number,
+    public minY: number,
+  ) {
+    super(x, z, range);
+  }
+  heuristic(node: Move): number {
+    const below = Math.max(0, this.minY - node.y);
+    return super.heuristic(node) + below;
+  }
+  isEnd(node: Move): boolean {
+    return node.y >= this.minY && super.isEnd(node);
+  }
+}
 
 /**
  * Every Movements config in the codebase MUST start here.
