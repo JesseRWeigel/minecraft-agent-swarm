@@ -935,7 +935,22 @@ export class BotBrain {
       // Scan 64 up, not 24: Atlas sat at y=16 in a shaft whose stone roof
       // was 35 blocks above him (a lake on top of that), and read as not
       // buried while his walks failed 930 times in an hour.
-      const buried = isBuried((x, y, z) => this.bot.blockAt(new Vec3(x, y, z)), f.x, f.y, f.z, 64);
+      // Near the surface, a roof also has to be dark: the sky tower's
+      // scattered cobblestone over the stash counted as four blocks
+      // overhead for Blade at y=70 (run 548, seven escapes that each
+      // "climbed out" at once). Sky light reaches around a pillar and into a
+      // hillside notch; it does not reach a sealed pocket.
+      const headSky = (() => {
+        try {
+          return (this.bot.world as unknown as { getSkyLight: (p: Vec3) => number }).getSkyLight(
+            new Vec3(f.x, f.y + 1, f.z),
+          );
+        } catch {
+          return 1;
+        }
+      })();
+      const buried =
+        isBuried((x, y, z) => this.bot.blockAt(new Vec3(x, y, z)), f.x, f.y, f.z, 64) && (f.y < 55 || headSky === 0);
       const pickless = !this.bot.inventory.items().some((i) => i.name.endsWith("_pickaxe"));
       const walledIn = this.navFailStreak >= 3;
       // A pit too shallow to count as buried still traps a bot: Forge and

@@ -69,7 +69,13 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
       return out.filter((n: any) => {
         if (n.y >= node.y) return true;
         try {
-          return world.getSkyLight!(new Vec3(n.x, n.y + 1, n.z)) > 0;
+          // Only a step from lit ground into darkness is a cave mouth. A
+          // bot already in shade (a hillside notch, under leaves) may keep
+          // walking downhill: Atlas phantom-arrived thirty times on a hill
+          // at y=81 with every downhill step refused (run 548).
+          const from = world.getSkyLight!(new Vec3(node.x, node.y + 1, node.z));
+          const to = world.getSkyLight!(new Vec3(n.x, n.y + 1, n.z));
+          return !(from > 0 && to === 0);
         } catch {
           return true; // unloaded column: no opinion
         }

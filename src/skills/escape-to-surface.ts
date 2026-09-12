@@ -263,6 +263,16 @@ function canSeeSky(bot: Bot): boolean {
   // A sealed pocket at surface height is still a pocket: the reflex that
   // invoked us just counted four or more solid blocks overhead (run 538:
   // "Already at the surface" for Flora at y=62 under ten blocks of stone).
+  // Sky light at the head near the surface settles it: a notch on a hill
+  // or the ground under a one-wide pillar is lit, a sealed pocket is not.
+  if (f.y >= SURFACE_Y - 7) {
+    try {
+      const sky = (bot.world as unknown as { getSkyLight: (p: Vec3) => number }).getSkyLight(f.offset(0, 1, 0));
+      if (sky > 0) return true;
+    } catch {
+      /* unloaded: fall through to the block scan */
+    }
+  }
   if (isBuried((x, y, z) => bot.blockAt(new Vec3(x, y, z)), f.x, f.y, f.z, 64)) return false;
   if (f.y >= SURFACE_Y) return true;
   for (let dy = 2; dy <= 6; dy++) {
