@@ -2314,7 +2314,12 @@ export class BotBrain {
       // stale. Hand it straight over when Forge is in sight.
       const holdsSpareLeather =
         !this.roleConfig.primarySmith && this.bot.inventory.items().some((i) => i.name === "leather");
-      const wantsReturn = (holdsPick && !canMine) || holdsDiamond || holdsSpareIron || holdsSpareLeather;
+      // A role that keeps a pickaxe (every role since run 571: the re-arm
+      // reflex crafts one so the bot can climb out of caves) never returns
+      // it: Blade crafted three stone picks in one hour and this reflex
+      // handed each one away within minutes.
+      const keepsPick = this.roleConfig.keepItems.some((k) => k.name === "pickaxe");
+      const wantsReturn = (holdsPick && !canMine && !keepsPick) || holdsDiamond || holdsSpareIron || holdsSpareLeather;
       // 5min, down from 10: every attempt is a lottery ticket on a quiet
       // window between mob waves — run 380 got five tickets and no winner.
       const cooledDown = Date.now() - this.lastToolReturnMs > 300_000;
