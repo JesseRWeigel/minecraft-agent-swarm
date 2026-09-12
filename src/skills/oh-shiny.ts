@@ -231,14 +231,36 @@ export const ohShinySkill: Skill = {
       // on four trips without moving from the portal.
       let scouted = 0;
       while (dug < 6 && Date.now() - mineStart < 150_000 && !signal.aborted) {
-        let ore = bot.findBlock({ matching: (b) => b.name === "nether_gold_ore", maxDistance: 64 });
+        // Skip ore with lava within two blocks: Blade died twice in lava on
+        // the first mining trip that worked (run 557, 6 ore, 30 nuggets).
+        const { Vec3: V3 } = await import("vec3");
+        const lavaNear = (p: { x: number; y: number; z: number }) => {
+          for (let dx = -2; dx <= 2; dx++)
+            for (let dy = -2; dy <= 1; dy++)
+              for (let dz = -2; dz <= 2; dz++) {
+                const n = bot.blockAt(new V3(p.x + dx, p.y + dy, p.z + dz))?.name;
+                if (n === "lava" || n === "flowing_lava") return true;
+              }
+          return false;
+        };
+        const safeOre = (b: { name: string; position: { x: number; y: number; z: number } }) =>
+          b.name === "nether_gold_ore" && !lavaNear(b.position);
+        let ore = bot.findBlock({
+          matching: (b) => b.name === "nether_gold_ore",
+          maxDistance: 64,
+          useExtraInfo: (b) => safeOre(b),
+        });
         if (!ore && scouted < 2) {
           scouted++;
           const p = bot.entity.position;
           const [dx, dz] = scouted === 1 ? [40, 0] : [-40, 40];
           step(`No gold ore in sight — scouting leg ${scouted}...`, 0.58);
           await safeGoto(bot, new goals.GoalNearXZ(p.x + dx, p.z + dz, 8), 40_000, 12_000).catch(() => {});
-          ore = bot.findBlock({ matching: (b) => b.name === "nether_gold_ore", maxDistance: 64 });
+          ore = bot.findBlock({
+            matching: (b) => b.name === "nether_gold_ore",
+            maxDistance: 64,
+            useExtraInfo: (b) => safeOre(b),
+          });
           console.log(`[ShinyDebug] scout leg ${scouted}: ore ${ore ? `at ${ore.position}` : "none within 64"}`);
         }
         if (!ore) break;
