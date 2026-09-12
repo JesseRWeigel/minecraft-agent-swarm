@@ -201,6 +201,7 @@ export class BotBrain {
   private lastTradeMs = 0;
   private lastBastionMs = 0;
   private lastArmorCraftMs = 0;
+  private lastPickCraftMs = 0;
   private lastFrontierMs = 0;
   private lastWaxMs = 0;
   /** Until when a known nest is refilling near Forge: hold him there instead of sending him mining. */
@@ -2747,6 +2748,44 @@ export class BotBrain {
           skill: "craft_gear",
           stashPos: this.roleConfig.stashPos,
         });
+        this.events.onAction("craft_gear", result);
+        this.lastAction = "craft_gear";
+        this.lastResult = result;
+        return;
+      }
+    }
+
+    // Re-arm reflex for every role: a pickless bot at village level crafts a
+    // stone pick with the stash's cobblestone and sticks. Run 570: all five
+    // bots pickless, 25 bare-handed escapes (six died on the way up), 15
+    // deaths, and the only craft_gear run of the hour had cobble=0 because
+    // the LLM invoked it without the stash. Nothing re-armed anyone but
+    // Forge's strip_mine branch. Runs last among the overrides so escape,
+    // drowning and hunger keep priority.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.roleConfig.allowedSkills.includes("craft_gear") &&
+      this.roleConfig.stashPos
+    ) {
+      const inv = this.bot.inventory.items();
+      const pickless = !inv.some((i) => i.name.endsWith("_pickaxe"));
+      const cnt = (n: string) => inv.filter((i) => i.name === n).reduce((t, i) => t + i.count, 0);
+      const sp = this.roleConfig.stashPos;
+      const p = this.bot.entity.position;
+      const atVillage = Math.hypot(p.x - sp.x, p.z - sp.z) < 120 && p.y >= sp.y - 8;
+      const materials =
+        cnt("cobblestone") >= 3 &&
+        (cnt("stick") >= 2 || inv.some((i) => i.name.endsWith("_planks") || i.name.endsWith("_log")));
+      const cooledPick = Date.now() - this.lastPickCraftMs > 300_000;
+      if (pickless && cooledPick && (atVillage || materials)) {
+        this.lastPickCraftMs = Date.now();
+        this.log.info(
+          "Brain",
+          `OVERRIDE: no pickaxe — running craft_gear (cobble ${cnt("cobblestone")}, sticks ${cnt("stick")}, ${atVillage ? "at the village" : "materials aboard"})`,
+        );
+        this.events.onThought("No pickaxe in hand. Time to forge one.");
+        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "craft_gear", stashPos: sp });
         this.events.onAction("craft_gear", result);
         this.lastAction = "craft_gear";
         this.lastResult = result;
