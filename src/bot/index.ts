@@ -200,16 +200,52 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
     if (spawnSafetyRunning) return;
     spawnSafetyRunning = true;
     await new Promise((r) => setTimeout(r, 800));
-    // HONEST-SPAWN ERA (Jesse's ruling, 2026-09-07): the /spawnpoint, /tp,
-    // and /spreadplayers plumbing that used to live here is gone. Bots
-    // respawn wherever the server says and WALK; respawn points are earned
-    // the vanilla way — the brain's bed-claim reflex uses a bed, which sets
-    // the respawn point even in daylight. keepInventory stays on as the
-    // run's one documented concession, to be reconsidered later.
     const p = bot.entity.position;
     console.log(
       `[Bot] ${roleConfig.name} spawned at ${Math.floor(p.x)},${Math.floor(p.y)},${Math.floor(p.z)} — no spawn commands (honest-spawn era)`,
     );
+    // A death loop means the bed itself is the trap. Run 573: Atlas slept in
+    // a frontier bed at (531, 62, -600) beside a pond with a drowned in it
+    // and died nine times in forty minutes, twenty seconds apart, while this
+    // handler only logged. Breaking our own bed is ordinary play: the next
+    // death respawns at world spawn, and the village bed-claim reflex runs
+    // again. First get clear of whatever is standing over the bed.
+    try {
+      const hostile = bot.nearestEntity(
+        (e) => e.type === "hostile" || /drowned|zombie|skeleton|creeper|spider|pillager/.test(String(e.name ?? "")),
+      );
+      if (hostile && hostile.position.distanceTo(bot.entity.position) < 10) {
+        const away = bot.entity.position.minus(hostile.position);
+        await bot.lookAt(bot.entity.position.offset(away.x * 4, 0, away.z * 4), true).catch(() => {});
+        bot.setControlState("sprint", true);
+        bot.setControlState("forward", true);
+        bot.setControlState("jump", true);
+        await new Promise((r) => setTimeout(r, 3500));
+        bot.clearControlStates();
+        console.log(`[Bot] ${roleConfig.name} respawn scatter: ran from ${hostile.name} for 3.5s`);
+      }
+      const bed = bot.findBlock({ matching: (b) => b.name.endsWith("_bed"), maxDistance: 10 });
+      if (bed) {
+        if (bed.position.distanceTo(bot.entity.position) > 4) {
+          await safeGoto(bot, new goals.GoalNear(bed.position.x, bed.position.y, bed.position.z, 2), 15_000).catch(
+            () => {},
+          );
+        }
+        if (bed.position.distanceTo(bot.entity.position) <= 5) {
+          await bot.dig(bed);
+          brain.resetBedClaim();
+          console.log(
+            `[Bot] ${roleConfig.name} broke the lethal bed at ${bed.position} — respawn resets to world spawn, village bed-claim rearmed`,
+          );
+        } else {
+          console.log(`[Bot] ${roleConfig.name} could not reach the lethal bed at ${bed.position}`);
+        }
+      } else {
+        console.log(`[Bot] ${roleConfig.name} death loop with no bed within 10 blocks — nothing to break`);
+      }
+    } catch (e) {
+      console.warn(`[Bot] ${roleConfig.name} lethal-respawn handling failed:`, (e as Error).message);
+    }
     spawnSafetyRunning = false;
     resolveSpawnSafetyDone();
   }

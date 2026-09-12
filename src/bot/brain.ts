@@ -191,6 +191,11 @@ export class BotBrain {
   private lastAimMs = 0;
   private lastShinyMs = 0;
   private bedClaimed = false;
+
+  /** Forget the claimed bed so the village bed-claim reflex runs again (the lethal-respawn handler broke the old one). */
+  resetBedClaim(): void {
+    this.bedClaimed = false;
+  }
   private lastBedClaimMs = 0;
   private lastGoldBankMs = 0;
   private lastFortressMs = 0;
