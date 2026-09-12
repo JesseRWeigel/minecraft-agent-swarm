@@ -590,6 +590,23 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
                 );
               }, 700);
             };
+            // Sixth phantom at the same spot with nothing soft to dig (Atlas,
+            // 41 phantoms on a stone peak at 565,107,-838, run 551): a healthy
+            // bot walks off the edge toward the goal instead. A drop of ten
+            // costs three and a half hearts; a peak costs the whole night.
+            if (streak >= 6 && streak % 3 === 0 && bot.health >= 8) {
+              console.log(
+                `[Nav] ${bot.username} stepping off toward the goal from ${here.floored()} (phantom streak ${streak})`,
+              );
+              bot.setControlState("forward", true);
+              setTimeout(() => {
+                bot.setControlState("forward", false);
+                settled = true;
+                finishTimers();
+                reject(new Error("No route from here — stepped off the ledge toward the goal."));
+              }, 1_500);
+              return;
+            }
             if (streak >= 3 && streak % 3 === 0) {
               clearExit(bot)
                 .then((n) => {

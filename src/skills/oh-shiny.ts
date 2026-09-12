@@ -199,8 +199,21 @@ export const ohShinySkill: Skill = {
       step("Mining nether gold ore near the portal...", 0.55);
       const mineStart = Date.now();
       let dug = 0;
+      // Search wider than 40 and, when the portal's neighbourhood has none,
+      // scout two short legs before giving up: run 551 reported "mined 0"
+      // on four trips without moving from the portal.
+      let scouted = 0;
       while (dug < 6 && Date.now() - mineStart < 150_000 && !signal.aborted) {
-        const ore = bot.findBlock({ matching: (b) => b.name === "nether_gold_ore", maxDistance: 40 });
+        let ore = bot.findBlock({ matching: (b) => b.name === "nether_gold_ore", maxDistance: 64 });
+        if (!ore && scouted < 2) {
+          scouted++;
+          const p = bot.entity.position;
+          const [dx, dz] = scouted === 1 ? [40, 0] : [-40, 40];
+          step(`No gold ore in sight — scouting leg ${scouted}...`, 0.58);
+          await safeGoto(bot, new goals.GoalNearXZ(p.x + dx, p.z + dz, 8), 40_000, 12_000).catch(() => {});
+          ore = bot.findBlock({ matching: (b) => b.name === "nether_gold_ore", maxDistance: 64 });
+          console.log(`[ShinyDebug] scout leg ${scouted}: ore ${ore ? `at ${ore.position}` : "none within 64"}`);
+        }
         if (!ore) break;
         const pick = bot.inventory.items().find((i) => i.name.endsWith("_pickaxe"));
         if (!pick) break;
