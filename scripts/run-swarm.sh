@@ -38,6 +38,15 @@ restarts=0
 FAST_FAIL_S=120
 fast_failures=0
 
+# Maintenance gate (ops/state.json, see ops/README.md): a planned window must
+# not be undone by an automatic restart. FORCE_START=1 overrides for a
+# deliberate operator launch inside the window.
+ops_mode() { jq -r .mode ops/state.json 2>/dev/null || echo live; }
+if [[ "$(ops_mode)" == "maintenance" && "${FORCE_START:-0}" != "1" ]]; then
+  echo "[Supervisor] ops mode is MAINTENANCE — refusing to start the swarm (FORCE_START=1 to override)."
+  exit 0
+fi
+
 while (( restarts < RESTART_CAP )); do
   started=$(date +%s)
   echo "[Supervisor] Starting swarm (restart #$restarts) at $(date -u +%H:%M:%SZ)"
@@ -68,6 +77,11 @@ while (( restarts < RESTART_CAP )); do
   # 134 is the OOM abort. Call it out so the log says what happened.
   if [[ $code -eq 134 ]]; then
     echo "[Supervisor] Exit 134 = JavaScript heap OOM. Cause still unknown; see scripts/run-swarm.sh header."
+  fi
+
+  if [[ "$(ops_mode)" == "maintenance" ]]; then
+    echo "[Supervisor] ops mode is MAINTENANCE — not restarting after this exit."
+    exit 0
   fi
 
   restarts=$(( restarts + 1 ))

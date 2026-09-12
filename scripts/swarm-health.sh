@@ -15,6 +15,10 @@ cd "$(dirname "$0")/.." || exit 1
 
 ALERTS=()
 
+# Study/operations mode (ops/state.json): live | maintenance | evaluation.
+OPS_MODE=$(jq -r .mode ops/state.json 2>/dev/null || echo live)
+echo "OPS_MODE=$OPS_MODE"
+
 # ── Process ────────────────────────────────────────────────────────────────
 # Match the two identifying strings INDEPENDENTLY, not adjacently. The old
 # pattern required "tsx/dist/loader.mjs src/index.ts" side by side, so adding

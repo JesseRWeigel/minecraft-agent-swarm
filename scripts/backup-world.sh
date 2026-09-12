@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Consistent server backup: pause autosave, flush, archive all three dimensions
+# plus the server's identity files, resume autosave, verify, and log it.
+# Output: backups/world-<UTC>.tar.zst (+ .sha256 and a manifest line in backups/MANIFEST.tsv).
+# Safe to run while the server is up; the swarm may keep playing (the pause is seconds).
+set -euo pipefail
+cd "$(dirname "$0")/.." || exit 1
+mkdir -p backups
+ts=$(date -u +%Y%m%dT%H%M%SZ)
+out="backups/world-${ts}.tar.zst"
+label="${1:-scheduled}"
+rcon() { node scripts/rcon.mjs "$@"; }
+echo "[backup] $ts label=$label"
+rcon "save-off" "save-all flush" >/dev/null
+trap 'rcon "save-on" >/dev/null || true' EXIT
+sleep 2
+tar -C server --exclude='ai-world/session.lock' --exclude='*/session.lock' -cf - \
+  ai-world ai-world_nether ai-world_the_end server.properties usercache.json ops.json whitelist.json \
+  | zstd -T0 -3 -q -o "$out"
+rcon "save-on" >/dev/null
+trap - EXIT
+sha=$(sha256sum "$out" | cut -d' ' -f1)
+echo "$sha  $(basename "$out")" > "${out}.sha256"
+size=$(stat -c %s "$out")
+git_head=$(git rev-parse --short HEAD 2>/dev/null || echo none)
+mode=$(jq -r .mode ops/state.json 2>/dev/null || echo live)
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$ts" "$(basename "$out")" "$size" "$sha" "$git_head" "$label/$mode" >> backups/MANIFEST.tsv
+zstd -t -q "$out" && echo "[backup] ok $out ($((size/1024/1024)) MB, sha256 $sha)"
+jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg f "$(basename "$out")" --arg l "$label" --arg m "$mode" --arg s "$sha" \
+  '{ts_utc:$ts,kind:"backup",reason:("world backup ("+$l+")"),changes:[("backups/"+$f)],sha256:$s,study_mode:$m,by:"Claude (operator)",trial_validity:null}' >> ops/interventions.jsonl

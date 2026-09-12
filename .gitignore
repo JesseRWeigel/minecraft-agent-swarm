@@ -21,3 +21,6 @@ finetune/*-lora*/
 finetune/*.gguf
 .advancement-extract/
 logs/known-nests.json
+
+# world backups (large archives; see ops/README.md)
+backups/
