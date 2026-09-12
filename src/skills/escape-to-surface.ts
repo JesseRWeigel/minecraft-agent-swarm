@@ -265,10 +265,16 @@ function canSeeSky(bot: Bot): boolean {
   // "Already at the surface" for Flora at y=62 under ten blocks of stone).
   // Sky light at the head near the surface settles it: a notch on a hill
   // or the ground under a one-wide pillar is lit, a sealed pocket is not.
+  // Direct sky is light level 15 exactly; 1 to 14 is light leaking in from
+  // an opening the bot cannot necessarily walk to. Run 562: Flora's pocket at
+  // (488, 59, -355) sat under eight solid blocks with a lit cave mouth to the
+  // east, so "sky > 0" declared her on the surface 23 times in an hour while
+  // the reflex kept firing her back. Anything under 15 falls through to the
+  // block scan, which sees the roof.
   if (f.y >= SURFACE_Y - 7) {
     try {
       const sky = (bot.world as unknown as { getSkyLight: (p: Vec3) => number }).getSkyLight(f.offset(0, 1, 0));
-      if (sky > 0) return true;
+      if (sky >= 15) return true;
     } catch {
       /* unloaded: fall through to the block scan */
     }
