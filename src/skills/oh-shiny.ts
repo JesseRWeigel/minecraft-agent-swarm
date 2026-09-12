@@ -89,9 +89,23 @@ export const ohShinySkill: Skill = {
 
     // --- Overworld prep: boots + ingots ---
     if (!inNether(bot)) {
-      const hasBoots =
+      const bootsAboard = () =>
         bot.inventory.items().some((i) => i.name === "golden_boots") ||
         bot.inventory.slots.some((s) => s?.name === "golden_boots");
+      // The stash ledger recorded two pairs of golden boots on 2026-09-12
+      // while this skill asked for four more gold to craft a third pair
+      // ("Need 4 gold for boots (have 3)", four trips). Fetch a pair first.
+      if (!bootsAboard()) {
+        const nearStash = Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z) < 60;
+        if (nearStash) {
+          step("Checking the stash for golden boots...", 0.06);
+          const bres = await withdrawStash(bot, STASH_POS, "golden_boots", 1, 40_000).catch(
+            (e: Error) => `threw: ${e.message}`,
+          );
+          console.log(`[ShinyDebug] boots withdraw: ${bres}`);
+        }
+      }
+      const hasBoots = bootsAboard();
       const needGold = (hasBoots ? 0 : 4) + 3 - Math.min(3, count(bot, "gold_ingot"));
       if (needGold > 0) {
         step("Checking the fund chest...", 0.08);
