@@ -153,9 +153,12 @@ export const goFishingSkill: Skill = {
 
     // 64, up from 48: the nearest open water to the stash is 41 blocks out
     // and the lake at (338, 62, -330) is 54 (RCON scan 2026-09-12).
-    // Prefer water under open sky: a bobber under a roof waits twice as long
-    // for a bite, and run 565's three empty trips fished from spots the
-    // finder picked by distance alone.
+    // Open-sky water ONLY. Run 566, with per-cast logging: every bite came
+    // from water with sky light 15 above it (Mason: 6 of 6, hunger 10 to
+    // 18), and every cast into sky-0 cave water got no bite in 50s with no
+    // bobber ever seen. The 400 nearest water blocks are often all one cave
+    // pool, so the search is wide and, when it still finds nothing lit, the
+    // bot marches to a known surface lake near the village.
     const sky = (p: Vec3) => {
       try {
         return (bot.world as unknown as { getSkyLight: (p: Vec3) => number }).getSkyLight(p);
@@ -163,30 +166,68 @@ export const goFishingSkill: Skill = {
         return 0;
       }
     };
-    const candidates = bot.findBlocks({ matching: (b) => b.name === "water", maxDistance: 64, count: 400 });
-    let water: ReturnType<typeof bot.blockAt> = null;
-    let bestScore = -Infinity;
-    for (const pos of candidates) {
-      const above = bot.blockAt(pos.offset(0, 1, 0));
-      if (!above || above.name !== "air") continue;
-      const below = bot.blockAt(pos.offset(0, -1, 0));
-      const deep = below?.name === "water" ? 1 : 0;
-      const lit = sky(pos.offset(0, 1, 0)) >= 15 ? 1 : 0;
-      const dist = pos.distanceTo(bot.entity.position);
-      const score = lit * 100 + deep * 20 - dist;
-      if (score > bestScore) {
-        bestScore = score;
-        water = bot.blockAt(pos);
+    const pickWater = (): ReturnType<typeof bot.blockAt> => {
+      const candidates = bot.findBlocks({ matching: (b) => b.name === "water", maxDistance: 64, count: 2000 });
+      let best: ReturnType<typeof bot.blockAt> = null;
+      let bestScore = -Infinity;
+      for (const pos of candidates) {
+        const above = bot.blockAt(pos.offset(0, 1, 0));
+        if (!above || above.name !== "air") continue;
+        if (sky(pos.offset(0, 1, 0)) < 15) continue;
+        const below = bot.blockAt(pos.offset(0, -1, 0));
+        const deep = below?.name === "water" ? 1 : 0;
+        const score = deep * 20 - pos.distanceTo(bot.entity.position);
+        if (score > bestScore) {
+          bestScore = score;
+          best = bot.blockAt(pos);
+        }
       }
-    }
-    if (water) {
       console.log(
-        `[FishDebug] ${bot.username} water at ${water.position} sky=${sky(water.position.offset(0, 1, 0))} candidates=${candidates.length}`,
+        `[FishDebug] ${bot.username} lit water: ${best ? `${best.position}` : "none"} among ${candidates.length} candidates`,
       );
+      return best;
+    };
+    let water = pickWater();
+    if (!water) {
+      const KNOWN_LAKES = [
+        { x: 250, y: 61, z: -334 },
+        { x: 338, y: 62, z: -330 },
+      ];
+      const p0 = bot.entity.position;
+      const lake = KNOWN_LAKES.reduce((a, c) =>
+        Math.hypot(c.x - p0.x, c.z - p0.z) < Math.hypot(a.x - p0.x, a.z - p0.z) ? c : a,
+      );
+      const gapL = () => Math.hypot(bot.entity.position.x - lake.x, bot.entity.position.z - lake.z);
+      onProgress({
+        skillName: "go_fishing",
+        phase: "Finding water",
+        progress: 0.06,
+        message: `No open-sky water here — walking to the lake at ${lake.x}, ${lake.z} (${Math.round(gapL())} blocks)...`,
+        active: true,
+      });
+      bot.pathfinder.setMovements(explorerMoves(bot));
+      const deadline = Date.now() + 150_000;
+      let guard = 0;
+      while (gapL() > 20 && Date.now() < deadline && !signal.aborted) {
+        const before = gapL();
+        const t = Math.min(1, 100 / before);
+        const wx = Math.round(bot.entity.position.x + (lake.x - bot.entity.position.x) * t);
+        const wz = Math.round(bot.entity.position.z + (lake.z - bot.entity.position.z) * t);
+        await safeGoto(bot, new GoalNearXZAbove(wx, wz, 8, 60), 45_000, 12_000).catch(() => {});
+        if (before - gapL() >= 6) guard = 0;
+        else if (++guard >= 3) break;
+      }
+      console.log(`[FishDebug] ${bot.username} lake march ended ${Math.round(gapL())} blocks from ${lake.x},${lake.z}`);
+      water = pickWater();
     }
     if (!water) {
-      return { success: false, message: "No water nearby! Explore to find a lake or river." };
+      return {
+        success: false,
+        message:
+          "No open-sky water within 64 blocks and the known lake was out of reach. Try go_fishing again nearer the village.",
+      };
     }
+    console.log(`[FishDebug] ${bot.username} water at ${water.position} sky=${sky(water.position.offset(0, 1, 0))}`);
 
     // Navigate to water's edge (stand on the bank, not in the water)
     setMovements(bot);
