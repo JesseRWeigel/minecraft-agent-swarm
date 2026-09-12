@@ -142,6 +142,35 @@ export function explorerMoves(bot: Bot): InstanceType<typeof Movements> {
  */
 const navGeneration = new WeakMap<Bot, number>();
 
+/** True when a self-directed move toward `toward` would step into lava,
+ *  fire, magma or a drop deeper than four blocks within two blocks of the
+ *  bot. The hop and the step-off aim at the goal without a path (Forge:
+ *  "tried to swim in lava" at y=-54 right after three 'No path' walks). */
+function hazardToward(bot: Bot, toward: Vec3): boolean {
+  const here = bot.entity.position;
+  const dx = toward.x - here.x;
+  const dz = toward.z - here.z;
+  const len = Math.hypot(dx, dz) || 1;
+  const bad = new Set(["lava", "flowing_lava", "fire", "soul_fire", "magma_block", "campfire", "soul_campfire"]);
+  for (const step of [1, 2]) {
+    const x = Math.floor(here.x + (dx / len) * step);
+    const z = Math.floor(here.z + (dz / len) * step);
+    const y = Math.floor(here.y);
+    for (const dy of [1, 0, -1, -2]) {
+      const b = bot.blockAt(new Vec3(x, y + dy, z));
+      if (b && bad.has(b.name)) return true;
+    }
+    let drop = 0;
+    for (let dy = -1; dy >= -5; dy--) {
+      const b = bot.blockAt(new Vec3(x, y + dy, z));
+      if (!b || b.boundingBox !== "empty") break;
+      drop++;
+    }
+    if (drop >= 5) return true;
+  }
+  return false;
+}
+
 /** Blocks bare hands clear quickly, for a bot wedged in a pit or a bush. */
 const SOFT_BLOCKS = new Set([
   "dirt",
@@ -594,7 +623,8 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
             // 41 phantoms on a stone peak at 565,107,-838, run 551): a healthy
             // bot walks off the edge toward the goal instead. A drop of ten
             // costs three and a half hearts; a peak costs the whole night.
-            if (streak >= 6 && streak % 3 === 0 && bot.health >= 8) {
+            const goalVec = typeof g.x === "number" && typeof g.z === "number" ? new Vec3(g.x, here.y, g.z) : null;
+            if (streak >= 6 && streak % 3 === 0 && bot.health >= 8 && goalVec && !hazardToward(bot, goalVec)) {
               console.log(
                 `[Nav] ${bot.username} stepping off toward the goal from ${here.floored()} (phantom streak ${streak})`,
               );
@@ -642,6 +672,11 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
             // planting loop, 1 of 17 plots planted).
             const { aim } = hopPending;
             hopPending = null;
+            if (aim && hazardToward(bot, aim)) {
+              console.log(`[Nav] ${bot.username} hop toward ${aim.floored()} skipped: lava, fire or a drop ahead`);
+              setTimeout(attempt, 3000);
+              return;
+            }
             const inWater = (bot.blockAt(bot.entity.position)?.name ?? "") === "water";
             // Climbing out of water onto a block takes longer than a dry hop.
             const holdMs = inWater ? 1300 : 700;
