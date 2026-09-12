@@ -543,6 +543,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
         : "";
     console.log(`[Bot] I died! Cause: ${cause}. Armor: ${worn}.${fallInfo} Respawning...`);
     lastDeathMessage = "";
+    brain.markDeathInterruption();
     abortActiveSkill(bot);
 
     // RESYNC the inventory after respawn. Deaths (lava especially) can leave

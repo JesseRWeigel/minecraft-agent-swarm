@@ -12,7 +12,8 @@
  * decision query by reusing these normalization helpers so aliases, parameter
  * hoisting, JSON repair, and failure behavior remain consistent.
  */
-import { chat } from "./provider.js";
+import { chat, ProviderCallError, type ChatResponse, type ProviderResponseMetadata } from "./provider.js";
+import { appendEpisodeEvent, currentEpisodeId } from "../data/episode-events.js";
 import { config } from "../config.js";
 import { getSkillPromptLines } from "../skills/registry.js";
 import { getDynamicSkillNames } from "../skills/dynamic-loader.js";
@@ -237,6 +238,117 @@ function parseDecision(
   };
 }
 
+export interface LLMDecision {
+  thought: string;
+  action: string;
+  params: Record<string, any>;
+  goal?: string;
+  goalSteps?: number;
+  metadata?: {
+    requestId: string | null;
+    origin: "provider" | "local_fallback" | "deterministic";
+    provider?: ProviderResponseMetadata;
+  };
+}
+
+function recordParsedDecision(botName: string, decision: LLMDecision, stage: "parsed_decision" | "fallback_decision") {
+  const requestId = decision.metadata?.requestId ?? null;
+  appendEpisodeEvent(
+    {
+      botId: botName,
+      episodeId: currentEpisodeId(botName),
+      actionId: null,
+      requestId,
+      kind: "observation",
+    },
+    {
+      captureVersion: 1,
+      stage,
+      origin: decision.metadata?.origin ?? "deterministic",
+      decision: {
+        thought: decision.thought,
+        action: decision.action,
+        params: decision.params,
+        goal: decision.goal,
+        goalSteps: decision.goalSteps,
+      },
+    },
+  );
+  return decision;
+}
+
+interface CriticVerdict {
+  success: boolean;
+  thought: string;
+  nextAction: string | null;
+  nextParams: Record<string, any>;
+  goalComplete: boolean;
+  metadata?: LLMDecision["metadata"];
+}
+
+function recordCriticDecision(
+  botName: string,
+  verdict: Omit<CriticVerdict, "metadata">,
+  metadata: LLMDecision["metadata"],
+  stage: "parsed_critic" | "fallback_critic",
+): CriticVerdict {
+  appendEpisodeEvent(
+    {
+      botId: botName,
+      episodeId: currentEpisodeId(botName),
+      actionId: null,
+      requestId: metadata?.requestId ?? null,
+      kind: "observation",
+    },
+    { captureVersion: 1, stage, verdict },
+  );
+  return { ...verdict, metadata };
+}
+export function parseProviderDecision(raw: string, botName: string, metadata: ProviderResponseMetadata): LLMDecision {
+  return recordParsedDecision(
+    botName,
+    {
+      ...parseDecision(raw, botName),
+      metadata: { requestId: metadata.requestId, origin: "provider", provider: metadata },
+    },
+    "parsed_decision",
+  );
+}
+
+function parseCapturedDecision(response: ChatResponse, botName: string): LLMDecision {
+  if (response.metadata) return parseProviderDecision(response.message.content, botName, response.metadata);
+  return recordParsedDecision(
+    botName,
+    {
+      ...parseDecision(response.message.content, botName),
+      metadata: { requestId: null, origin: "provider" },
+    },
+    "parsed_decision",
+  );
+}
+export function fallbackDecision(
+  thought: string,
+  action: string,
+  error: unknown,
+  botName = config.bot.name,
+  params: Record<string, any> = {},
+): LLMDecision {
+  const provider = error instanceof ProviderCallError ? error.metadata : undefined;
+  return recordParsedDecision(
+    botName,
+    {
+      thought,
+      action,
+      params,
+      metadata: {
+        requestId: provider?.requestId ?? null,
+        origin: "local_fallback",
+        ...(provider ? { provider } : {}),
+      },
+    },
+    "fallback_decision",
+  );
+}
 // ─── New event-driven query functions ───────────────────────────────────────
 
 /**
@@ -254,7 +366,7 @@ export async function queryStrategic(
   recentMessages: LLMMessage[],
   memoryContext: string,
   role: RoleContext,
-): Promise<{ thought: string; action: string; params: Record<string, any>; goal?: string; goalSteps?: number }> {
+): Promise<LLMDecision> {
   const memorySection = memoryContext ? `\nYOUR MEMORY:\n${memoryContext}\n` : "";
   const messages: LLMMessage[] = [
     { role: "system", content: buildStrategicPrompt(role) },
@@ -268,6 +380,7 @@ export async function queryStrategic(
       messages,
       think: thinkFor(config.llm.model),
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
+      telemetry: { botId: role.name, source: "strategic" },
       options: {
         temperature: 0.8,
         repeat_penalty: 1.15, // the 8B fine-tune can loop ("Forge demands...!" x50) without this
@@ -287,7 +400,7 @@ export async function queryStrategic(
         `\n${"=".repeat(72)}\n[LLM] RECOVERED — the model is answering again. Bots resume real decisions.\n${"=".repeat(72)}\n`,
       );
     }
-    return parseDecision(response.message.content, role.name);
+    return parseCapturedDecision(response, role.name);
   } catch (err) {
     llmLog.error("LLM:strategic", "Error:", err);
 
@@ -307,7 +420,7 @@ export async function queryStrategic(
           `${"=".repeat(72)}\n`,
       );
     }
-    return { thought: "Planning...", action: "idle", params: {} };
+    return fallbackDecision("Planning...", "idle", err, role.name);
   }
 }
 
@@ -321,11 +434,7 @@ export async function queryStrategic(
  * @param allowedActions - Optional role-specific actions exposed to the model.
  * @returns A normalized urgent decision; provider errors fall back to `flee`.
  */
-export async function queryReactive(
-  name: string,
-  situation: string,
-  allowedActions?: string[],
-): Promise<{ thought: string; action: string; params: Record<string, any> }> {
+export async function queryReactive(name: string, situation: string, allowedActions?: string[]): Promise<LLMDecision> {
   const messages: LLMMessage[] = [
     { role: "system", content: buildReactivePrompt(name, allowedActions) },
     { role: "user", content: situation },
@@ -337,6 +446,7 @@ export async function queryReactive(
       messages,
       think: thinkFor(config.llm.fastModel),
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
+      telemetry: { botId: name, source: "reactive" },
       options: {
         temperature: 0.5, // Lower temp for urgent decisions — be reliable, not creative
         repeat_penalty: 1.15, // the 8B fine-tune can loop ("Forge demands...!" x50) without this
@@ -350,10 +460,10 @@ export async function queryReactive(
     );
     llmLog.debug("LLM:reactive", "Situation:", situation);
     llmLog.debug("LLM:reactive", "Full response:", response.message.content);
-    return parseDecision(response.message.content, name);
+    return parseCapturedDecision(response, name);
   } catch (err) {
     llmLog.error("LLM:reactive", "Error:", err);
-    return { thought: "Danger!", action: "flee", params: {} };
+    return fallbackDecision("Danger!", "flee", err, name);
   }
 }
 
@@ -370,13 +480,7 @@ export async function queryCritic(
   name: string,
   actionContext: string,
   allowedActions?: string[],
-): Promise<{
-  success: boolean;
-  thought: string;
-  nextAction: string | null;
-  nextParams: Record<string, any>;
-  goalComplete: boolean;
-}> {
+): Promise<CriticVerdict> {
   const messages: LLMMessage[] = [
     { role: "system", content: buildCriticPrompt(name, allowedActions) },
     { role: "user", content: actionContext },
@@ -388,6 +492,7 @@ export async function queryCritic(
       messages,
       think: thinkFor(config.llm.fastModel),
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
+      telemetry: { botId: name, source: "critic" },
       options: {
         temperature: 0.4, // Low temp — critic should be analytical
         repeat_penalty: 1.15, // the 8B fine-tune can loop ("Forge demands...!" x50) without this
@@ -398,9 +503,17 @@ export async function queryCritic(
     llmLog.info("LLM:critic", `(${response.message.content.length} chars): ${response.message.content.slice(0, 150)}`);
     llmLog.debug("LLM:critic", "Action context:", actionContext);
     llmLog.debug("LLM:critic", "Full response:", response.message.content);
+    const metadata: LLMDecision["metadata"] = response.metadata
+      ? { requestId: response.metadata.requestId, origin: "provider", provider: response.metadata }
+      : { requestId: null, origin: "provider" };
     const jsonStr = extractJSON(response.message.content);
     if (!jsonStr) {
-      return { success: false, thought: "Hmm...", nextAction: null, nextParams: {}, goalComplete: true };
+      return recordCriticDecision(
+        name,
+        { success: false, thought: "Hmm...", nextAction: null, nextParams: {}, goalComplete: true },
+        metadata,
+        "parsed_critic",
+      );
     }
     const parsed = JSON.parse(jsonStr);
 
@@ -411,16 +524,31 @@ export async function queryCritic(
       nextAction = ACTION_ALIASES[lower] ?? nextAction;
     }
 
-    return {
-      success: parsed.success ?? false,
-      thought: parsed.thought || "...",
-      nextAction,
-      nextParams: parsed.nextParams ?? parsed.params ?? {},
-      goalComplete: parsed.goalComplete ?? false,
-    };
+    return recordCriticDecision(
+      name,
+      {
+        success: parsed.success ?? false,
+        thought: parsed.thought || "...",
+        nextAction,
+        nextParams: parsed.nextParams ?? parsed.params ?? {},
+        goalComplete: parsed.goalComplete ?? false,
+      },
+      metadata,
+      "parsed_critic",
+    );
   } catch (err) {
     llmLog.error("LLM:critic", "Error:", err);
-    return { success: false, thought: "Error evaluating", nextAction: null, nextParams: {}, goalComplete: true };
+    const provider = err instanceof ProviderCallError ? err.metadata : undefined;
+    return recordCriticDecision(
+      name,
+      { success: false, thought: "Error evaluating", nextAction: null, nextParams: {}, goalComplete: true },
+      {
+        requestId: provider?.requestId ?? null,
+        origin: "local_fallback",
+        ...(provider ? { provider } : {}),
+      },
+      "fallback_critic",
+    );
   }
 }
 
@@ -543,7 +671,7 @@ export async function queryLLM(
     allowedSkills?: string[];
     priorities?: string;
   },
-): Promise<{ thought: string; action: string; params: Record<string, any>; goal?: string; goalSteps?: number }> {
+): Promise<LLMDecision> {
   const memorySection = memoryContext ? `\n\nYOUR MEMORY (learn from this): ${memoryContext}\n` : "";
   const messages: LLMMessage[] = [
     { role: "system", content: buildSystemPrompt(roleConfig) },
@@ -557,6 +685,7 @@ export async function queryLLM(
       messages,
       think: thinkFor(config.llm.fastModel),
       format: "json", // syntactically valid JSON guaranteed (schema mode is ignored by qwen3.6 on ollama 0.20)
+      telemetry: { botId: roleConfig?.name ?? config.bot.name, source: "legacy" },
       options: {
         temperature: 0.85,
         repeat_penalty: 1.15, // the 8B fine-tune can loop ("Forge demands...!" x50) without this
@@ -570,6 +699,7 @@ export async function queryLLM(
       response = await chat({
         model: config.llm.fastModel,
         think: thinkFor(config.llm.fastModel),
+        telemetry: { botId: roleConfig?.name ?? config.bot.name, source: "legacy" },
         messages: [
           {
             role: "system",
@@ -590,10 +720,10 @@ export async function queryLLM(
     );
     llmLog.debug("LLM", "Full prompt:", JSON.stringify(messages, null, 2));
     llmLog.debug("LLM", "Full response:", response.message.content);
-    return parseDecision(response.message.content, roleConfig?.name ?? config.bot.name);
+    return parseCapturedDecision(response, roleConfig?.name ?? config.bot.name);
   } catch (err) {
     llmLog.error("LLM", "Error:", err);
-    return { thought: "Brain freeze...", action: "idle", params: {} };
+    return fallbackDecision("Brain freeze...", "idle", err, roleConfig?.name ?? config.bot.name);
   }
 }
 
@@ -619,6 +749,7 @@ export async function chatWithLLM(prompt: string, context: string, roleConfig?: 
         },
         { role: "user", content: prompt },
       ],
+      telemetry: { botId: roleConfig?.name ?? config.bot.name, source: "chat" },
       options: {
         temperature: 0.9,
         num_predict: 150,

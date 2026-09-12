@@ -15,6 +15,7 @@
  * the strong model (32b) for the decisions that matter.
  */
 
+import { randomUUID } from "node:crypto";
 import type { Bot } from "mineflayer";
 import { Vec3 } from "vec3";
 import type { Entity } from "prismarine-entity";
@@ -59,8 +60,15 @@ import { recordAction, recordSkillResult, checkInventoryMilestones } from "./sco
 import { getTechTreeLine } from "./curriculum.js";
 import { advancementLine } from "./advancement-line.js";
 import { readTeamEarned } from "./advancement-progress.js";
-import { recordTrajectory } from "./trajectory.js";
-import { buildStrategicPrompt } from "../llm/prompts.js";
+import { recordTrajectory, type TrajectoryModelMetadata } from "./trajectory.js";
+import {
+  appendEpisodeEvent,
+  currentCollectionContext,
+  currentEpisodeId,
+  type ActionOutcome,
+  type ActionStatus,
+} from "../data/episode-events.js";
+import type { ProviderResponseMetadata } from "../llm/provider.js";
 
 export interface ChatMessage {
   source: "minecraft" | "twitch" | "youtube";
@@ -69,6 +77,46 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export interface DecisionMetadata {
+  requestId: string | null;
+  origin: "provider" | "local_fallback" | "deterministic";
+  provider?: ProviderResponseMetadata;
+}
+
+export interface BrainDecision {
+  thought: string;
+  action: string;
+  params: Record<string, any>;
+  goal?: string;
+  goalSteps?: number;
+  metadata?: DecisionMetadata;
+}
+interface ActionCapture {
+  actionId: string;
+  requestId: string | null;
+  episodeId: string;
+  botId: string;
+  startPayloadRef: string;
+  interruptionGeneration: number;
+  outcome?: ActionOutcome;
+}
+function trajectoryModelMetadata(decision: BrainDecision): TrajectoryModelMetadata {
+  const provider = decision.metadata?.provider;
+  return {
+    origin: decision.metadata?.origin ?? "deterministic",
+    provider: provider?.provider ?? null,
+    model: provider?.model ?? null,
+    providerModel: provider?.providerModel ?? null,
+    providerRequestId: provider?.providerRequestId ?? null,
+    durationMs: provider?.durationMs ?? null,
+    usage: provider?.usage ?? {
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      costUsd: null,
+    },
+  };
+}
 export interface BrainEvents {
   onThought: (thought: string) => void;
   onAction: (action: string, result: string) => void;
@@ -94,6 +142,12 @@ export class BotBrain {
   private events: BrainEvents;
   private memStore: BotMemoryStore;
   private log;
+  /** Injectable seams keep outcome/cancellation tests local and provider-free. */
+  private actionExecutor = executeAction;
+  private speechGenerator = generateSpeech;
+  private overlayUpdater = updateOverlay;
+  private skillOutcomeReader = takeSkillOutcome;
+  private interruptionGeneration = 0;
 
   // Processing state
   private processing = false;
@@ -494,6 +548,7 @@ export class BotBrain {
 
   /** Stop the brain — clears all timers. */
   stop(): void {
+    this.interruptionGeneration++;
     this.stopped = true;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.hostileScanner) clearInterval(this.hostileScanner);
@@ -502,12 +557,17 @@ export class BotBrain {
 
   /** Pause autonomous decisions and discard queued work that has not started. */
   pause(): void {
+    this.interruptionGeneration++;
     this.paused = true;
     this.eventQueue = [];
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = null;
   }
 
+  /** Mark an in-flight action as interrupted by a Minecraft death. */
+  markDeathInterruption(): void {
+    this.interruptionGeneration++;
+  }
   /** Resume autonomous decisions with a fresh strategic plan. */
   resume(): void {
     if (!this.paused || this.stopped) return;
@@ -864,7 +924,6 @@ export class BotBrain {
     }
 
     const decision = await queryReactive(this.roleConfig.name, situation, this.roleConfig.allowedActions);
-    if (this.paused) return;
     // A reactive MOVE while a skill is walking steals the pathfinder: the
     // skill's goto rejects with "goal was changed", and run 500 logged 324
     // such interruptions for Blade and 130 for Flora in one hour, killing
@@ -2826,17 +2885,18 @@ export class BotBrain {
     };
 
     const decision = await queryStrategic(context, this.recentHistory, memoryCtx, role);
-    if (this.paused) return;
-    await this.executeDecision(decision);
+    const outcome = await this.executeDecision(decision);
 
-    // Capture the trajectory for fine-tuning: exact prompt -> decision -> outcome
+    // Exact provider messages and raw responses live in episode-events-v1.
+    // The compact v2 trajectory joins them by requestId and the local outcome by actionId.
     recordTrajectory({
+      schemaVersion: 2,
       bot: this.roleConfig.name,
-      system: buildStrategicPrompt(role),
-      context: memoryCtx ? `YOUR MEMORY:\n${memoryCtx}\n${context}` : context,
+      requestId: decision.metadata?.requestId ?? null,
+      actionId: outcome.actionId,
       decision: { thought: decision.thought, action: decision.action, params: decision.params, goal: decision.goal },
-      result: this.lastResult,
-      success: this.lastActionWasSuccess,
+      outcome,
+      model: trajectoryModelMetadata(decision),
       timestamp: new Date().toISOString(),
     });
   }
@@ -2883,6 +2943,7 @@ export class BotBrain {
         thought: verdict.thought,
         action: verdict.nextAction,
         params: verdict.nextParams,
+        metadata: verdict.metadata,
       });
     } else if (!verdict.success) {
       // Action failed — trigger strategic re-plan
@@ -2898,22 +2959,191 @@ export class BotBrain {
    *  walk timing out with zero velocity) and the pickless gate ignored him. */
   private navFailStreak = 0;
 
-  private async executeActionUnlessPaused(action: string, params: Record<string, any>): Promise<string> {
-    if (this.paused) return "Paused by player command";
-    // A drowning bot surfaces before it does anything else. Run 560: Forge
-    // was at air=11 when a flee and then the armour override each started a
-    // new walk through the aquifer; Flora's escape skill dug farmland at
-    // air=0. The drown timer owns the controls until the head is in air.
+  private beginActionCapture(
+    decision: BrainDecision,
+    origin = decision.metadata?.origin ?? "deterministic",
+  ): ActionCapture {
+    const actionId = randomUUID();
+    const requestId = decision.metadata?.requestId ?? null;
+    const botId = this.roleConfig.name;
+    const episodeId = currentEpisodeId(botId);
+    const started = appendEpisodeEvent(
+      { botId, episodeId, actionId, requestId, kind: "action_started" },
+      {
+        captureVersion: 1,
+        origin,
+        proposedDecision: {
+          thought: decision.thought,
+          action: decision.action,
+          params: decision.params,
+          goal: decision.goal,
+          goalSteps: decision.goalSteps,
+        },
+        provider: decision.metadata?.provider ?? null,
+        collection: currentCollectionContext(),
+      },
+    );
+    return {
+      actionId,
+      requestId,
+      episodeId,
+      botId,
+      startPayloadRef: started.payloadRef,
+      interruptionGeneration: this.interruptionGeneration,
+    };
+  }
+
+  private finishActionCapture(
+    capture: ActionCapture,
+    status: ActionStatus,
+    reasonCode: string,
+    resultText: string,
+    evidenceRefs: string[] = [],
+    details: Record<string, unknown> = {},
+  ): ActionOutcome {
+    if (capture.outcome) return capture.outcome;
+    const outcome: ActionOutcome = {
+      actionId: capture.actionId,
+      status,
+      reasonCode,
+      resultText,
+      evidenceRefs: [capture.startPayloadRef, ...evidenceRefs],
+    };
+    // Mark terminal before persistence so a later callback failure cannot emit
+    // a contradictory second terminal event for this invocation.
+    capture.outcome = outcome;
+    appendEpisodeEvent(
+      {
+        botId: capture.botId,
+        episodeId: capture.episodeId,
+        actionId: capture.actionId,
+        requestId: capture.requestId,
+        kind: "action_finished",
+      },
+      { captureVersion: 1, outcome, ...details },
+    );
+    return outcome;
+  }
+
+  private executionObservation(capture: ActionCapture, resultText: string, reportedSuccess: boolean | null) {
+    return appendEpisodeEvent(
+      {
+        botId: capture.botId,
+        episodeId: capture.episodeId,
+        actionId: capture.actionId,
+        requestId: capture.requestId,
+        kind: "observation",
+      },
+      { captureVersion: 1, stage: "execution_result", resultText, reportedSuccess },
+    );
+  }
+
+  private outcomeForExecution(
+    capture: ActionCapture,
+    action: string,
+    resultText: string,
+    skillSuccess: boolean | undefined,
+    evidenceRef: string,
+  ): ActionOutcome {
+    if (capture.interruptionGeneration !== this.interruptionGeneration) {
+      const reason = this.stopped
+        ? "brain_stopped_during_action"
+        : this.paused
+          ? "paused_during_action"
+          : "death_interrupted";
+      return this.finishActionCapture(capture, "cancelled", reason, resultText, [evidenceRef]);
+    }
+    if (resultText === "Stopped before action execution") {
+      return this.finishActionCapture(capture, "cancelled", "brain_stopped_during_action", resultText, [evidenceRef]);
+    }
+    if (resultText === "Paused by player command") {
+      return this.finishActionCapture(capture, "cancelled", "paused_during_action", resultText, [evidenceRef]);
+    }
+    if (resultText === "Underwater and short of air \u2014 surfacing first, try again once breathing.") {
+      return this.finishActionCapture(capture, "blocked", "drowning_safety_gate", resultText, [evidenceRef]);
+    }
+    if (/^Already running skill "[^"]+"\. Wait for it to finish\.$/.test(resultText)) {
+      return this.finishActionCapture(capture, "blocked", "skill_already_running", resultText, [evidenceRef]);
+    }
+    if (
+      /^Action "[^"]+" timed out after \d+(?:\.\d+)?s \u2014 aborted to free the brain\.$/.test(resultText) ||
+      /^.+ timed out after \d+(?:\.\d+)?s \u2014 aborted to free the bot\.$/.test(resultText)
+    ) {
+      return this.finishActionCapture(capture, "timed_out", "action_timeout", resultText, [evidenceRef]);
+    }
+    if (/^Skill .+ was interrupted\.$/.test(resultText)) {
+      return this.finishActionCapture(capture, "cancelled", "action_cancelled", resultText, [evidenceRef]);
+    }
+    if (/needs? (?:an? |a )?['"]?\w+['"]? param|nothing was said|non-empty ['"]?task['"]? param/i.test(resultText)) {
+      return this.finishActionCapture(capture, "blocked", "invalid_params", resultText, [evidenceRef]);
+    }
+    if (skillSuccess !== undefined) {
+      return this.finishActionCapture(
+        capture,
+        skillSuccess ? "unknown" : "failed",
+        skillSuccess ? "skill_reported_success_unverified" : "skill_reported_failure",
+        resultText,
+        [evidenceRef],
+        { reportedSuccess: skillSuccess, verifiedMissionProgress: null },
+      );
+    }
+    if ((action === "chat" || action === "respond_to_chat") && /^(Said|Replied):/.test(resultText)) {
+      return this.finishActionCapture(capture, "succeeded", "chat_sent", resultText, [evidenceRef], {
+        reportedSuccess: true,
+        verifiedMissionProgress: null,
+      });
+    }
+    if (
+      /^(?:Unknown action:|Action "[^"]+" threw:|Failed(?:\b|:)|Can't\b|Cannot\b|Couldn't\b|Nothing to\b|Refusing to\b|Blocked:|No path to the goal\b|Skill .+ (?:failed|crashed):|Skill '[^']+' not found\.)/i.test(
+        resultText,
+      )
+    ) {
+      return this.finishActionCapture(capture, "failed", "action_reported_failure", resultText, [evidenceRef], {
+        reportedSuccess: false,
+        verifiedMissionProgress: null,
+      });
+    }
+    return this.finishActionCapture(capture, "unknown", "unverified_builtin_result", resultText, [evidenceRef], {
+      reportedSuccess: null,
+      verifiedMissionProgress: null,
+    });
+  }
+
+  private async executeActionUnlessPaused(
+    action: string,
+    params: Record<string, any>,
+    captureDeterministic = true,
+  ): Promise<string> {
+    const capture = captureDeterministic
+      ? this.beginActionCapture({
+          thought: "Deterministic runtime action",
+          action,
+          params,
+          metadata: {
+            requestId: null,
+            origin: "deterministic",
+          },
+        })
+      : null;
+    if (this.stopped) {
+      const result = "Stopped before action execution";
+      if (capture) this.finishActionCapture(capture, "cancelled", "brain_stopped", result);
+      return result;
+    }
+    if (this.paused) {
+      const result = "Paused by player command";
+      if (capture) this.finishActionCapture(capture, "cancelled", "brain_paused", result);
+      return result;
+    }
     if (headUnderWater(this.bot) && (this.bot.oxygenLevel ?? 20) < 16) {
       this.log.info("Brain", `Drowning (air ${this.bot.oxygenLevel}) — surfacing before ${action}`);
-      return "Underwater and short of air — surfacing first, try again once breathing.";
+      const result = "Underwater and short of air — surfacing first, try again once breathing.";
+      if (capture) this.finishActionCapture(capture, "blocked", "drowning_safety_gate", result);
+      return result;
     }
     this.activeAction = action;
     try {
-      const result = await executeAction(this.bot, action, params);
-      // "Couldn't move ... path blocked" is the explore action failing to
-      // leave the spot: Atlas logged it 674 times in one hour from a flooded
-      // shaft under a lake at y=16, and it never counted as a walk failure.
+      const result = await this.actionExecutor(this.bot, action, params);
       if (
         /Navigation timed out|Stuck — not making progress|No path to the goal|No route from here|Couldn't reach|Couldn't move|path blocked/i.test(
           result,
@@ -2923,28 +3153,57 @@ export class BotBrain {
       } else if (/Arrived|Explored|reached|Walked|Deposited|Withdrew|Harvested|Farm planted/i.test(result)) {
         this.navFailStreak = 0;
       }
-      // A tool the bot does not have is structural: Atlas asked to mine
-      // gold_ore with a wooden pickaxe 256 times in an hour. Block that ore
-      // for this bot until the blacklist expires (the key carries the block
-      // name, see getActionKey, so other blocks stay allowed).
       const noTool = /Can't harvest (\w+) with/.exec(result);
       if (noTool) {
         this.blockAction(`mine_block:${noTool[1]}`, result.slice(0, 120), BotBrain.FAILURE_TTL_STRUCTURAL_MS);
       }
+      if (capture) {
+        const skillName = action === "invoke_skill" ? (params.skill as string) : action;
+        const skillSuccess = this.skillOutcomeReader(this.bot, skillName);
+        const observation = this.executionObservation(capture, result, skillSuccess ?? null);
+        this.outcomeForExecution(capture, action, result, skillSuccess, observation.payloadRef);
+      }
       return result;
+    } catch (error) {
+      if (capture) {
+        const message = `Action "${action}" threw: ${(error as Error)?.message ?? String(error)}`;
+        const observation = this.executionObservation(capture, message, false);
+        this.finishActionCapture(capture, "failed", "execution_exception", message, [observation.payloadRef]);
+      }
+      throw error;
     } finally {
       this.activeAction = "";
     }
   }
+  private async executeDecision(input: BrainDecision): Promise<ActionOutcome> {
+    const decision: BrainDecision = { ...input, params: { ...(input.params ?? {}) } };
+    const capture = this.beginActionCapture(decision);
+    try {
+      return await this.executeDecisionCaptured(decision, capture);
+    } catch (error) {
+      if (capture.outcome) {
+        this.log.error("Brain", "Post-outcome callback failed: " + ((error as Error)?.message ?? String(error)));
+        return capture.outcome;
+      }
+      const result = "Decision pipeline threw: " + ((error as Error)?.message ?? String(error));
+      this.lastAction = decision.action;
+      this.lastResult = result;
+      try {
+        this.events.onAction(decision.action, result);
+      } catch {
+        // The terminal event below remains authoritative when UI callbacks fail.
+      }
+      return this.finishActionCapture(capture, "failed", "decision_pipeline_exception", result);
+    }
+  }
 
-  private async executeDecision(decision: {
-    thought: string;
-    action: string;
-    params: Record<string, any>;
-    goal?: string;
-    goalSteps?: number;
-  }): Promise<void> {
-    if (this.paused) return;
+  private async executeDecisionCaptured(decision: BrainDecision, capture: ActionCapture): Promise<ActionOutcome> {
+    if (this.stopped) {
+      return this.finishActionCapture(capture, "cancelled", "brain_stopped", "Stopped before action execution");
+    }
+    if (this.paused) {
+      return this.finishActionCapture(capture, "cancelled", "brain_paused", "Paused by player command");
+    }
     // Filter thought for safety
     const thoughtFilter = filterContent(decision.thought);
     if (!thoughtFilter.safe) {
@@ -2965,7 +3224,7 @@ export class BotBrain {
     this.log.debug("Brain", "Decision params:", JSON.stringify(decision.params));
 
     // Update overlay
-    updateOverlay({
+    this.overlayUpdater({
       health: this.bot.health,
       food: this.bot.food,
       position: {
@@ -2981,7 +3240,7 @@ export class BotBrain {
     });
 
     // TTS in background
-    generateSpeech(decision.thought)
+    this.speechGenerator(decision.thought)
       .then((url) => {
         if (url) speakThought(url);
       })
@@ -3031,7 +3290,7 @@ export class BotBrain {
         `Not in YOUR toolkit — use: ${this.roleConfig.allowedActions.join(", ")}`,
         BotBrain.FAILURE_TTL_STRUCTURAL_MS,
       );
-      return;
+      return this.finishActionCapture(capture, "blocked", "role_denied", gateMsg);
     }
 
     // ── Blacklist check ──
@@ -3044,7 +3303,7 @@ export class BotBrain {
       this.lastResult = blockMsg;
       // Trigger re-plan since this action was blocked
       setTimeout(() => this.triggerReplan(), 500);
-      return;
+      return this.finishActionCapture(capture, "blocked", "recent_failure_gate", blockMsg);
     }
 
     // ── Normalize params ──
@@ -3056,6 +3315,15 @@ export class BotBrain {
       }
     }
 
+    if (
+      (decision.action === "chat" || decision.action === "respond_to_chat") &&
+      (typeof normalizedParams.message !== "string" || !normalizedParams.message.trim())
+    ) {
+      const msg = `${decision.action} needs a 'message' param — nothing was said.`;
+      this.events.onAction(decision.action, msg);
+      this.lastResult = msg;
+      return this.finishActionCapture(capture, "blocked", "invalid_params", msg);
+    }
     // Chat dedup — refuse to re-broadcast a near-identical message
     if ((decision.action === "chat" || decision.action === "respond_to_chat") && normalizedParams.message) {
       const sig = String(normalizedParams.message).slice(0, 40);
@@ -3064,7 +3332,7 @@ export class BotBrain {
           "You already said that. Talking won't make it happen — ACT instead (check your inventory first; you may already have what you asked for).";
         this.events.onAction(decision.action, msg);
         this.lastResult = msg;
-        return;
+        return this.finishActionCapture(capture, "blocked", "duplicate_chat", msg);
       }
       this.lastChatSent = sig;
       this.lastChatSentMs = Date.now();
@@ -3162,6 +3430,21 @@ export class BotBrain {
       normalizedParams.stashPos = this.roleConfig.stashPos;
     }
 
+    appendEpisodeEvent(
+      {
+        botId: capture.botId,
+        episodeId: capture.episodeId,
+        actionId: capture.actionId,
+        requestId: capture.requestId,
+        kind: "observation",
+      },
+      {
+        captureVersion: 1,
+        stage: "normalized_decision",
+        action: decision.action,
+        params: normalizedParams,
+      },
+    );
     // ── Execute ──
     // Do not walk back into the place that keeps killing you.
     //
@@ -3191,15 +3474,39 @@ export class BotBrain {
         this.events.onAction(decision.action, msg);
         this.lastResult = msg;
         this.blockAction(decision.action, msg, BotBrain.FAILURE_TTL_TRANSIENT_MS);
-        return;
+        return this.finishActionCapture(capture, "blocked", "death_trap_gate", msg);
       }
     }
 
-    const result = await this.executeActionUnlessPaused(decision.action, normalizedParams);
+    let result: string;
+    try {
+      result = await this.executeActionUnlessPaused(decision.action, normalizedParams, false);
+    } catch (error) {
+      result = `Action "${decision.action}" threw: ${(error as Error)?.message ?? String(error)}`;
+      this.lastAction = decision.action;
+      this.lastResult = result;
+      this.events.onAction(decision.action, result);
+      const observation = this.executionObservation(capture, result, false);
+      return this.finishActionCapture(capture, "failed", "execution_exception", result, [observation.payloadRef]);
+    }
     this.lastAction = decision.action;
     this.lastResult = result;
     this.events.onAction(decision.action, result);
     this.log.info("Brain", `Result: ${result}`);
+
+    const skillName = decision.action === "invoke_skill" ? (normalizedParams.skill as string) : decision.action;
+    const skillReportedSuccess = result.startsWith("Already running skill ")
+      ? undefined
+      : this.skillOutcomeReader(this.bot, skillName);
+    const isSuccess = skillReportedSuccess ?? classifyResult(result);
+    const executionEvent = this.executionObservation(capture, result, skillReportedSuccess ?? null);
+    const outcome = this.outcomeForExecution(
+      capture,
+      decision.action,
+      result,
+      skillReportedSuccess,
+      executionEvent.payloadRef,
+    );
 
     // A bot wedged in a pit is not immobile, so nothing rescued it.
     //
@@ -3257,7 +3564,7 @@ export class BotBrain {
     });
 
     // Update overlay with result
-    updateOverlay({
+    this.overlayUpdater({
       health: this.bot.health,
       food: this.bot.food,
       position: {
@@ -3281,8 +3588,7 @@ export class BotBrain {
     // Skills know whether they worked; only prose has to be guessed at. Reading
     // the recorded boolean first is what stops "HOUSE BUILT!" scoring as a
     // failure and blacklisting a skill that works.
-    const skillName = decision.action === "invoke_skill" ? (normalizedParams.skill as string) : decision.action;
-    const isSuccess = takeSkillOutcome(this.bot, skillName) ?? classifyResult(result);
+
     this.lastActionWasSuccess = isSuccess;
     recordAction(this.roleConfig.name, decision.action, result, isSuccess);
     if (decision.action === "invoke_skill" || skillRegistry.has(decision.action)) {
@@ -3363,6 +3669,7 @@ export class BotBrain {
         timestamp: Date.now(),
       });
     }
+    return outcome;
   }
 
   // ─── Failure tracking ─────────────────────────────────────────────────────

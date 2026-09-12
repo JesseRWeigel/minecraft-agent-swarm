@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { EpisodeEventRecorder, setEpisodeEventRecorderForTests } from "../data/episode-events.js";
 import { BotBrain } from "./brain.js";
+
+setEpisodeEventRecorderForTests(
+  new EpisodeEventRecorder({ rootDir: mkdtempSync(path.join(tmpdir(), "brain-pause-events-")), runId: "pause-run" }),
+);
 
 function bareBrain() {
   const calls: string[] = [];
   const brain: any = Object.create(BotBrain.prototype);
-  brain.bot = {};
+  brain.bot = { username: "Atlas" };
+  brain.roleConfig = { name: "Atlas" };
   brain.paused = false;
   brain.stopped = false;
   brain.processing = false;

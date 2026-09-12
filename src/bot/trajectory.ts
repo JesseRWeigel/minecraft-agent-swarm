@@ -1,43 +1,89 @@
 /**
- * Trajectory logger — training-data capture for local-model fine-tuning.
+ * Versioned trajectory summary for prospective collection.
  *
- * Every strategic decision is appended as one JSONL line: the exact prompt
- * the model saw, the decision it made, and whether the resulting action
- * succeeded. scripts/extract-finetune-dataset.mjs filters successful
- * trajectories into chat-format training data (the approach behind
- * mindcraft's "Andy" models: fine-tune a small local model on the team's
- * own successful action sequences).
+ * Historical files under logs/trajectories are immutable and retain their
+ * original labels. New rows live under logs/trajectories-v2 and refer to the
+ * provider request/action IDs recorded by the episode-event store.
  */
 
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
+import {
+  currentCollectionContext,
+  getEpisodeEventRecorder,
+  type ActionOutcome,
+  type CollectionContext,
+  type EpisodeEventRecorder,
+} from "../data/episode-events.js";
+import type { ProviderResponseMetadata, ProviderUsage } from "../llm/provider.js";
 
 const SESSION_ID = new Date().toISOString().replace(/[:.]/g, "-");
-const TRAJ_DIR = path.resolve("logs", "trajectories");
-let streamReady = false;
 
-export interface TrajectoryEntry {
+export interface TrajectoryModelMetadata {
+  origin: "provider" | "local_fallback" | "deterministic";
+  provider: ProviderResponseMetadata["provider"] | null;
+  model: string | null;
+  providerModel: string | null;
+  providerRequestId: string | null;
+  durationMs: number | null;
+  usage: ProviderUsage;
+}
+
+export interface TrajectoryTelemetry {
+  runId: string;
+  complete: boolean;
+  lastError: string | null;
+  collection: CollectionContext;
+}
+
+export interface TrajectoryEntryV2 {
+  schemaVersion: 2;
   bot: string;
-  /** Full system prompt the model saw */
-  system: string;
-  /** Full user/context message the model saw */
-  context: string;
-  /** Raw decision the model produced */
+  requestId: string | null;
+  actionId: string;
   decision: { thought: string; action: string; params: Record<string, any>; goal?: string };
-  /** Action result string */
-  result: string;
-  success: boolean;
+  outcome: ActionOutcome;
+  model: TrajectoryModelMetadata;
+  telemetry: TrajectoryTelemetry;
   timestamp: string;
 }
 
-export function recordTrajectory(entry: TrajectoryEntry): void {
-  try {
-    if (!streamReady) {
-      fs.mkdirSync(TRAJ_DIR, { recursive: true });
-      streamReady = true;
+export type TrajectoryEntryInput = Omit<TrajectoryEntryV2, "telemetry">;
+export type TrajectoryRecorder = (entry: TrajectoryEntryInput) => void;
+
+export function createTrajectoryRecorder(
+  logRoot: string,
+  sessionId = SESSION_ID,
+  injectedEventRecorder?: EpisodeEventRecorder,
+): TrajectoryRecorder {
+  const file = path.join(
+    path.resolve(logRoot),
+    "trajectories-v2",
+    `${sessionId.replace(/[^a-zA-Z0-9._-]/g, "_")}.jsonl`,
+  );
+  return (entry) => {
+    const eventRecorder = injectedEventRecorder ?? getEpisodeEventRecorder();
+    const completedEntry: TrajectoryEntryV2 = {
+      ...entry,
+      telemetry: {
+        runId: eventRecorder.runId,
+        complete: eventRecorder.health.complete,
+        lastError: eventRecorder.health.lastError,
+        collection: currentCollectionContext(),
+      },
+    };
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+      fs.appendFileSync(file, JSON.stringify(completedEntry) + "\n", { mode: 0o600 });
+    } catch (error) {
+      const message = `Trajectory write failed: ${(error as Error)?.message ?? String(error)}`;
+      eventRecorder.markIncomplete(new Error(message));
     }
-    fs.appendFileSync(path.join(TRAJ_DIR, `${SESSION_ID}.jsonl`), JSON.stringify(entry) + "\n");
-  } catch {
-    /* never let telemetry break the bot */
-  }
+  };
+}
+
+const defaultRecorder = createTrajectoryRecorder(path.resolve("logs"));
+
+export function recordTrajectory(entry: TrajectoryEntryInput): void {
+  defaultRecorder(entry);
 }
