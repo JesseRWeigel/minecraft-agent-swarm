@@ -957,6 +957,7 @@ export function headUnderWater(bot: Bot): boolean {
 }
 
 const swimTraceActive = new WeakMap<Bot, boolean>();
+const lastDrownPos = new WeakMap<Bot, Vec3>();
 
 export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   if (!headUnderWater(bot)) return false; // head not submerged → breathing fine
@@ -979,8 +980,14 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     // bot back under. Run 560: Atlas (air=7, surface one block up), Forge x3
     // and Flora all drowned inside "goto interrupted externally — retry 1/2".
     bumpNavGeneration(bot);
+    // Swim from the first instant. Run 576's trace: Forge sank for a whole
+    // three-second period with no keys held, because setGoal(null) below
+    // runs resetPath, which clears every control state, and the keys only
+    // came back after the shore scan and the dig race. Reset only when a
+    // goal is actually set, and hold jump before anything else.
+    bot.setControlState("jump", true);
     try {
-      bot.pathfinder.setGoal(null);
+      if (bot.pathfinder.goal) bot.pathfinder.setGoal(null);
     } catch {
       /* best effort */
     }
@@ -995,6 +1002,13 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   // offset rings (NOT a findBlock predicate that calls blockAt — that silently
   // matches nothing). Prefer the closest.
   const base = bot.entity.position.floored();
+  // Pinned: the body did not move since the last period. Run 576: Blade and
+  // Mason sat in one-block water pockets under a ceiling at velocity zero
+  // with keys held, and the dig was skipped for exceeding the air budget.
+  // With nowhere to swim, a slow dig is the only move left.
+  const lastPos = lastDrownPos.get(bot);
+  const pinned = !!lastPos && lastPos.distanceTo(bot.entity.position) < 0.3;
+  lastDrownPos.set(bot, bot.entity.position.clone());
   let shore = null as ReturnType<typeof bot.blockAt> | null;
   for (let r = 1; r <= 8 && !shore; r++) {
     for (let dx = -r; dx <= r && !shore; dx++) {
@@ -1067,7 +1081,7 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     const swimRoute = Object.values(neighbours).some((b) => b && (b.name === "water" || b.name === "air"));
     const budgetMs = Math.max(0, air) * 750 + Math.max(0, bot.health - 2) * 500;
     const needMs = escape ? bot.digTime(neighbours[escape.direction]!) : 0;
-    if (escape && needMs > budgetMs && swimRoute) {
+    if (escape && needMs > budgetMs && swimRoute && !pinned) {
       console.log(
         `[Drown] ${bot.username} skipping ${escape.direction} dig through ${escape.block.name}: ` +
           `${(needMs / 1000).toFixed(1)}s > ${(budgetMs / 1000).toFixed(1)}s of air — swimming for the shore`,
@@ -1075,7 +1089,7 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     } else if (escape) {
       try {
         console.log(
-          `[Drown] ${bot.username} enclosed at air=${air} — digging ${escape.direction} through ${escape.block.name} (${(needMs / 1000).toFixed(1)}s)`,
+          `[Drown] ${bot.username} enclosed at air=${air}${pinned ? " and pinned" : ""} — digging ${escape.direction} through ${escape.block.name} (${(needMs / 1000).toFixed(1)}s)`,
         );
         // Bound the dig by the air budget: a dig that overruns it must not
         // hold the reflex (and its swim) hostage until the bot is dead.
@@ -1143,7 +1157,10 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     if (shore && shore.position) {
       await bot.lookAt(shore.position.offset(0.5, 1.5, 0.5));
       bot.setControlState("forward", true);
-      bot.setControlState("sprint", true);
+      // No sprint: sprinting in water puts the player in the swimming pose,
+      // whose eye height is 0.4, so a bobbing bot breathes only at the top
+      // of each bob (run 576: Forge on the lake surface, air stuck at 5).
+      bot.setControlState("sprint", false);
     }
     await bot.waitForTicks(40); // ~2s of swimming up/out of the 3s timer period; re-runs if still under
   } catch {
