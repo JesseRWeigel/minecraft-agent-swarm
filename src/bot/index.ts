@@ -225,7 +225,17 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
         console.log(`[Bot] ${roleConfig.name} respawn scatter: ran from ${hostile.name} for 3.5s`);
       }
       const bed = bot.findBlock({ matching: (b) => b.name.endsWith("_bed"), maxDistance: 10 });
-      if (bed) {
+      // Only a bed the deaths cluster around is the trap. Run 574: four bots
+      // broke the shared village bed at (307, 63, -321) after four unrelated
+      // deaths in fifteen minutes (falls, zombies, a drowning elsewhere).
+      const clustered = bed
+        ? recentDeathSpots.filter((d) => Math.hypot(d.x - bed.position.x, d.z - bed.position.z) <= 16).length
+        : 0;
+      if (bed && clustered < 3) {
+        console.log(
+          `[Bot] ${roleConfig.name} death loop but only ${clustered} of the recent deaths were near the bed at ${bed.position} — keeping it`,
+        );
+      } else if (bed) {
         if (bed.position.distanceTo(bot.entity.position) > 4) {
           await safeGoto(bot, new goals.GoalNear(bed.position.x, bed.position.y, bed.position.z, 2), 15_000).catch(
             () => {},
@@ -357,6 +367,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
   // The loop is self-reinforcing and cannot break on its own, so detect it by
   // repetition and clear the spawnpoint back to a safe landing.
   let recentDeaths: number[] = [];
+  let recentDeathSpots: { x: number; y: number; z: number; t: number }[] = [];
   let respawnFixing = false;
   // Sized against a measured loop, not a guess. Atlas died 460 times in three
   // days at a median of 235s between deaths — so a 4-in-180s window could never
@@ -561,6 +572,8 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
     const now = Date.now();
     recentDeaths = recentDeaths.filter((t) => now - t < LOOP_WINDOW_MS);
     recentDeaths.push(now);
+    recentDeathSpots = recentDeathSpots.filter((d) => now - d.t < LOOP_WINDOW_MS);
+    recentDeathSpots.push({ x: pos.x, y: pos.y, z: pos.z, t: now });
 
     if (recentDeaths.length >= LOOP_THRESHOLD && !respawnFixing) {
       respawnFixing = true;
