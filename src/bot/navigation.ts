@@ -934,9 +934,30 @@ export function isPreciousBlock(name: string): boolean {
   return PRECIOUS_BLOCKS.some((p) => name.includes(p));
 }
 
-export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
+/**
+ * Is the bot's head under water the way the SERVER measures it: at eye
+ * height, counting water-logged blocks (kelp, seagrass, bubble columns)?
+ * The old check read the block one above the feet. With a fractional y
+ * above ~0.38 (any swimmer) that is a different block from the eye block,
+ * and run 561 had Mason at air -1 with the reflex reporting "not in water".
+ */
+export function headUnderWater(bot: Bot): boolean {
+  const eye = bot.blockAt(bot.entity.position.offset(0, (bot.entity as { eyeHeight?: number }).eyeHeight ?? 1.62, 0));
   const head = bot.blockAt(bot.entity.position.offset(0, 1, 0));
-  if (!head || head.name !== "water") return false; // head not submerged → breathing fine
+  const watery = (b: ReturnType<typeof bot.blockAt>) => {
+    if (!b) return false;
+    if (b.name === "water" || b.name === "bubble_column" || /kelp|seagrass/.test(b.name)) return true;
+    try {
+      return (b.getProperties() as { waterlogged?: string | boolean }).waterlogged === true;
+    } catch {
+      return false;
+    }
+  };
+  return watery(eye) || (watery(head) && (bot.oxygenLevel ?? 20) < 20);
+}
+
+export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
+  if (!headUnderWater(bot)) return false; // head not submerged → breathing fine
 
   // When air is actually running out, this reflex must WIN the controls: the
   // pathfinder re-asserts movement every tick, so 1.2s rescue bursts lost the
@@ -1039,9 +1060,9 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     // and drowned inside the dig every time, with a shore two blocks away.
     // Only dig when mineflayer's own estimate fits the air left (plus the
     // seconds drowning damage buys), or when there is nowhere to swim.
-    const swimRoute = Object.entries(neighbours).some(
-      ([d, b]) => d !== "up" && b && (b.name === "water" || b.name === "air"),
-    );
+    // "up" counts: a water column overhead IS the swim route. Run 561: Blade
+    // at the foot of a 14-block shaft started a 187s dig north instead.
+    const swimRoute = Object.values(neighbours).some((b) => b && (b.name === "water" || b.name === "air"));
     const budgetMs = Math.max(0, air) * 750 + Math.max(0, bot.health - 2) * 500;
     const needMs = escape ? bot.digTime(neighbours[escape.direction]!) : 0;
     if (escape && needMs > budgetMs && swimRoute) {
@@ -1054,7 +1075,25 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
         console.log(
           `[Drown] ${bot.username} enclosed at air=${air} — digging ${escape.direction} through ${escape.block.name} (${(needMs / 1000).toFixed(1)}s)`,
         );
-        await bot.dig(neighbours[escape.direction]!);
+        // Bound the dig by the air budget: a dig that overruns it must not
+        // hold the reflex (and its swim) hostage until the bot is dead.
+        let timer: NodeJS.Timeout | undefined;
+        await Promise.race([
+          bot.dig(neighbours[escape.direction]!),
+          new Promise<void>((resolve) => {
+            timer = setTimeout(
+              () => {
+                try {
+                  bot.stopDigging();
+                } catch {
+                  /* not digging */
+                }
+                resolve();
+              },
+              Math.max(1000, budgetMs),
+            );
+          }),
+        ]).finally(() => clearTimeout(timer));
       } catch {
         /* couldn't dig (no tool, or interrupted) — fall through to swimming */
       }
