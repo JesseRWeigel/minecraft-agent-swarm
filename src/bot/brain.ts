@@ -966,7 +966,10 @@ export class BotBrain {
       // 243,58,-512, no water after all, 100+ stuck resets per walk). A bot
       // with a pickaxe digs a staircase out in under a minute.
       const chronic = this.navFailStreak >= 6 && !pickless;
-      if ((buried || pit || waterTrap || chronic) && (pickless || walledIn)) {
+      // Pit, water hole and chronic need a failing walk streak: a hillside
+      // notch at y=81 read as a pit for Atlas every ninety seconds (run 547),
+      // each time costing a turn for an escape that returned at once.
+      if ((buried && (pickless || walledIn)) || ((pit || waterTrap || chronic) && walledIn)) {
         this.lastEscapeMs = Date.now();
         this.navFailStreak = 0;
         this.log.info(
