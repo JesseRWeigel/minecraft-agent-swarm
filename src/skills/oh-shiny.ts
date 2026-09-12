@@ -289,6 +289,7 @@ export const ohShinySkill: Skill = {
               continue;
             }
             await bot.lookAt(piglin.position.offset(0, 1.6, 0), true).catch(() => {});
+            const goldBefore = count(bot, "gold_ingot");
             try {
               await (bot as any).activateEntity(piglin);
             } catch (e) {
@@ -298,6 +299,21 @@ export const ohShinySkill: Skill = {
               } catch {
                 /* both paths failed this round */
               }
+            }
+            await new Promise((r) => setTimeout(r, 1_500));
+            // Ground truth for the hand-off (run 550: four hand-offs at one
+            // block, no criteria written): a piglin that took the ingot
+            // holds it in its offhand and admires it for six seconds, and
+            // our stack drops by one. Log both, and give an accepted ingot
+            // its six seconds before offering the next.
+            const offhand = (piglin as any).equipment?.[1]?.name ?? "empty";
+            const accepted = offhand === "gold_ingot" || count(bot, "gold_ingot") < goldBefore;
+            console.log(
+              `[ShinyDebug] after hand-off ${k + 1}: piglin offhand=${offhand} ourGold ${goldBefore}->${count(bot, "gold_ingot")} accepted=${accepted}`,
+            );
+            if (accepted) {
+              await new Promise((r) => setTimeout(r, 8_000));
+              break;
             }
             await new Promise((r) => setTimeout(r, 2_000));
           }
@@ -314,7 +330,18 @@ export const ohShinySkill: Skill = {
         await bot.toss(gold.type, null, 1).catch(() => {});
         tossed++;
         // The piglin walks over, picks it up, and admires it for six seconds.
-        await new Promise((r) => setTimeout(r, 9_000));
+        await new Promise((r) => setTimeout(r, 4_000));
+        const offAfterToss = (piglin as any).equipment?.[1]?.name ?? "empty";
+        const goldOnGround = Object.values(bot.entities).some(
+          (e) =>
+            e.name === "item" &&
+            (e as any).getDroppedItem?.()?.name === "gold_ingot" &&
+            e.position.distanceTo(bot.entity.position) < 12,
+        );
+        console.log(
+          `[ShinyDebug] after toss ${tossed}: piglin offhand=${offAfterToss} goldStillOnGround=${goldOnGround}`,
+        );
+        await new Promise((r) => setTimeout(r, 5_000));
       }
     }
 
