@@ -363,8 +363,23 @@ export const ohShinySkill: Skill = {
             // hand-off. Run 554: the piglin took the ingot into its offhand
             // and nothing was credited, because Blade wore golden boots. Take
             // them off for the instant of the offer and put them back on.
+            // unequip needs a free inventory slot; a full pack leaves the boots
+            // on and the criteria fail silently. Make room, then verify.
+            if (bot.inventory.emptySlotCount() < 1) {
+              const junk = bot.inventory
+                .items()
+                .find((i) =>
+                  ["cobblestone", "netherrack", "dirt", "gravel", "cobbled_deepslate", "tuff"].includes(i.name),
+                );
+              if (junk) await bot.toss(junk.type, null, junk.count).catch(() => {});
+            }
             await bot.unequip("feet").catch(() => {});
             await new Promise((r) => setTimeout(r, 300));
+            const feetSlot = bot.inventory.slots[8]?.name ?? "empty";
+            const armorNow = [5, 6, 7, 8].map((i) => bot.inventory.slots[i]?.name ?? "-").join(",");
+            console.log(
+              `[ShinyDebug] armor before hand-off: ${armorNow} (feet=${feetSlot}, freeSlots=${bot.inventory.emptySlotCount()})`,
+            );
             try {
               await (bot as any).activateEntity(piglin);
             } catch (e) {
