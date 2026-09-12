@@ -227,18 +227,28 @@ def _event_schema_errors(event: dict) -> list[str]:
     return errors
 
 
-def _extract_evidence_refs(value, found: list[str]) -> None:
+def _extract_evidence_refs(value) -> tuple[list[str], list[str]]:
+    found: list[str] = []
+    schema_errors: list[str] = []
     pending = [value]
     while pending:
         current = pending.pop()
         if isinstance(current, dict):
             for key, item in current.items():
-                if key == "evidenceRefs" and isinstance(item, list):
-                    found.extend(ref for ref in item if isinstance(ref, str))
+                if key == "evidenceRefs":
+                    if not isinstance(item, list):
+                        schema_errors.append("evidenceRefs_not_array")
+                    else:
+                        for reference in item:
+                            if isinstance(reference, str):
+                                found.append(reference)
+                            else:
+                                schema_errors.append("evidenceRefs_item_not_string")
                 else:
                     pending.append(item)
         elif isinstance(current, list):
             pending.extend(current)
+    return found, schema_errors
 
 
 def _audit_events(db: sqlite3.Connection, event_file: Path, run_id: str) -> tuple[int, int, tuple[int, int, int, str]]:
@@ -291,6 +301,15 @@ def _audit_events(db: sqlite3.Connection, event_file: Path, run_id: str) -> tupl
                 continue
             if event.get("runId") != run_id:
                 _finding(db, "event_outside_run", event_id=event.get("eventId"), observed_run_id=event.get("runId"))
+                continue
+            expected_episode_id = f"{run_id}:{event['botId']}"
+            if event["episodeId"] != expected_episode_id:
+                _finding(
+                    db,
+                    "invalid_episode_linkage",
+                    event_id=event["eventId"],
+                    expected_episode_id=expected_episode_id,
+                )
                 continue
             event_count += 1
             event_id = event.get("eventId")
@@ -431,8 +450,14 @@ def _read_payload_evidence(db: sqlite3.Connection, path: Path, expected_hash: st
     except ValueError as error:
         _finding(db, "payload_json_unreadable", reference=f"sha256:{expected_hash}", reason=str(error))
         return
-    found: list[str] = []
-    _extract_evidence_refs(value, found)
+    found, schema_errors = _extract_evidence_refs(value)
+    for reason in schema_errors:
+        _finding(
+            db,
+            "invalid_evidence_reference_schema",
+            reference=f"sha256:{expected_hash}",
+            reason=reason,
+        )
     for reference in found:
         db.execute(
             "INSERT INTO evidence_refs VALUES (?,1) ON CONFLICT(ref) DO UPDATE SET ref_count=ref_count+1",

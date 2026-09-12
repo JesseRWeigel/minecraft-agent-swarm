@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import hashlib
 import json
 import math
@@ -19,7 +20,30 @@ MAX_V1_MANIFEST_BYTES = 32 * 1024 * 1024
 MAX_V2_ROOT_BYTES = 1024 * 1024
 MAX_SHARD_BYTES = 16 * 1024 * 1024
 MAX_RECORD_LINE_BYTES = 64 * 1024
+MAX_AUDIT_LINE_BYTES = 4 * 1024 * 1024
 HASH_RE = re.compile(r"[a-f0-9]{64}")
+V2_TOTAL_FIELDS = {
+    "files",
+    "captured_bytes",
+    "shards",
+    "events",
+    "episodes",
+    "referenced_payloads",
+    "copied_payloads",
+    "audit_findings",
+}
+V2_STORAGE_FIELDS = {
+    "total_bytes",
+    "free_bytes",
+    "total_inodes",
+    "free_inodes",
+    "fragment_bytes",
+    "required_bytes_preflight",
+    "required_inodes_preflight",
+    "reserve_bytes",
+    "reserve_inodes",
+}
+V2_SOURCE_KINDS = {"event_jsonl", "event_payload", "export_audit"}
 
 
 class ManifestError(ValueError):
@@ -126,6 +150,13 @@ def _nonnegative_int(value: object, label: str) -> int:
     return value
 
 
+def _positive_int(value: object, label: str) -> int:
+    result = _nonnegative_int(value, label)
+    if result == 0:
+        raise ManifestError(f"invalid {label}")
+    return result
+
+
 def _hash(value: object, label: str) -> str:
     if not isinstance(value, str) or not HASH_RE.fullmatch(value):
         raise ManifestError(f"invalid {label} hash")
@@ -146,6 +177,8 @@ def _validate_file_entry(entry: object, schema_version: int) -> dict:
         raise ManifestError("invalid capture status")
     if not isinstance(entry.get("source_kind"), str) or not entry["source_kind"]:
         raise ManifestError("missing source kind")
+    if schema_version == 2 and entry["source_kind"] not in V2_SOURCE_KINDS:
+        raise ManifestError("invalid version-2 source kind")
     cutoff = entry.get("complete_line_cutoff")
     if cutoff is not None and (type(cutoff) is not int or not 0 <= cutoff <= captured):
         raise ManifestError("invalid complete-line cutoff")
@@ -197,8 +230,46 @@ class ManifestReader:
         totals = doc.get("totals")
         if not isinstance(totals, dict):
             raise ManifestError("missing manifest totals")
-        for key in ("files", "captured_bytes", "shards"):
+        if set(totals) != V2_TOTAL_FIELDS:
+            raise ManifestError("version-2 totals have missing or unknown fields")
+        for key in V2_TOTAL_FIELDS:
             _nonnegative_int(totals.get(key), f"total {key}")
+        if totals["shards"] == 0:
+            raise ManifestError("invalid total shards")
+        if totals["episodes"] > totals["events"]:
+            raise ManifestError("total episodes cannot exceed total events")
+        if totals["referenced_payloads"] > totals["events"]:
+            raise ManifestError("total referenced payloads cannot exceed total events")
+        if totals["copied_payloads"] > totals["referenced_payloads"]:
+            raise ManifestError("total copied payloads cannot exceed referenced payloads")
+        audit = doc["audit"]
+        if set(audit) != {"findings", "by_kind"}:
+            raise ManifestError("audit summary has missing or unknown fields")
+        findings = _nonnegative_int(audit.get("findings"), "audit findings")
+        by_kind = audit.get("by_kind")
+        if not isinstance(by_kind, dict):
+            raise ManifestError("invalid audit by_kind")
+        for kind, count in by_kind.items():
+            if not isinstance(kind, str) or not kind:
+                raise ManifestError("invalid audit finding kind")
+            _positive_int(count, f"audit by_kind count for {kind}")
+        if sum(by_kind.values()) != findings or findings != totals["audit_findings"]:
+            raise ManifestError("audit findings do not reconcile with totals")
+
+        storage = doc["storage"]
+        if set(storage) != V2_STORAGE_FIELDS:
+            raise ManifestError("storage summary has missing or unknown fields")
+        for key in V2_STORAGE_FIELDS:
+            _nonnegative_int(storage.get(key), f"storage {key}")
+        _positive_int(storage["fragment_bytes"], "storage fragment_bytes")
+        if storage["free_bytes"] > storage["total_bytes"]:
+            raise ManifestError("storage free_bytes exceeds total_bytes")
+        if storage["free_inodes"] > storage["total_inodes"]:
+            raise ManifestError("storage free_inodes exceeds total_inodes")
+        if storage["free_bytes"] < storage["required_bytes_preflight"] + storage["reserve_bytes"]:
+            raise ManifestError("storage byte preflight does not preserve its reserve")
+        if storage["free_inodes"] < storage["required_inodes_preflight"] + storage["reserve_inodes"]:
+            raise ManifestError("storage inode preflight does not preserve its reserve")
         shards = doc.get("shards")
         if not isinstance(shards, list) or len(shards) != totals["shards"]:
             raise ManifestError("manifest shard count mismatch")
@@ -314,14 +385,77 @@ def _verify_file(path: Path, entry: dict) -> None:
         raise ManifestError(f"complete-line cutoff is not newline terminated: {entry['archive_relpath']}")
 
 
+def _audit_counts(path: Path, entry: dict) -> dict[str, int]:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    digest = hashlib.sha256()
+    size = 0
+    previous_id = 0
+    counts: Counter[str] = Counter()
+    with os.fdopen(os.open(path, flags), "rb") as handle:
+        before = os.fstat(handle.fileno())
+        if not stat.S_ISREG(before.st_mode):
+            raise ManifestError("audit path is not a regular file")
+        while True:
+            line = handle.readline(MAX_AUDIT_LINE_BYTES + 1)
+            if not line:
+                break
+            digest.update(line)
+            size += len(line)
+            if len(line) > MAX_AUDIT_LINE_BYTES:
+                raise ManifestError("audit record is oversized")
+            if not line.endswith(b"\n"):
+                raise ManifestError("audit file has an incomplete tail")
+            record = strict_decode(line)
+            if not isinstance(record, dict) or set(record) != {"finding_id", "kind", "detail"}:
+                raise ManifestError("invalid audit record schema")
+            finding_id = record.get("finding_id")
+            if type(finding_id) is not int or finding_id != previous_id + 1:
+                raise ManifestError("invalid audit finding sequence")
+            kind = record.get("kind")
+            if not isinstance(kind, str) or not kind or not isinstance(record.get("detail"), dict):
+                raise ManifestError("invalid audit record schema")
+            previous_id = finding_id
+            counts[kind] += 1
+        after = os.fstat(handle.fileno())
+    if (before.st_size, before.st_mtime_ns, before.st_ino) != (
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ino,
+    ):
+        raise ManifestError("audit file changed while verifying")
+    if size != entry["captured_bytes"] or digest.hexdigest() != entry["sha256"]:
+        raise ManifestError("audit file hash or size mismatch")
+    return dict(sorted(counts.items()))
+
+
 def verify_manifest(manifest_path: Path | str) -> dict:
     reader = ManifestReader(manifest_path)
     files = 0
     captured = 0
+    source_kinds: Counter[str] = Counter()
+    observed_audit_counts = None
     for entry in reader.iter_files():
-        _verify_file(safe_archive_file(reader.root, entry["archive_relpath"]), entry)
+        target = safe_archive_file(reader.root, entry["archive_relpath"])
+        _verify_file(target, entry)
+        source_kinds[entry["source_kind"]] += 1
+        if reader.schema_version == 2 and entry["source_kind"] == "export_audit":
+            observed_audit_counts = _audit_counts(target, entry)
         files += 1
         captured += entry["captured_bytes"]
+    if reader.schema_version == 2:
+        totals = reader.document["totals"]
+        expected_kinds = {
+            "event_jsonl": 1,
+            "event_payload": totals["copied_payloads"],
+            "export_audit": 1,
+        }
+        if dict(source_kinds) != {key: value for key, value in expected_kinds.items() if value}:
+            raise ManifestError("version-2 source kinds do not reconcile with totals")
+        if observed_audit_counts != reader.document["audit"]["by_kind"]:
+            raise ManifestError("audit records do not reconcile with the root summary")
+        missing_payloads = observed_audit_counts.get("missing_payload", 0)
+        if totals["referenced_payloads"] != totals["copied_payloads"] + missing_payloads:
+            raise ManifestError("payload reference totals do not reconcile with audit records")
     _, final_manifest_hash = _read_document(reader.path)
     if final_manifest_hash != reader.manifest_sha256:
         raise ManifestError("manifest changed while verifying")

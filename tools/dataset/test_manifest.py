@@ -32,6 +32,8 @@ class ManifestTests(unittest.TestCase):
             json.dumps(entry, sort_keys=True, separators=(",", ":")).encode() + b"\n" for entry in entries
         )
         shard_path.write_bytes(shard_bytes)
+        payload_count = sum(entry["source_kind"] == "event_payload" for entry in entries)
+        event_count = sum(entry["source_kind"] == "event_jsonl" for entry in entries)
         doc = {
             "schema_version": 2,
             "manifest_kind": "run_export",
@@ -48,12 +50,27 @@ class ManifestTests(unittest.TestCase):
             "copy_complete": copy_complete,
             "episode_complete": False,
             "episode_completion_basis": "not_independently_verified",
-            "audit": {"findings": 0},
-            "storage": {},
+            "audit": {"findings": 0, "by_kind": {}},
+            "storage": {
+                "total_bytes": 1_000_000,
+                "free_bytes": 900_000,
+                "total_inodes": 10_000,
+                "free_inodes": 9_000,
+                "fragment_bytes": 4096,
+                "required_bytes_preflight": 0,
+                "required_inodes_preflight": 0,
+                "reserve_bytes": 0,
+                "reserve_inodes": 0,
+            },
             "totals": {
                 "files": len(entries),
                 "captured_bytes": sum(item["captured_bytes"] for item in entries),
                 "shards": 1,
+                "events": max(event_count, payload_count),
+                "episodes": min(1, max(event_count, payload_count)),
+                "referenced_payloads": payload_count,
+                "copied_payloads": payload_count,
+                "audit_findings": 0,
             },
             "shards": [
                 {
@@ -97,21 +114,27 @@ class ManifestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             entries = []
-            for number in range(3):
-                data = json.dumps({"n": number}).encode() + b"\n"
-                relpath = f"files/payloads/{number}.json"
+            fixtures = (
+                ("files/events/run.jsonl", b"{}\n", "event_jsonl"),
+                ("files/payloads/0.json", b'{"n":0}\n', "event_payload"),
+                ("audit/findings.jsonl", b"", "export_audit"),
+            )
+            for relpath, data, kind in fixtures:
                 target = root / relpath
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)
-                entries.append(self.file_entry(relpath, data))
+                entry = self.file_entry(relpath, data, kind)
+                if kind in ("event_jsonl", "export_audit"):
+                    entry["complete_line_cutoff"] = len(data)
+                entries.append(entry)
             path = self.write_v2(root, entries)
 
             reader = ManifestReader(path)
             self.assertEqual(reader.schema_version, 2)
             self.assertEqual([entry["archive_relpath"] for entry in reader.iter_files()], [
+                "files/events/run.jsonl",
                 "files/payloads/0.json",
-                "files/payloads/1.json",
-                "files/payloads/2.json",
+                "audit/findings.jsonl",
             ])
             self.assertEqual(verify_manifest(path), {
                 "schema_version": 2,

@@ -1,4 +1,5 @@
 import contextlib
+import copy
 import hashlib
 import io
 import json
@@ -166,6 +167,34 @@ class RunExportTests(unittest.TestCase):
         self.assertEqual(result["audit"]["by_kind"]["event_outside_run"], 1)
         self.assertEqual(result["totals"]["events"], 0)
 
+    def test_episode_id_must_link_the_event_run_and_bot(self):
+        self.add_event("observation", event_id="event-one")
+        self.events[0]["episodeId"] = "other-run:Atlas"
+        self.write_events()
+
+        result = self.export()
+
+        self.assertEqual(result["audit"]["by_kind"]["invalid_episode_linkage"], 1)
+        self.assertEqual(result["totals"]["events"], 0)
+        self.assertEqual(result["totals"]["episodes"], 0)
+
+    def test_malformed_evidence_reference_shapes_are_audited(self):
+        outside = "sha256:" + "b" * 64
+        self.add_event(
+            "observation",
+            event_id="event-one",
+            payload={
+                "outcome": {"evidenceRefs": outside},
+                "nested": {"evidenceRefs": [outside, 7]},
+            },
+        )
+        self.write_events()
+
+        result = self.export()
+
+        self.assertEqual(result["audit"]["by_kind"]["invalid_evidence_reference_schema"], 2)
+        self.assertEqual(result["audit"]["by_kind"]["evidence_reference_outside_run"], 1)
+
     def test_invalid_typed_event_fields_are_audited_instead_of_treated_as_clean(self):
         self.add_event("observation", event_id="base")
         base = self.events.pop()
@@ -304,6 +333,48 @@ class RunExportTests(unittest.TestCase):
                 self.base / "second" / "manifest.json",
                 previous_manifest=self.base / "first" / "manifest.json",
             )
+
+    def test_v2_root_summary_fields_are_strictly_typed(self):
+        self.add_event("observation", event_id="event-one")
+        self.write_events()
+        self.export()
+        manifest = self.base / "export" / "manifest.json"
+        original = json.loads(manifest.read_text())
+        mutations = (
+            (lambda doc: doc["totals"].__setitem__("events", "unknown"), "total events"),
+            (lambda doc: doc["audit"].__setitem__("findings", -1), "audit findings"),
+            (lambda doc: doc["audit"].__setitem__("by_kind", []), "audit by_kind"),
+            (lambda doc: doc["storage"].__setitem__("free_bytes", True), "storage free_bytes"),
+        )
+        for mutate, message in mutations:
+            with self.subTest(message=message):
+                document = copy.deepcopy(original)
+                mutate(document)
+                manifest.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, message):
+                    verify_manifest(manifest)
+
+    def test_v2_audit_summary_must_match_the_verified_audit_records(self):
+        self.add_event("observation", event_id="event-one")
+        self.write_events()
+        self.export()
+        manifest = self.base / "export" / "manifest.json"
+        document = json.loads(manifest.read_text())
+        document["totals"]["audit_findings"] = 1
+        document["audit"] = {"findings": 1, "by_kind": {"invented": 1}}
+        manifest.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "audit records"):
+            verify_manifest(manifest)
+
+        document = json.loads((self.base / "export" / "manifest.json").read_text())
+        document["audit"] = {"findings": 0, "by_kind": {}}
+        document["totals"]["audit_findings"] = 0
+        document["totals"]["events"] += 1
+        document["totals"]["referenced_payloads"] += 1
+        manifest.write_text(json.dumps(document), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "payload reference totals"):
+            verify_manifest(manifest)
 
 
 class RunExportCliTests(unittest.TestCase):

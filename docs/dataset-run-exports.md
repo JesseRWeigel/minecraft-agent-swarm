@@ -61,11 +61,12 @@ These fields have deliberately separate meanings:
 
 The audit reports duplicate event IDs, duplicate or unmatched action starts and
 terminals, duplicate or unmatched model requests and responses, incomplete or
-malformed event tails, missing or corrupt payloads, unavailable or invalid
-references, evidence references outside the run, unexpected paths, and unused
-payload blobs. Referenced corrupt blobs are retained with their actual hash and
-the expected content-addressed hash so corruption is visible rather than
-silently repaired. Unused blobs are reported but not copied.
+malformed event tails, episode IDs that do not match the event's run and bot,
+missing or corrupt payloads, unavailable or invalid references, malformed
+`evidenceRefs` shapes, evidence references outside the run, unexpected paths,
+and unused payload blobs. Referenced corrupt blobs are retained with their
+actual hash and the expected content-addressed hash so corruption is visible
+rather than silently repaired. Unused blobs are reported but not copied.
 
 The exporter copies the event stream, each referenced payload it found, and the
 generated audit. It does not transform repeated prompt fields or compress
