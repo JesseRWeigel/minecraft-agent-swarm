@@ -165,6 +165,33 @@ export const ohShinySkill: Skill = {
       }
       const boots = bot.inventory.items().find((i) => i.name === "golden_boots");
       if (boots) await bot.equip(boots, "feet").catch(() => {});
+      // The goldless leg mines nether gold ore, which needs any pickaxe: run
+      // 552 found ore on the first scouting leg and the loop broke on "no
+      // pickaxe" (Blade carried none). Fetch or craft one before crossing.
+      const hasPick = () => bot.inventory.items().some((i) => i.name.endsWith("_pickaxe"));
+      if (!hasPick() && count(bot, "gold_ingot") < 1) {
+        step("No pickaxe for the gold ore — fetching one from the stash...", 0.12);
+        for (const name of ["iron_pickaxe", "stone_pickaxe", "wooden_pickaxe"]) {
+          if (hasPick()) break;
+          await withdrawStash(bot, STASH_POS, name, 1, 30_000).catch(() => {});
+        }
+        if (!hasPick()) {
+          if (count(bot, "cobblestone") < 3)
+            await withdrawStash(bot, STASH_POS, "cobblestone", 3, 30_000).catch(() => {});
+          if (count(bot, "stick") < 2) await withdrawStash(bot, STASH_POS, "stick", 4, 30_000).catch(() => {});
+          const { executeAction } = await import("../bot/actions.js");
+          const r = await executeAction(bot, "craft", { item: "stone_pickaxe", count: 1 }).catch(
+            (e: Error) => e.message,
+          );
+          console.log(`[ShinyDebug] pickaxe craft: ${String(r).slice(0, 80)} -> hasPick=${hasPick()}`);
+        }
+        if (!hasPick()) {
+          return {
+            success: false,
+            message: resumable("No pickaxe for the Nether gold ore and the stash had none to lend."),
+          };
+        }
+      }
       // Self-funding: 9 nuggets craft an ingot, and the Nether leg below
       // mines nether gold ore when the pockets are empty — the stash ran
       // completely dry of gold, and waiting on overworld vein luck parked
