@@ -13,6 +13,7 @@ import stat
 import tempfile
 
 from label_rules import LABEL_VERSION, classify_legacy
+from manifest import ManifestReader, safe_archive_file
 
 MAX_LINE_BYTES = 4 * 1024 * 1024
 
@@ -52,40 +53,15 @@ def safe_file(root, rel):
 
 
 def load_manifest(path):
-    path = Path(path)
-    if path.is_symlink():
-        raise ValueError('Manifest symlink is not allowed')
-    if path.stat().st_size > 32 * 1024 * 1024:
-        raise ValueError('Oversized manifest')
-    doc = decode(path.read_bytes())
-    if (not isinstance(doc, dict) or type(doc.get('schema_version')) is not int
-            or doc['schema_version'] != 1 or doc.get('complete') is not True):
-        raise ValueError('Require complete version-1 archive')
-    if not isinstance(doc.get('files'), list):
-        raise ValueError('Missing file records')
-    seen = set()
-    for entry in doc['files']:
-        if not isinstance(entry, dict): raise ValueError('Invalid file record')
-        rel = entry.get('archive_relpath')
-        target = safe_file(path.parent, rel)
-        if rel in seen: raise ValueError('Duplicate archive path')
-        seen.add(rel)
-        digest, size = entry.get('sha256'), entry.get('captured_bytes')
-        if not isinstance(digest, str) or not re.fullmatch('[a-f0-9]{64}', digest):
-            raise ValueError('Invalid hash')
-        if type(size) is not int or size < 0 or target.stat().st_size != size:
+    """Return the validated legacy manifest document for review-tool callers."""
+    reader = ManifestReader(path)
+    if reader.schema_version != 1:
+        raise ValueError('load_manifest supports version-1 historical archives')
+    for entry in reader.iter_files():
+        target = safe_archive_file(reader.root, entry['archive_relpath'])
+        if target.stat().st_size != entry['captured_bytes']:
             raise ValueError('Invalid archive size')
-        source_size = entry.get('source_size_at_open')
-        if type(source_size) is not int or source_size < size:
-            raise ValueError('Invalid source size')
-        if entry.get('status') not in ('complete', 'complete_prefix'):
-            raise ValueError('Invalid capture status')
-        if not isinstance(entry.get('source_relpath'), str) or not isinstance(entry.get('source_kind'), str):
-            raise ValueError('Missing source identity')
-        cutoff = entry.get('complete_line_cutoff')
-        if entry['source_kind'] == 'trajectory_jsonl' and (type(cutoff) is not int or cutoff != size):
-            raise ValueError('Invalid trajectory cutoff')
-    return doc
+    return reader.document
 
 
 def valid_row(row):
@@ -138,8 +114,8 @@ def build_index(manifest_path, output_path, max_line_bytes=MAX_LINE_BYTES):
     if output_path.exists() or output_path.is_symlink(): raise FileExistsError(output_path)
     if output_path.resolve().is_relative_to(manifest_path.parent.resolve()):
         raise ValueError('Index must be outside the immutable archive')
-    manifest = load_manifest(manifest_path)
-    manifest_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    manifest = ManifestReader(manifest_path)
+    manifest_hash = manifest.manifest_sha256
     fd, scratch = tempfile.mkstemp(prefix='.dataset-index-', dir=output_path.parent)
     os.close(fd)
     db = sqlite3.connect(scratch)
@@ -154,8 +130,8 @@ def build_index(manifest_path, output_path, max_line_bytes=MAX_LINE_BYTES):
                 evidence_kind TEXT,review_required INTEGER,family TEXT,quality TEXT);
             CREATE TABLE exclusions(source_path TEXT,line_no INTEGER,reason TEXT);
         ''')
-        for entry in manifest['files']:
-            target = safe_file(manifest_path.parent, entry['archive_relpath'])
+        for entry in manifest.iter_files():
+            target = safe_archive_file(manifest.root, entry['archive_relpath'])
             digest = hashlib.sha256()
             flags = os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0)
             with os.fdopen(os.open(target, flags), 'rb') as handle:
@@ -203,6 +179,9 @@ def build_index(manifest_path, output_path, max_line_bytes=MAX_LINE_BYTES):
         summary = dict(counts)
         summary['label_version'] = LABEL_VERSION
         summary['manifest_sha256'] = manifest_hash
+        summary['manifest_schema_version'] = manifest.schema_version
+        summary['index_scope'] = 'legacy_trajectory_rows_only'
+        summary['prospective_event_rows_indexed'] = 0
         summary['status_cross_tab'] = [dict(zip(('original_success','revised_status','count'), row)) for row in db.execute('SELECT original_success,revised_status,count(*) FROM records GROUP BY original_success,revised_status ORDER BY 1,2')]
         summary['exclusions_by_reason'] = dict(db.execute('SELECT reason,count(*) FROM exclusions GROUP BY reason'))
         db.execute('INSERT INTO metadata VALUES (?,?)',('summary',json.dumps(summary,sort_keys=True)))

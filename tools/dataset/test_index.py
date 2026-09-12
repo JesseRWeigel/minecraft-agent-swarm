@@ -6,7 +6,8 @@ import sqlite3
 import tempfile
 import tracemalloc
 import unittest
-from index import build_index, sample_candidates
+from index import build_index, load_manifest, sample_candidates
+from run_export import export_run
 
 
 def row(bot='Atlas', action='eat', result='Blocked: "eat" recently failed. Try something else.'):
@@ -38,6 +39,15 @@ class IndexTests(unittest.TestCase):
     def sample_row(self, i, family='food_resources'):
         return (f'id-{i}', 'session.jsonl', i + 1, f'session-{i}', f'bot-{i}',
                 '2026-06-12T01:02:03Z', 'eat', family, f'context-{i}', f'action-{i}', 'unknown')
+
+    def test_load_manifest_keeps_legacy_document_contract(self):
+        self.fixture(json.dumps(row()).encode() + b'\n')
+
+        loaded = load_manifest(self.manifest)
+
+        self.assertIsInstance(loaded, dict)
+        self.assertEqual(loaded['schema_version'], 1)
+        self.assertIsInstance(loaded['files'], list)
 
     def test_reconciles_and_preserves_source(self):
         data = json.dumps(row()).encode() + b'\nnot-json\n{}\n\n'
@@ -145,6 +155,39 @@ class IndexTests(unittest.TestCase):
         self.manifest.write_text(json.dumps(doc))
         with self.assertRaises(ValueError):
             build_index(self.manifest, self.output)
+
+    def test_sharded_run_export_is_verified_and_catalogued_without_indexing_event_rows(self):
+        event_root = self.root / 'prospective'
+        payload_root = event_root / 'payloads'
+        payload_root.mkdir(parents=True)
+        payload = b'{"stage":"observation"}\n'
+        payload_hash = hashlib.sha256(payload).hexdigest()
+        payload_path = payload_root / payload_hash[:2] / f'{payload_hash}.json'
+        payload_path.parent.mkdir()
+        payload_path.write_bytes(payload)
+        event = {
+            'schemaVersion': 1, 'eventId': 'event-a', 'runId': 'run-a',
+            'episodeId': 'run-a:Atlas', 'botId': 'Atlas', 'sequence': 1,
+            'actionId': None, 'requestId': None, 'occurredAt': '2026-09-12T00:00:00Z',
+            'monotonicMs': 1, 'kind': 'observation', 'payloadRef': f'sha256:{payload_hash}',
+        }
+        event_file = event_root / 'events' / 'run-a.jsonl'
+        event_file.parent.mkdir()
+        event_file.write_text(json.dumps(event) + '\n', encoding='utf-8')
+        export_root = self.root / 'run-export'
+        export_run(event_file=event_file, payload_root=payload_root, output_root=export_root,
+                   run_id='run-a', scope='closed_run', closure_kind='operator_assertion',
+                   closure_reference='test-ledger:1', asserted_by='test-operator', max_shard_bytes=1024)
+
+        summary = build_index(export_root / 'manifest.json', self.output)
+
+        self.assertEqual(summary['manifest_schema_version'], 2)
+        self.assertEqual(summary['records'], 0)
+        self.assertEqual(summary['prospective_event_rows_indexed'], 0)
+        self.assertEqual(summary['index_scope'], 'legacy_trajectory_rows_only')
+        with sqlite3.connect(self.output) as database:
+            kinds = {row[0] for row in database.execute('select kind from sources')}
+        self.assertEqual(kinds, {'event_jsonl', 'event_payload', 'export_audit'})
 
     def test_sampler_represents_all_families_before_repeating_one(self):
         families = ['navigation', 'food_resources', 'shared_resources',
