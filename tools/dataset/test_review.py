@@ -145,6 +145,51 @@ class ReviewToolTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "tool source"):
             create_scaffold(tampered_path, "reviewer-a", "model-a", self.root / "bad.json")
 
+    def test_packet_validation_enforces_utf8_result_byte_limit(self):
+        self.build_fixture()
+        packet = self.extract(limit=1)
+        main = next(
+            line["record"] for line in packet["candidates"][0]["evidence_lines"]
+            if line["line_no"] == packet["candidates"][0]["line_no"]
+        )
+        main["result"] = "😀" * 70_000
+        main["result_sha256"] = hashlib.sha256(
+            main["result"].encode("utf-8")
+        ).hexdigest()
+        packet["packet_sha256"] = review._hash_value({**packet, "packet_sha256": ""})
+        path = self.root / "oversized-result-packet.json"
+        path.write_text(json.dumps(packet), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "result.*UTF-8 byte limit"):
+            create_scaffold(path, "reviewer-a", "model-a", self.root / "bad-result.json")
+
+    def test_packet_validation_enforces_aggregate_context_byte_limit(self):
+        self.build_fixture()
+        packet = self.extract(limit=1)
+        cases = [
+            [{"context_line": 1, "text": "😀" * 4_000}],
+            [
+                {"context_line": number, "text": "a" * 1_000}
+                for number in range(1, 14)
+            ],
+        ]
+        for number, projection in enumerate(cases, 1):
+            mutated = copy.deepcopy(packet)
+            record = next(
+                line["record"] for line in mutated["candidates"][0]["evidence_lines"]
+                if line["line_no"] == mutated["candidates"][0]["line_no"]
+            )
+            record["context_projection"] = projection
+            mutated["packet_sha256"] = review._hash_value(
+                {**mutated, "packet_sha256": ""}
+            )
+            path = self.root / f"oversized-context-{number}.json"
+            path.write_text(json.dumps(mutated), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "context projection.*UTF-8 byte limit"):
+                create_scaffold(
+                    path, "reviewer-a", "model-a",
+                    self.root / f"bad-context-{number}.json",
+                )
+
     def test_extract_skips_windows_overlapping_earlier_candidates(self):
         candidates = self.build_fixture(18)
         by_line = {item["line_no"]: item for item in candidates}

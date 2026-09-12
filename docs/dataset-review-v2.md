@@ -34,7 +34,7 @@ python3 tools/dataset/review.py extract \
   --output /private/calibration-v2-packet.json
 ```
 
-The packet omits legacy `success`, `revised_status`, quality, family, model thought, and system-prompt text. It includes the sampled action, parameters, goal fields, full executor result up to the documented byte bound, source hashes, and state-bearing context lines such as position, health, inventory, nearby observations, and current goal. It removes the legacy `LAST 5 ACTIONS` summary and its success/failure icons. Hashes bind omitted full context and system text. Explicit flags report result or context-projection truncation.
+The packet omits legacy `success`, `revised_status`, quality, family, model thought, and system-prompt text. It includes the sampled action, parameters, goal fields, full executor result up to the documented byte bound, source hashes, and state-bearing context lines such as position, health, inventory, nearby observations, and current goal. It removes the legacy `LAST 5 ACTIONS` summary and its success/failure icons. Hashes bind omitted full context and system text. The projected context has a 12 KiB aggregate UTF-8 byte cap, and the result has a 256 KiB UTF-8 byte cap. Explicit flags report result or context-projection truncation.
 
 The initial evidence window contains three lines before and after the sampled line. Every reviewer receives the same named continuation segments: two five-line segments before the initial window and four after it. Unavailable lines and censored boundaries remain explicit.
 

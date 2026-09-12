@@ -606,13 +606,31 @@ def _validate_packet_line(line, where):
     _boolean(record["result_truncated"], f"{where} result_truncated")
     if not isinstance(record["context_projection"], list):
         raise ValueError(f"{where} context_projection must be a list")
+    context_bytes = 0
+    previous_context_line = 0
     for projected in record["context_projection"]:
         _exact(projected, {"context_line", "text"}, f"{where} projected context")
-        _integer(projected["context_line"], f"{where} context_line")
-        _string(projected["text"], f"{where} context text", empty=True, maximum=MAX_CONTEXT_BYTES)
+        context_line = _integer(projected["context_line"], f"{where} context_line")
+        if context_line <= previous_context_line:
+            raise ValueError(f"{where} context lines must be strictly increasing")
+        previous_context_line = context_line
+        text = _string(
+            projected["text"], f"{where} context text", empty=True,
+            maximum=MAX_CONTEXT_BYTES,
+        )
+        context_bytes += len(text.encode("utf-8", errors="surrogatepass"))
+        if context_bytes > MAX_CONTEXT_BYTES:
+            raise ValueError(f"{where} context projection exceeds UTF-8 byte limit")
     if not isinstance(record["decision"], dict) or set(record["decision"]) - {"action", "params", "goal", "goalSteps"}:
         raise ValueError(f"{where} decision projection is invalid")
-    _string(record["result"], f"{where} result", empty=True, maximum=MAX_RESULT_BYTES)
+    result = _string(
+        record["result"], f"{where} result", empty=True, maximum=MAX_RESULT_BYTES
+    )
+    result_bytes = result.encode("utf-8", errors="surrogatepass")
+    if len(result_bytes) > MAX_RESULT_BYTES:
+        raise ValueError(f"{where} result exceeds UTF-8 byte limit")
+    if not record["result_truncated"] and _sha_bytes(result_bytes) != record["result_sha256"]:
+        raise ValueError(f"{where} untruncated result hash mismatch")
     if record["bot"] is not None:
         _string(record["bot"], f"{where} bot", maximum=1000)
     if record["timestamp"] is not None:
