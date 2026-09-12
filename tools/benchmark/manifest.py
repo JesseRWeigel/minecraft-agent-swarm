@@ -49,6 +49,7 @@ class LoadedExperiment:
     observations: dict[str, Any]
     case_study: dict[str, Any]
     conditions: tuple[dict[str, Any], ...]
+    evaluator_files: tuple[dict[str, str], ...]
 
 
 def _expect_object(value: Any, label: str) -> dict[str, Any]:
@@ -72,7 +73,7 @@ def _require_id(mapping: dict[str, Any], field: str, label: str) -> str:
 
 
 def _require_schema(document: dict[str, Any], label: str) -> None:
-    if document.get("schema_version") != SCHEMA_VERSION:
+    if type(document.get("schema_version")) is not int or document["schema_version"] != SCHEMA_VERSION:
         raise ManifestError(f"{label}.schema_version must be {SCHEMA_VERSION}")
 
 
@@ -89,11 +90,108 @@ def _read_json(path: Path, label: str) -> tuple[dict[str, Any], str]:
         raise ManifestError(f"{label} exceeds {MAX_JSON_BYTES} bytes")
     raw = path.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
+    def reject_constant(value: str) -> None:
+        raise ManifestError(f"{label} contains non-finite JSON constant: {value}")
+
+    def finite_float(value: str) -> float:
+        parsed = float(value)
+        if not math.isfinite(parsed):
+            raise ManifestError(f"{label} contains non-finite JSON number: {value}")
+        return parsed
+
+    def unique_object(items: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in items:
+            if key in result:
+                raise ManifestError(f"{label} contains duplicate JSON key: {key}")
+            result[key] = value
+        return result
+
     try:
-        value = json.loads(raw)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        value = json.loads(
+            raw,
+            parse_constant=reject_constant,
+            parse_float=finite_float,
+            object_pairs_hook=unique_object,
+        )
+    except ManifestError:
+        raise
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
         raise ManifestError(f"{label} is not valid UTF-8 JSON: {path}") from exc
     return _expect_object(value, label), digest
+
+
+def _validate_code(
+    code: dict[str, Any], adapter: str
+) -> tuple[dict[str, str], ...]:
+    if set(code) != {"controller", "evaluator"}:
+        raise ManifestError("experiment.code must contain exactly controller and evaluator")
+    controller = _expect_object(code.get("controller"), "experiment.code.controller")
+    if set(controller) != {"kind", "identity"}:
+        raise ManifestError("experiment.code.controller must contain exactly kind and identity")
+    controller_kind = controller.get("kind")
+    identity = controller.get("identity")
+    if controller_kind == "synthetic_fixture":
+        if adapter != "mock" or identity != "unavailable":
+            raise ManifestError(
+                "synthetic fixture controller identity must be unavailable in mock mode"
+            )
+    elif controller_kind == "git_commit":
+        if adapter == "mock":
+            raise ManifestError("mock experiments require a synthetic fixture controller")
+        if not isinstance(identity, str) or not _GIT_COMMIT.fullmatch(identity):
+            raise ManifestError("controller git_commit identity must be a full Git object ID")
+    else:
+        raise ManifestError("experiment.code.controller.kind is unsupported")
+
+    evaluator = _expect_object(code.get("evaluator"), "experiment.code.evaluator")
+    if set(evaluator) != {"kind", "files"}:
+        raise ManifestError("experiment.code.evaluator must contain exactly kind and files")
+    if evaluator.get("kind") != "content_sha256":
+        raise ManifestError("experiment.code.evaluator.kind must be content_sha256")
+    files = evaluator.get("files")
+    required = {
+        "tools/benchmark/manifest.py",
+        "tools/benchmark/predicates.py",
+        "tools/benchmark/runner.py",
+    }
+    if not isinstance(files, list) or len(files) != len(required):
+        raise ManifestError("experiment.code.evaluator.files must pin all evaluator sources")
+    by_path: dict[str, str] = {}
+    for index, raw in enumerate(files):
+        entry = _expect_object(raw, f"experiment.code.evaluator.files[{index}]")
+        if set(entry) != {"path", "sha256"}:
+            raise ManifestError("evaluator source pins must contain exactly path and sha256")
+        path = _require_string(entry, "path", f"experiment.code.evaluator.files[{index}]")
+        expected = _require_string(entry, "sha256", f"experiment.code.evaluator.files[{index}]")
+        if path in by_path:
+            raise ManifestError(f"duplicate evaluator source pin: {path}")
+        if path not in required or not _SHA256.fullmatch(expected):
+            raise ManifestError("invalid evaluator source path or SHA-256")
+        by_path[path] = expected
+    if set(by_path) != required:
+        raise ManifestError("experiment.code.evaluator.files must pin all evaluator sources")
+
+    repository_root = Path(__file__).resolve().parents[2]
+    checked: list[dict[str, str]] = []
+    for relative in sorted(required):
+        source = repository_root.joinpath(*PurePosixPath(relative).parts)
+        try:
+            info = source.lstat()
+        except FileNotFoundError as exc:
+            raise ManifestError(f"evaluator source does not exist: {relative}") from exc
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            raise ManifestError(f"evaluator source must be a regular non-symlink file: {relative}")
+        observed = hashlib.sha256(source.read_bytes()).hexdigest()
+        if observed != by_path[relative]:
+            raise ManifestError(
+                f"evaluator source hash mismatch for {relative}: "
+                f"expected {by_path[relative]}, observed {observed}"
+            )
+        checked.append(
+            {"path": relative, "sha256": by_path[relative], "observed_sha256": observed}
+        )
+    return tuple(checked)
 
 
 def _resolve_ref(base: Path, ref: Any, label: str) -> tuple[dict[str, Any], str]:
@@ -147,7 +245,12 @@ def _validate_scenarios(scenarios: dict[str, Any]) -> None:
             raise ManifestError(f"duplicate scenario id: {scenario_id}")
         seen.add(scenario_id)
         task = _require_string(scenario, "task", f"scenario[{index}]")
-        if task not in {"navigate_to_region", "acquire_item", "shared_resource_handoff"}:
+        if task not in {
+            "navigate_to_region",
+            "acquire_item",
+            "shared_resource_handoff",
+            "recover_after_injected_failure",
+        }:
             raise ManifestError(f"unsupported scenario task: {task}")
         _expect_object(scenario.get("goal"), f"scenario[{index}].goal")
 
@@ -176,7 +279,7 @@ def _validate_case_study(case_study: dict[str, Any]) -> None:
         _require_string(case_study, field, "case_study_manifest")
 
 
-def _validate_main(manifest: dict[str, Any]) -> None:
+def _validate_main(manifest: dict[str, Any]) -> tuple[dict[str, str], ...]:
     _require_schema(manifest, "experiment")
     _require_id(manifest, "benchmark_id", "experiment")
     adapter = manifest.get("adapter")
@@ -184,14 +287,7 @@ def _validate_main(manifest: dict[str, Any]) -> None:
         raise ManifestError("experiment.adapter must be mock or replay")
 
     code = _expect_object(manifest.get("code"), "experiment.code")
-    commit = _require_string(code, "git_commit", "experiment.code")
-    if not _GIT_COMMIT.fullmatch(commit):
-        raise ManifestError("experiment.code.git_commit must be a full Git object ID")
-    dirty_hash = code.get("dirty_diff_sha256")
-    if dirty_hash is not None and (
-        not isinstance(dirty_hash, str) or not _SHA256.fullmatch(dirty_hash)
-    ):
-        raise ManifestError("experiment.code.dirty_diff_sha256 must be null or SHA-256")
+    evaluator_files = _validate_code(code, adapter)
 
     seeds = manifest.get("seeds")
     if (
@@ -221,10 +317,15 @@ def _validate_main(manifest: dict[str, Any]) -> None:
         raise ManifestError(
             f"experiment.collection_context must contain exactly {sorted(_CONTEXT_FIELDS)}"
         )
-    for field in _CONTEXT_FIELDS:
+    for field in _CONTEXT_FIELDS - {"git_commit"}:
         _require_string(context, field, "experiment.collection_context")
-    if context["git_commit"] != commit:
-        raise ManifestError("collection_context.git_commit must match experiment.code.git_commit")
+    controller = code["controller"]
+    context_commit = context["git_commit"]
+    if controller["kind"] == "synthetic_fixture":
+        if context_commit is not None:
+            raise ManifestError("synthetic collection_context.git_commit must be null")
+    elif context_commit != controller["identity"]:
+        raise ManifestError("collection_context.git_commit must match controller identity")
 
     conditions = manifest.get("conditions")
     if not isinstance(conditions, list) or not conditions:
@@ -243,6 +344,7 @@ def _validate_main(manifest: dict[str, Any]) -> None:
         baseline_count += kind == "baseline"
     if baseline_count != 1:
         raise ManifestError("experiment.conditions must contain exactly one baseline")
+    return evaluator_files
 
 
 def load_experiment(path: Path) -> LoadedExperiment:
@@ -250,7 +352,7 @@ def load_experiment(path: Path) -> LoadedExperiment:
 
     path = Path(path)
     manifest, manifest_hash = _read_json(path, "experiment")
-    _validate_main(manifest)
+    evaluator_files = _validate_main(manifest)
     base = path.parent
     scenarios, _ = _resolve_ref(base, manifest.get("scenario_manifest"), "scenario_manifest")
     reset, _ = _resolve_ref(base, manifest.get("reset_manifest"), "reset_manifest")
@@ -300,4 +402,5 @@ def load_experiment(path: Path) -> LoadedExperiment:
         observations=observations,
         case_study=case_study,
         conditions=tuple(loaded_conditions),
+        evaluator_files=evaluator_files,
     )

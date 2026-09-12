@@ -20,12 +20,28 @@ class RunnerTests(unittest.TestCase):
         second = run_benchmark(FIXTURE)
         self.assertEqual(first, second)
         self.assertEqual(first["evidence_class"], "synthetic_mock")
-        self.assertEqual(len(first["runs"]), 36)
+        self.assertEqual(len(first["runs"]), 48)
         statuses = {row["status"] for row in first["runs"]}
         self.assertTrue({"completed", "failed", "timed_out", "interrupted", "missing_telemetry"} <= statuses)
         self.assertTrue(all(row["model_self_report"] is not None for row in first["runs"]))
-        self.assertEqual(first["summary"]["trial_count"], 36)
+        self.assertEqual(first["summary"]["trial_count"], 48)
         self.assertIn("paired_comparisons", first["summary"])
+
+    def test_report_records_checked_evaluator_fingerprints_without_fake_controller_commit(self):
+        report = run_benchmark(FIXTURE)
+        code = report["provenance"]["code"]
+        self.assertEqual(
+            code["controller"],
+            {"kind": "synthetic_fixture", "identity": "unavailable"},
+        )
+        self.assertNotIn("git_commit", code["controller"])
+        self.assertEqual(len(code["evaluator"]["files"]), 3)
+        self.assertTrue(
+            all(
+                item["sha256"] == item["observed_sha256"]
+                for item in code["evaluator"]["files"]
+            )
+        )
 
     def test_contradictory_self_report_cannot_make_a_failed_predicate_pass(self):
         report = run_benchmark(FIXTURE)
@@ -40,6 +56,51 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(row["model_self_report"], "Transferred the iron.")
         self.assertEqual(row["status"], "failed")
         self.assertEqual(row["reason_code"], "transfer_evidence_missing")
+
+    def test_recovery_negative_self_report_cannot_replace_observed_attempt(self):
+        report = run_benchmark(FIXTURE)
+        matches = [
+            item for item in report["runs"] if item["run_id"] == "recover-baseline-11"
+        ]
+        self.assertEqual(len(matches), 1)
+        row = matches[0]
+        self.assertEqual(row["model_self_report"], "I recovered from the obstruction.")
+        self.assertEqual(row["status"], "failed")
+        self.assertEqual(row["reason_code"], "recovery_attempt_not_observed")
+
+    def test_recovery_report_exposes_independent_timing_and_outcome_evidence(self):
+        report = run_benchmark(FIXTURE)
+        row = next(
+            item
+            for item in report["runs"]
+            if item["run_id"] == "recover-coordination-11"
+        )
+        self.assertEqual(row["status"], "completed")
+        self.assertEqual(row["reason_code"], "observed_recovery_after_injection")
+        evidence = row["predicate"]["evidence"]
+        self.assertEqual(evidence["injection_kind"], "path_obstruction")
+        self.assertEqual(evidence["injection_step"], 3)
+        self.assertEqual(evidence["injection_outcome"], "interrupted")
+        self.assertEqual(evidence["recovery_outcome"], "recovered")
+        self.assertLessEqual(evidence["recovery_latency_ms"], 5000)
+
+    def test_recovery_failed_outcome_and_excess_latency_remain_failures(self):
+        report = run_benchmark(FIXTURE)
+        by_id = {item["run_id"]: item for item in report["runs"]}
+        self.assertEqual(
+            (
+                by_id["recover-baseline-22"]["status"],
+                by_id["recover-baseline-22"]["reason_code"],
+            ),
+            ("failed", "recovery_outcome_not_met"),
+        )
+        self.assertEqual(
+            (
+                by_id["recover-baseline-33"]["status"],
+                by_id["recover-baseline-33"]["reason_code"],
+            ),
+            ("failed", "recovery_latency_exceeded"),
+        )
 
     def test_case_study_links_a_paired_synthetic_failure_and_fix(self):
         report = run_benchmark(FIXTURE)
@@ -83,7 +144,7 @@ class RunnerTests(unittest.TestCase):
             if item["candidate_condition"] == "coordination"
         )
         self.assertEqual(comparison["baseline_condition"], "baseline")
-        self.assertEqual(comparison["pair_count"], 12)
+        self.assertEqual(comparison["pair_count"], 16)
         self.assertEqual(
             comparison["wins"] + comparison["losses"] + comparison["ties"],
             comparison["pair_count"],
@@ -146,6 +207,11 @@ class RunnerTests(unittest.TestCase):
             self.copy_fixture(root)
             experiment = json.loads((root / "experiment.json").read_text())
             experiment["adapter"] = "replay"
+            experiment["code"]["controller"] = {
+                "kind": "git_commit",
+                "identity": "1" * 40,
+            }
+            experiment["collection_context"]["git_commit"] = "1" * 40
             self.write_json(root / "experiment.json", experiment)
             report = run_benchmark(root / "experiment.json")
             self.assertEqual(report["evidence_class"], "replay_observations")

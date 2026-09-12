@@ -513,7 +513,13 @@ def run_benchmark(manifest_path: Path) -> dict[str, Any]:
             ],
             "world": experiment.reset,
             "model": experiment.model,
-            "code": experiment.manifest["code"],
+            "code": {
+                "controller": experiment.manifest["code"]["controller"],
+                "evaluator": {
+                    "kind": experiment.manifest["code"]["evaluator"]["kind"],
+                    "files": list(experiment.evaluator_files),
+                },
+            },
             "collection_context": experiment.manifest["collection_context"],
             "budgets": experiment.manifest["budgets"],
             "seeds": experiment.manifest["seeds"],

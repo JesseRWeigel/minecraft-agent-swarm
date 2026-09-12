@@ -2007,6 +2007,741 @@
       "seed": 44,
       "steps": 5,
       "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        },
+        "observed_injections": [
+          {
+            "actor": "atlas",
+            "at_step": 3,
+            "event_id": "inject-1",
+            "kind": "path_obstruction",
+            "observed_at_ms": 1000,
+            "outcome": "interrupted"
+          }
+        ],
+        "observed_recovery_attempts": []
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 161,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1211
+        }
+      },
+      "model_self_report": "I recovered from the obstruction.",
+      "run_id": "recover-baseline-11",
+      "scenario_id": "recover",
+      "seed": 11,
+      "steps": 8,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        },
+        "observed_injections": [
+          {
+            "actor": "atlas",
+            "at_step": 3,
+            "event_id": "inject-1",
+            "kind": "path_obstruction",
+            "observed_at_ms": 1000,
+            "outcome": "interrupted"
+          }
+        ],
+        "observed_recovery_attempts": [
+          {
+            "actor": "atlas",
+            "event_id": "recovery-1",
+            "finished_at_ms": 3200,
+            "injection_event_id": "inject-1",
+            "outcome": "failed",
+            "started_at_ms": 1200
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 172,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1222
+        }
+      },
+      "model_self_report": "Recovered after the observed obstruction.",
+      "run_id": "recover-baseline-22",
+      "scenario_id": "recover",
+      "seed": 22,
+      "steps": 8,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        },
+        "observed_injections": [
+          {
+            "actor": "atlas",
+            "at_step": 3,
+            "event_id": "inject-1",
+            "kind": "path_obstruction",
+            "observed_at_ms": 1000,
+            "outcome": "interrupted"
+          }
+        ],
+        "observed_recovery_attempts": [
+          {
+            "actor": "atlas",
+            "event_id": "recovery-1",
+            "finished_at_ms": 7000,
+            "injection_event_id": "inject-1",
+            "outcome": "recovered",
+            "started_at_ms": 1200
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 183,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1233
+        }
+      },
+      "model_self_report": "Recovered after the observed obstruction.",
+      "run_id": "recover-baseline-33",
+      "scenario_id": "recover",
+      "seed": 33,
+      "steps": 8,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "baseline",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        },
+        "observed_injections": [
+          {
+            "actor": "atlas",
+            "at_step": 3,
+            "event_id": "inject-1",
+            "kind": "path_obstruction",
+            "observed_at_ms": 1000,
+            "outcome": "interrupted"
+          }
+        ],
+        "observed_recovery_attempts": [
+          {
+            "actor": "atlas",
+            "event_id": "recovery-1",
+            "finished_at_ms": 3200,
+            "injection_event_id": "inject-1",
+            "outcome": "recovered",
+            "started_at_ms": 1200
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "provider_requests": 0
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 194,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1244
+        }
+      },
+      "model_self_report": "Recovered after the observed obstruction.",
+      "run_id": "recover-baseline-44",
+      "scenario_id": "recover",
+      "seed": 44,
+      "steps": 8,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        },
+        "observed_injections": [
+          {
+            "actor": "atlas",
+            "at_step": 3,
+            "event_id": "inject-1",
+            "kind": "path_obstruction",
+            "observed_at_ms": 1000,
+            "outcome": "interrupted"
+          }
+        ],
+        "observed_recovery_attempts": [
+          {
+            "actor": "atlas",
+            "event_id": "recovery-1",
+            "finished_at_ms": 3200,
+            "injection_event_id": "inject-1",
+            "outcome": "recovered",
+            "started_at_ms": 1200
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 161,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1211
+        }
+      },
+      "model_self_report": "Recovered after the observed obstruction.",
+      "run_id": "recover-coordination-11",
+      "scenario_id": "recover",
+      "seed": 11,
+      "steps": 8,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        },
+        "observed_injections": [
+          {
+            "actor": "atlas",
+            "at_step": 3,
+            "event_id": "inject-1",
+            "kind": "path_obstruction",
+            "observed_at_ms": 1000,
+            "outcome": "interrupted"
+          }
+        ],
+        "observed_recovery_attempts": [
+          {
+            "actor": "atlas",
+            "event_id": "recovery-1",
+            "finished_at_ms": 3200,
+            "injection_event_id": "inject-1",
+            "outcome": "recovered",
+            "started_at_ms": 1200
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 172,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1222
+        }
+      },
+      "model_self_report": "Recovered after the observed obstruction.",
+      "run_id": "recover-coordination-22",
+      "scenario_id": "recover",
+      "seed": 22,
+      "steps": 8,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        },
+        "observed_injections": [
+          {
+            "actor": "atlas",
+            "at_step": 3,
+            "event_id": "inject-1",
+            "kind": "path_obstruction",
+            "observed_at_ms": 1000,
+            "outcome": "interrupted"
+          }
+        ],
+        "observed_recovery_attempts": [
+          {
+            "actor": "atlas",
+            "event_id": "recovery-1",
+            "finished_at_ms": 3200,
+            "injection_event_id": "inject-1",
+            "outcome": "recovered",
+            "started_at_ms": 1200
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 183,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1233
+        }
+      },
+      "model_self_report": "Recovered after the observed obstruction.",
+      "run_id": "recover-coordination-33",
+      "scenario_id": "recover",
+      "seed": 33,
+      "steps": 8,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coordination",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        },
+        "observed_injections": [
+          {
+            "actor": "atlas",
+            "at_step": 3,
+            "event_id": "inject-1",
+            "kind": "path_obstruction",
+            "observed_at_ms": 1000,
+            "outcome": "interrupted"
+          }
+        ],
+        "observed_recovery_attempts": [
+          {
+            "actor": "atlas",
+            "event_id": "recovery-1",
+            "finished_at_ms": 3200,
+            "injection_event_id": "inject-1",
+            "outcome": "recovered",
+            "started_at_ms": 1200
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 194,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1244
+        }
+      },
+      "model_self_report": "Recovered after the observed obstruction.",
+      "run_id": "recover-coordination-44",
+      "scenario_id": "recover",
+      "seed": 44,
+      "steps": 8,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        },
+        "observed_injections": [
+          {
+            "actor": "atlas",
+            "at_step": 3,
+            "event_id": "inject-1",
+            "kind": "path_obstruction",
+            "observed_at_ms": 1000,
+            "outcome": "interrupted"
+          }
+        ],
+        "observed_recovery_attempts": [
+          {
+            "actor": "atlas",
+            "event_id": "recovery-1",
+            "finished_at_ms": 3200,
+            "injection_event_id": "inject-1",
+            "outcome": "recovered",
+            "started_at_ms": 1200
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 161,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1211
+        }
+      },
+      "model_self_report": "Recovered after the observed obstruction.",
+      "run_id": "recover-coaching-11",
+      "scenario_id": "recover",
+      "seed": 11,
+      "steps": 8,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        },
+        "observed_injections": [
+          {
+            "actor": "atlas",
+            "at_step": 3,
+            "event_id": "inject-1",
+            "kind": "weather_change",
+            "observed_at_ms": 1000,
+            "outcome": "interrupted"
+          }
+        ],
+        "observed_recovery_attempts": [
+          {
+            "actor": "atlas",
+            "event_id": "recovery-1",
+            "finished_at_ms": 3200,
+            "injection_event_id": "inject-1",
+            "outcome": "recovered",
+            "started_at_ms": 1200
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 172,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1222
+        }
+      },
+      "model_self_report": "Recovered after the observed obstruction.",
+      "run_id": "recover-coaching-22",
+      "scenario_id": "recover",
+      "seed": 22,
+      "steps": 8,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        },
+        "observed_injections": [
+          {
+            "actor": "atlas",
+            "at_step": 3,
+            "event_id": "inject-1",
+            "kind": "path_obstruction",
+            "observed_at_ms": 1000,
+            "outcome": "interrupted"
+          }
+        ],
+        "observed_recovery_attempts": [
+          {
+            "actor": "atlas",
+            "event_id": "recovery-1",
+            "finished_at_ms": 3200,
+            "injection_event_id": "inject-1",
+            "outcome": "recovered",
+            "started_at_ms": 1200
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 183,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1233
+        }
+      },
+      "model_self_report": "Recovered after the observed obstruction.",
+      "run_id": "recover-coaching-33",
+      "scenario_id": "recover",
+      "seed": 33,
+      "steps": 8,
+      "telemetry_complete": true
+    },
+    {
+      "condition_id": "coaching",
+      "execution_status": "completed",
+      "final_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        },
+        "observed_injections": [
+          {
+            "actor": "atlas",
+            "at_step": 3,
+            "event_id": "inject-1",
+            "kind": "path_obstruction",
+            "observed_at_ms": 1000,
+            "outcome": "interrupted"
+          }
+        ],
+        "observed_recovery_attempts": [
+          {
+            "actor": "atlas",
+            "event_id": "recovery-1",
+            "finished_at_ms": 3200,
+            "injection_event_id": "inject-1",
+            "outcome": "recovered",
+            "started_at_ms": 1200
+          }
+        ]
+      },
+      "initial_state": {
+        "actors": {
+          "atlas": {
+            "recovery_state": "operational"
+          }
+        }
+      },
+      "metrics": {
+        "engineering": {
+          "infrastructure_cost_usd": null,
+          "labor_time_minutes": null
+        },
+        "inference": {
+          "estimated_cost_usd": null,
+          "input_tokens": 100,
+          "output_tokens": 20,
+          "provider_requests": 1
+        },
+        "runtime_resources": {
+          "cpu_time_ms": 194,
+          "energy_joules": null,
+          "peak_rss_bytes": 64000000,
+          "wall_time_ms": 1244
+        }
+      },
+      "model_self_report": "Recovered after the observed obstruction.",
+      "run_id": "recover-coaching-44",
+      "scenario_id": "recover",
+      "seed": 44,
+      "steps": 8,
+      "telemetry_complete": true
     }
   ],
   "schema_version": 1,

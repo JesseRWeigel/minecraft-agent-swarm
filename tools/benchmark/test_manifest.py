@@ -86,7 +86,7 @@ class ManifestTests(unittest.TestCase):
                 "model_manifest": self.ref("model.json"),
                 "observation_manifest": self.ref("observations.json"),
                 "case_study_manifest": self.ref("case-study.json"),
-                "code": {"git_commit": "1" * 40, "dirty_diff_sha256": None},
+                "code": self.evaluator_code(),
                 "conditions": [
                     {
                         "id": "baseline",
@@ -105,7 +105,7 @@ class ManifestTests(unittest.TestCase):
                 "collection_context": {
                     "operation_mode": "evaluation",
                     "trial_id": "fixture-trial",
-                    "git_commit": "1" * 40,
+                    "git_commit": None,
                     "world_snapshot_id": "fixture-world",
                 },
             },
@@ -120,11 +120,123 @@ class ManifestTests(unittest.TestCase):
         path = self.root / name
         return {"path": name, "sha256": digest(path)}
 
+    @staticmethod
+    def evaluator_code():
+        evaluator_root = Path(__file__).resolve().parent
+        return {
+            "controller": {"kind": "synthetic_fixture", "identity": "unavailable"},
+            "evaluator": {
+                "kind": "content_sha256",
+                "files": [
+                    {
+                        "path": f"tools/benchmark/{name}",
+                        "sha256": digest(evaluator_root / name),
+                    }
+                    for name in ("manifest.py", "predicates.py", "runner.py")
+                ],
+            },
+        }
+
     def test_loads_and_resolves_a_fully_pinned_manifest(self):
         loaded = load_experiment(self.root / "experiment.json")
         self.assertEqual(loaded.manifest["adapter"], "mock")
         self.assertEqual(loaded.reset["world_id"], "fixture-world")
         self.assertEqual(loaded.conditions[0]["config_data"]["mode"], "independent")
+
+    def test_synthetic_controller_and_evaluator_sources_are_content_pinned(self):
+        manifest = json.loads((self.root / "experiment.json").read_text())
+        manifest["code"] = self.evaluator_code()
+        manifest["collection_context"]["git_commit"] = None
+        self.write("experiment.json", manifest)
+
+        loaded = load_experiment(self.root / "experiment.json")
+
+        self.assertEqual(loaded.manifest["code"]["controller"]["identity"], "unavailable")
+        self.assertEqual(
+            {item["path"] for item in loaded.evaluator_files},
+            {
+                "tools/benchmark/manifest.py",
+                "tools/benchmark/predicates.py",
+                "tools/benchmark/runner.py",
+            },
+        )
+        self.assertTrue(
+            all(item["sha256"] == item["observed_sha256"] for item in loaded.evaluator_files)
+        )
+
+    def test_changed_evaluator_source_hash_is_rejected(self):
+        manifest = json.loads((self.root / "experiment.json").read_text())
+        manifest["code"] = self.evaluator_code()
+        manifest["code"]["evaluator"]["files"][0]["sha256"] = "0" * 64
+        manifest["collection_context"]["git_commit"] = None
+        self.write("experiment.json", manifest)
+
+        with self.assertRaisesRegex(ManifestError, "evaluator.*hash mismatch"):
+            load_experiment(self.root / "experiment.json")
+
+    def test_synthetic_controller_cannot_carry_a_fake_git_commit(self):
+        manifest = json.loads((self.root / "experiment.json").read_text())
+        manifest["code"] = self.evaluator_code()
+        manifest["code"]["controller"]["git_commit"] = "0" * 40
+        manifest["collection_context"]["git_commit"] = None
+        self.write("experiment.json", manifest)
+
+        with self.assertRaisesRegex(ManifestError, "controller.*exactly"):
+            load_experiment(self.root / "experiment.json")
+
+    def test_mock_experiment_cannot_claim_a_controller_commit(self):
+        manifest = json.loads((self.root / "experiment.json").read_text())
+        manifest["code"] = self.evaluator_code()
+        manifest["code"]["controller"] = {
+            "kind": "git_commit",
+            "identity": "0" * 40,
+        }
+        manifest["collection_context"]["git_commit"] = "0" * 40
+        self.write("experiment.json", manifest)
+
+        with self.assertRaisesRegex(ManifestError, "mock.*synthetic"):
+            load_experiment(self.root / "experiment.json")
+
+    def test_duplicate_json_keys_are_rejected(self):
+        path = self.root / "experiment.json"
+        raw = path.read_text()
+        path.write_text(
+            raw.replace('"schema_version": 1', '"schema_version": 1, "schema_version": 1', 1),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ManifestError, "duplicate JSON key"):
+            load_experiment(path)
+
+    def test_nonfinite_json_constants_are_rejected_even_in_unused_fields(self):
+        model = self.root / "model.json"
+        raw = model.read_text().rstrip()
+        model.write_text(raw[:-1] + ', "diagnostic": NaN}\n', encoding="utf-8")
+        manifest = json.loads((self.root / "experiment.json").read_text())
+        manifest["model_manifest"] = self.ref("model.json")
+        self.write("experiment.json", manifest)
+
+        with self.assertRaisesRegex(ManifestError, "non-finite JSON constant"):
+            load_experiment(self.root / "experiment.json")
+
+    def test_overflowing_json_numbers_are_rejected_even_in_unused_fields(self):
+        model = self.root / "model.json"
+        raw = model.read_text().rstrip()
+        model.write_text(raw[:-1] + ', "diagnostic": 1e400}\n', encoding="utf-8")
+        manifest = json.loads((self.root / "experiment.json").read_text())
+        manifest["model_manifest"] = self.ref("model.json")
+        self.write("experiment.json", manifest)
+
+        with self.assertRaisesRegex(ManifestError, "non-finite JSON number"):
+            load_experiment(self.root / "experiment.json")
+
+    def test_boolean_schema_version_is_rejected(self):
+        manifest = json.loads((self.root / "experiment.json").read_text())
+        manifest["schema_version"] = True
+        self.write("experiment.json", manifest)
+
+        with self.assertRaisesRegex(ManifestError, "schema_version"):
+            load_experiment(self.root / "experiment.json")
 
     def test_changed_referenced_bytes_are_rejected(self):
         (self.root / "model.json").write_text("{}\n", encoding="utf-8")
@@ -155,6 +267,8 @@ class ManifestTests(unittest.TestCase):
             load_experiment(self.root / "experiment.json")
 
         manifest["adapter"] = "replay"
+        manifest["code"]["controller"] = {"kind": "git_commit", "identity": "1" * 40}
+        manifest["collection_context"]["git_commit"] = "1" * 40
         manifest["collection_context"]["operation_mode"] = None
         self.write("experiment.json", manifest)
         with self.assertRaisesRegex(ManifestError, "collection_context"):

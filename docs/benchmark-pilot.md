@@ -29,7 +29,7 @@ experiment.json uses schema version 1 and pins every input by a relative path an
 - observation_manifest contains the complete frozen run matrix.
 - case_study_manifest links one matched baseline failure to one simulated change and successful post-state.
 - Each condition pins its own config. The config repeats its condition ID and kind so a coordination config cannot be silently labeled as the baseline.
-- code, collection_context, seeds, and budgets are required. Git commit and world IDs must agree across the relevant fields.
+- code, collection_context, seeds, and budgets are required. The evaluator entry pins the exact SHA-256 of `manifest.py`, `predicates.py`, and `runner.py`; the loader checks those installed source bytes and reports both the declared and observed fingerprints. The mock controller is explicitly `synthetic_fixture` with identity `unavailable`, and its collection-context Git commit is null. Replay controller commits must be real full object IDs and must agree with collection context. World IDs must agree with the reset manifest.
 
 References must stay within the bundle, must be regular files rather than symlinks, and must match their declared hash. A changed reset, condition, model, scenario, case-study, or observation file invalidates the experiment. The manifest accepts only mock and replay; live is rejected.
 
@@ -39,13 +39,14 @@ The fixture covers baseline, coordination, and coaching with the same four seeds
 
 The evaluator ignores model_self_report when assigning status. The report retains that field so contradictory claims remain inspectable.
 
-Three bounded predicates operate only on observed initial and final state:
+Four bounded predicates operate only on observed initial and final state:
 
 - navigate_to_region requires a named actor to start outside and finish inside a closed XYZ region in the declared Minecraft dimension. Missing or wrong dimension cannot satisfy the goal.
 - acquire_item treats count as the target final inventory. The actor must start below that count, finish at or above it, and have a positive observed gain.
 - shared_resource_handoff requires distinct donor and recipient actors, matching inventory movement for the named item, and an independently observed transfer event bound to donor, recipient, item, observer, and count. Duplicate transfer event IDs are invalid. Coincidental inventory changes or moving a different item cannot satisfy the goal.
+- recover_after_injected_failure requires one independently observed injection with the declared actor, kind, step, and interruption outcome; a separately observed recovery attempt linked to that injection; a recovered outcome; the declared final operational state; and recovery latency within the fixed limit. Missing observer streams are missing telemetry. An empty stream, an unlinked attempt, a failed outcome, or a late recovery fails the predicate.
 
-An initially fulfilled goal becomes invalid_initial; it never receives completion credit. Missing predicate observations become missing_telemetry. The fixture includes a foreign-item handoff, an initially met goal, and prose claiming success despite a failed position predicate.
+An initially fulfilled inventory or location goal becomes invalid_initial; it never receives completion credit. Missing predicate observations become missing_telemetry. The fixture includes a foreign-item handoff, an initially met goal, prose claiming success despite a failed position predicate, and prose claiming recovery when the evaluator observed no recovery attempt.
 
 Run status is one of:
 

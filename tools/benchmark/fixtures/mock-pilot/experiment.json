@@ -13,11 +13,30 @@
     "sha256": "218321f04f050593f8bc535a3b677f61e3ae63dc29f71b72c101151434cc37bc"
   },
   "code": {
-    "dirty_diff_sha256": null,
-    "git_commit": "0000000000000000000000000000000000000000"
+    "controller": {
+      "identity": "unavailable",
+      "kind": "synthetic_fixture"
+    },
+    "evaluator": {
+      "files": [
+        {
+          "path": "tools/benchmark/manifest.py",
+          "sha256": "285529ad5c2bbb28563a7f2de512904a01c3b13f06ab460fef5ff63fcfc6f5dd"
+        },
+        {
+          "path": "tools/benchmark/predicates.py",
+          "sha256": "b60a935c0b9a66113555395ee1c46732d9d68770187edce17a0f241640e72346"
+        },
+        {
+          "path": "tools/benchmark/runner.py",
+          "sha256": "b537b949d6697f34f4a954051e314891a641f7e3011222fa03dd090dc0dd0689"
+        }
+      ],
+      "kind": "content_sha256"
+    }
   },
   "collection_context": {
-    "git_commit": "0000000000000000000000000000000000000000",
+    "git_commit": null,
     "operation_mode": "synthetic_fixture",
     "trial_id": "mock-pilot-v1",
     "world_snapshot_id": "mock-world-v1"
@@ -54,7 +73,7 @@
   },
   "observation_manifest": {
     "path": "observations.json",
-    "sha256": "8668e49785a0f7b8a2a88a84fb759b73dfe074a8d39b754837e74d119fe2b601"
+    "sha256": "22c06d0d073ae57cd3cf7851d23ea0cd72497eb5c4743ee1726122f2c7cd72be"
   },
   "reset_manifest": {
     "path": "reset.json",
@@ -62,7 +81,7 @@
   },
   "scenario_manifest": {
     "path": "scenarios.json",
-    "sha256": "f2f2581a712453d2cce79af292adf99cb5f18951b7a0dff078215d5fc375a93c"
+    "sha256": "f71fcaa737a18d42fad0f5cc01987aab4f37a0830200867e305f8c9114402ea1"
   },
   "schema_version": 1,
   "seeds": [

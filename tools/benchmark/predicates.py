@@ -25,10 +25,10 @@ def _goal(scenario: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
-def _name(goal: dict[str, Any], field: str) -> str:
-    value = goal.get(field)
+def _name(mapping: dict[str, Any], field: str, label: str = "goal") -> str:
+    value = mapping.get(field)
     if not isinstance(value, str) or not value:
-        raise PredicateError(f"goal.{field} must be a non-empty string")
+        raise PredicateError(f"{label}.{field} must be a non-empty string")
     return value
 
 
@@ -36,6 +36,37 @@ def _count(goal: dict[str, Any]) -> int:
     value = goal.get("count")
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise PredicateError("goal.count must be a positive integer")
+    return value
+
+
+def _positive_number(mapping: dict[str, Any], field: str, label: str) -> float:
+    value = mapping.get(field)
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value <= 0
+    ):
+        raise PredicateError(f"{label}.{field} must be a positive finite number")
+    return float(value)
+
+
+def _nonnegative_number(mapping: dict[str, Any], field: str, label: str) -> float:
+    value = mapping.get(field)
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0
+    ):
+        raise PredicateError(f"{label}.{field} must be a non-negative finite number")
+    return float(value)
+
+
+def _positive_integer(mapping: dict[str, Any], field: str, label: str) -> int:
+    value = mapping.get(field)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise PredicateError(f"{label}.{field} must be a positive integer")
     return value
 
 
@@ -284,6 +315,130 @@ def _handoff(scenario: dict[str, Any], initial: Any, final: Any) -> PredicateRes
     )
 
 
+def _recovery_state(state: Any, actor: str) -> str | None:
+    actor_state = _actor(state, actor)
+    if actor_state is None:
+        return None
+    value = actor_state.get("recovery_state")
+    return value if isinstance(value, str) and value else None
+
+
+def _recovery(scenario: dict[str, Any], initial: Any, final: Any) -> PredicateResult:
+    goal = _goal(scenario)
+    actor = _name(goal, "actor")
+    injection_kind = _name(goal, "injection_kind")
+    injection_outcome = _name(goal, "injection_outcome")
+    expected_final_state = _name(goal, "expected_final_state")
+    injection_step = _positive_integer(goal, "injection_step", "goal")
+    max_latency = _positive_number(goal, "max_recovery_latency_ms", "goal")
+    initial_state = _recovery_state(initial, actor)
+    final_state = _recovery_state(final, actor)
+    if initial_state is None or final_state is None or not isinstance(final, dict):
+        return PredicateResult(False, "missing_observation", {"actor": actor})
+
+    injections = final.get("observed_injections")
+    attempts = final.get("observed_recovery_attempts")
+    if not isinstance(injections, list) or not isinstance(attempts, list):
+        return PredicateResult(False, "missing_observation", {"actor": actor})
+
+    injection_ids: set[str] = set()
+    matching_injections: list[tuple[dict[str, Any], float]] = []
+    for index, value in enumerate(injections):
+        if not isinstance(value, dict):
+            raise PredicateError(f"observed_injections[{index}] must be an object")
+        label = f"observed_injections[{index}]"
+        event_id = _name(value, "event_id", label)
+        if event_id in injection_ids:
+            raise PredicateError(f"duplicate observed injection event_id: {event_id}")
+        injection_ids.add(event_id)
+        at_step = _positive_integer(value, "at_step", label)
+        observed_at = _nonnegative_number(value, "observed_at_ms", label)
+        for field in ("actor", "kind", "outcome"):
+            _name(value, field, label)
+        if (
+            value["actor"] == actor
+            and value["kind"] == injection_kind
+            and value["outcome"] == injection_outcome
+            and at_step == injection_step
+        ):
+            matching_injections.append((value, observed_at))
+    if not matching_injections:
+        return PredicateResult(
+            False,
+            "injection_not_observed",
+            {
+                "actor": actor,
+                "injection_kind": injection_kind,
+                "injection_step": injection_step,
+                "injection_outcome": injection_outcome,
+            },
+        )
+    if len(matching_injections) != 1:
+        raise PredicateError("recovery predicate requires exactly one matching injection")
+    injection, injection_time = matching_injections[0]
+
+    attempt_ids: set[str] = set()
+    linked_attempts: list[tuple[dict[str, Any], float, float]] = []
+    for index, value in enumerate(attempts):
+        if not isinstance(value, dict):
+            raise PredicateError(f"observed_recovery_attempts[{index}] must be an object")
+        label = f"observed_recovery_attempts[{index}]"
+        event_id = _name(value, "event_id", label)
+        if event_id in attempt_ids:
+            raise PredicateError(f"duplicate observed recovery event_id: {event_id}")
+        attempt_ids.add(event_id)
+        started_at = _nonnegative_number(value, "started_at_ms", label)
+        finished_at = _nonnegative_number(value, "finished_at_ms", label)
+        for field in ("actor", "injection_event_id", "outcome"):
+            _name(value, field, label)
+        if finished_at < started_at:
+            raise PredicateError(f"{label} finishes before it starts")
+        if value["actor"] == actor and value["injection_event_id"] == injection["event_id"]:
+            if started_at < injection_time:
+                raise PredicateError(f"{label} starts before its linked injection")
+            linked_attempts.append((value, started_at, finished_at))
+    if not linked_attempts:
+        return PredicateResult(
+            False,
+            "recovery_attempt_not_observed",
+            {"actor": actor, "injection_event_id": injection["event_id"]},
+        )
+
+    recovered = [entry for entry in linked_attempts if entry[0]["outcome"] == "recovered"]
+    if not recovered:
+        return PredicateResult(
+            False,
+            "recovery_outcome_not_met",
+            {
+                "actor": actor,
+                "injection_event_id": injection["event_id"],
+                "observed_outcomes": sorted({entry[0]["outcome"] for entry in linked_attempts}),
+            },
+        )
+    attempt, started_at, finished_at = min(recovered, key=lambda entry: entry[2])
+    latency = finished_at - injection_time
+    attempt_duration = finished_at - started_at
+    evidence = {
+        "actor": actor,
+        "initial_state": initial_state,
+        "final_state": final_state,
+        "injection_event_id": injection["event_id"],
+        "injection_kind": injection_kind,
+        "injection_step": injection_step,
+        "injection_outcome": injection_outcome,
+        "recovery_event_id": attempt["event_id"],
+        "recovery_outcome": attempt["outcome"],
+        "recovery_latency_ms": latency,
+        "attempt_duration_ms": attempt_duration,
+        "max_recovery_latency_ms": max_latency,
+    }
+    if final_state != expected_final_state:
+        return PredicateResult(False, "recovery_postcondition_not_met", evidence)
+    if latency > max_latency:
+        return PredicateResult(False, "recovery_latency_exceeded", evidence)
+    return PredicateResult(True, "observed_recovery_after_injection", evidence)
+
+
 def evaluate_goal(
     scenario: dict[str, Any], initial_state: Any, final_state: Any
 ) -> PredicateResult:
@@ -296,4 +451,6 @@ def evaluate_goal(
         return _acquire(scenario, initial_state, final_state)
     if task == "shared_resource_handoff":
         return _handoff(scenario, initial_state, final_state)
+    if task == "recover_after_injected_failure":
+        return _recovery(scenario, initial_state, final_state)
     raise PredicateError(f"unsupported scenario task: {task!r}")

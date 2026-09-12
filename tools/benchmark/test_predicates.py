@@ -15,6 +15,21 @@ def position(x, y, z, dimension="overworld"):
 
 
 class PredicateTests(unittest.TestCase):
+    @staticmethod
+    def recovery_scenario():
+        return {
+            "id": "recover",
+            "task": "recover_after_injected_failure",
+            "goal": {
+                "actor": "atlas",
+                "injection_kind": "path_obstruction",
+                "injection_step": 3,
+                "injection_outcome": "interrupted",
+                "max_recovery_latency_ms": 5000,
+                "expected_final_state": "operational",
+            },
+        }
+
     def test_navigation_requires_crossing_into_the_region_and_dimension(self):
         scenario = {
             "id": "navigate",
@@ -179,6 +194,83 @@ class PredicateTests(unittest.TestCase):
             },
         }
         result = evaluate_goal(scenario, {"actors": {}}, {"actors": {}})
+        self.assertFalse(result.passed)
+        self.assertEqual(result.reason, "missing_observation")
+
+    def test_recovery_requires_linked_observed_injection_attempt_outcome_and_latency(self):
+        initial = {"actors": {"atlas": {"recovery_state": "operational"}}}
+        final = {
+            "actors": {"atlas": {"recovery_state": "operational"}},
+            "observed_injections": [
+                {
+                    "event_id": "inject-1",
+                    "actor": "atlas",
+                    "kind": "path_obstruction",
+                    "at_step": 3,
+                    "outcome": "interrupted",
+                    "observed_at_ms": 1000,
+                }
+            ],
+            "observed_recovery_attempts": [
+                {
+                    "event_id": "recovery-1",
+                    "actor": "atlas",
+                    "injection_event_id": "inject-1",
+                    "outcome": "recovered",
+                    "started_at_ms": 1200,
+                    "finished_at_ms": 3200,
+                }
+            ],
+        }
+
+        result = evaluate_goal(self.recovery_scenario(), initial, final)
+
+        self.assertTrue(result.passed)
+        self.assertEqual(result.reason, "observed_recovery_after_injection")
+        self.assertEqual(result.evidence["recovery_latency_ms"], 2200)
+        self.assertEqual(result.evidence["attempt_duration_ms"], 2000)
+
+    def test_recovery_rejects_unlinked_or_late_attempts(self):
+        initial = {"actors": {"atlas": {"recovery_state": "operational"}}}
+        final = {
+            "actors": {"atlas": {"recovery_state": "operational"}},
+            "observed_injections": [
+                {
+                    "event_id": "inject-1",
+                    "actor": "atlas",
+                    "kind": "path_obstruction",
+                    "at_step": 3,
+                    "outcome": "interrupted",
+                    "observed_at_ms": 1000,
+                }
+            ],
+            "observed_recovery_attempts": [
+                {
+                    "event_id": "recovery-1",
+                    "actor": "atlas",
+                    "injection_event_id": "other-injection",
+                    "outcome": "recovered",
+                    "started_at_ms": 1200,
+                    "finished_at_ms": 3200,
+                }
+            ],
+        }
+        unlinked = evaluate_goal(self.recovery_scenario(), initial, final)
+        self.assertFalse(unlinked.passed)
+        self.assertEqual(unlinked.reason, "recovery_attempt_not_observed")
+
+        final["observed_recovery_attempts"][0]["injection_event_id"] = "inject-1"
+        final["observed_recovery_attempts"][0]["finished_at_ms"] = 7000
+        late = evaluate_goal(self.recovery_scenario(), initial, final)
+        self.assertFalse(late.passed)
+        self.assertEqual(late.reason, "recovery_latency_exceeded")
+
+    def test_recovery_missing_observer_stream_is_missing_observation(self):
+        result = evaluate_goal(
+            self.recovery_scenario(),
+            {"actors": {"atlas": {"recovery_state": "operational"}}},
+            {"actors": {"atlas": {"recovery_state": "operational"}}},
+        )
         self.assertFalse(result.passed)
         self.assertEqual(result.reason, "missing_observation")
 

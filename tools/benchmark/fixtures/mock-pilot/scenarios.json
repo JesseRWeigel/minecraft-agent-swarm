@@ -20,7 +20,7 @@
       "task": "navigate_to_region"
     },
     {
-      "description": "Increase Atlas's observed oak-log inventory by four.",
+      "description": "Reach an observed oak-log inventory count of four from a lower initial count.",
       "goal": {
         "actor": "atlas",
         "count": 4,
@@ -40,6 +40,19 @@
       },
       "id": "handoff",
       "task": "shared_resource_handoff"
+    },
+    {
+      "description": "Recover to an observed operational state after a deterministic path obstruction at step three.",
+      "goal": {
+        "actor": "atlas",
+        "expected_final_state": "operational",
+        "injection_kind": "path_obstruction",
+        "injection_outcome": "interrupted",
+        "injection_step": 3,
+        "max_recovery_latency_ms": 5000
+      },
+      "id": "recover",
+      "task": "recover_after_injected_failure"
     }
   ],
   "schema_version": 1
