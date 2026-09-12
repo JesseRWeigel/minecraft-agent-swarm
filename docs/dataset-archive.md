@@ -13,6 +13,8 @@ The archive command copies existing world-backup artifacts; it does not create a
 The source repository inventory includes:
 
 - `logs/trajectories/**/*.jsonl` and `logs/sessions/**/*.json`
+- direct `logs/trajectories-v2/*.jsonl` summaries
+- direct `logs/episode-events-v1/events/*.jsonl` event streams and content-addressed JSON payloads at `payloads/<two lowercase hex>/<64 lowercase hex>.json`
 - direct `logs/*.json`, `logs/*.csv`, and `logs/*.log`
 - `logs/bot-runs/bot-run-*.log`
 - `.log`, `.txt`, and `.gz` files below `server/logs/`
@@ -31,6 +33,8 @@ Line-oriented files can grow while capture runs. The tool records only the initi
 Capture is bounded per file; it is not one atomic snapshot across every log and metadata file. `captured_at_utc` is the time the manifest was finalized, not a shared observation time for all records. Record the archive-tool commit and source repository commit separately during an archival run. Do not infer an exact historical code version from the manifest alone.
 
 Atomic JSON, metadata, and backup files must remain unchanged while they are copied and verified. If one changes, is replaced, is truncated, is malformed JSON where JSON validation applies, or cannot be read, the entire capture fails and the incomplete output directory is removed. Retry after the producer has atomically published a stable file.
+
+Episode payload filenames must equal the SHA-256 of their exact JSON bytes, including the producer's trailing newline. Files with the wrong hash fail capture. Files outside the producer's flat event/trajectory layout or exact content-addressed payload layout are not selected.
 
 Each manifest file entry contains:
 

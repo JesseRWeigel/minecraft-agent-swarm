@@ -45,6 +45,9 @@ SOURCE_KINDS = {
     "supervisor_jsonl",
     "ops_metadata",
     "world_backup",
+    "trajectory_v2",
+    "event_jsonl",
+    "event_payload",
 }
 TRAINING_TOP_LEVEL = {
     "README.md",
@@ -82,6 +85,7 @@ class SourceSpec:
     source_kind: str
     line_bounded: bool
     validate_json: bool
+    expected_sha256: str | None = None
 
 
 def _utc_now() -> str:
@@ -519,9 +523,38 @@ def _add_source(specs: dict[str, SourceSpec], spec: SourceSpec) -> None:
     specs[spec.archive_relpath] = spec
 
 
-def _source_spec(source_root: Path, path: Path, kind: str, *, line: bool = False, validate_json: bool = False) -> SourceSpec:
+def _source_spec(
+    source_root: Path,
+    path: Path,
+    kind: str,
+    *,
+    line: bool = False,
+    validate_json: bool = False,
+    expected_sha256: str | None = None,
+) -> SourceSpec:
     relative = path.relative_to(source_root).as_posix()
-    return SourceSpec(path, relative, f"files/source/{relative}", kind, line, validate_json)
+    return SourceSpec(
+        path,
+        relative,
+        f"files/source/{relative}",
+        kind,
+        line,
+        validate_json,
+        expected_sha256,
+    )
+
+
+def _is_safe_generated_jsonl_name(name: str) -> bool:
+    stem = name.removesuffix(".jsonl")
+    return (
+        name.endswith(".jsonl")
+        and bool(stem)
+        and all(char in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for char in stem)
+    )
+
+
+def _is_lower_hex(value: str, length: int) -> bool:
+    return len(value) == length and all(char in "0123456789abcdef" for char in value)
 
 
 def _discover_sources(source_root: Path, extra_root: Path | None = None) -> list[SourceSpec]:
@@ -532,6 +565,61 @@ def _discover_sources(source_root: Path, extra_root: Path | None = None) -> list
     for path in _walk_directory(trajectories):
         if path.suffix == ".jsonl":
             _add_source(specs, _source_spec(source_root, path, "trajectory_jsonl", line=True))
+
+    trajectories_v2 = source_root / "logs" / "trajectories-v2"
+    if trajectories_v2.exists() or trajectories_v2.is_symlink():
+        _assert_directory(trajectories_v2, "versioned trajectories directory")
+        for entry in sorted(os.scandir(trajectories_v2), key=lambda item: item.name):
+            path = Path(entry.path)
+            if entry.is_symlink():
+                raise ArchiveError(f"symlink in versioned trajectories rejected: {path}")
+            if entry.is_file(follow_symlinks=False) and _is_safe_generated_jsonl_name(entry.name):
+                _add_source(specs, _source_spec(source_root, path, "trajectory_v2", line=True))
+
+    episode_events = source_root / "logs" / "episode-events-v1"
+    if episode_events.exists() or episode_events.is_symlink():
+        _assert_directory(episode_events, "episode events directory")
+
+        events = episode_events / "events"
+        if events.exists() or events.is_symlink():
+            _assert_directory(events, "episode event log directory")
+            for entry in sorted(os.scandir(events), key=lambda item: item.name):
+                path = Path(entry.path)
+                if entry.is_symlink():
+                    raise ArchiveError(f"symlink in episode event logs rejected: {path}")
+                if entry.is_file(follow_symlinks=False) and _is_safe_generated_jsonl_name(entry.name):
+                    _add_source(specs, _source_spec(source_root, path, "event_jsonl", line=True))
+
+        payloads = episode_events / "payloads"
+        if payloads.exists() or payloads.is_symlink():
+            _assert_directory(payloads, "episode event payload directory")
+            for prefix_entry in sorted(os.scandir(payloads), key=lambda item: item.name):
+                prefix_path = Path(prefix_entry.path)
+                if prefix_entry.is_symlink():
+                    raise ArchiveError(f"symlink in episode event payloads rejected: {prefix_path}")
+                if not prefix_entry.is_dir(follow_symlinks=False) or not _is_lower_hex(prefix_entry.name, 2):
+                    continue
+                for entry in sorted(os.scandir(prefix_path), key=lambda item: item.name):
+                    path = Path(entry.path)
+                    if entry.is_symlink():
+                        raise ArchiveError(f"symlink in episode event payloads rejected: {path}")
+                    name_hash = entry.name.removesuffix(".json")
+                    if (
+                        entry.is_file(follow_symlinks=False)
+                        and entry.name.endswith(".json")
+                        and _is_lower_hex(name_hash, 64)
+                        and name_hash.startswith(prefix_entry.name)
+                    ):
+                        _add_source(
+                            specs,
+                            _source_spec(
+                                source_root,
+                                path,
+                                "event_payload",
+                                validate_json=True,
+                                expected_sha256=name_hash,
+                            ),
+                        )
 
     sessions = source_root / "logs" / "sessions"
     for path in _walk_directory(sessions):
@@ -766,6 +854,8 @@ def archive_sources(source_root: Path, output_root: Path, extra_root: Path | Non
                 line_bounded=spec.line_bounded,
                 validate_json=spec.validate_json,
             )
+            if spec.expected_sha256 is not None and captured["sha256"] != spec.expected_sha256:
+                raise ArchiveError(f"event payload content hash does not match its filename: {spec.source_relpath}")
             records.append(_manifest_record(spec, captured))
 
         manifest = {
@@ -850,9 +940,19 @@ def verify_manifest(manifest_path: Path) -> dict:
                 raise ArchiveError(f"file record {index} has invalid {field}")
         if record["captured_bytes"] > record["source_size_at_open"]:
             raise ArchiveError(f"file record {index} captured more than source size")
+        if record["status"] == "complete" and record["captured_bytes"] != record["source_size_at_open"]:
+            raise ArchiveError(f"file record {index} complete status omits source bytes")
         kind = record["source_kind"]
         line_kind = (
-            kind in {"trajectory_jsonl", "csv", "extra_tmp_log", "supervisor_jsonl"}
+            kind
+            in {
+                "trajectory_jsonl",
+                "trajectory_v2",
+                "event_jsonl",
+                "csv",
+                "extra_tmp_log",
+                "supervisor_jsonl",
+            }
             or (kind == "runtime_log" and source_key.endswith(".log"))
             or (kind == "server_log" and source_key.endswith((".log", ".txt")))
             or (kind == "training_metadata" and source_key.endswith((".jsonl", ".log")))
@@ -868,6 +968,19 @@ def verify_manifest(manifest_path: Path) -> dict:
         digest = record["sha256"]
         if not isinstance(digest, str) or len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
             raise ArchiveError(f"file record {index} has invalid sha256")
+        if kind == "event_payload":
+            payload_parts = source_key.split("/")
+            payload_hash = payload_parts[-1].removesuffix(".json")
+            if (
+                len(payload_parts) != 5
+                or payload_parts[:3] != ["logs", "episode-events-v1", "payloads"]
+                or not _is_lower_hex(payload_parts[3], 2)
+                or not _is_lower_hex(payload_hash, 64)
+                or payload_hash[:2] != payload_parts[3]
+                or payload_parts[-1] != f"{payload_hash}.json"
+                or digest != payload_hash
+            ):
+                raise ArchiveError(f"file record {index} has an invalid event payload hash path")
 
         archived = archive_root / Path(*archive_relative.parts)
         _assert_no_symlink_components(archived.parent, archive_root)
@@ -883,6 +996,12 @@ def verify_manifest(manifest_path: Path) -> dict:
             raise ArchiveError(f"archived size mismatch: {archive_key}")
         if sha256_file(archived) != digest:
             raise ArchiveError(f"archived hash mismatch: {archive_key}")
+        if line_kind and record["captured_bytes"] > 0:
+            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            with os.fdopen(os.open(archived, flags), "rb", buffering=0) as handle:
+                handle.seek(-1, os.SEEK_END)
+                if handle.read(1) != b"\n":
+                    raise ArchiveError(f"archived line cutoff does not end at a newline: {archive_key}")
         if source_key.endswith(".json"):
             _validate_json_file(archived)
     return manifest

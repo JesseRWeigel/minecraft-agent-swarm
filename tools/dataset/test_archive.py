@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -259,6 +260,78 @@ class ArchiveSourcesTests(unittest.TestCase):
             interventions = next(entry for entry in manifest["files"] if entry["source_relpath"] == "ops/interventions.jsonl")
             self.assertEqual(interventions["status"], "complete_prefix")
 
+    def test_versioned_trajectories_events_and_content_addressed_payloads_are_allowlisted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            source = base / "source"
+            output = base / "archive"
+            source.mkdir()
+            self.make_source(source)
+
+            trajectories = source / "logs" / "trajectories-v2"
+            trajectories.mkdir()
+            (trajectories / "run-1.jsonl").write_text('{"schemaVersion":2}\n', encoding="utf-8")
+            (trajectories / "ignored.json").write_text("{}", encoding="utf-8")
+            (trajectories / "nested").mkdir()
+            (trajectories / "nested" / "ignored.jsonl").write_text("{}\n", encoding="utf-8")
+
+            event_root = source / "logs" / "episode-events-v1"
+            events = event_root / "events"
+            events.mkdir(parents=True)
+            (events / "run-1.jsonl").write_text('{"schemaVersion":1}\n', encoding="utf-8")
+            (events / "ignored.txt").write_text("excluded\n", encoding="utf-8")
+
+            payload_bytes = b'{"decision":"mine"}\n'
+            payload_hash = hashlib.sha256(payload_bytes).hexdigest()
+            payload_dir = event_root / "payloads" / payload_hash[:2]
+            payload_dir.mkdir(parents=True)
+            (payload_dir / f"{payload_hash}.json").write_bytes(payload_bytes)
+            (payload_dir / f"{'f' * 64}.json").write_bytes(b"{}\n")
+            wrong_prefix = event_root / "payloads" / "00"
+            wrong_prefix.mkdir()
+            (wrong_prefix / f"{payload_hash}.json").write_bytes(payload_bytes)
+
+            manifest = archive.archive_sources(source, output)
+
+            records = {entry["source_relpath"]: entry for entry in manifest["files"]}
+            self.assertEqual(records["logs/trajectories-v2/run-1.jsonl"]["source_kind"], "trajectory_v2")
+            self.assertEqual(
+                records["logs/episode-events-v1/events/run-1.jsonl"]["source_kind"],
+                "event_jsonl",
+            )
+            payload_path = f"logs/episode-events-v1/payloads/{payload_hash[:2]}/{payload_hash}.json"
+            self.assertEqual(records[payload_path]["source_kind"], "event_payload")
+            self.assertEqual(records[payload_path]["sha256"], payload_hash)
+            self.assertNotIn("logs/trajectories-v2/nested/ignored.jsonl", records)
+            self.assertNotIn(
+                f"logs/episode-events-v1/payloads/00/{payload_hash}.json",
+                records,
+            )
+
+            archived_payload = output / records[payload_path]["archive_relpath"]
+            altered = b'{"decision":"walk"}\n'
+            self.assertEqual(len(altered), len(payload_bytes))
+            archived_payload.write_bytes(altered)
+            records[payload_path]["sha256"] = hashlib.sha256(altered).hexdigest()
+            (output / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(archive.ArchiveError, "payload.*hash|hash.*payload"):
+                archive.verify_manifest(output / "manifest.json")
+
+    def test_event_payload_filename_must_match_exact_content_hash(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            source = base / "source"
+            output = base / "archive"
+            payload_hash = "a" * 64
+            payload_dir = source / "logs" / "episode-events-v1" / "payloads" / "aa"
+            payload_dir.mkdir(parents=True)
+            (payload_dir / f"{payload_hash}.json").write_text('{"different":true}\n', encoding="utf-8")
+
+            with self.assertRaisesRegex(archive.ArchiveError, "payload.*hash|hash.*payload"):
+                archive.archive_sources(source, output)
+
+            self.assertFalse(output.exists())
+
     def test_insufficient_capacity_fails_before_output_creation(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -462,6 +535,28 @@ class VerifyManifestTests(unittest.TestCase):
             archived.write_bytes(b"corrupt\n")
 
             with self.assertRaisesRegex(archive.ArchiveError, "hash|size"):
+                archive.verify_manifest(output / "manifest.json")
+
+    def test_line_cutoff_must_end_at_a_newline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output, manifest = self.make_archive(Path(directory))
+            record = manifest["files"][0]
+            archived = output / record["archive_relpath"]
+            unterminated = archived.read_bytes()[:-1] + b" "
+            archived.write_bytes(unterminated)
+            record["sha256"] = hashlib.sha256(unterminated).hexdigest()
+            (output / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+            with self.assertRaisesRegex(archive.ArchiveError, "newline"):
+                archive.verify_manifest(output / "manifest.json")
+
+    def test_complete_status_cannot_hide_omitted_source_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output, manifest = self.make_archive(Path(directory))
+            manifest["files"][0]["source_size_at_open"] += 1
+            (output / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+            with self.assertRaisesRegex(archive.ArchiveError, "status"):
                 archive.verify_manifest(output / "manifest.json")
 
     def test_traversal_in_manifest_is_rejected(self):
