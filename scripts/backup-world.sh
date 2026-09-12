@@ -23,11 +23,13 @@ tar -C server --exclude='ai-world/session.lock' --exclude='*/session.lock' -cf -
   | zstd -T0 -3 -q -o "$out"
 rcon "save-on" >/dev/null
 trap - EXIT
+# Standalone check: an AND-list would mask a failing verifier under set -e.
+zstd -t -q "$out"
 sha=$(sha256sum "$out" | cut -d' ' -f1)
 echo "$sha  $(basename "$out")" > "${out}.sha256"
 size=$(stat -c %s "$out")
 git_head=$(git rev-parse --short HEAD 2>/dev/null || echo none)
 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$ts" "$(basename "$out")" "$size" "$sha" "$git_head" "$label/$mode" >> backups/MANIFEST.tsv
-zstd -t -q "$out" && echo "[backup] ok $out ($((size/1024/1024)) MB, sha256 $sha)"
+echo "[backup] ok $out ($((size/1024/1024)) MB, sha256 $sha)"
 jq -nc --arg operator "${OPS_BY:-Claude (operator)}" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg f "$(basename "$out")" --arg l "$label" --arg m "$mode" --arg s "$sha" \
   '{ts_utc:$ts,kind:"backup",reason:("world backup ("+$l+")"),changes:[("backups/"+$f)],sha256:$s,study_mode:$m,by:$operator,trial_validity:null}' >> ops/interventions.jsonl

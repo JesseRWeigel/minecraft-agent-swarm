@@ -108,6 +108,16 @@ class StudyGuards(unittest.TestCase):
         self.assertFalse((self.root / 'rcon-calls').exists())
         self.assertFalse((self.root / 'backups').exists())
 
+    def test_failed_archive_validation_never_logs_a_successful_backup(self):
+        self.fake('node', 'exit 0')
+        self.fake('sleep', 'exit 0')
+        self.fake('tar', 'echo fixture')
+        self.fake('zstd', 'if [[ "$1" == "-t" ]]; then exit 9; fi; while [[ "$1" != "-o" ]]; do shift; done; shift; cat > "$1"')
+        result = self.run_script('backup-world.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / 'backups/MANIFEST.tsv').exists())
+        self.assertFalse((self.root / 'ops/interventions.jsonl').exists())
+
     def test_failed_flush_still_restores_autosave(self):
         self.fake('node', 'echo "$*" >> rcon-calls; if [[ "$*" == *save-off* ]]; then exit 7; fi')
         result = self.run_script('backup-world.sh')
