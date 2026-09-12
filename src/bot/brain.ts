@@ -938,12 +938,28 @@ export class BotBrain {
       const buried = isBuried((x, y, z) => this.bot.blockAt(new Vec3(x, y, z)), f.x, f.y, f.z, 64);
       const pickless = !this.bot.inventory.items().some((i) => i.name.endsWith("_pickaxe"));
       const walledIn = this.navFailStreak >= 3;
-      if (buried && (pickless || walledIn)) {
+      // A pit too shallow to count as buried still traps a bot: Forge and
+      // Atlas shared a three-deep hole at 243,58,-512 with water at the
+      // bottom (run 545), where the pathfinder never starts a dig because
+      // it waits for solid ground. Three solid sides at the feet and two at
+      // the head is a pit; the escape staircase handles water.
+      const solidAt = (dx: number, dy: number, dz: number) =>
+        this.bot.blockAt(new Vec3(f.x + dx, f.y + dy, f.z + dz))?.boundingBox === "block";
+      const sides: Array<[number, number]> = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ];
+      const feetWalls = sides.filter(([dx, dz]) => solidAt(dx, 0, dz)).length;
+      const headWalls = sides.filter(([dx, dz]) => solidAt(dx, 1, dz)).length;
+      const pit = feetWalls >= 3 && headWalls >= 2;
+      if ((buried || pit) && (pickless || walledIn)) {
         this.lastEscapeMs = Date.now();
         this.navFailStreak = 0;
         this.log.info(
           "Brain",
-          `OVERRIDE: buried ${pickless ? "pickless" : `with a pick but ${walledIn ? "walks keep failing" : ""}`} at y=${f.y} — digging up to the surface`,
+          `OVERRIDE: ${buried ? "buried" : "in a pit"} ${pickless ? "pickless" : `with a pick but ${walledIn ? "walks keep failing" : ""}`} at y=${f.y} — digging up to the surface`,
         );
         // The client's own view of the column overhead, for the desync seen
         // in run 537/538: the server held Flora at 363,62,-281 under stone
