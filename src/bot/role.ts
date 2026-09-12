@@ -111,6 +111,7 @@ export const ATLAS_CONFIG: BotRoleConfig = {
   allowedActions: ["explore", "go_to", "gather_wood", "mine_block", "chat", "eat", "sleep", "flee", "attack"],
   allowedSkills: ["find_fortress", "craft_gear", "go_fishing"],
   keepItems: [
+    { name: "fishing_rod", minCount: 1 },
     { name: "sapling", minCount: 16 },
     { name: "sword", minCount: 1 },
     { name: "food", minCount: 4 },
@@ -154,6 +155,7 @@ export const FLORA_CONFIG: BotRoleConfig = {
     "go_fishing",
   ],
   keepItems: [
+    { name: "fishing_rod", minCount: 1 },
     { name: "hoe", minCount: 1 },
     { name: "food", minCount: 4 },
     { name: "seeds", minCount: 16 },
@@ -205,6 +207,7 @@ export const FORGE_CONFIG: BotRoleConfig = {
     "go_fishing",
   ],
   keepItems: [
+    { name: "fishing_rod", minCount: 1 },
     { name: "sapling", minCount: 16 },
     { name: "pickaxe", minCount: 1 },
     { name: "food", minCount: 4 },
@@ -271,6 +274,7 @@ export const MASON_CONFIG: BotRoleConfig = {
     "go_fishing",
   ],
   keepItems: [
+    { name: "fishing_rod", minCount: 1 },
     { name: "sapling", minCount: 16 },
     { name: "axe", minCount: 1 },
     // Mason is the team's second crafter-miner and twice ended up mining
@@ -316,6 +320,7 @@ export const BLADE_CONFIG: BotRoleConfig = {
   // the standing raw-metal-aboard override cooks whatever oh_shiny withdraws.
   allowedSkills: ["neural_combat", "craft_gear", "build_nether_portal", "smelt_ores", "go_fishing"],
   keepItems: [
+    { name: "fishing_rod", minCount: 1 },
     { name: "sword", minCount: 1 },
     { name: "shield", minCount: 1 },
     { name: "food", minCount: 8 },

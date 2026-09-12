@@ -8,7 +8,8 @@ import { baseMoves, explorerMoves, safeGoto, GoalNearXZAbove, collectNearbyDrops
 import { placeCraftingTable } from "./craft-gear.js";
 
 const FISH_ATTEMPTS = 6;
-const BITE_TIMEOUT_MS = 30000;
+// 45s: a bite takes 5 to 30s under open sky and twice that under a roof.
+const BITE_TIMEOUT_MS = 45000;
 
 export const goFishingSkill: Skill = {
   name: "go_fishing",
@@ -152,10 +153,37 @@ export const goFishingSkill: Skill = {
 
     // 64, up from 48: the nearest open water to the stash is 41 blocks out
     // and the lake at (338, 62, -330) is 54 (RCON scan 2026-09-12).
-    const water = bot.findBlock({
-      matching: (b) => b.name === "water",
-      maxDistance: 64,
-    });
+    // Prefer water under open sky: a bobber under a roof waits twice as long
+    // for a bite, and run 565's three empty trips fished from spots the
+    // finder picked by distance alone.
+    const sky = (p: Vec3) => {
+      try {
+        return (bot.world as unknown as { getSkyLight: (p: Vec3) => number }).getSkyLight(p);
+      } catch {
+        return 0;
+      }
+    };
+    const candidates = bot.findBlocks({ matching: (b) => b.name === "water", maxDistance: 64, count: 400 });
+    let water: ReturnType<typeof bot.blockAt> = null;
+    let bestScore = -Infinity;
+    for (const pos of candidates) {
+      const above = bot.blockAt(pos.offset(0, 1, 0));
+      if (!above || above.name !== "air") continue;
+      const below = bot.blockAt(pos.offset(0, -1, 0));
+      const deep = below?.name === "water" ? 1 : 0;
+      const lit = sky(pos.offset(0, 1, 0)) >= 15 ? 1 : 0;
+      const dist = pos.distanceTo(bot.entity.position);
+      const score = lit * 100 + deep * 20 - dist;
+      if (score > bestScore) {
+        bestScore = score;
+        water = bot.blockAt(pos);
+      }
+    }
+    if (water) {
+      console.log(
+        `[FishDebug] ${bot.username} water at ${water.position} sky=${sky(water.position.offset(0, 1, 0))} candidates=${candidates.length}`,
+      );
+    }
     if (!water) {
       return { success: false, message: "No water nearby! Explore to find a lake or river." };
     }
@@ -187,18 +215,28 @@ export const goFishingSkill: Skill = {
       rod = bot.inventory.items().find((i) => i.name === "fishing_rod");
       if (!rod) break;
 
+      // Bobbers from earlier casts linger in bot.entities as invalid
+      // entities. Run 565: Atlas's casts 1 to 4 all resolved in the same
+      // second because the wait found a dead bobber first. Ignore every
+      // bobber id that existed before this cast.
+      const staleIds = new Set(
+        Object.values(bot.entities)
+          .filter((e) =>
+            /fishing_bobber|fishing_float/.test(String(e.name ?? (e as { objectType?: string }).objectType ?? "")),
+          )
+          .map((e) => e.id),
+      );
+      const t0 = Date.now();
+      let outcome = "bite";
       try {
         await bot.equip(rod, "hand");
-        await bot.lookAt(water.position.offset(0.5, 1, 0.5));
+        await bot.lookAt(water!.position.offset(0.5, 1, 0.5));
 
-        // Cast the line
         bot.activateItem();
         await bot.waitForTicks(20);
 
-        // Wait for a bite (bobber dip detection)
-        const gotBite = await waitForBite(bot, signal, BITE_TIMEOUT_MS);
+        const gotBite = await waitForBite(bot, signal, BITE_TIMEOUT_MS, staleIds);
 
-        // Reel in
         bot.activateItem();
         await bot.waitForTicks(10);
 
@@ -206,16 +244,20 @@ export const goFishingSkill: Skill = {
           caught++;
           catches.push("catch");
           console.log(`[Skill] Fish caught! (#${caught})`);
+        } else {
+          outcome = "no bite";
         }
-      } catch {
-        // Clean up - make sure rod is deactivated
+      } catch (e) {
+        outcome = `error: ${(e as Error).message}`;
         try {
           bot.deactivateItem();
         } catch {
           /* ok */
         }
-        continue;
       }
+      console.log(
+        `[FishDebug] ${bot.username} cast ${attempt + 1}: ${outcome} after ${((Date.now() - t0) / 1000).toFixed(1)}s (bobbers seen ${Object.values(bot.entities).filter((e) => /fishing_bobber|fishing_float/.test(String(e.name ?? ""))).length})`,
+      );
     }
 
     if (caught === 0) {
@@ -252,7 +294,7 @@ export const goFishingSkill: Skill = {
 };
 
 /** Wait for the fishing bobber to dip, indicating a bite. */
-async function waitForBite(bot: Bot, signal: AbortSignal, timeoutMs: number): Promise<boolean> {
+async function waitForBite(bot: Bot, signal: AbortSignal, timeoutMs: number, staleIds: Set<number>): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     let resolved = false;
 
@@ -288,6 +330,8 @@ async function waitForBite(bot: Bot, signal: AbortSignal, timeoutMs: number): Pr
           const name = entity.name || (entity as any).objectType || "";
           if (
             (name === "fishing_bobber" || name === "fishing_float") &&
+            entity.isValid &&
+            !staleIds.has(entity.id) &&
             entity.position.distanceTo(bot.entity.position) < 40
           ) {
             bobber = entity;
@@ -301,8 +345,9 @@ async function waitForBite(bot: Bot, signal: AbortSignal, timeoutMs: number): Pr
 
       // Check if bobber is gone (someone else reeled in, or entity despawned)
       if (!bobber.isValid) {
-        cleanup();
-        resolve(false);
+        // The bobber despawned (reeled, hit ground, or the server dropped
+        // it). Look for a fresh one rather than calling the cast dead.
+        bobber = null;
         return;
       }
 
