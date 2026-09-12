@@ -1566,11 +1566,24 @@ async function attackNearest(bot: Bot): Promise<string> {
   // (falls during combat pursuit, which the swordpvp sprint takes the bot over,
   // bypassing the pathfinder drop cap). A target down a pit isn't worth dying
   // for; engage only reachable ones.
-  const reachable = (e: { position?: { y: number } }) => !!e.position && e.position.y >= myPos.y - 3;
+  // Reachable both ways: a pillager sniping from a roof 13 blocks up (run
+  // 544, 284,75,-305 over the stash) is as unreachable as one in a pit.
+  const reachable = (e: { position?: { y: number } }) =>
+    !!e.position && e.position.y >= myPos.y - 3 && e.position.y <= myPos.y + 4;
 
   // Defense first: nearest hostile within 16. (!!e.position guards entities
   // that are mid-spawn and have no position yet.)
   let target = bot.nearestEntity((e) => reachable(e) && isHostile(e) && e.position.distanceTo(myPos) < 16);
+
+  // Bare hands against a crossbow is a death sentence: Blade fought
+  // pillagers for 6 seconds at a time and was shot five times in fifteen
+  // minutes (run 544). Retreat instead, and let craft_gear arm the bot.
+  const RANGED = new Set(["pillager", "skeleton", "stray", "bogged", "witch", "blaze", "ghast", "drowned"]);
+  const armed = bot.inventory.items().some((i) => i.name.endsWith("_sword") || i.name.endsWith("_axe"));
+  if (target && !armed && RANGED.has((target.name ?? "").toLowerCase())) {
+    const fled = await flee(bot);
+    return `Unarmed against a ${target.name} — retreating instead of fighting. ${fled}`;
+  }
 
   if (!target) {
     // No threat → HUNT the nearest passive food animal for meat. This was the
