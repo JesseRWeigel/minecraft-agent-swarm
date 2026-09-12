@@ -954,12 +954,19 @@ export class BotBrain {
       const feetWalls = sides.filter(([dx, dz]) => solidAt(dx, 0, dz)).length;
       const headWalls = sides.filter(([dx, dz]) => solidAt(dx, 1, dz)).length;
       const pit = feetWalls >= 3 && headWalls >= 2;
-      if ((buried || pit) && (pickless || walledIn)) {
+      // Floating in water at the bottom of a hole is the same trap with one
+      // open side (Forge at 243,58,-513, run 546: two solid sides at the
+      // feet, water underfoot, every walk 'stuck'): the pathfinder never
+      // digs while the bot is off the ground.
+      const feetBlock = this.bot.blockAt(new Vec3(f.x, f.y, f.z))?.name ?? "";
+      const inWater = feetBlock === "water" || feetBlock === "flowing_water";
+      const waterTrap = inWater && walledIn && feetWalls >= 2;
+      if ((buried || pit || waterTrap) && (pickless || walledIn)) {
         this.lastEscapeMs = Date.now();
         this.navFailStreak = 0;
         this.log.info(
           "Brain",
-          `OVERRIDE: ${buried ? "buried" : "in a pit"} ${pickless ? "pickless" : `with a pick but ${walledIn ? "walks keep failing" : ""}`} at y=${f.y} — digging up to the surface`,
+          `OVERRIDE: ${buried ? "buried" : pit ? "in a pit" : "in a water hole"} ${pickless ? "pickless" : `with a pick but ${walledIn ? "walks keep failing" : ""}`} at y=${f.y} — digging up to the surface`,
         );
         // The client's own view of the column overhead, for the desync seen
         // in run 537/538: the server held Flora at 363,62,-281 under stone
