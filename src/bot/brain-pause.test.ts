@@ -18,6 +18,8 @@ function bareBrain() {
   brain.paused = false;
   brain.stopped = false;
   brain.processing = false;
+  brain.interruptionGeneration = 0;
+  brain.interruptionHistory = [];
   brain.eventQueue = [{ type: "strategic" }];
   brain.idleTimer = null;
   brain.currentGoal = "mine diamonds";
