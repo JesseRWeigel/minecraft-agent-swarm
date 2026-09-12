@@ -38,7 +38,7 @@ class StudyGuards(unittest.TestCase):
         return subprocess.run(['bash', str(self.root / 'scripts' / name), *args], cwd=self.root, env=self.env, capture_output=True, text=True, timeout=10)
 
     def test_missing_malformed_or_unknown_state_never_launches(self):
-        for content in [None, '{', '{"mode":"typo"}', '{}', '{"mode":null}']:
+        for content in [None, '{', '{"mode":"typo"}', '{}', '{"mode":null}', '{"mode":"maintenance"}\n{"mode":"live"}']:
             with self.subTest(content=content):
                 path = self.root / 'ops/state.json'
                 if content is None:
@@ -84,6 +84,21 @@ class StudyGuards(unittest.TestCase):
         self.assertEqual(json.loads((self.root / 'ops/state.json').read_text())['trial'], 'trial-one')
         ledger = json.loads((self.root / 'ops/interventions.jsonl').read_text())
         self.assertEqual(ledger['study_mode'], 'evaluation')
+
+    def test_invalid_status_and_log_fail_without_ledger_write(self):
+        (self.root / 'ops/state.json').write_text('{')
+        self.assertNotEqual(self.run_script('ops-state.sh', 'status').returncode, 0)
+        self.assertNotEqual(self.run_script('ops-state.sh', 'log', 'infra', 'probe').returncode, 0)
+        self.assertFalse((self.root / 'ops/interventions.jsonl').exists())
+
+    def test_actor_identity_is_preserved_in_state_and_ledger(self):
+        self.env['OPS_BY'] = 'Codex reviewer'
+        for args in [('enter-maintenance', 'fixture'), ('exit-maintenance',), ('enter-evaluation', 'trial', 'fixture'), ('log', 'infra', 'fixture'), ('exit-evaluation',)]:
+            result = self.run_script('ops-state.sh', *args)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads((self.root / 'ops/state.json').read_text())['by'], 'Codex reviewer')
+        ledger = [json.loads(line) for line in (self.root / 'ops/interventions.jsonl').read_text().splitlines()]
+        self.assertTrue(all(row['by'] == 'Codex reviewer' for row in ledger))
 
     def test_failed_flush_still_restores_autosave(self):
         self.fake('node', 'echo "$*" >> rcon-calls; if [[ "$*" == *save-off* ]]; then exit 7; fi')

@@ -57,3 +57,14 @@ jobs:
 
       - name: Qualify generated-skill containment
         run: npm run test:sandbox
+
+  dataset-and-operations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test archive, historical index, and study safeguards
+        run: |
+          python3 -m unittest discover -s tools/dataset
+          python3 -m unittest discover -s tools/ops
+      - name: Check study shell syntax
+        run: bash -n scripts/ops-mode.sh scripts/ops-state.sh scripts/run-swarm.sh scripts/swarm-health.sh scripts/backup-world.sh
