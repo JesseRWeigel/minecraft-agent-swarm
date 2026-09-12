@@ -44,6 +44,7 @@ import { updateOverlay, addChatMessage, speakThought, setCurrentBot } from "../s
 import { generateSpeech } from "../stream/tts.js";
 import { filterContent, filterChatMessage, filterViewerMessage } from "../safety/filter.js";
 import { abortActiveSkill, isSkillRunning, getActiveSkillName, takeSkillOutcome } from "../skills/executor.js";
+import { stashCount, ledgerKnown } from "../skills/stash-ledger.js";
 import { handsBusy } from "../skills/fluid.js";
 import { skillRegistry } from "../skills/registry.js";
 import { isBuried } from "../skills/escape-to-surface.js";
@@ -2489,7 +2490,27 @@ export class BotBrain {
       // empty hunts). The Fishy Business chase stays Flora's; the others go
       // to the water only when starving.
       const chasesFishy = !fished && this.bot.username === "Flora";
-      if ((chasesFishy || starving) && cooled) {
+      // No rod and no way to make one means no trip: run 568 sent rodless
+      // bots to the stash nine times for string that sat 66 blocks down, two
+      // minutes each. Rods wear out after 64 casts, so this gate matters.
+      const inv = this.bot.inventory.items();
+      const hasRod = inv.some((i) => i.name === "fishing_rod");
+      const stringHeld = inv.filter((i) => i.name === "string").reduce((n, i) => n + i.count, 0);
+      const stashY = this.roleConfig.stashPos?.y;
+      const canRig =
+        hasRod ||
+        stringHeld >= 2 ||
+        !ledgerKnown() ||
+        stashCount("fishing_rod", stashY) >= 1 ||
+        stashCount("string", stashY) >= 2;
+      if ((chasesFishy || starving) && cooled && !canRig) {
+        this.lastFishOverrideMs = Date.now();
+        this.log.info(
+          "Brain",
+          `Fishing skipped: no rod, string ${stringHeld} aboard, stash string ${stashCount("string", stashY)} reachable — hunting instead`,
+        );
+      }
+      if ((chasesFishy || starving) && cooled && canRig) {
         this.lastFishOverrideMs = Date.now();
         this.log.info(
           "Brain",
