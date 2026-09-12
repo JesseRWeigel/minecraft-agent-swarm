@@ -6,7 +6,7 @@ This change adds collection formats for future process runs. It does not rewrite
 
 Restricted event data is written below `logs/episode-events-v1` by default:
 
-- `events/<run-id>.jsonl` is the append-only event sequence.
+- `events/<readable-run-id>-<sha256-of-full-run-id>.jsonl` is the append-only event sequence.
 - `payloads/<hash-prefix>/<sha256>.json` holds content-addressed payloads.
 - `DATASET_EVENT_DIR` and `DATASET_RUN_ID` can select a different root and run.
 - New compact summaries use `logs/trajectories-v2/<process-session>.jsonl`. Explicit session IDs must already contain only letters, digits, dots, underscores, or hyphens so distinct IDs cannot collapse onto one file. Existing `logs/trajectories` files remain unchanged.
@@ -41,7 +41,7 @@ Unset values remain `null`; collection never invents them. These fields support 
 
 The event recorder exposes an in-process health state. Any event or trajectory write failure marks it incomplete and emits a visible `[Telemetry]` error without crashing gameplay. Each trajectory v2 row snapshots that health after its action events were attempted. Consumers must exclude or explicitly classify rows whose `telemetry.complete` is false, including rows with dangling evidence references. A whole-device failure can still prevent both the event and health snapshot from reaching disk; this is not durable transaction storage.
 
-Recovery is deliberately narrow. `recoverInterruptedActions()` reconciles unmatched starts in the explicitly selected, inactive run file and marks them `unknown/process_interrupted` with a synthesized flag. The default startup creates a new random run ID and does not scan previous runs. Offline cross-run auditing for missing terminals remains a future task.
+Recovery is deliberately narrow. `recoverInterruptedActions()` reconciles unmatched starts in the explicitly selected, inactive run file and marks them `unknown/process_interrupted` with a synthesized flag. The default startup creates a new random run ID and does not scan previous runs. An unterminated final line, including otherwise valid JSON without its newline, or a mismatched embedded run ID marks the recorder incomplete and blocks appends and recovery without changing the original bytes. Serialization failures store an explicit diagnostic payload rather than claiming the original payload was captured; subsequent writes return an unavailable reference without further I/O. Offline cross-run auditing for missing terminals remains a future task.
 
 ## Rollout and operations
 
