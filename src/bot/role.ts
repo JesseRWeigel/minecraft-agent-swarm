@@ -111,6 +111,8 @@ export const ATLAS_CONFIG: BotRoleConfig = {
   allowedActions: ["explore", "go_to", "gather_wood", "mine_block", "chat", "eat", "sleep", "flee", "attack"],
   allowedSkills: ["find_fortress", "craft_gear", "go_fishing"],
   keepItems: [
+    { name: "_log", minCount: 3 },
+    { name: "stick", minCount: 4 },
     { name: "pickaxe", minCount: 1 },
     { name: "fishing_rod", minCount: 1 },
     { name: "sapling", minCount: 16 },
@@ -156,6 +158,8 @@ export const FLORA_CONFIG: BotRoleConfig = {
     "go_fishing",
   ],
   keepItems: [
+    { name: "_log", minCount: 3 },
+    { name: "stick", minCount: 4 },
     { name: "pickaxe", minCount: 1 },
     { name: "fishing_rod", minCount: 1 },
     { name: "hoe", minCount: 1 },
@@ -209,6 +213,8 @@ export const FORGE_CONFIG: BotRoleConfig = {
     "go_fishing",
   ],
   keepItems: [
+    { name: "_log", minCount: 3 },
+    { name: "stick", minCount: 4 },
     { name: "fishing_rod", minCount: 1 },
     { name: "sapling", minCount: 16 },
     { name: "pickaxe", minCount: 1 },
@@ -276,6 +282,8 @@ export const MASON_CONFIG: BotRoleConfig = {
     "go_fishing",
   ],
   keepItems: [
+    { name: "_log", minCount: 3 },
+    { name: "stick", minCount: 4 },
     { name: "fishing_rod", minCount: 1 },
     { name: "sapling", minCount: 16 },
     { name: "axe", minCount: 1 },
@@ -322,6 +330,8 @@ export const BLADE_CONFIG: BotRoleConfig = {
   // the standing raw-metal-aboard override cooks whatever oh_shiny withdraws.
   allowedSkills: ["neural_combat", "craft_gear", "build_nether_portal", "smelt_ores", "go_fishing"],
   keepItems: [
+    { name: "_log", minCount: 3 },
+    { name: "stick", minCount: 4 },
     { name: "pickaxe", minCount: 1 },
     { name: "fishing_rod", minCount: 1 },
     { name: "sword", minCount: 1 },

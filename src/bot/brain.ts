@@ -2779,9 +2779,19 @@ export class BotBrain {
       const sp = this.roleConfig.stashPos;
       const p = this.bot.entity.position;
       const atVillage = Math.hypot(p.x - sp.x, p.z - sp.z) < 120 && p.y >= sp.y - 8;
+      // Underground re-arm: a wooden pick is 3 planks + 2 sticks, plus 4
+      // planks for a table when none is near, and a log is 4 planks. Run 572:
+      // Mason and Flora sat 30 to 40 blocks under the village pickless, five
+      // climb-outs hit the 240s watchdog, and the override never fired
+      // because it wanted cobblestone or village level. A wooden pick digs
+      // stone five times faster than a hand and drops the cobble to pillar.
+      const plankEq =
+        inv.filter((i) => i.name.endsWith("_planks")).reduce((t, i) => t + i.count, 0) +
+        4 * inv.filter((i) => i.name.endsWith("_log")).reduce((t, i) => t + i.count, 0);
       const materials =
-        cnt("cobblestone") >= 3 &&
-        (cnt("stick") >= 2 || inv.some((i) => i.name.endsWith("_planks") || i.name.endsWith("_log")));
+        (cnt("cobblestone") >= 3 && (cnt("stick") >= 2 || plankEq >= 2)) ||
+        plankEq >= 7 ||
+        (plankEq >= 5 && cnt("stick") >= 2);
       const cooledPick = Date.now() - this.lastPickCraftMs > 300_000;
       if (pickless && cooledPick && (atVillage || materials)) {
         this.lastPickCraftMs = Date.now();
