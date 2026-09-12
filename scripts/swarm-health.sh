@@ -2,7 +2,7 @@
 # Swarm health check — one-shot snapshot for the hourly monitoring loop.
 #
 # Emits KEY=VALUE lines so a caller can diff successive runs cheaply.
-# Exit 0 = healthy, 1 = degraded (see ALERTS).
+# Exit 0 = healthy, 1 = degraded (see ALERTS), 2 = invalid study state.
 #
 # Watches the two regressions fixed 2026-07-25:
 #   MS_SOCKETS  — Edge TTS socket leak (5f7f45a). Must stay at 0 or 1.
