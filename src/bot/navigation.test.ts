@@ -87,7 +87,9 @@ test("drowning escape refuses to dig through valuable blocks", () => {
   // and the invariant under test is about WHAT gets dug, never about when.
   const digAnchor = source.search(/if \(air < \d+\) \{\n\s+const p = bot\.entity\.position;/);
   assert.notStrictEqual(digAnchor, -1, "dig-out block not found");
-  const digBlock = source.slice(digAnchor, digAnchor + 900);
+  // 1800: the dig-time budget (run 560) added a comment and a skip branch
+  // between the anchor and the dig call.
+  const digBlock = source.slice(digAnchor, digAnchor + 1800);
   assert.match(digBlock, /chooseDrownEscape\(/, "dig-out must choose its target, not assume the ceiling");
   assert.match(digBlock, /bot\.dig\(/, "dig-out should still dig when a route is ordinary");
   assert.doesNotMatch(digBlock, /bot\.dig\(ceiling\)/, "must not go back to digging whatever is overhead");

@@ -951,6 +951,11 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   // Surface swimmers bob at ~20 air, so a genuine sub-16 reading while
   // head-submerged means trouble, never a routine lake crossing.
   if (air < 16) {
+    // Deliberate takeover: without the bump, safeGoto reads this stop as an
+    // external one-shot and re-plans the same walk 3s later, dragging the
+    // bot back under. Run 560: Atlas (air=7, surface one block up), Forge x3
+    // and Flora all drowned inside "goto interrupted externally — retry 1/2".
+    bumpNavGeneration(bot);
     try {
       bot.pathfinder.setGoal(null);
     } catch {
@@ -1028,10 +1033,26 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
       west: bot.blockAt(p.offset(-1, 1, 0)),
     };
     const escape = chooseDrownEscape(neighbours);
-    if (escape) {
+    // Digging while afloat in water is 25x slower (5x submerged, 5x off the
+    // ground): stone with a stone pick is ~29s, and an oxygen unit lasts
+    // 0.75s. Forge dug "up through stone" at air=11 three times in run 560
+    // and drowned inside the dig every time, with a shore two blocks away.
+    // Only dig when mineflayer's own estimate fits the air left (plus the
+    // seconds drowning damage buys), or when there is nowhere to swim.
+    const swimRoute = Object.entries(neighbours).some(
+      ([d, b]) => d !== "up" && b && (b.name === "water" || b.name === "air"),
+    );
+    const budgetMs = Math.max(0, air) * 750 + Math.max(0, bot.health - 2) * 500;
+    const needMs = escape ? bot.digTime(neighbours[escape.direction]!) : 0;
+    if (escape && needMs > budgetMs && swimRoute) {
+      console.log(
+        `[Drown] ${bot.username} skipping ${escape.direction} dig through ${escape.block.name}: ` +
+          `${(needMs / 1000).toFixed(1)}s > ${(budgetMs / 1000).toFixed(1)}s of air — swimming for the shore`,
+      );
+    } else if (escape) {
       try {
         console.log(
-          `[Drown] ${bot.username} enclosed at air=${air} — digging ${escape.direction} through ${escape.block.name}`,
+          `[Drown] ${bot.username} enclosed at air=${air} — digging ${escape.direction} through ${escape.block.name} (${(needMs / 1000).toFixed(1)}s)`,
         );
         await bot.dig(neighbours[escape.direction]!);
       } catch {
@@ -1053,7 +1074,7 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
       await bot.lookAt(shore.position.offset(0.5, 1.5, 0.5));
       bot.setControlState("forward", true);
     }
-    await bot.waitForTicks(24); // ~1.2s of swimming up/out; the timer re-runs if still under
+    await bot.waitForTicks(40); // ~2s of swimming up/out of the 3s timer period; re-runs if still under
   } catch {
     /* best effort — timer retries */
   } finally {

@@ -2791,6 +2791,15 @@ export class BotBrain {
 
   private async executeActionUnlessPaused(action: string, params: Record<string, any>): Promise<string> {
     if (this.paused) return "Paused by player command";
+    // A drowning bot surfaces before it does anything else. Run 560: Forge
+    // was at air=11 when a flee and then the armour override each started a
+    // new walk through the aquifer; Flora's escape skill dug farmland at
+    // air=0. The drown timer owns the controls until the head is in air.
+    const headBlock = this.bot.blockAt(this.bot.entity.position.offset(0, 1, 0));
+    if (headBlock?.name === "water" && (this.bot.oxygenLevel ?? 20) < 16) {
+      this.log.info("Brain", `Drowning (air ${this.bot.oxygenLevel}) — surfacing before ${action}`);
+      return "Underwater and short of air — surfacing first, try again once breathing.";
+    }
     this.activeAction = action;
     try {
       const result = await executeAction(this.bot, action, params);
