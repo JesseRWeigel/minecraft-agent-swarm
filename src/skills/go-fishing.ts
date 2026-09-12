@@ -4,13 +4,17 @@ import { Vec3 } from "vec3";
 import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
 import mcDataLoader from "minecraft-data";
-import { baseMoves, explorerMoves, safeGoto, GoalNearXZAbove } from "../bot/navigation.js";
+import { baseMoves, explorerMoves, safeGoto, GoalNearXZAbove, collectNearbyDrops } from "../bot/navigation.js";
+import { placeCraftingTable } from "./craft-gear.js";
 
 const FISH_ATTEMPTS = 6;
-const BITE_TIMEOUT_MS = 35000;
+const BITE_TIMEOUT_MS = 30000;
 
 export const goFishingSkill: Skill = {
   name: "go_fishing",
+  // Stash march (170s cap) + rod craft + walk to water + 6 casts of 30s.
+  // Run 564: two trips died at the 240s default with the rod in hand.
+  timeoutMs: 480_000,
   description:
     "Fish at nearby water for food and loot. Crafts a fishing rod if possible (needs 3 sticks + 2 string). Catches ~3-5 items.",
   params: {},
@@ -69,7 +73,9 @@ export const goFishingSkill: Skill = {
           }
           console.log(`[FishDebug] ${bot.username} stash march ended ${Math.round(gap())} blocks out`);
         }
-        if (gap() <= 60) {
+        // 90, up from 60: two marches ended at 63 and 82 blocks out and the
+        // withdraw was skipped; withdrawStash walks the rest itself.
+        if (gap() <= 90) {
           const r1 = await Promise.race([
             withdrawStash(bot, STASH_POS, "fishing_rod", 1),
             new Promise<string>((r) => setTimeout(() => r("timeout"), 30_000)),
@@ -127,10 +133,10 @@ export const goFishingSkill: Skill = {
         rod = bot.inventory.items().find((i) => i.name === "fishing_rod");
       }
       if (!rod) {
+        const tableNear = !!bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 32 });
         return {
           success: false,
-          message:
-            "Can't fish yet — need a fishing rod (3 sticks + 2 string). No string; kill a spider or find cobwebs, then invoke_skill go_fishing again.",
+          message: `Can't fish yet — need a fishing rod (3 sticks + 2 string). Holding string ${held("string")}, sticks ${held("stick")}, crafting table within 32: ${tableNear ? "yes" : "no"}. ${held("string") < 2 ? "Kill a spider or withdraw string from the stash, then" : "Get to a crafting table, then"} invoke_skill go_fishing again.`,
         };
       }
     }
@@ -216,6 +222,8 @@ export const goFishingSkill: Skill = {
       return { success: false, message: "Didn't catch anything! The fish outsmarted me. Try again near deeper water." };
     }
 
+    // The catch flies to the player and lands beside them; give it a moment.
+    await collectNearbyDrops(bot, 4, 2500).catch(() => {});
     // Eat the catch on the bank while hungry: raw cod and salmon are 2 hunger
     // each, and a starving bot has no regen until food is back over 17.
     let ate = 0;
@@ -333,52 +341,67 @@ function setMovements(bot: Bot) {
 async function craftFishingRod(bot: Bot, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return;
   const mcData = mcDataLoader(bot.version);
-
-  // Need 3 sticks + 2 string
-  const stringCount = bot.inventory
-    .items()
-    .filter((i) => i.name === "string")
-    .reduce((s, i) => s + i.count, 0);
-  if (stringCount < 2) return;
-
-  // Ensure sticks
-  const stickItem = mcData.itemsByName["stick"];
-  if (stickItem) {
-    const stickCount = bot.inventory
+  const count = (n: string) =>
+    bot.inventory
       .items()
-      .filter((i) => i.name === "stick")
+      .filter((i) => i.name === n)
       .reduce((s, i) => s + i.count, 0);
-    if (stickCount < 3) {
-      const recipe = bot.recipesFor(stickItem.id, null, 1, null)[0];
-      if (recipe) {
-        try {
-          await bot.craft(recipe, 1, undefined);
-        } catch {
-          /* best-effort */
-        }
-      }
+
+  if (count("string") < 2) {
+    console.log(`[FishDebug] ${bot.username} rod craft skipped: string ${count("string")}`);
+    return;
+  }
+
+  const stickItem = mcData.itemsByName["stick"];
+  if (stickItem && count("stick") < 3) {
+    const recipe = bot.recipesFor(stickItem.id, null, 1, null)[0];
+    if (recipe) {
+      await bot.craft(recipe, 1, undefined).catch((e: Error) => {
+        console.log(`[FishDebug] ${bot.username} stick craft failed: ${e.message}`);
+      });
     }
   }
 
-  // Craft fishing rod (needs crafting table)
   const rodItem = mcData.itemsByName["fishing_rod"];
   if (!rodItem) return;
 
-  const table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 32 });
-  if (table) {
-    setMovements(bot);
-    try {
-      await bot.pathfinder.goto(new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2));
-    } catch {
-      /* best-effort */
-    }
-    const recipe = bot.recipesFor(rodItem.id, null, 1, table)[0];
-    if (recipe) {
-      try {
-        await bot.craft(recipe, 1, table);
-      } catch {
-        /* best-effort */
-      }
-    }
+  // Run 564: every string withdrawal ended in "Can't fish yet" and nothing
+  // said why. Name each step: the table, the walk to it, the recipe, the
+  // craft. With no table in reach, place one (planks from the pack or the
+  // stash's 806) the way craft_gear does.
+  let table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 32 });
+  if (!table) {
+    await placeCraftingTable(bot).catch((e: Error) => {
+      console.log(`[FishDebug] ${bot.username} table placement failed: ${e.message}`);
+    });
+    table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 8 });
+  }
+  if (!table) {
+    console.log(`[FishDebug] ${bot.username} rod craft: no crafting table within 32 and none placed`);
+    return;
+  }
+  setMovements(bot);
+  await safeGoto(
+    bot,
+    new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2),
+    40_000,
+    12_000,
+  ).catch((e: Error) => {
+    console.log(`[FishDebug] ${bot.username} walk to table failed: ${e.message}`);
+  });
+  const recipe = bot.recipesFor(rodItem.id, null, 1, table)[0];
+  if (!recipe) {
+    console.log(
+      `[FishDebug] ${bot.username} rod recipe unavailable: string ${count("string")} sticks ${count("stick")} table dist ${bot.entity.position.distanceTo(table.position).toFixed(1)}`,
+    );
+    return;
+  }
+  try {
+    await bot.craft(recipe, 1, table);
+    console.log(
+      `[FishDebug] ${bot.username} crafted a fishing rod (string ${count("string")}, sticks ${count("stick")} left)`,
+    );
+  } catch (e) {
+    console.log(`[FishDebug] ${bot.username} rod craft failed: ${(e as Error).message}`);
   }
 }

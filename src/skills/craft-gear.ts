@@ -588,7 +588,7 @@ async function craftPiece(
 }
 
 /** Place a crafting table from inventory near the bot, or craft one from planks first. */
-async function placeCraftingTable(bot: Bot): Promise<void> {
+export async function placeCraftingTable(bot: Bot): Promise<void> {
   const mcData = mcDataLoader(bot.version);
 
   // Ensure we have a crafting_table item — craft from planks if needed
