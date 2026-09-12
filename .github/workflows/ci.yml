@@ -62,9 +62,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Test archive, historical index, and study safeguards
+      - name: Test dataset, study safeguards, and offline benchmark
         run: |
           python3 -m unittest discover -s tools/dataset
           python3 -m unittest discover -s tools/ops
+          python3 -m unittest discover -s tools/benchmark
       - name: Check study shell syntax
         run: bash -n scripts/ops-mode.sh scripts/ops-state.sh scripts/run-swarm.sh scripts/swarm-health.sh scripts/backup-world.sh
