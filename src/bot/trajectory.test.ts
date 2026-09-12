@@ -86,3 +86,9 @@ test("a trajectory write failure marks the shared telemetry health incomplete", 
   assert.equal(eventRecorder.health.complete, false);
   assert.match(eventRecorder.health.lastError ?? "", /trajectory/i);
 });
+
+test("rejects ambiguous explicit trajectory session IDs instead of merging files", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "trajectory-session-id-"));
+  assert.throws(() => createTrajectoryRecorder(root, "trial/a"), /sessionId/);
+  assert.throws(() => createTrajectoryRecorder(root, "trial?a"), /sessionId/);
+});

@@ -56,11 +56,10 @@ export function createTrajectoryRecorder(
   sessionId = SESSION_ID,
   injectedEventRecorder?: EpisodeEventRecorder,
 ): TrajectoryRecorder {
-  const file = path.join(
-    path.resolve(logRoot),
-    "trajectories-v2",
-    `${sessionId.replace(/[^a-zA-Z0-9._-]/g, "_")}.jsonl`,
-  );
+  if (!/^[a-zA-Z0-9._-]{1,160}$/.test(sessionId)) {
+    throw new Error("trajectory sessionId must use only letters, digits, dot, underscore, or hyphen");
+  }
+  const file = path.join(path.resolve(logRoot), "trajectories-v2", `${sessionId}.jsonl`);
   return (entry) => {
     const eventRecorder = injectedEventRecorder ?? getEpisodeEventRecorder();
     const completedEntry: TrajectoryEntryV2 = {

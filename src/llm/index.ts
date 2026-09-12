@@ -39,6 +39,13 @@ function thinkFor(model: string): boolean | "low" | "medium" | "high" {
 
 const llmLog = createLogger();
 
+type ChatClient = typeof chat;
+let chatClient: ChatClient = chat;
+
+export function setChatClientForTests(client: ChatClient | null): void {
+  chatClient = client ?? chat;
+}
+
 /** Tool schema that can be rendered into an LLM prompt. */
 export interface LLMTool {
   name: string;
@@ -251,7 +258,12 @@ export interface LLMDecision {
   };
 }
 
-function recordParsedDecision(botName: string, decision: LLMDecision, stage: "parsed_decision" | "fallback_decision") {
+function recordParsedDecision(
+  botName: string,
+  decision: LLMDecision,
+  stage: "parsed_decision" | "fallback_decision",
+  details: Record<string, unknown> = {},
+) {
   const requestId = decision.metadata?.requestId ?? null;
   appendEpisodeEvent(
     {
@@ -272,6 +284,7 @@ function recordParsedDecision(botName: string, decision: LLMDecision, stage: "pa
         goal: decision.goal,
         goalSteps: decision.goalSteps,
       },
+      ...details,
     },
   );
   return decision;
@@ -291,6 +304,7 @@ function recordCriticDecision(
   verdict: Omit<CriticVerdict, "metadata">,
   metadata: LLMDecision["metadata"],
   stage: "parsed_critic" | "fallback_critic",
+  details: Record<string, unknown> = {},
 ): CriticVerdict {
   appendEpisodeEvent(
     {
@@ -300,32 +314,106 @@ function recordCriticDecision(
       requestId: metadata?.requestId ?? null,
       kind: "observation",
     },
-    { captureVersion: 1, stage, verdict },
+    { captureVersion: 1, stage, verdict, ...details },
   );
   return { ...verdict, metadata };
 }
+class ProviderDecisionParseError extends Error {
+  readonly metadata: ProviderResponseMetadata;
+  readonly reasonCode: string;
+
+  constructor(reasonCode: string, cause: unknown, metadata: ProviderResponseMetadata) {
+    super("Provider decision parsing failed: " + ((cause as Error)?.message ?? String(cause)), { cause });
+    this.name = "ProviderDecisionParseError";
+    this.reasonCode = reasonCode;
+    this.metadata = metadata;
+  }
+}
+
+function localFallbackMetadata(metadata: ProviderResponseMetadata | undefined): LLMDecision["metadata"] {
+  return {
+    requestId: metadata?.requestId ?? null,
+    origin: "local_fallback",
+    ...(metadata ? { provider: metadata } : {}),
+  };
+}
+
+function providerMetadataFromError(error: unknown): ProviderResponseMetadata | undefined {
+  if (error instanceof ProviderCallError || error instanceof ProviderDecisionParseError) return error.metadata;
+  return undefined;
+}
+
 export function parseProviderDecision(raw: string, botName: string, metadata: ProviderResponseMetadata): LLMDecision {
+  const json = extractJSON(raw);
+  if (!json) {
+    return recordParsedDecision(
+      botName,
+      {
+        ...parseDecision(raw, botName),
+        metadata: localFallbackMetadata(metadata),
+      },
+      "fallback_decision",
+      { fallbackReason: "provider_response_no_json" },
+    );
+  }
+
+  let proposed: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(json);
+    proposed = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch (error) {
+    throw new ProviderDecisionParseError("provider_response_malformed_json", error, metadata);
+  }
+
+  let decision: Omit<LLMDecision, "metadata">;
+  try {
+    decision = parseDecision(raw, botName);
+  } catch (error) {
+    throw new ProviderDecisionParseError("provider_response_normalization_error", error, metadata);
+  }
+
+  const hasAction =
+    (typeof proposed.action === "string" && proposed.action.trim().length > 0) ||
+    ["invoke_skill", "generate_skill", "neural_combat"].some((key) => proposed[key] !== undefined);
+  if (!hasAction) {
+    return recordParsedDecision(
+      botName,
+      { ...decision, metadata: localFallbackMetadata(metadata) },
+      "fallback_decision",
+      { fallbackReason: "provider_response_missing_action" },
+    );
+  }
+
   return recordParsedDecision(
     botName,
     {
-      ...parseDecision(raw, botName),
+      ...decision,
       metadata: { requestId: metadata.requestId, origin: "provider", provider: metadata },
     },
     "parsed_decision",
+    {
+      normalization: {
+        sourceAction: typeof proposed.action === "string" ? proposed.action : null,
+        executedAction: decision.action,
+      },
+    },
   );
 }
 
 function parseCapturedDecision(response: ChatResponse, botName: string): LLMDecision {
   if (response.metadata) return parseProviderDecision(response.message.content, botName, response.metadata);
+  const decision = parseDecision(response.message.content, botName);
   return recordParsedDecision(
     botName,
     {
-      ...parseDecision(response.message.content, botName),
+      ...decision,
       metadata: { requestId: null, origin: "provider" },
     },
     "parsed_decision",
+    { provenanceMissing: true },
   );
 }
+
 export function fallbackDecision(
   thought: string,
   action: string,
@@ -333,7 +421,7 @@ export function fallbackDecision(
   botName = config.bot.name,
   params: Record<string, any> = {},
 ): LLMDecision {
-  const provider = error instanceof ProviderCallError ? error.metadata : undefined;
+  const provider = providerMetadataFromError(error);
   return recordParsedDecision(
     botName,
     {
@@ -347,6 +435,14 @@ export function fallbackDecision(
       },
     },
     "fallback_decision",
+    {
+      fallbackReason:
+        error instanceof ProviderDecisionParseError
+          ? error.reasonCode
+          : provider
+            ? "provider_call_error"
+            : "local_error",
+    },
   );
 }
 // ─── New event-driven query functions ───────────────────────────────────────
@@ -375,7 +471,7 @@ export async function queryStrategic(
   ];
 
   try {
-    const response = await chat({
+    const response = await chatClient({
       model: config.llm.model, // Strong model for strategic decisions
       messages,
       think: thinkFor(config.llm.model),
@@ -441,7 +537,7 @@ export async function queryReactive(name: string, situation: string, allowedActi
   ];
 
   try {
-    const response = await chat({
+    const response = await chatClient({
       model: config.llm.fastModel,
       messages,
       think: thinkFor(config.llm.fastModel),
@@ -487,7 +583,7 @@ export async function queryCritic(
   ];
 
   try {
-    const response = await chat({
+    const response = await chatClient({
       model: config.llm.fastModel,
       messages,
       think: thinkFor(config.llm.fastModel),
@@ -503,19 +599,37 @@ export async function queryCritic(
     llmLog.info("LLM:critic", `(${response.message.content.length} chars): ${response.message.content.slice(0, 150)}`);
     llmLog.debug("LLM:critic", "Action context:", actionContext);
     llmLog.debug("LLM:critic", "Full response:", response.message.content);
-    const metadata: LLMDecision["metadata"] = response.metadata
-      ? { requestId: response.metadata.requestId, origin: "provider", provider: response.metadata }
+    const providerMetadata = response.metadata;
+    const metadata: LLMDecision["metadata"] = providerMetadata
+      ? { requestId: providerMetadata.requestId, origin: "provider", provider: providerMetadata }
       : { requestId: null, origin: "provider" };
+    const fallbackMetadata = localFallbackMetadata(providerMetadata);
     const jsonStr = extractJSON(response.message.content);
     if (!jsonStr) {
       return recordCriticDecision(
         name,
         { success: false, thought: "Hmm...", nextAction: null, nextParams: {}, goalComplete: true },
-        metadata,
-        "parsed_critic",
+        fallbackMetadata,
+        "fallback_critic",
+        { fallbackReason: "provider_response_no_json" },
       );
     }
-    const parsed = JSON.parse(jsonStr);
+
+    let parsed: Record<string, any>;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (error) {
+      return recordCriticDecision(
+        name,
+        { success: false, thought: "Error evaluating", nextAction: null, nextParams: {}, goalComplete: true },
+        fallbackMetadata,
+        "fallback_critic",
+        {
+          fallbackReason: "provider_response_malformed_json",
+          parseError: (error as Error)?.message ?? String(error),
+        },
+      );
+    }
 
     // Normalize nextAction if present
     let nextAction = parsed.nextAction ?? null;
@@ -535,10 +649,16 @@ export async function queryCritic(
       },
       metadata,
       "parsed_critic",
+      {
+        normalization: {
+          sourceAction: typeof parsed.nextAction === "string" ? parsed.nextAction : null,
+          executedAction: nextAction,
+        },
+      },
     );
   } catch (err) {
     llmLog.error("LLM:critic", "Error:", err);
-    const provider = err instanceof ProviderCallError ? err.metadata : undefined;
+    const provider = providerMetadataFromError(err);
     return recordCriticDecision(
       name,
       { success: false, thought: "Error evaluating", nextAction: null, nextParams: {}, goalComplete: true },
@@ -680,7 +800,7 @@ export async function queryLLM(
   ];
 
   try {
-    let response = await chat({
+    let response = await chatClient({
       model: config.llm.fastModel,
       messages,
       think: thinkFor(config.llm.fastModel),
@@ -696,7 +816,7 @@ export async function queryLLM(
     // Retry once on short/empty response
     if (response.message.content.trim().length < 20) {
       llmLog.warn("LLM", "Short/empty response — retrying with fallback prompt...");
-      response = await chat({
+      response = await chatClient({
         model: config.llm.fastModel,
         think: thinkFor(config.llm.fastModel),
         telemetry: { botId: roleConfig?.name ?? config.bot.name, source: "legacy" },
@@ -737,7 +857,7 @@ export async function queryLLM(
  */
 export async function chatWithLLM(prompt: string, context: string, roleConfig?: { name: string }): Promise<string> {
   try {
-    const response = await chat({
+    const response = await chatClient({
       model: config.llm.fastModel,
       // think:false is load-bearing: without it qwen3.6 spends the entire
       // token budget inside <think> and returns empty content ("Hmm...").

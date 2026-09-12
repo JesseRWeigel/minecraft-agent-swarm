@@ -9,9 +9,11 @@ Restricted event data is written below `logs/episode-events-v1` by default:
 - `events/<run-id>.jsonl` is the append-only event sequence.
 - `payloads/<hash-prefix>/<sha256>.json` holds content-addressed payloads.
 - `DATASET_EVENT_DIR` and `DATASET_RUN_ID` can select a different root and run.
-- New compact summaries use `logs/trajectories-v2/<process-session>.jsonl`. Existing `logs/trajectories` files remain unchanged.
+- New compact summaries use `logs/trajectories-v2/<process-session>.jsonl`. Explicit session IDs must already contain only letters, digits, dots, underscores, or hyphens so distinct IDs cannot collapse onto one file. Existing `logs/trajectories` files remain unchanged.
 
-Every provider call has a new request ID. The request and response events share that ID. Every attempted action has a new action ID; its start, normalized decision, execution observation, terminal outcome, and trajectory summary share that ID. Provider-derived actions retain the request ID. Deterministic and local fallback decisions record their origin explicitly.
+Every provider call has a new request ID. The request and response events share that ID. Every top-level action routed through the brain has a new action ID; its start, normalized decision, execution observation, and terminal outcome share that ID. Strategic actions also receive a compact trajectory summary. Provider-derived actions retain the request ID. Deterministic overrides and the respawn hostile reflex are captured without a provider request.
+
+This is not a complete trace of every Mineflayer control update. Movement, pathfinder calls, and helper actions nested inside a skill remain evidence inside the enclosing top-level action rather than separate action records. New top-level reactive paths must use the brain capture wrapper.
 
 `episodeId` currently means one process-run and bot collection session (`<run-id>:<bot>`). It is not a mission, scenario, independent trial, world reset, or evaluation episode. A future scenario runner must define those boundaries and write independently verified episode-end predicates.
 
@@ -21,7 +23,7 @@ Each action terminal uses one of `succeeded`, `failed`, `blocked`, `cancelled`, 
 
 Capture happens at the provider boundary before decision parsing. The restricted request payload contains the model, sampling options, and the message array actually sent. Successful responses retain the provider envelope (or a bounded pre-parse wire response for OpenAI-compatible HTTP), provider/model identifiers, duration, and provider-supplied token quantities. Malformed and failed responses retain bounded response metadata when available. Missing usage is `null`; the collector does not infer token quantities or cost. Retries are separate requests with separate IDs.
 
-Locally parsed decisions and local fallback decisions are recorded separately, so a fallback cannot be presented as provider output.
+Provider responses, parser results, and local fallbacks are recorded separately. Valid action aliases and repairs retain provider origin with a normalization trace. No-JSON replies and replies missing an action keep the originating request ID, usage, and provider metadata but are marked `local_fallback`; malformed JSON follows the query's existing safe fallback with the same provenance. Critic parse fallbacks follow the same rule, so synthesized idle, flee, or critic values cannot be presented as provider proposals.
 
 Payload serialization redacts credential-shaped object keys such as `authorization`, `apiKey`, `access_token`, cookies, passwords, and client secrets. It preserves provider accounting fields such as `prompt_tokens`, `completion_tokens`, `total_tokens`, and `tokenCount`. The captured messages are therefore a redacted snapshot of the exact provider-bound request structure, not a promise of byte-identical provider traffic. Secrets embedded inside arbitrary message or response strings are not guaranteed to be detected. Keep this source restricted and perform a separate content and provenance review before any release.
 

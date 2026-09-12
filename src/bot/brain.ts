@@ -148,6 +148,7 @@ export class BotBrain {
   private overlayUpdater = updateOverlay;
   private skillOutcomeReader = takeSkillOutcome;
   private interruptionGeneration = 0;
+  private interruptionHistory: Array<{ generation: number; reason: string }> = [];
 
   // Processing state
   private processing = false;
@@ -548,7 +549,7 @@ export class BotBrain {
 
   /** Stop the brain — clears all timers. */
   stop(): void {
-    this.interruptionGeneration++;
+    this.markInterruption("brain_stopped_during_action");
     this.stopped = true;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.hostileScanner) clearInterval(this.hostileScanner);
@@ -557,7 +558,7 @@ export class BotBrain {
 
   /** Pause autonomous decisions and discard queued work that has not started. */
   pause(): void {
-    this.interruptionGeneration++;
+    this.markInterruption("paused_during_action");
     this.paused = true;
     this.eventQueue = [];
     if (this.idleTimer) clearTimeout(this.idleTimer);
@@ -566,7 +567,17 @@ export class BotBrain {
 
   /** Mark an in-flight action as interrupted by a Minecraft death. */
   markDeathInterruption(): void {
-    this.interruptionGeneration++;
+    this.markInterruption("death_interrupted");
+  }
+
+  private markInterruption(reason: string): void {
+    const generation = ++this.interruptionGeneration;
+    this.interruptionHistory.push({ generation, reason });
+    if (this.interruptionHistory.length > 256) this.interruptionHistory.shift();
+  }
+
+  private interruptionReasonSince(generation: number): string | null {
+    return this.interruptionHistory.find((entry) => entry.generation > generation)?.reason ?? null;
   }
   /** Resume autonomous decisions with a fresh strategic plan. */
   resume(): void {
@@ -3046,11 +3057,7 @@ export class BotBrain {
     evidenceRef: string,
   ): ActionOutcome {
     if (capture.interruptionGeneration !== this.interruptionGeneration) {
-      const reason = this.stopped
-        ? "brain_stopped_during_action"
-        : this.paused
-          ? "paused_during_action"
-          : "death_interrupted";
+      const reason = this.interruptionReasonSince(capture.interruptionGeneration) ?? "action_interrupted";
       return this.finishActionCapture(capture, "cancelled", reason, resultText, [evidenceRef]);
     }
     if (resultText === "Stopped before action execution") {
@@ -3107,6 +3114,44 @@ export class BotBrain {
       reportedSuccess: null,
       verifiedMissionProgress: null,
     });
+  }
+
+  /**
+   * Capture a top-level deterministic reflex without adding brain pause or
+   * drowning gates. Respawn safety used to call the dispatcher directly, so
+   * keeping this wrapper ungated preserves that behavior.
+   */
+  async executeDeterministicAction(
+    action: string,
+    params: Record<string, any>,
+    thought = "Deterministic runtime action",
+  ): Promise<string> {
+    const capture = this.beginActionCapture({
+      thought,
+      action,
+      params,
+      metadata: { requestId: null, origin: "deterministic" },
+    });
+    try {
+      const result = await this.actionExecutor(this.bot, action, params);
+      const skillName = action === "invoke_skill" ? (params.skill as string) : action;
+      const skillSuccess = result.startsWith("Already running skill ")
+        ? undefined
+        : this.skillOutcomeReader(this.bot, skillName);
+      const observation = this.executionObservation(capture, result, skillSuccess ?? null);
+      this.outcomeForExecution(capture, action, result, skillSuccess, observation.payloadRef);
+      return result;
+    } catch (error) {
+      const message = 'Action "' + action + '" threw: ' + ((error as Error)?.message ?? String(error));
+      const observation = this.executionObservation(capture, message, false);
+      const interruptionReason = this.interruptionReasonSince(capture.interruptionGeneration);
+      if (interruptionReason) {
+        this.finishActionCapture(capture, "cancelled", interruptionReason, message, [observation.payloadRef]);
+      } else {
+        this.finishActionCapture(capture, "failed", "execution_exception", message, [observation.payloadRef]);
+      }
+      throw error;
+    }
   }
 
   private async executeActionUnlessPaused(
@@ -3168,7 +3213,12 @@ export class BotBrain {
       if (capture) {
         const message = `Action "${action}" threw: ${(error as Error)?.message ?? String(error)}`;
         const observation = this.executionObservation(capture, message, false);
-        this.finishActionCapture(capture, "failed", "execution_exception", message, [observation.payloadRef]);
+        const interruptionReason = this.interruptionReasonSince(capture.interruptionGeneration);
+        if (interruptionReason) {
+          this.finishActionCapture(capture, "cancelled", interruptionReason, message, [observation.payloadRef]);
+        } else {
+          this.finishActionCapture(capture, "failed", "execution_exception", message, [observation.payloadRef]);
+        }
       }
       throw error;
     } finally {
@@ -3487,6 +3537,10 @@ export class BotBrain {
       this.lastResult = result;
       this.events.onAction(decision.action, result);
       const observation = this.executionObservation(capture, result, false);
+      const interruptionReason = this.interruptionReasonSince(capture.interruptionGeneration);
+      if (interruptionReason) {
+        return this.finishActionCapture(capture, "cancelled", interruptionReason, result, [observation.payloadRef]);
+      }
       return this.finishActionCapture(capture, "failed", "execution_exception", result, [observation.payloadRef]);
     }
     this.lastAction = decision.action;

@@ -28,7 +28,6 @@ import { recordDeath, startScoreboard } from "./scoreboard.js";
 import { createFallTracker, isFallDeath } from "./fall-tracker.js";
 import { shouldFleeOnRespawn } from "./respawn-safety.js";
 import { isHostile } from "./perception.js";
-import { executeAction } from "./actions.js";
 
 // Re-export types used by src/index.ts
 export type { ChatMessage, BrainEvents as BotEvents };
@@ -493,7 +492,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
           console.log(
             `[Respawn] ${roleConfig.name} woke up ${dist!.toFixed(1)} blocks from ${hostile!.name ?? "a hostile"} — fleeing before resuming`,
           );
-          executeAction(bot, "flee", {}).catch(() => {});
+          brain.executeDeterministicAction("flee", {}, "Respawn hostile reflex").catch(() => {});
         } else {
           console.log(
             `[Respawn] ${roleConfig.name} spawn check: nearest hostile ${dist === null ? "none" : dist.toFixed(1) + " blocks"} — resuming`,

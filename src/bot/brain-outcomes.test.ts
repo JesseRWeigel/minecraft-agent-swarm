@@ -70,6 +70,7 @@ function setup() {
   brain.actionExecutor = async (_bot: unknown, action: string, params: Record<string, unknown>) =>
     action === "chat" ? `Said: ${params.message}` : "Arrived.";
   brain.interruptionGeneration = 0;
+  brain.interruptionHistory = [];
   brain.triggerReplan = () => {};
   brain.resetIdleTimer = () => {};
 
@@ -330,4 +331,52 @@ test("a same-skill concurrency rejection cannot consume a stale reported success
   const outcome = await brain.executeDecision({ thought: "build twice", action: "build_house", params: {} });
   assert.equal(outcome.status, "blocked");
   assert.equal(outcome.reasonCode, "skill_already_running");
+});
+
+test("pause attribution survives resume for both fulfillment and rejection", async () => {
+  const fulfilledSetup = setup();
+  const fulfillment = deferred<string>();
+  fulfilledSetup.brain.actionExecutor = async () => fulfillment.promise;
+  const fulfilling = fulfilledSetup.brain.executeDecision({ thought: "walk", action: "explore", params: {} });
+  fulfilledSetup.brain.pause();
+  fulfilledSetup.brain.resume();
+  fulfillment.resolve("Arrived.");
+  const fulfilled = await fulfilling;
+  assert.equal(fulfilled.status, "cancelled");
+  assert.equal(fulfilled.reasonCode, "paused_during_action");
+
+  const rejectedSetup = setup();
+  let rejectAction!: (error: Error) => void;
+  const rejection = new Promise<string>((_resolve, reject) => {
+    rejectAction = reject;
+  });
+  rejectedSetup.brain.actionExecutor = async () => rejection;
+  const rejecting = rejectedSetup.brain.executeDecision({ thought: "walk", action: "explore", params: {} });
+  rejectedSetup.brain.pause();
+  rejectedSetup.brain.resume();
+  rejectAction(new Error("late path rejection"));
+  const rejected = await rejecting;
+  assert.equal(rejected.status, "cancelled");
+  assert.equal(rejected.reasonCode, "paused_during_action");
+  assert.match(rejected.resultText, /late path rejection/);
+});
+
+test("ungated deterministic reflexes preserve their direct action behavior and are captured", async () => {
+  const { brain, recorder } = setup();
+  let executed = false;
+  brain.paused = true;
+  brain.actionExecutor = async () => {
+    executed = true;
+    return "Fled 12 blocks.";
+  };
+  const result = await brain.executeDeterministicAction("flee", {}, "Respawn hostile reflex");
+  assert.equal(result, "Fled 12 blocks.");
+  assert.equal(executed, true);
+  const records = payloads(recorder);
+  const start = records.find(({ event }) => event.kind === "action_started")!;
+  const terminal = records.find(({ event }) => event.kind === "action_finished")!;
+  assert.equal(start.event.requestId, null);
+  assert.equal(start.payload.proposedDecision.thought, "Respawn hostile reflex");
+  assert.equal(terminal.event.actionId, start.event.actionId);
+  assert.equal(terminal.payload.outcome.status, "unknown");
 });
