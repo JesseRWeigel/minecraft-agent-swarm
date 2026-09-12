@@ -961,12 +961,17 @@ export class BotBrain {
       const feetBlock = this.bot.blockAt(new Vec3(f.x, f.y, f.z))?.name ?? "";
       const inWater = feetBlock === "water" || feetBlock === "flowing_water";
       const waterTrap = inWater && walledIn && feetWalls >= 2;
-      if ((buried || pit || waterTrap) && (pickless || walledIn)) {
+      // Chronic: six failed walks in a row from one spot is a trap whatever
+      // the geometry (Forge on a cobblestone ledge over a drop at
+      // 243,58,-512, no water after all, 100+ stuck resets per walk). A bot
+      // with a pickaxe digs a staircase out in under a minute.
+      const chronic = this.navFailStreak >= 6 && !pickless;
+      if ((buried || pit || waterTrap || chronic) && (pickless || walledIn)) {
         this.lastEscapeMs = Date.now();
         this.navFailStreak = 0;
         this.log.info(
           "Brain",
-          `OVERRIDE: ${buried ? "buried" : pit ? "in a pit" : "in a water hole"} ${pickless ? "pickless" : `with a pick but ${walledIn ? "walks keep failing" : ""}`} at y=${f.y} — digging up to the surface`,
+          `OVERRIDE: ${buried ? "buried" : pit ? "in a pit" : waterTrap ? "in a water hole" : "stuck in place"} ${pickless ? "pickless" : `with a pick but ${walledIn ? "walks keep failing" : ""}`} at y=${f.y} — digging up to the surface`,
         );
         // The client's own view of the column overhead, for the desync seen
         // in run 537/538: the server held Flora at 363,62,-281 under stone
