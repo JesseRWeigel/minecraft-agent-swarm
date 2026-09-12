@@ -58,6 +58,29 @@ export const tradeWithVillagerSkill: Skill = {
     // Dig-capable march: unknown terrain over ~650 blocks snags cautious
     // moves on the first ridge, so bulldoze through. The searchRadius clamp
     // inside safeGoto bounds each hop.
+    // Goods first. Runs 572 to 575: the march reached the village four times
+    // and every trip ended "no villager had a trade I could afford", with 0
+    // coal aboard and 2,882 coal in the stash. Sixteen coal is one emerald
+    // at an armorer, toolsmith or weaponsmith; carry enough for two trades
+    // so a bread purchase can follow.
+    try {
+      const { STASH_POS } = await import("../bot/role.js");
+      const nearStash = Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z) < 90;
+      if (invCount(bot, "coal") < 16 && nearStash) {
+        const { withdrawStash } = await import("./stash.js");
+        step("Fetching coal from the stash to sell...", 0.05);
+        const r = await Promise.race([
+          withdrawStash(bot, STASH_POS, "coal", 32),
+          new Promise<string>((res) => setTimeout(() => res("timeout"), 60_000)),
+        ]).catch((e: Error) => e.message);
+        console.log(`[TradeDebug] ${bot.username} coal withdraw: ${r} (coal now ${invCount(bot, "coal")})`);
+      } else {
+        console.log(`[TradeDebug] ${bot.username} goods aboard: coal ${invCount(bot, "coal")}, nearStash=${nearStash}`);
+      }
+    } catch (e) {
+      console.log(`[TradeDebug] ${bot.username} coal withdraw skipped: ${(e as Error).message}`);
+    }
+
     const marchMoves = baseMoves(bot);
     (marchMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).canDig = true;
     (marchMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).allow1by1towers = true;
@@ -120,11 +143,33 @@ export const tradeWithVillagerSkill: Skill = {
         t.hasItem2 && t.inputItem2 ? [t.inputItem1, t.inputItem2] : [t.inputItem1];
 
       // Pick the first live trade whose inputs we can fully cover.
-      const affordable = trades.find((t) => {
+      const canPay = (t: (typeof trades)[number]) => {
         if (!t || t.tradeDisabled) return false;
         if (t.nbTradeUses >= t.maximumNbTradeUses) return false;
         return inputsOf(t).every((inp) => inp && invCount(bot, inp.name) >= inp.count);
-      });
+      };
+      // Name what the villager offers, so a "could afford" failure says why.
+      console.log(
+        `[TradeDebug] ${bot.username} villager ${villager.id}: ` +
+          (trades.length
+            ? trades
+                .map(
+                  (t) =>
+                    `${inputsOf(t)
+                      .map((i) => (i ? `${i.count} ${i.name}` : "?"))
+                      .join(
+                        "+",
+                      )} -> ${t.outputItem ? `${t.outputItem.count} ${t.outputItem.name}` : "?"}${t.tradeDisabled ? " (disabled)" : ""}${canPay(t) ? " [ok]" : ""}`,
+                )
+                .join("; ")
+            : "no trades (unprofessioned)"),
+      );
+      // Prefer food for emeralds when hungry and holding emeralds, else any
+      // affordable trade (selling coal is the usual first deal).
+      const isFood = (n: string | undefined) =>
+        !!n && /bread|cooked_|apple|cookie|pie|baked_potato|carrot|potato|melon/.test(n);
+      const foodTrade = bot.food < 14 ? trades.find((t) => canPay(t) && isFood(t.outputItem?.name)) : undefined;
+      const affordable = foodTrade ?? trades.find(canPay);
 
       if (!affordable) {
         bot.closeWindow(win);

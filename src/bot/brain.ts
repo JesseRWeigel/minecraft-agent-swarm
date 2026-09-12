@@ -1992,11 +1992,13 @@ export class BotBrain {
       const spTrade = this.roleConfig.stashPos;
       const nearStashTrade =
         !!spTrade && Math.hypot(this.bot.entity.position.x - spTrade.x, this.bot.entity.position.z - spTrade.z) < 40;
-      const hasCoal =
-        this.bot.inventory
-          .items()
-          .filter((i) => i.name === "coal")
-          .reduce((s, i) => s + i.count, 0) >= 15;
+      // Coal aboard OR in the stash band: the skill now withdraws 32 before
+      // the march (2,882 coal banked while four trips failed for want of it).
+      const coalAboard = this.bot.inventory
+        .items()
+        .filter((i) => i.name === "coal")
+        .reduce((s, i) => s + i.count, 0);
+      const hasCoal = coalAboard >= 15 || (ledgerKnown() && stashCount("coal", spTrade?.y) >= 16);
       if (!tradeDone && cooledTrade && todTrade < 9000 && nearStashTrade && hasCoal) {
         this.lastTradeMs = Date.now();
         this.log.info("Brain", "OVERRIDE: no village nearby — marching to sell coal for What a Deal!");
