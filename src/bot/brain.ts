@@ -680,7 +680,12 @@ export class BotBrain {
         data: { reason: "low_health", health: this.bot.health },
         timestamp: now,
       });
-    } else if (this.bot.food <= 6) {
+    } else if (this.bot.food <= 6 && this.hasEdibleAboard()) {
+      // Only when there is something to eat: run 569 logged 156 "eat" actions
+      // in an hour, most answered "No food in inventory!", each one an LLM
+      // call and an item swap that cancels whatever the bot was holding (a
+      // fishing cast, a chest walk). Starvation with an empty pack is the
+      // hunger and fishing overrides' job.
       this.pushEvent({
         type: "reactive",
         priority: 2,
@@ -688,6 +693,12 @@ export class BotBrain {
         timestamp: now,
       });
     }
+  }
+
+  private hasEdibleAboard(): boolean {
+    const edible =
+      /(bread|cooked_|^cod$|^salmon$|apple|carrot|potato|baked|melon_slice|cookie|beef|porkchop|mutton|chicken|rabbit|rotten_flesh|tropical_fish)/;
+    return this.bot.inventory.items().some((i) => edible.test(i.name));
   }
 
   // ─── Safety overrides ─────────────────────────────────────────────────────
@@ -2720,7 +2731,15 @@ export class BotBrain {
       // minutes to a five-pillager patrol camped on the stash, with one stone
       // sword in the whole swarm and 5,000 cobblestone banked.
       const noSword = !this.bot.inventory.items().some((i) => i.name.endsWith("_sword"));
-      if ((hasPick || noSword) && cooledArmor) {
+      // Armour needs iron: the cheapest piece costs 4 ingots. Run 569 ran
+      // craft_gear 20 times for "No new tools crafted" because every bot
+      // had a pick and no armour while the pack and stash held 0 to 2 iron.
+      const ironAboard = this.bot.inventory
+        .items()
+        .filter((i) => i.name === "iron_ingot")
+        .reduce((n, i) => n + i.count, 0);
+      const ironReachable = ironAboard + (ledgerKnown() ? stashCount("iron_ingot", this.roleConfig.stashPos?.y) : 99);
+      if (((hasPick && ironReachable >= 4) || noSword) && cooledArmor) {
         this.lastArmorCraftMs = Date.now();
         this.log.info("Brain", "OVERRIDE: unarmoured with a pick in hand — running craft_gear to forge armour");
         this.events.onThought("A pick in hand but nothing on my back. Time to forge some armour.");
