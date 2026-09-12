@@ -30,5 +30,8 @@ class LabelTests(unittest.TestCase):
         for v in [None, 1, 'true']:
             self.assertIsNone(classify_legacy({'success': v, 'result': 'okay'})['original_success'])
 
+    def test_timeout_needs_a_boundary_after_seconds(self):
+        text = 'Action "attack" timed out after 5successful actions followed.'
+        self.assertEqual(classify_legacy({'success': True, 'result': text})['revised_status'], 'unknown')
 
 if __name__ == '__main__': unittest.main()

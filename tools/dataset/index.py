@@ -3,7 +3,6 @@ import argparse
 import collections
 import datetime
 import hashlib
-import heapq
 import json
 import math
 import os
@@ -59,7 +58,8 @@ def load_manifest(path):
     if path.stat().st_size > 32 * 1024 * 1024:
         raise ValueError('Oversized manifest')
     doc = decode(path.read_bytes())
-    if not isinstance(doc, dict) or doc.get('schema_version') != 1 or doc.get('complete') is not True:
+    if (not isinstance(doc, dict) or type(doc.get('schema_version')) is not int
+            or doc['schema_version'] != 1 or doc.get('complete') is not True):
         raise ValueError('Require complete version-1 archive')
     if not isinstance(doc.get('files'), list):
         raise ValueError('Missing file records')
@@ -75,11 +75,15 @@ def load_manifest(path):
             raise ValueError('Invalid hash')
         if type(size) is not int or size < 0 or target.stat().st_size != size:
             raise ValueError('Invalid archive size')
+        source_size = entry.get('source_size_at_open')
+        if type(source_size) is not int or source_size < size:
+            raise ValueError('Invalid source size')
         if entry.get('status') not in ('complete', 'complete_prefix'):
             raise ValueError('Invalid capture status')
         if not isinstance(entry.get('source_relpath'), str) or not isinstance(entry.get('source_kind'), str):
             raise ValueError('Missing source identity')
-        if entry['source_kind'] == 'trajectory_jsonl' and entry.get('complete_line_cutoff') != size:
+        cutoff = entry.get('complete_line_cutoff')
+        if entry['source_kind'] == 'trajectory_jsonl' and (type(cutoff) is not int or cutoff != size):
             raise ValueError('Invalid trajectory cutoff')
     return doc
 
@@ -171,7 +175,8 @@ def build_index(manifest_path, output_path, max_line_bytes=MAX_LINE_BYTES):
                             label = classify_legacy(row)
                             action = row['decision']['action']
                             action_key = hashlib.sha256(json.dumps([action,row['decision'].get('params',{})],sort_keys=True).encode()).hexdigest()
-                            context_hash = hashlib.sha256((row['system']+'\n'+row['context']).encode()).hexdigest()
+                            context_material = json.dumps([row['system'], row['context']], ensure_ascii=False, separators=(',', ':'))
+                            context_hash = hashlib.sha256(context_material.encode()).hexdigest()
                             record_id = f"{entry['sha256']}:{line_no}"
                             cursor = db.execute('INSERT OR IGNORE INTO records VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', (
                                 record_id,entry['source_relpath'],entry['sha256'],line_no,
@@ -213,39 +218,52 @@ def build_index(manifest_path, output_path, max_line_bytes=MAX_LINE_BYTES):
 
 def sample_candidates(index_path, limit=300, seed='dataset-v1'):
     if not 1 <= limit <= 10000: raise ValueError('Candidate limit must be 1..10000')
-    heaps = collections.defaultdict(list)
     uri = Path(index_path).absolute().as_uri()+'?mode=ro'
-    with sqlite3.connect(uri,uri=True) as db:
-        rows = db.execute('SELECT id,source_path,line_no,session_id,bot,timestamp,action,family,context_hash,action_key,revised_status FROM records')
-        for row in rows:
-            key = row[7],row[4],row[5][:7]
-            rank = int.from_bytes(hashlib.sha256((seed+'\0'+row[0]).encode()).digest(),'big')
-            heap = heaps[key]
-            item = (-rank,row)
-            if len(heap)<limit: heapq.heappush(heap,item)
-            elif item>heap[0]: heapq.heapreplace(heap,item)
-    pools = {key:[r for _,r in sorted(items,reverse=True)] for key,items in heaps.items()}
     selected=[]; seen=set(); groups=set()
-    # First diversify sessions within each family; then fill remaining slots.
-    for diverse in (True,False):
-        positions = {key:0 for key in pools}
-        while len(selected)<limit:
-            progressed=False
-            for key in sorted(pools):
-                while positions[key]<len(pools[key]):
-                    row=pools[key][positions[key]]; positions[key]+=1
-                    signature=(row[8],row[9],row[10])
-                    group=(row[3],row[7])
-                    if signature in seen or (diverse and group in groups): continue
-                    seen.add(signature);groups.add(group);progressed=True
-                    selected.append({'record_id':row[0],'source_relpath':row[1],'line_no':row[2],
-                        'session_id':row[3],'bot':row[4],'timestamp':row[5],'action':row[6],
-                        'family':row[7],'revised_status':row[10],'quality':'observed',
-                        'split':'development_candidate','window_start_line':max(1,row[2]-3),'window_end_line':row[2]+3,
-                        'window_note':'Unreviewed line window; filter by bot and inspect continuation. Not a verified episode.'})
-                    break
+    with sqlite3.connect(uri,uri=True) as db:
+        db.execute('PRAGMA temp_store=FILE')
+        db.execute('PRAGMA cache_size=-2048')
+        db.execute('PRAGMA temp.cache_size=-2048')
+        db.create_function('sample_rank', 1, lambda record_id: hashlib.sha256(
+            (seed+'\0'+record_id).encode()).hexdigest(), deterministic=True)
+        query = '''
+            WITH base AS (
+                SELECT id,source_path,line_no,session_id,bot,timestamp,action,family,
+                       context_hash,action_key,revised_status,substr(timestamp,1,7) AS month,
+                       sample_rank(id) AS rank_hex
+                FROM records
+            ), ranked AS (
+                SELECT *,row_number() OVER (
+                    PARTITION BY family,bot,month ORDER BY rank_hex,id
+                ) AS candidate_round
+                FROM base
+            ), strata AS (
+                SELECT family,bot,month,row_number() OVER (
+                    PARTITION BY family ORDER BY bot,month
+                ) AS stratum_round
+                FROM (SELECT DISTINCT family,bot,substr(timestamp,1,7) AS month FROM records)
+            )
+            SELECT r.id,r.source_path,r.line_no,r.session_id,r.bot,r.timestamp,r.action,
+                   r.family,r.context_hash,r.action_key,r.revised_status
+            FROM ranked AS r JOIN strata AS s
+              ON r.family=s.family AND r.bot=s.bot AND r.month=s.month
+            ORDER BY r.candidate_round,s.stratum_round,r.family,r.bot,r.month,r.rank_hex,r.id
+        '''
+        # The first pass diversifies sessions within a family. The second fills any capacity
+        # left by duplicate signatures or repeated sessions. Both cursors are streamed.
+        for diverse in (True,False):
+            for row in db.execute(query):
+                signature=(row[8],row[9],row[10])
+                group=(row[3],row[7])
+                if signature in seen or (diverse and group in groups): continue
+                seen.add(signature);groups.add(group)
+                selected.append({'record_id':row[0],'source_relpath':row[1],'line_no':row[2],
+                    'session_id':row[3],'bot':row[4],'timestamp':row[5],'action':row[6],
+                    'family':row[7],'revised_status':row[10],'quality':'observed',
+                    'split':'development_candidate','window_start_line':max(1,row[2]-3),'window_end_line':row[2]+3,
+                    'window_note':'Unreviewed line window; filter by bot and inspect continuation. Not a verified episode.'})
                 if len(selected)>=limit: break
-            if not progressed: break
+            if len(selected)>=limit: break
     return selected
 
 

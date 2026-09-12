@@ -34,6 +34,8 @@ These are textual classifications, not new ground truth. Every record remains `q
 
 Sampling is deterministic for a fixed index, seed, and limit. It balances six broad action families, bot and month, favors session diversity within each family, and collapses exact system/context + action/parameter + revised-status repetitions. It is a review queue, not a random prevalence estimate, a semantic deduplicator, or a train/test split. Near-duplicate loops can survive and require reviewer grouping.
 
+Candidate ranks and family/bot/month rounds are sorted in SQLite with file-backed temporary storage. The query is streamed twice so Python retains only the selected signatures and session groups, bounded by the requested limit. This trades extra local sorting and temporary disk I/O for bounded process memory when an archive contains many distinct bots or months.
+
 Each candidate points to a seven-line window around a decision. Interleaved teammates may occupy those lines; filter by bot, inspect earlier context and later continuation, and extend the window as needed. The tool deliberately does not call this a complete episode. Every candidate is `split=development_candidate`; no held-out test set is created from one persistent historical world.
 
 ## Independent episode review

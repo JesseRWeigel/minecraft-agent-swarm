@@ -1,8 +1,10 @@
+import gc
 import hashlib
 import json
 from pathlib import Path
 import sqlite3
 import tempfile
+import tracemalloc
 import unittest
 from index import build_index, sample_candidates
 
@@ -27,6 +29,15 @@ class IndexTests(unittest.TestCase):
         self.source.write_bytes(data)
         item = {'source_relpath': 'logs/trajectories/session.jsonl', 'archive_relpath': 'data.jsonl', 'source_kind': 'trajectory_jsonl', 'sha256': hashlib.sha256(data).hexdigest(), 'captured_bytes': len(data), 'source_size_at_open': len(data), 'complete_line_cutoff': len(data), 'status': 'complete'}
         self.manifest.write_text(json.dumps({'schema_version': 1, 'complete': True, 'captured_at_utc': '2026-09-12T00:00:00Z', 'source_root': '/example', 'files': [item]}))
+
+    def sample_db(self, rows):
+        with sqlite3.connect(self.output) as db:
+            db.execute('CREATE TABLE records(id,source_path,line_no,session_id,bot,timestamp,action,family,context_hash,action_key,revised_status)')
+            db.executemany('INSERT INTO records VALUES (?,?,?,?,?,?,?,?,?,?,?)', rows)
+
+    def sample_row(self, i, family='food_resources'):
+        return (f'id-{i}', 'session.jsonl', i + 1, f'session-{i}', f'bot-{i}',
+                '2026-06-12T01:02:03Z', 'eat', family, f'context-{i}', f'action-{i}', 'unknown')
 
     def test_reconciles_and_preserves_source(self):
         data = json.dumps(row()).encode() + b'\nnot-json\n{}\n\n'
@@ -98,5 +109,60 @@ class IndexTests(unittest.TestCase):
         build_index(self.manifest,self.output)
         self.assertEqual(len(sample_candidates(self.output,5,'fixed')),1)
 
+    def test_boolean_source_size_at_open_is_rejected(self):
+        self.fixture(json.dumps(row()).encode()+b'\n')
+        doc = json.loads(self.manifest.read_text())
+        doc['files'][0]['source_size_at_open'] = True
+        self.manifest.write_text(json.dumps(doc))
+        with self.assertRaises(ValueError):
+            build_index(self.manifest, self.output)
+
+    def test_boolean_trajectory_cutoff_is_rejected(self):
+        self.fixture(b'')
+        doc = json.loads(self.manifest.read_text())
+        doc['files'][0]['complete_line_cutoff'] = False
+        self.manifest.write_text(json.dumps(doc))
+        with self.assertRaises(ValueError):
+            build_index(self.manifest, self.output)
+
+    def test_context_hash_keeps_distinct_system_context_pairs(self):
+        first = {**row(), 'system': 'a\n', 'context': 'b'}
+        second = {**row(), 'system': 'a', 'context': '\nb'}
+        self.fixture(json.dumps(first).encode()+b'\n'+json.dumps(second).encode()+b'\n')
+        build_index(self.manifest, self.output)
+        self.assertEqual(len(sample_candidates(self.output, 10, 'fixed')), 2)
+
+    def test_boolean_schema_version_is_rejected(self):
+        self.fixture(json.dumps(row()).encode()+b'\n')
+        doc = json.loads(self.manifest.read_text())
+        doc['schema_version'] = True
+        self.manifest.write_text(json.dumps(doc))
+        with self.assertRaises(ValueError):
+            build_index(self.manifest, self.output)
+
+    def test_sampler_represents_all_families_before_repeating_one(self):
+        families = ['navigation', 'food_resources', 'shared_resources',
+                    'inventory_crafting', 'multi_step', 'other_recovery']
+        rows = [self.sample_row(i, family) for i, family in enumerate(families)]
+        rows.extend(self.sample_row(100 + i, 'food_resources') for i in range(12))
+        self.sample_db(rows)
+        selected = sample_candidates(self.output, len(families), 'fixed')
+        self.assertEqual(selected, sample_candidates(self.output, len(families), 'fixed'))
+        self.assertEqual({item['family'] for item in selected}, set(families))
+
+    def test_sampler_limit_has_a_fixed_upper_bound(self):
+        self.sample_db([])
+        with self.assertRaises(ValueError):
+            sample_candidates(self.output, 10_001, 'fixed')
+
+    def test_sampler_python_memory_is_bounded_by_limit(self):
+        self.sample_db(self.sample_row(i) for i in range(10_000))
+        gc.collect()
+        tracemalloc.start()
+        selected = sample_candidates(self.output, 1, 'fixed')
+        _, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        self.assertEqual(len(selected), 1)
+        self.assertLess(peak, 3_000_000)
 
 if __name__ == '__main__': unittest.main()

@@ -13,7 +13,7 @@ def classify_legacy(row: dict) -> dict:
         status, reason = 'blocked', 'recent_failure_gate'
     elif re.match(r'^Action "[^"\n]+" not allowed for [^\n]+\. Use:', text):
         status, reason = 'blocked', 'policy_denied'
-    elif re.match(r'^Action "[^"\n]+" timed out after \d+s', text):
+    elif re.match(r'^Action "[^"\n]+" timed out after \d+s\b', text):
         status, reason = 'timed_out', 'execution_timeout'
     elif text.startswith('Action failed: Navigation timed out'):
         status, reason = 'timed_out', 'navigation_timeout'
