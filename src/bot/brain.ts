@@ -2483,10 +2483,13 @@ export class BotBrain {
       // proven end-to-end — it earned Fishy Business and lands 3-5 edible
       // catches a run with no terrain luck. A fisher who is hungry with
       // nothing edible aboard goes fishing even after the advancement banked.
-      const edible =
-        /(bread|cooked_|raw_cod|raw_salmon|apple|carrot|potato|baked|melon_slice|cookie|beef|porkchop|mutton)/;
+      const edible = /(bread|cooked_|^cod$|^salmon$|apple|carrot|potato|baked|melon_slice|cookie|beef|porkchop|mutton)/;
       const starving = this.bot.food < 12 && !this.bot.inventory.items().some((i) => edible.test(i.name));
-      if ((!fished || starving) && cooled) {
+      // Every role may fish now (run 563: 17 deaths, four bots at 0 food, nine
+      // empty hunts). The Fishy Business chase stays Flora's; the others go
+      // to the water only when starving.
+      const chasesFishy = !fished && this.bot.username === "Flora";
+      if ((chasesFishy || starving) && cooled) {
         this.lastFishOverrideMs = Date.now();
         this.log.info(
           "Brain",
@@ -2520,7 +2523,7 @@ export class BotBrain {
     // scouting outward in daylight when none is in sight, and eats it there.
     if (config.bot.allowStrategyOverrides && !isSkillRunning(this.bot)) {
       const edible =
-        /(bread|cooked_|raw_cod|raw_salmon|apple|carrot|potato|baked|melon_slice|cookie|beef|porkchop|mutton|chicken|rabbit)/;
+        /(bread|cooked_|^cod$|^salmon$|apple|carrot|potato|baked|melon_slice|cookie|beef|porkchop|mutton|chicken|rabbit)/;
       const hasEdible = this.bot.inventory.items().some((i) => edible.test(i.name));
       const cooled = Date.now() - this.lastHuntFoodOverrideMs > 240_000;
       // At night the skill will not scout, but an animal already in view is

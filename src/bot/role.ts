@@ -109,7 +109,7 @@ export const ATLAS_CONFIG: BotRoleConfig = {
   // Ore discoveries at X=254-550 confirm this zone is explorable and away from the bare highland.
   safeSpawn: { x: 280, y: 0, z: -320 },
   allowedActions: ["explore", "go_to", "gather_wood", "mine_block", "chat", "eat", "sleep", "flee", "attack"],
-  allowedSkills: ["find_fortress", "craft_gear"],
+  allowedSkills: ["find_fortress", "craft_gear", "go_fishing"],
   keepItems: [
     { name: "sapling", minCount: 16 },
     { name: "sword", minCount: 1 },
@@ -201,6 +201,8 @@ export const FORGE_CONFIG: BotRoleConfig = {
     "wax_copper",
     "wax_off",
     "harvest_honey",
+
+    "go_fishing",
   ],
   keepItems: [
     { name: "sapling", minCount: 16 },
@@ -265,6 +267,8 @@ export const MASON_CONFIG: BotRoleConfig = {
     "find_fortress",
     "loot_bastion",
     "setup_enchanting",
+
+    "go_fishing",
   ],
   keepItems: [
     { name: "sapling", minCount: 16 },
@@ -310,7 +314,7 @@ export const BLADE_CONFIG: BotRoleConfig = {
   // smelt_ores added for the gold economy: the piglin campaign runs on gold
   // ingots and the stash's last five are RAW — with this skill in the list,
   // the standing raw-metal-aboard override cooks whatever oh_shiny withdraws.
-  allowedSkills: ["neural_combat", "craft_gear", "build_nether_portal", "smelt_ores"],
+  allowedSkills: ["neural_combat", "craft_gear", "build_nether_portal", "smelt_ores", "go_fishing"],
   keepItems: [
     { name: "sword", minCount: 1 },
     { name: "shield", minCount: 1 },

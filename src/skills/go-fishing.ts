@@ -4,9 +4,9 @@ import { Vec3 } from "vec3";
 import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
 import mcDataLoader from "minecraft-data";
-import { baseMoves } from "../bot/navigation.js";
+import { baseMoves, explorerMoves, safeGoto, GoalNearXZAbove } from "../bot/navigation.js";
 
-const FISH_ATTEMPTS = 5;
+const FISH_ATTEMPTS = 6;
 const BITE_TIMEOUT_MS = 35000;
 
 export const goFishingSkill: Skill = {
@@ -42,16 +42,52 @@ export const goFishingSkill: Skill = {
       try {
         const { withdrawStash } = await import("./stash.js");
         const { STASH_POS } = await import("../bot/role.js");
-        if (Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z) < 60) {
-          await Promise.race([
+        // The stash is the rod: it holds string, sticks and planks (ledger
+        // 2026-09-12: string 9, stick 573). Run 563: every bot at 0 food, nine
+        // hunts in a row saw no animal, and the one fishing attempt gave up
+        // because Flora stood 200 blocks from the stash. Walk there first.
+        const gap = () => Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z);
+        if (gap() > 60) {
+          onProgress({
+            skillName: "go_fishing",
+            phase: "Preparing",
+            progress: 0.01,
+            message: `Walking to the stash for string — ${Math.round(gap())} blocks out...`,
+            active: true,
+          });
+          bot.pathfinder.setMovements(explorerMoves(bot));
+          const deadline = Date.now() + 170_000;
+          let guard = 0;
+          while (gap() > 40 && Date.now() < deadline && !signal.aborted) {
+            const before = gap();
+            const t = Math.min(1, 100 / before);
+            const wx = Math.round(bot.entity.position.x + (STASH_POS.x - bot.entity.position.x) * t);
+            const wz = Math.round(bot.entity.position.z + (STASH_POS.z - bot.entity.position.z) * t);
+            await safeGoto(bot, new GoalNearXZAbove(wx, wz, 8, 62), 45_000, 12_000).catch(() => {});
+            if (before - gap() >= 6) guard = 0;
+            else if (++guard >= 3) break;
+          }
+          console.log(`[FishDebug] ${bot.username} stash march ended ${Math.round(gap())} blocks out`);
+        }
+        if (gap() <= 60) {
+          const r1 = await Promise.race([
             withdrawStash(bot, STASH_POS, "fishing_rod", 1),
-            new Promise((r) => setTimeout(r, 30_000)),
-          ]).catch(() => {});
+            new Promise<string>((r) => setTimeout(() => r("timeout"), 30_000)),
+          ]).catch((e: Error) => e.message);
+          console.log(`[FishDebug] ${bot.username} rod withdraw: ${r1}`);
           if (!bot.inventory.items().some((i) => i.name === "fishing_rod") && held("string") < 2) {
-            await Promise.race([
+            const r2 = await Promise.race([
               withdrawStash(bot, STASH_POS, "string", 2),
-              new Promise((r) => setTimeout(r, 30_000)),
-            ]).catch(() => {});
+              new Promise<string>((r) => setTimeout(() => r("timeout"), 30_000)),
+            ]).catch((e: Error) => e.message);
+            console.log(`[FishDebug] ${bot.username} string withdraw: ${r2} (string now ${held("string")})`);
+          }
+          if (!bot.inventory.items().some((i) => i.name === "fishing_rod") && held("stick") < 3) {
+            const r3 = await Promise.race([
+              withdrawStash(bot, STASH_POS, "stick", 3),
+              new Promise<string>((r) => setTimeout(() => r("timeout"), 30_000)),
+            ]).catch((e: Error) => e.message);
+            console.log(`[FishDebug] ${bot.username} stick withdraw: ${r3} (sticks now ${held("stick")})`);
           }
         }
       } catch {
@@ -108,9 +144,11 @@ export const goFishingSkill: Skill = {
       active: true,
     });
 
+    // 64, up from 48: the nearest open water to the stash is 41 blocks out
+    // and the lake at (338, 62, -330) is 54 (RCON scan 2026-09-12).
     const water = bot.findBlock({
       matching: (b) => b.name === "water",
-      maxDistance: 48,
+      maxDistance: 64,
     });
     if (!water) {
       return { success: false, message: "No water nearby! Explore to find a lake or river." };
@@ -118,11 +156,14 @@ export const goFishingSkill: Skill = {
 
     // Navigate to water's edge (stand on the bank, not in the water)
     setMovements(bot);
-    try {
-      await bot.pathfinder.goto(new goals.GoalNear(water.position.x, water.position.y + 1, water.position.z, 3));
-    } catch {
+    await safeGoto(
+      bot,
+      new goals.GoalNear(water.position.x, water.position.y + 1, water.position.z, 3),
+      60_000,
+      12_000,
+    ).catch(() => {
       /* try anyway */
-    }
+    });
 
     // --- Step 3: Fish! ---
     let caught = 0;
@@ -175,9 +216,28 @@ export const goFishingSkill: Skill = {
       return { success: false, message: "Didn't catch anything! The fish outsmarted me. Try again near deeper water." };
     }
 
+    // Eat the catch on the bank while hungry: raw cod and salmon are 2 hunger
+    // each, and a starving bot has no regen until food is back over 17.
+    let ate = 0;
+    const foodBefore = bot.food;
+    for (let i = 0; i < 6 && bot.food < 17 && !signal.aborted; i++) {
+      const fish = bot.inventory
+        .items()
+        .find((it) => /^(cod|salmon|cooked_cod|cooked_salmon|tropical_fish)$/.test(it.name));
+      if (!fish) break;
+      try {
+        await bot.equip(fish, "hand");
+        await bot.consume();
+        ate++;
+      } catch {
+        break;
+      }
+    }
+    console.log(`[FishDebug] ${bot.username} caught ${caught}, ate ${ate}, hunger ${foodBefore} -> ${bot.food}`);
+
     return {
       success: true,
-      message: `Fishing trip done! Caught ${caught} items in ${FISH_ATTEMPTS} casts. Fresh fish dinner!`,
+      message: `Fishing trip done! Caught ${caught} items in ${FISH_ATTEMPTS} casts${ate ? `, ate ${ate} (hunger ${foodBefore} -> ${bot.food})` : ""}. Fresh fish dinner!`,
       stats: { fishCaught: caught },
     };
   },
