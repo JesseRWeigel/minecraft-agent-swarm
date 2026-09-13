@@ -96,6 +96,33 @@ export const craftGearSkill: Skill = {
     // for stone/wood tools and never made iron, even though the team had smelted
     // plenty. Mirrors smelt_ores' stash withdrawal.
     const stashPos = params?.stashPos as { x: number; y: number; z: number } | undefined;
+    const keepItems = (params?.keepItems as { name: string; minCount: number }[] | undefined) ?? [
+      { name: "pickaxe", minCount: 1 },
+      { name: "sword", minCount: 1 },
+      { name: "axe", minCount: 1 },
+      { name: "shovel", minCount: 1 },
+      { name: "food", minCount: 4 },
+      { name: "stick", minCount: 8 },
+      { name: "cobblestone", minCount: 8 },
+      { name: "_log", minCount: 3 },
+      { name: "iron_ingot", minCount: 33 },
+      { name: "fishing_rod", minCount: 1 },
+    ];
+    // A full pack blocks every withdrawal below. Run 582: Forge's re-arm
+    // fired eight times at the village and each cobblestone withdrawal
+    // failed "Bot inventory is full", so he stayed pickless all hour with
+    // 5,000 cobblestone in the chests. Bank the haul first.
+    if (stashPos && !signal.aborted && bot.inventory.emptySlotCount() < 3) {
+      const { depositStash } = await import("./stash.js");
+      const before = bot.inventory.emptySlotCount();
+      const r = await Promise.race([
+        depositStash(bot, stashPos, keepItems),
+        new Promise<string>((res) => setTimeout(() => res("timeout"), 120_000)),
+      ]).catch((e: Error) => e.message);
+      console.log(
+        `[GearDebug] pack full (${before} free): deposit -> ${String(r).slice(0, 80)}; free now ${bot.inventory.emptySlotCount()}`,
+      );
+    }
     if (stashPos && !signal.aborted) {
       const ironIngots = bot.inventory
         .items()

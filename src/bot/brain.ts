@@ -1061,17 +1061,31 @@ export class BotBrain {
       // overhead for Blade at y=70 (run 548, seven escapes that each
       // "climbed out" at once). Sky light reaches around a pillar and into a
       // hillside notch; it does not reach a sealed pocket.
-      const headSky = (() => {
-        try {
-          return (this.bot.world as unknown as { getSkyLight: (p: Vec3) => number }).getSkyLight(
-            new Vec3(f.x, f.y + 1, f.z),
-          );
-        } catch {
-          return 1;
+      // Sealed by geometry, since client sky light is unreliable (it reads 0
+      // wherever the section carries no light data, which made the village
+      // surface count as dark). A sealed pocket has a solid block within six
+      // above every one of the nine columns around the head; a bot under a
+      // scattered tower of planks and chests has open columns beside it.
+      // Run 582: Forge fired "buried pickless at y=69-71" eleven times at the
+      // village with five climb-out timeouts, under exactly that scatter.
+      const sealedNearSurface = (() => {
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            let roof = false;
+            for (let dy = 2; dy <= 7; dy++) {
+              if (this.bot.blockAt(new Vec3(f.x + dx, f.y + dy, f.z + dz))?.boundingBox === "block") {
+                roof = true;
+                break;
+              }
+            }
+            if (!roof) return false;
+          }
         }
+        return true;
       })();
       const buried =
-        isBuried((x, y, z) => this.bot.blockAt(new Vec3(x, y, z)), f.x, f.y, f.z, 64) && (f.y < 55 || headSky === 0);
+        isBuried((x, y, z) => this.bot.blockAt(new Vec3(x, y, z)), f.x, f.y, f.z, 64) &&
+        (f.y < 55 || sealedNearSurface);
       const pickless = !this.bot.inventory.items().some((i) => i.name.endsWith("_pickaxe"));
       const walledIn = this.navFailStreak >= 3;
       // A pit too shallow to count as buried still traps a bot: Forge and
