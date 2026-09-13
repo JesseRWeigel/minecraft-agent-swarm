@@ -63,18 +63,22 @@ test("forwards Node test options without treating them as file paths", () => {
 test("keeps a separated test-skip-pattern value out of the file list", () => {
   const result = spawnSync(
     process.execPath,
-    [
-      path.resolve("scripts/test-runner.mjs"),
-      fixture,
-      "--test-skip-pattern",
-      "default telemetry recorder",
-    ],
+    [path.resolve("scripts/test-runner.mjs"), fixture, "--test-skip-pattern", "default telemetry recorder"],
     {
       env: { ...process.env, CHILD_SHOULD_FAIL: "1" },
       stdio: "pipe",
     },
   );
-  assert.equal(result.status, 0, result.stderr.toString());
+  const supportsSkipPattern = spawnSync(process.execPath, ["--help"], {
+    encoding: "utf8",
+  }).stdout.includes("--test-skip-pattern");
+  if (supportsSkipPattern) {
+    assert.equal(result.status, 0, result.stderr.toString());
+  } else {
+    // Node 20 rejects the option; the launcher must preserve that diagnostic.
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr.toString(), /bad option: --test-skip-pattern/);
+  }
 });
 
 test("refuses a replaced scratch root without deleting its symlink target", () => {
