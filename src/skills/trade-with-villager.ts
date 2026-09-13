@@ -134,7 +134,15 @@ export const tradeWithVillagerSkill: Skill = {
       // start: the bot is wedged in a stash chest (run 585: three legs
       // rejected in one second at (289, 70, -314), five trips lost). Step
       // onto a standable neighbour by hand and try the leg again.
-      if (Date.now() - legStart < 3000 && /No path/i.test(legError) && unwedges < 3) {
+      // "No route from here" is the phantom-arrival rejection (an empty path
+      // from an invalid start); it is the same wedge as "No path".
+      // Run 589: twelve legs returned inside one second with no navigation
+      // line at all, so the message is unknown. Log every leg, and treat any
+      // leg that ends inside three seconds without progress as the wedge.
+      console.log(
+        `[TradeDebug] ${bot.username} leg to (${wx}, ${wz}) took ${((Date.now() - legStart) / 1000).toFixed(1)}s: ${legError || "resolved"}; gap ${Math.round(before)} -> ${Math.round(gapToVillage())}`,
+      );
+      if (Date.now() - legStart < 3000 && before - gapToVillage() < 2 && unwedges < 3) {
         unwedges++;
         const p = bot.entity.position.floored();
         const { Vec3 } = await import("vec3");
