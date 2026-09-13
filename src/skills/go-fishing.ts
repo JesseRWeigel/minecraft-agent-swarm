@@ -77,23 +77,14 @@ export const goFishingSkill: Skill = {
         // 90, up from 60: two marches ended at 63 and 82 blocks out and the
         // withdraw was skipped; withdrawStash walks the rest itself.
         if (gap() <= 90) {
-          const r1 = await Promise.race([
-            withdrawStash(bot, STASH_POS, "fishing_rod", 1),
-            new Promise<string>((r) => setTimeout(() => r("timeout"), 30_000)),
-          ]).catch((e: Error) => e.message);
+          const r1 = await withdrawStash(bot, STASH_POS, "fishing_rod", 1).catch((e: Error) => e.message);
           console.log(`[FishDebug] ${bot.username} rod withdraw: ${r1}`);
           if (!bot.inventory.items().some((i) => i.name === "fishing_rod") && held("string") < 2) {
-            const r2 = await Promise.race([
-              withdrawStash(bot, STASH_POS, "string", 2),
-              new Promise<string>((r) => setTimeout(() => r("timeout"), 30_000)),
-            ]).catch((e: Error) => e.message);
+            const r2 = await withdrawStash(bot, STASH_POS, "string", 2).catch((e: Error) => e.message);
             console.log(`[FishDebug] ${bot.username} string withdraw: ${r2} (string now ${held("string")})`);
           }
           if (!bot.inventory.items().some((i) => i.name === "fishing_rod") && held("stick") < 3) {
-            const r3 = await Promise.race([
-              withdrawStash(bot, STASH_POS, "stick", 3),
-              new Promise<string>((r) => setTimeout(() => r("timeout"), 30_000)),
-            ]).catch((e: Error) => e.message);
+            const r3 = await withdrawStash(bot, STASH_POS, "stick", 3).catch((e: Error) => e.message);
             console.log(`[FishDebug] ${bot.username} stick withdraw: ${r3} (sticks now ${held("stick")})`);
           }
         }

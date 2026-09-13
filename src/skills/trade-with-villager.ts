@@ -69,10 +69,7 @@ export const tradeWithVillagerSkill: Skill = {
       const { withdrawStash } = await import("./stash.js");
       if (invCount(bot, "coal") < 16 && nearStash) {
         step("Fetching coal from the stash to sell...", 0.05);
-        const r = await Promise.race([
-          withdrawStash(bot, STASH_POS, "coal", 32),
-          new Promise<string>((res) => setTimeout(() => res("timeout"), 60_000)),
-        ]).catch((e: Error) => e.message);
+        const r = await withdrawStash(bot, STASH_POS, "coal", 32).catch((e: Error) => e.message);
         console.log(`[TradeDebug] ${bot.username} coal withdraw: ${r} (coal now ${invCount(bot, "coal")})`);
       } else {
         console.log(`[TradeDebug] ${bot.username} goods aboard: coal ${invCount(bot, "coal")}, nearStash=${nearStash}`);
@@ -84,10 +81,7 @@ export const tradeWithVillagerSkill: Skill = {
         try {
           const { stashCount, ledgerKnown } = await import("./stash-ledger.js");
           if (invCount(bot, "emerald") < 1 && ledgerKnown() && stashCount("emerald", STASH_POS.y) >= 1) {
-            const r3 = await Promise.race([
-              withdrawStash(bot, STASH_POS, "emerald", 4),
-              new Promise<string>((res) => setTimeout(() => res("timeout"), 45_000)),
-            ]).catch((e: Error) => e.message);
+            const r3 = await withdrawStash(bot, STASH_POS, "emerald", 4).catch((e: Error) => e.message);
             console.log(
               `[TradeDebug] ${bot.username} emerald withdraw: ${r3} (emeralds now ${invCount(bot, "emerald")})`,
             );
@@ -95,16 +89,28 @@ export const tradeWithVillagerSkill: Skill = {
         } catch {
           /* ledger unavailable */
         }
-        if (invCount(bot, "stick") < 32) {
-          const r2 = await Promise.race([
-            withdrawStash(bot, STASH_POS, "stick", 32),
-            new Promise<string>((res) => setTimeout(() => res("timeout"), 45_000)),
-          ]).catch((e: Error) => e.message);
+        if (invCount(bot, "stick") < 8) {
+          const r2 = await withdrawStash(bot, STASH_POS, "stick", 32).catch((e: Error) => e.message);
           console.log(`[TradeDebug] ${bot.username} stick withdraw: ${r2} (sticks now ${invCount(bot, "stick")})`);
         }
       }
     } catch (e) {
       console.log(`[TradeDebug] ${bot.username} coal withdraw skipped: ${(e as Error).message}`);
+    }
+
+    // Run 590: every march leg died in 0.0s with "The goal was changed":
+    // the withdraw calls above had been raced against timeouts, and a timed
+    // out withdraw kept walking chests in the background, replacing the
+    // march's goal the instant it was set. The races are gone; withdraws
+    // budget themselves. Kill any leftover goal before the march anyway.
+    {
+      const { bumpNavGeneration } = await import("../bot/navigation.js");
+      bumpNavGeneration(bot);
+      try {
+        bot.pathfinder.setGoal(null);
+      } catch {
+        /* no goal */
+      }
     }
 
     const marchMoves = baseMoves(bot);
