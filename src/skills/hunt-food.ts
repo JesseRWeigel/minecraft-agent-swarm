@@ -2,7 +2,7 @@ import type { Bot } from "mineflayer";
 import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
-import { baseMoves, safeGoto, collectNearbyDrops } from "../bot/navigation.js";
+import { GoalNearXZAbove, baseMoves, safeGoto, collectNearbyDrops } from "../bot/navigation.js";
 
 /**
  * hunt_food — the swarm's pantry when the farm and the lake both fail.
@@ -124,6 +124,9 @@ async function eatMeat(bot: Bot, signal: AbortSignal): Promise<number> {
   return eaten;
 }
 
+/** Per-bot scouting memory: headings that found nothing, and the last spot an animal was seen. */
+const huntMemory = new Map<string, { failed: string[]; animalSpot?: { x: number; y: number; z: number } }>();
+
 export const huntFoodSkill: Skill = {
   name: "hunt_food",
   description:
@@ -177,22 +180,70 @@ export const huntFoodSkill: Skill = {
       if (!bot.time.isDay) {
         return { success: false, message: "No food animal in sight and it is night. Hunt again at daybreak." };
       }
-      const cardinals = [
+      // Remember what worked. Runs 577 to 581: 12 to 13 empty hunts an hour
+      // near the village, each a random heading of three hops, while the
+      // kills came 300 blocks out. A bot now walks toward the last spot an
+      // animal was seen when one is known, otherwise picks a heading it has
+      // not tried and goes five hops. Hops stay on the surface (y floor 60):
+      // the old XZ goal walked scouts down into caves.
+      const mem = huntMemory.get(bot.username) ?? { failed: [] as string[] };
+      huntMemory.set(bot.username, mem);
+      const cardinals: Array<[number, number]> = [
         [1, 0],
         [0, 1],
         [-1, 0],
         [0, -1],
       ];
-      const [ddx, ddz] = cardinals[Math.floor(Math.random() * cardinals.length)];
-      for (let hop = 0; hop < 3 && !target && !signal.aborted; hop++) {
+      const p0 = bot.entity.position;
+      const spot = mem.animalSpot;
+      const spotGap = spot ? Math.hypot(spot.x - p0.x, spot.z - p0.z) : Infinity;
+      let ddx: number;
+      let ddz: number;
+      if (spot && spotGap > 24 && spotGap < 400) {
+        ddx = (spot.x - p0.x) / spotGap;
+        ddz = (spot.z - p0.z) / spotGap;
+        console.log(
+          `[HuntDebug] ${bot.username} scouting toward the last animal spot (${spot.x}, ${spot.z}), ${Math.round(spotGap)} blocks`,
+        );
+      } else {
+        const untried = cardinals.filter((c) => !mem.failed.includes(c.join(",")));
+        const pick = (untried.length ? untried : cardinals)[
+          Math.floor(Math.random() * (untried.length ? untried.length : 4))
+        ];
+        if (!untried.length) mem.failed = [];
+        [ddx, ddz] = pick;
+        console.log(
+          `[HuntDebug] ${bot.username} scouting heading (${ddx}, ${ddz}); tried ${mem.failed.length ? mem.failed.join(" ") : "none"}`,
+        );
+      }
+      const HOPS = 5;
+      for (let hop = 0; hop < HOPS && !target && !signal.aborted; hop++) {
         const p = bot.entity.position;
-        step(`Scouting for animals (hop ${hop + 1}/3)...`, 0.1 + hop * 0.1);
-        await safeGoto(bot, new goals.GoalNearXZ(p.x + ddx * 60, p.z + ddz * 60, 6), 45_000, 12_000).catch(() => {});
+        step(`Scouting for animals (hop ${hop + 1}/${HOPS})...`, 0.1 + hop * 0.08);
+        await safeGoto(bot, new GoalNearXZAbove(p.x + ddx * 60, p.z + ddz * 60, 6, 60), 45_000, 12_000).catch(() => {});
         target = nearestFoodAnimal(bot);
       }
       if (!target) {
-        return { success: false, message: "Scouted 180 blocks and saw no food animal. Try another heading next time." };
+        if (!spot || spotGap >= 400) mem.failed.push(`${Math.round(ddx)},${Math.round(ddz)}`);
+        else mem.animalSpot = undefined;
+        return {
+          success: false,
+          message: `Scouted ${HOPS * 60} blocks and saw no food animal. Try another heading next time.`,
+        };
       }
+      mem.animalSpot = {
+        x: Math.round(target.position.x),
+        y: Math.round(target.position.y),
+        z: Math.round(target.position.z),
+      };
+    } else {
+      const mem = huntMemory.get(bot.username) ?? { failed: [] as string[] };
+      mem.animalSpot = {
+        x: Math.round(target.position.x),
+        y: Math.round(target.position.y),
+        z: Math.round(target.position.z),
+      };
+      huntMemory.set(bot.username, mem);
     }
 
     const weapon =

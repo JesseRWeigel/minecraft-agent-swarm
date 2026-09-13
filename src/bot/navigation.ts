@@ -1007,7 +1007,10 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   // with keys held, and the dig was skipped for exceeding the air budget.
   // With nowhere to swim, a slow dig is the only move left.
   const lastPos = lastDrownPos.get(bot);
-  const pinned = !!lastPos && lastPos.distanceTo(bot.entity.position) < 0.3;
+  // 0.6, up from 0.3: Mason (run 581) drifted 0.05 blocks per five ticks
+  // against a wall under stone, about 0.4 per period, and never qualified.
+  // A swimming bot covers 1.5 to 3 blocks per period.
+  const pinned = !!lastPos && lastPos.distanceTo(bot.entity.position) < 0.6;
   lastDrownPos.set(bot, bot.entity.position.clone());
   let shore = null as ReturnType<typeof bot.blockAt> | null;
   for (let r = 1; r <= 8 && !shore; r++) {
