@@ -2818,6 +2818,7 @@ export class BotBrain {
         const result = await this.executeActionUnlessPaused("invoke_skill", {
           skill: "craft_gear",
           stashPos: this.roleConfig.stashPos,
+          keepItems: this.roleConfig.keepItems,
         });
         this.events.onAction("craft_gear", result);
         this.lastAction = "craft_gear";
@@ -2875,6 +2876,7 @@ export class BotBrain {
         const result = await this.executeActionUnlessPaused("invoke_skill", {
           skill: "craft_gear",
           stashPos: this.roleConfig.stashPos,
+          keepItems: this.roleConfig.keepItems,
         });
         this.events.onAction("craft_gear", result);
         this.lastAction = "craft_gear";
@@ -2923,7 +2925,11 @@ export class BotBrain {
           `OVERRIDE: no pickaxe — running craft_gear (cobble ${cnt("cobblestone")}, sticks ${cnt("stick")}, ${atVillage ? "at the village" : "materials aboard"})`,
         );
         this.events.onThought("No pickaxe in hand. Time to forge one.");
-        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "craft_gear", stashPos: sp });
+        const result = await this.executeActionUnlessPaused("invoke_skill", {
+          skill: "craft_gear",
+          stashPos: sp,
+          keepItems: this.roleConfig.keepItems,
+        });
         this.events.onAction("craft_gear", result);
         this.lastAction = "craft_gear";
         this.lastResult = result;
