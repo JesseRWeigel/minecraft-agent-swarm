@@ -95,7 +95,11 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   // Nether keeps its own depths.
   const inOverworld = /overworld/.test(String(bot.game?.dimension ?? "overworld"));
   if (bot.username !== "Forge" && inOverworld) {
-    const DEPTH_FLOOR = 48;
+    // 48 -> 56 (run 597/598): nine deaths in two hours at a flooded shaft
+    // under the village, entered from a cave at y=50 to 55 that no non-miner
+    // has any business in (Atlas: "path held with no keys at (301, 55,
+    // -319)", then swept into the hole).
+    const DEPTH_FLOOR = 56;
     const origNeighborsDepth = moves.getNeighbors.bind(moves);
     moves.getNeighbors = (node: any) =>
       origNeighborsDepth(node).filter((n: any) => !(n.y < node.y && n.y < DEPTH_FLOOR));

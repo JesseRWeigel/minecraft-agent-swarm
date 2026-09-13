@@ -239,6 +239,7 @@ export class BotBrain {
   private lastBreedOverrideMs = 0;
   private lastFishOverrideMs = 0;
   private lastHuntFoodOverrideMs = 0;
+  private lastStashFoodMs = 0;
   private lastWaxOffMs = 0;
   private lastHoneyMs = 0;
   private lastToolReturnMs = 0;
@@ -2696,6 +2697,64 @@ export class BotBrain {
           /caught|fish/i.test(result),
         );
         return;
+      }
+    }
+
+    // Pantry first. Run 598: the village trip brought 37 potatoes home while
+    // Mason (1 hp) and Blade sat at 0 hunger beside the stash, and nothing
+    // ever fetched banked food for a hungry bot. A hungry bot near the stash
+    // withdraws the first edible the ledger knows of and eats it before any
+    // 300-block scout.
+    if (config.bot.allowStrategyOverrides && !isSkillRunning(this.bot) && this.roleConfig.stashPos) {
+      const sp = this.roleConfig.stashPos;
+      const edibleRe =
+        /(bread|cooked_|^cod$|^salmon$|apple|carrot|^potato$|baked_potato|melon_slice|cookie|^beef$|porkchop|mutton|^chicken$|^rabbit$)/;
+      const hasEdible = this.bot.inventory.items().some((i) => edibleRe.test(i.name));
+      const nearStash =
+        Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 60 &&
+        this.bot.entity.position.y >= sp.y - 8;
+      const cooled = Date.now() - this.lastStashFoodMs > 600_000;
+      if (this.bot.food <= 8 && !hasEdible && nearStash && cooled && ledgerKnown()) {
+        const PANTRY = [
+          "bread",
+          "baked_potato",
+          "cooked_beef",
+          "cooked_porkchop",
+          "cooked_mutton",
+          "cooked_chicken",
+          "cooked_cod",
+          "cooked_salmon",
+          "potato",
+          "carrot",
+          "apple",
+          "beef",
+          "porkchop",
+          "mutton",
+          "chicken",
+          "cod",
+          "salmon",
+        ];
+        const pick = PANTRY.find((n) => stashCount(n, sp.y) >= 1);
+        if (pick) {
+          this.lastStashFoodMs = Date.now();
+          const want = Math.min(8, stashCount(pick, sp.y));
+          this.log.info(
+            "Brain",
+            `OVERRIDE: hunger ${this.bot.food}/20 — fetching ${want} ${pick} from the stash pantry`,
+          );
+          this.events.onThought("The pantry has food. Fetch some before the long walk.");
+          const { withdrawStash } = await import("../skills/stash.js");
+          const r = await withdrawStash(this.bot, sp, pick, want, 90_000).catch((e: Error) => e.message);
+          const got = this.bot.inventory.items().some((i) => i.name === pick);
+          console.log(`[Pantry] ${this.bot.username} ${pick} x${want}: ${String(r).slice(0, 90)}; aboard=${got}`);
+          if (got) {
+            const ate = await this.executeActionUnlessPaused("eat", {});
+            this.log.info("Brain", `Pantry: ate -> ${ate}`);
+          }
+          this.lastAction = "pantry";
+          this.lastResult = String(r);
+          return;
+        }
       }
     }
 
