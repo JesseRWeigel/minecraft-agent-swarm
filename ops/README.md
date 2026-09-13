@@ -99,12 +99,14 @@ for untracked and ignored files under runtime source paths (`src`, `scripts`,
 count is nonzero. Scanning is fail-closed in every mode: state is limited to
 64 KiB, and runtime evidence is limited to 10,000 files, 64 MiB per file,
 256 MiB total, and a 4 MiB tracked-path listing. Files are hashed as streams;
-symlinks, FIFOs, other non-regular files, and inputs that change while hashing
-abort the launch. Trial IDs must match
-`[A-Za-z0-9][A-Za-z0-9._-]{0,127}`. A controlled evaluation also requires a nonempty trial and a
-operator-provided `WORLD_SNAPSHOT_ID` formatted as a SHA-256 content identifier.
-The helper passes it to the collector as `DATASET_WORLD_SNAPSHOT_ID`. Its presence is
-an operator assertion of snapshot identity, not proof that a restore was tested.
+symlinks, FIFOs, and other non-regular files abort the launch. Metadata is
+checked before and after streaming to detect observed races. This is best-effort
+detection, not an atomic filesystem snapshot. Trial IDs must match
+`[A-Za-z0-9][A-Za-z0-9._-]{0,127}`. A controlled evaluation also requires a
+nonempty trial and an operator-provided `WORLD_SNAPSHOT_ID` formatted as a
+SHA-256 content identifier. The helper passes it to the collector as
+`DATASET_WORLD_SNAPSHOT_ID`. Its presence is an operator assertion of snapshot
+identity, not proof that a restore was tested.
 
 Launch context describes one process launch. Changing tracked source, operations
 state, or the world during the process does not rewrite its captured context and

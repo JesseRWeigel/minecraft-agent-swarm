@@ -92,24 +92,38 @@ def bounded_git_paths(args):
 
 tracked = bounded_git_paths(['git', 'ls-files', '-z', '--', 'src', 'scripts', 'skills', 'package.json', 'package-lock.json', 'tsconfig.json'])
 paths = set()
+
+def add_untracked_file(path):
+    raw_path = os.fsencode(path.as_posix())
+    metadata = path.lstat()
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError('runtime source contains a non-regular file')
+    if raw_path not in tracked:
+        paths.add(raw_path)
+        if len(paths) > MAX_FILES:
+            raise ValueError('runtime source file count exceeds 10000')
+
+def metadata_signature(metadata):
+    return (metadata.st_mode, metadata.st_dev, metadata.st_ino, metadata.st_size,
+            metadata.st_mtime_ns, metadata.st_ctime_ns)
+
 for root_name in ('src', 'scripts', 'skills'):
     root = pathlib.Path(root_name)
-    if not root.exists():
+    if not os.path.lexists(root):
         continue
+    if not stat.S_ISDIR(root.lstat().st_mode):
+        raise ValueError('runtime source root must be a regular directory')
     for directory, directory_names, file_names in os.walk(root, followlinks=False):
-        for name in directory_names + file_names:
+        for name in directory_names:
             path = pathlib.Path(directory, name)
-            raw_path = os.fsencode(path.as_posix())
-            if raw_path not in tracked:
-                paths.add(raw_path)
-                if len(paths) > MAX_FILES:
-                    raise ValueError('runtime source file count exceeds 10000')
+            if not stat.S_ISDIR(path.lstat().st_mode):
+                raise ValueError('runtime source contains a non-directory traversal entry')
+        for name in file_names:
+            add_untracked_file(pathlib.Path(directory, name))
 for root_name in ('package.json', 'package-lock.json', 'tsconfig.json'):
     path = pathlib.Path(root_name)
-    raw_path = os.fsencode(root_name)
     if os.path.lexists(path):
-        if raw_path not in tracked:
-            paths.add(raw_path)
+        add_untracked_file(path)
 digest = hashlib.sha256()
 total_size = 0
 for raw_path in sorted(paths):
@@ -128,7 +142,7 @@ for raw_path in sorted(paths):
     bytes_read = 0
     descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
     opened_metadata = os.fstat(descriptor)
-    if (opened_metadata.st_dev, opened_metadata.st_ino, opened_metadata.st_size) != (metadata.st_dev, metadata.st_ino, metadata.st_size):
+    if metadata_signature(opened_metadata) != metadata_signature(metadata):
         os.close(descriptor)
         raise ValueError('runtime source changed before hashing')
     with os.fdopen(descriptor, 'rb') as handle:
@@ -140,6 +154,9 @@ for raw_path in sorted(paths):
             if bytes_read > MAX_FILE_BYTES:
                 raise ValueError('runtime source file grew beyond 64 MiB while hashing')
             digest.update(chunk)
+        final_metadata = os.fstat(handle.fileno())
+        if metadata_signature(final_metadata) != metadata_signature(opened_metadata):
+            raise ValueError('runtime source changed while hashing')
     if bytes_read != metadata.st_size:
         raise ValueError('runtime source changed while hashing')
 print(json.dumps({'count': len(paths), 'sha256': digest.hexdigest()}, separators=(',', ':')))

@@ -155,6 +155,26 @@ exit 143
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse((self.root / 'launches').exists())
 
+    def test_nested_tracked_source_launches_live_but_ignored_source_blocks_evaluation(self):
+        (self.root / 'src/bot').mkdir(parents=True)
+        (self.root / 'src/bot/file.ts').write_text('export {}\n')
+        (self.root / 'skills/generated').mkdir(parents=True)
+        (self.root / '.gitignore').write_text('skills/generated/\n')
+        subprocess.run(['git', 'add', '.gitignore', 'src/bot/file.ts'], cwd=self.root, check=True)
+        subprocess.run(['git', 'commit', '-qm', 'nested fixture'], cwd=self.root, check=True)
+        (self.root / 'skills/generated/runtime.ts').write_text('export {}\n')
+
+        result = self.run_script('run-swarm.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / 'launches').read_text(), 'launch\n')
+
+        (self.root / 'launches').unlink()
+        self.state('evaluation', 'trial-a')
+        self.env['WORLD_SNAPSHOT_ID'] = 'a' * 64
+        result = self.run_script('run-swarm.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / 'launches').exists())
+
     def test_oversized_state_and_invalid_trial_identifiers_fail_closed(self):
         (self.root / 'ops/state.json').write_text('{"mode":"live","padding":"' + 'x' * (64 * 1024) + '"}')
         result = self.run_script('run-swarm.sh')
