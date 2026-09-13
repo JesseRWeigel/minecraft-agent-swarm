@@ -74,12 +74,11 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   // more in the first 15 minutes of run 526, each following one of those
   // walks, with Flora rescued from y=-38. Callers assign canDig after this
   // returns, so the guard is an accessor that keeps reading false.
-  // Water is a last resort on every route. Run 587: three drownings, each a
-  // bot in a roofed cave lake (Atlas at (203, 41, -316), Forge at
-  // (482, 60, -415) under stone at 63), and the trade march died in that
-  // same lake. The library prices a water node like a land node; fifteen
-  // times the cost keeps paths on land whenever land exists.
-  (moves as unknown as { liquidCost: number }).liquidCost = 15; // present at runtime, absent from the typings
+  // liquidCost stays at the library default. A cost of 15 (cddfb3d, run
+  // 588) made A* refuse or time out on ordinary village walks: "No path"
+  // rejections went from 75 to 110 an hour to 240, stuck walks from 0 to 8
+  // up to 59, the farm walk failed 24 times and the trade march never left
+  // the stash. Water avoidance needs a narrower tool than a global cost.
 
   // Depth floor for everyone but the miner, in the overworld: no step down
   // below y=48. Run 583: Flora, the farmer, walked from the village to
