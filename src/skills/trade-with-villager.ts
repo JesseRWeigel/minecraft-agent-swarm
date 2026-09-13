@@ -379,10 +379,79 @@ export const tradeWithVillagerSkill: Skill = {
       }
     }
 
+    // No affordable trade. The trip still feeds the bot when the fields have
+    // a crop nobody wants: run 586's census read 28 mature potatoes and no
+    // wheat (the last trip took all 20), while Forge stood at 0 hunger. Take
+    // up to 24 plants, replant one potato on each cleared farmland, eat raw
+    // potatoes until hunger is back over 12, and carry the rest home.
+    let potatoes = 0;
+    let replanted = 0;
+    if (bot.food < 14) {
+      const { Vec3 } = await import("vec3");
+      const { collectNearbyDrops } = await import("../bot/navigation.js");
+      const deadline = Date.now() + 200_000;
+      let dug = 0;
+      while (dug < 24 && Date.now() < deadline && !signal.aborted) {
+        const plant = bot.findBlock({
+          matching: (b) => b.name === "potatoes" && Number(b.getProperties()?.age ?? 0) >= 7,
+          maxDistance: 48,
+        });
+        if (!plant) break;
+        step(`No trade for me — harvesting potatoes (${dug} plants)...`, 0.85);
+        await safeGoto(
+          bot,
+          new goals.GoalNear(plant.position.x, plant.position.y, plant.position.z, 2),
+          30_000,
+          8_000,
+        ).catch(() => {});
+        if (bot.entity.position.distanceTo(plant.position) > 4.5) break;
+        try {
+          await bot.dig(plant);
+          dug++;
+        } catch {
+          break;
+        }
+        await collectNearbyDrops(bot, 4, 1500).catch(() => {});
+        const seed = bot.inventory.items().find((i) => i.name === "potato");
+        const soil = bot.blockAt(plant.position.offset(0, -1, 0));
+        if (seed && soil?.name === "farmland") {
+          try {
+            await bot.equip(seed, "hand");
+            await bot.placeBlock(soil, new Vec3(0, 1, 0));
+            replanted++;
+          } catch {
+            /* replanting is a courtesy */
+          }
+        }
+      }
+      potatoes = invCount(bot, "potato");
+      let ate = 0;
+      for (let i = 0; i < 12 && bot.food < 12 && !signal.aborted; i++) {
+        const spud = bot.inventory.items().find((it) => it.name === "potato");
+        if (!spud) break;
+        try {
+          await bot.equip(spud, "hand");
+          await bot.consume();
+          ate++;
+        } catch {
+          break;
+        }
+      }
+      console.log(
+        `[TradeDebug] ${bot.username} potato fallback: dug ${dug}, replanted ${replanted}, ate ${ate}, carrying ${invCount(bot, "potato")}, hunger now ${bot.food}`,
+      );
+      if (dug > 0) {
+        return {
+          success: true,
+          message: `No affordable trade, but harvested ${dug} potato plants at the village (replanted ${replanted}, ate ${ate}, carrying ${invCount(bot, "potato")}). Bake them at a furnace for 5 hunger each.`,
+        };
+      }
+    }
+
     return {
       success: false,
       message: resumable(
-        `Reached the village but no villager had a trade I could afford (carrying coal ${invCount(bot, "coal")}, sticks ${invCount(bot, "stick")}${[...cropWanted].map(([k, v]) => `, ${k} ${invCount(bot, k)}/${v}`).join("")}).`,
+        `Reached the village but no villager had a trade I could afford (carrying coal ${invCount(bot, "coal")}, sticks ${invCount(bot, "stick")}, potatoes ${potatoes}${[...cropWanted].map(([k, v]) => `, ${k} ${invCount(bot, k)}/${v}`).join("")}).`,
       ),
     };
   },
