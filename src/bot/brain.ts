@@ -284,7 +284,12 @@ export class BotBrain {
         .filter((i) => i.name === "emerald")
         .reduce((n, i) => n + i.count, 0) + (ledgerKnown() ? stashCount("emerald", sp.y) : 0);
     const breadRun = emeralds >= 1 && this.bot.food < 10;
-    if (tradeDone && !breadRun) return false;
+    // Run 592: the last emerald went to a cleric for redstone and no trip
+    // ran in run 593 while three bots sat at 0 hunger. The village fields
+    // feed the trip on their own (potato fallback, run 591 reached them),
+    // so a hungry bot goes without an emerald too.
+    const foodRun = this.bot.food < 10;
+    if (tradeDone && !breadRun && !foodRun) return false;
     if (Date.now() - this.lastTradeMs < 1_800_000) return false;
     if ((this.bot.time?.timeOfDay ?? 0) >= 9000) return false;
     if (Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) >= 40) return false;
