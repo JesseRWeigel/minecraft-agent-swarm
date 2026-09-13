@@ -847,6 +847,10 @@ export async function depositStash(
   canMine = true,
   /** See shouldKeep: food items to hold back from the bank. */
   foodKeep = 6,
+  /** Stop walking to further chests after this wall-clock time (ms epoch).
+   *  Run 597: a pre-trip deposit into a stash of full chests ran the whole
+   *  480 s skill budget and the village trip never marched. */
+  deadlineMs = Number.POSITIVE_INFINITY,
 ): Promise<string> {
   const PICK_RANK: Record<string, number> = {
     wooden_pickaxe: 0,
@@ -1058,6 +1062,10 @@ export async function depositStash(
 
     for (const chest of candidates) {
       if (pending.length === 0) break;
+      if (Date.now() > deadlineMs) {
+        console.log(`[Stash] ${bot.username}: deposit deadline reached with ${pending.length} stacks left aboard`);
+        break;
+      }
       let distToChest = Number.NaN;
       try {
         // Navigation failure must NOT skip the roof clear. First deploy of the

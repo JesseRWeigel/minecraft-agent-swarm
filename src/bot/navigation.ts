@@ -52,6 +52,13 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   const moves = new Movements(bot);
   moves.maxDropDown = 3; // 3 blocks = no fall damage, 4 = 1.5 hearts
   moves.allowParkour = false;
+  // The library allows a drop of ANY height when the landing block is water.
+  // Run 597: a flooded shaft beside the stash, water at (306, 50, -324) over
+  // a 23-block hole to a dry cobblestone floor at y=27, took six deaths in
+  // an hour (Blade x3, Mason x2, Atlas): "fell from a high place ... in=water
+  // ... pathing=true" every time. A thin water layer over a pit is a trap;
+  // drops into water now obey maxDropDown like every other drop.
+  (moves as unknown as { infiniteLiquidDropdownDistance: boolean }).infiniteLiquidDropdownDistance = false;
   // The pathfinder ships with door opening OFF ("causes issues on non-Paper
   // servers"). This is Paper. Three bots stalled 3 blocks from a bed inside
   // a plank house with a 44-node path planned around it (NavDiag, run 503).

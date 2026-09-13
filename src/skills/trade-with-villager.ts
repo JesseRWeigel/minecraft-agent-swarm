@@ -102,7 +102,15 @@ export const tradeWithVillagerSkill: Skill = {
         ];
         const before = bot.inventory.emptySlotCount();
         step("Banking the haul before the trip...", 0.03);
-        const r0 = await depositStash(bot, STASH_POS, keepItems).catch((e: Error) => e.message);
+        const r0 = await depositStash(
+          bot,
+          STASH_POS,
+          keepItems,
+          undefined,
+          undefined,
+          undefined,
+          Date.now() + 120_000,
+        ).catch((e: Error) => e.message);
         console.log(
           `[TradeDebug] ${bot.username} pack full (${before} free): deposit -> ${String(r0).slice(0, 80)}; free now ${bot.inventory.emptySlotCount()}`,
         );
