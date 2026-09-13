@@ -2058,7 +2058,10 @@ export class BotBrain {
         this.lastTradeMs = Date.now();
         this.log.info("Brain", "OVERRIDE: no village nearby — marching to sell coal for What a Deal!");
         this.events.onThought("Coal in my pack, a village on the horizon. Time to strike a deal.");
-        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "trade_with_villager" });
+        const result = await this.executeActionUnlessPaused("invoke_skill", {
+          skill: "trade_with_villager",
+          keepItems: this.roleConfig.keepItems,
+        });
         this.events.onAction("trade_with_villager", result);
         this.lastAction = "trade_with_villager";
         this.lastResult = result;

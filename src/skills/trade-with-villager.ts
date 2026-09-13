@@ -46,7 +46,7 @@ export const tradeWithVillagerSkill: Skill = {
     return {};
   },
 
-  async execute(bot, _params, signal, onProgress): Promise<SkillResult> {
+  async execute(bot, params, signal, onProgress): Promise<SkillResult> {
     const step = (message: string, progress: number) =>
       onProgress({ skillName: "trade_with_villager", phase: "Trade", progress, message, active: true });
     const resumable = (msg: string) => `${msg} invoke_skill {"skill":"trade_with_villager"} again to continue.`;
@@ -66,7 +66,29 @@ export const tradeWithVillagerSkill: Skill = {
     try {
       const { STASH_POS } = await import("../bot/role.js");
       const nearStash = Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z) < 90;
-      const { withdrawStash } = await import("./stash.js");
+      const { withdrawStash, depositStash } = await import("./stash.js");
+      // Run 591: the first march that reached the fields dug 8 potatoes and
+      // carried 0 home. Forge's pack was full of mining haul, so every drop
+      // stayed on the ground and the "Pocket hygiene" reflex only fired after
+      // the trip. Bank the haul at the stash before setting out, keeping the
+      // trade goods, tools and food aboard.
+      if (nearStash && bot.inventory.emptySlotCount() < 6) {
+        const keepItems = (params?.keepItems as { name: string; minCount: number }[] | undefined) ?? [
+          { name: "coal", minCount: 32 },
+          { name: "emerald", minCount: 64 },
+          { name: "stick", minCount: 8 },
+          { name: "pickaxe", minCount: 1 },
+          { name: "sword", minCount: 1 },
+          { name: "bread", minCount: 16 },
+          { name: "potato", minCount: 16 },
+        ];
+        const before = bot.inventory.emptySlotCount();
+        step("Banking the haul before the trip...", 0.03);
+        const r0 = await depositStash(bot, STASH_POS, keepItems).catch((e: Error) => e.message);
+        console.log(
+          `[TradeDebug] ${bot.username} pack full (${before} free): deposit -> ${String(r0).slice(0, 80)}; free now ${bot.inventory.emptySlotCount()}`,
+        );
+      }
       if (invCount(bot, "coal") < 16 && nearStash) {
         step("Fetching coal from the stash to sell...", 0.05);
         const r = await withdrawStash(bot, STASH_POS, "coal", 32).catch((e: Error) => e.message);
@@ -356,6 +378,10 @@ export const tradeWithVillagerSkill: Skill = {
       console.log(
         `[TradeDebug] ${bot.username} crops within 48 of (${Math.round(bot.entity.position.x)}, ${Math.round(bot.entity.position.z)}): ${JSON.stringify(census)}`,
       );
+      {
+        const { shedJunk } = await import("../bot/navigation.js");
+        await shedJunk(bot, 4).catch(() => {});
+      }
       while (have() < need && dug < 24 && Date.now() < deadline && !signal.aborted) {
         // Mature first; an immature plant still drops one item, which is
         // enough when the mature ones are gone.
@@ -402,7 +428,9 @@ export const tradeWithVillagerSkill: Skill = {
     let replanted = 0;
     if (bot.food < 14) {
       const { Vec3 } = await import("vec3");
-      const { collectNearbyDrops } = await import("../bot/navigation.js");
+      const { collectNearbyDrops, shedJunk } = await import("../bot/navigation.js");
+      // Drops need open slots; toss bulk stone rather than dig into a full pack.
+      await shedJunk(bot, 4).catch(() => {});
       const deadline = Date.now() + 200_000;
       let dug = 0;
       while (dug < 24 && Date.now() < deadline && !signal.aborted) {
