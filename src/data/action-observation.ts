@@ -1,6 +1,7 @@
 import type { Bot } from "mineflayer";
 
 export const MAX_OBSERVED_ITEM_TYPES = 128;
+export const MAX_OBSERVED_INVENTORY_ENTRIES = 4096;
 export type ActionObservationStage = "before_execution" | "at_terminal";
 
 export interface ActionStateObservation {
@@ -23,10 +24,13 @@ export interface ActionStateObservation {
     position: { x: number; y: number; z: number; dimension: string | null } | null;
     inventory: {
       counts: Record<string, number>;
-      totalCount: number;
-      distinctItemTypes: number;
+      observedTotalCount: number;
+      totalCountComplete: boolean;
+      observedDistinctItemTypes: number;
+      entriesExamined: number;
       truncated: boolean;
       maxDistinctItemTypes: number;
+      maxEntries: number;
     } | null;
     health: number | null;
     available: { position: boolean; dimension: boolean; inventory: boolean; health: boolean };
@@ -83,32 +87,46 @@ export function captureActionObservation(
     const aggregate = new Map<string, number>();
     let invalid = false;
     let overflow = false;
-    for (const item of items) {
+    let observedTotalCount = 0;
+    const entriesExamined = Math.min(items.length, MAX_OBSERVED_INVENTORY_ENTRIES);
+    const entriesTruncated = items.length > MAX_OBSERVED_INVENTORY_ENTRIES;
+    let distinctTruncated = false;
+    for (let index = 0; index < entriesExamined; index++) {
+      const item = items[index];
       const name = typeof item?.name === "string" ? item.name : "";
       const count = finite(item?.count);
-      if (!name || name.length > 160 || count === null || count < 0) {
+      if (!name || name.length > 160 || count === null || !Number.isSafeInteger(count) || count < 0) {
         invalid = true;
         continue;
       }
       if (count === 0) continue;
-      const bounded = Math.min(Math.floor(count), Number.MAX_SAFE_INTEGER);
+      if (!Number.isSafeInteger(observedTotalCount + count)) overflow = true;
+      else observedTotalCount += count;
       const prior = aggregate.get(name) ?? 0;
-      const next = prior + bounded;
-      if (!Number.isSafeInteger(Math.floor(count)) || !Number.isSafeInteger(next)) overflow = true;
-      aggregate.set(name, Math.min(next, Number.MAX_SAFE_INTEGER));
+      if (!aggregate.has(name) && aggregate.size >= MAX_OBSERVED_ITEM_TYPES) {
+        distinctTruncated = true;
+        continue;
+      }
+      const next = prior + count;
+      if (!Number.isSafeInteger(next)) overflow = true;
+      else aggregate.set(name, next);
     }
     const entries = [...aggregate.entries()].sort(([a], [b]) => a.localeCompare(b));
-    const truncated = entries.length > MAX_OBSERVED_ITEM_TYPES;
+    const truncated = entriesTruncated || distinctTruncated;
     inventory = {
-      counts: Object.fromEntries(entries.slice(0, MAX_OBSERVED_ITEM_TYPES)),
-      totalCount: entries.reduce((sum, [, count]) => Math.min(sum + count, Number.MAX_SAFE_INTEGER), 0),
-      distinctItemTypes: entries.length,
+      counts: Object.fromEntries(entries),
+      observedTotalCount,
+      totalCountComplete: !invalid && !overflow && !entriesTruncated,
+      observedDistinctItemTypes: entries.length,
+      entriesExamined,
       truncated,
       maxDistinctItemTypes: MAX_OBSERVED_ITEM_TYPES,
+      maxEntries: MAX_OBSERVED_INVENTORY_ENTRIES,
     };
     if (invalid) unavailable.add("inventory.invalid_entries");
-    if (overflow) unavailable.add("inventory.count_overflow");
-    if (truncated) unavailable.add("inventory.counts_truncated");
+    if (overflow) unavailable.add("inventory.total_or_item_count_overflow");
+    if (entriesTruncated) unavailable.add("inventory.entries_truncated");
+    if (distinctTruncated) unavailable.add("inventory.distinct_counts_truncated");
   } catch {
     unavailable.add("inventory");
   }

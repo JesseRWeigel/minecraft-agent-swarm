@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { captureActionObservation, MAX_OBSERVED_ITEM_TYPES } from "./action-observation.js";
+import {
+  captureActionObservation,
+  MAX_OBSERVED_INVENTORY_ENTRIES,
+  MAX_OBSERVED_ITEM_TYPES,
+} from "./action-observation.js";
 
 test("captures finite client state and aggregates bounded inventory counts", () => {
   const bot: any = {
@@ -48,5 +52,52 @@ test("caps inventory and reports truncation rather than implying zero", () => {
   assert.equal(Object.keys(sample.state.inventory!.counts).length, MAX_OBSERVED_ITEM_TYPES);
   assert.equal(sample.state.inventory!.truncated, true);
   assert.equal(sample.capture.complete, false);
-  assert.equal(sample.state.inventory!.distinctItemTypes, MAX_OBSERVED_ITEM_TYPES + 3);
+  assert.equal(sample.state.inventory!.observedDistinctItemTypes, MAX_OBSERVED_ITEM_TYPES);
+  assert.equal(sample.state.inventory!.totalCountComplete, true);
+});
+
+test("fractional counts are rejected instead of silently rounded", () => {
+  const sample = captureActionObservation(
+    { inventory: { items: () => [{ name: "stone", count: 1.5 }] } } as any,
+    "Atlas",
+    "fractional",
+    "at_terminal",
+  );
+  assert.deepEqual(sample.state.inventory!.counts, {});
+  assert.equal(sample.state.inventory!.observedTotalCount, 0);
+  assert.equal(sample.state.inventory!.totalCountComplete, false);
+  assert.ok(sample.capture.unavailableFields.includes("inventory.invalid_entries"));
+});
+
+test("aggregate total overflow is explicit and leaves an honest partial total", () => {
+  const sample = captureActionObservation(
+    {
+      inventory: {
+        items: () => [
+          { name: "a", count: Number.MAX_SAFE_INTEGER },
+          { name: "b", count: 1 },
+        ],
+      },
+    } as any,
+    "Atlas",
+    "overflow",
+    "at_terminal",
+  );
+  assert.equal(sample.state.inventory!.observedTotalCount, Number.MAX_SAFE_INTEGER);
+  assert.equal(sample.state.inventory!.totalCountComplete, false);
+  assert.ok(sample.capture.unavailableFields.includes("inventory.total_or_item_count_overflow"));
+});
+
+test("huge unique inventories stop at fixed iteration and aggregation caps", () => {
+  const items = Array.from({ length: MAX_OBSERVED_INVENTORY_ENTRIES * 2 }, (_, i) => ({
+    name: `unique_${i}`,
+    count: 1,
+  }));
+  const sample = captureActionObservation({ inventory: { items: () => items } } as any, "Atlas", "huge", "at_terminal");
+  assert.equal(sample.state.inventory!.entriesExamined, MAX_OBSERVED_INVENTORY_ENTRIES);
+  assert.equal(Object.keys(sample.state.inventory!.counts).length, MAX_OBSERVED_ITEM_TYPES);
+  assert.equal(sample.state.inventory!.observedDistinctItemTypes, MAX_OBSERVED_ITEM_TYPES);
+  assert.equal(sample.state.inventory!.observedTotalCount, MAX_OBSERVED_INVENTORY_ENTRIES);
+  assert.equal(sample.state.inventory!.totalCountComplete, false);
+  assert.equal(sample.state.inventory!.truncated, true);
 });
