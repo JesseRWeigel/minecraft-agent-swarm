@@ -74,6 +74,13 @@ export const tradeWithVillagerSkill: Skill = {
           new Promise<string>((res) => setTimeout(() => res("timeout"), 60_000)),
         ]).catch((e: Error) => e.message);
         console.log(`[TradeDebug] ${bot.username} coal withdraw: ${r} (coal now ${invCount(bot, "coal")})`);
+        if (invCount(bot, "stick") < 32) {
+          const r2 = await Promise.race([
+            withdrawStash(bot, STASH_POS, "stick", 32),
+            new Promise<string>((res) => setTimeout(() => res("timeout"), 45_000)),
+          ]).catch((e: Error) => e.message);
+          console.log(`[TradeDebug] ${bot.username} stick withdraw: ${r2} (sticks now ${invCount(bot, "stick")})`);
+        }
       } else {
         console.log(`[TradeDebug] ${bot.username} goods aboard: coal ${invCount(bot, "coal")}, nearStash=${nearStash}`);
       }
@@ -113,93 +120,175 @@ export const tradeWithVillagerSkill: Skill = {
     // --- Find a villager and complete an affordable trade. Try the few
     //     nearest, since some may be unprofessioned (no trades). ---
     step("At the village — looking for a villager to trade with...", 0.7);
-    const tried = new Set<number>();
-    for (let attempt = 0; attempt < 5 && !signal.aborted; attempt++) {
-      const villager = bot.nearestEntity((e: Entity) => e.name === "villager" && !tried.has(e.id));
-      if (!villager) break;
-      tried.add(villager.id);
+    const CROPS: Record<string, { block: string; mature: number }> = {
+      carrot: { block: "carrots", mature: 7 },
+      potato: { block: "potatoes", mature: 7 },
+      wheat: { block: "wheat", mature: 7 },
+      beetroot: { block: "beetroots", mature: 3 },
+    };
+    const isFood = (n: string | undefined) =>
+      !!n && /bread|cooked_|apple|cookie|pie|baked_potato|carrot|potato|melon/.test(n);
+    // Crop demands seen on the first pass: { item, count }. Run 579: the one
+    // villager in range was a farmer (1 emerald -> 6 bread; 22 carrot -> 1
+    // emerald) and Forge held only coal, so four arrivals ended with nothing.
+    const cropWanted = new Map<string, number>();
 
-      // Approach — openVillager needs to be within reach.
-      const approachUntil = Date.now() + 45_000;
-      while (!signal.aborted && Date.now() < approachUntil && bot.entity.position.distanceTo(villager.position) > 3) {
+    const tryVillagers = async (pass: number): Promise<SkillResult | null> => {
+      const tried = new Set<number>();
+      // Villagers keep to their houses and the entity range is short: sweep
+      // the centre and three offsets before giving up on "no villager".
+      const sweep = [
+        { x: VILLAGE.x, z: VILLAGE.z },
+        { x: VILLAGE.x + 24, z: VILLAGE.z },
+        { x: VILLAGE.x, z: VILLAGE.z + 24 },
+        { x: VILLAGE.x - 24, z: VILLAGE.z - 24 },
+      ];
+      let sweepIdx = 0;
+      for (let attempt = 0; attempt < 6 && !signal.aborted; attempt++) {
+        let villager = bot.nearestEntity((e: Entity) => e.name === "villager" && !tried.has(e.id));
+        while (!villager && sweepIdx < sweep.length && !signal.aborted) {
+          const w = sweep[sweepIdx++];
+          step(`No villager in sight — sweeping to ${w.x}, ${w.z}...`, 0.72);
+          await safeGoto(bot, new goals.GoalNearXZ(w.x, w.z, 6), 40_000, 12_000).catch(() => {});
+          villager = bot.nearestEntity((e: Entity) => e.name === "villager" && !tried.has(e.id));
+        }
+        if (!villager) break;
+        tried.add(villager.id);
+
+        const approachUntil = Date.now() + 45_000;
+        while (!signal.aborted && Date.now() < approachUntil && bot.entity.position.distanceTo(villager.position) > 3) {
+          await safeGoto(
+            bot,
+            new goals.GoalNear(villager.position.x, villager.position.y, villager.position.z, 2),
+            20_000,
+            8_000,
+          ).catch(() => {});
+          if (bot.entity.position.distanceTo(villager.position) > 3) await new Promise((r) => setTimeout(r, 800));
+        }
+        if (bot.entity.position.distanceTo(villager.position) > 4) continue;
+
+        let win;
+        try {
+          win = await bot.openVillager(villager);
+        } catch {
+          continue;
+        }
+        const trades = win?.trades ?? [];
+        const inputsOf = (t: (typeof trades)[number]) =>
+          t.hasItem2 && t.inputItem2 ? [t.inputItem1, t.inputItem2] : [t.inputItem1];
+        const canPay = (t: (typeof trades)[number]) => {
+          if (!t || t.tradeDisabled) return false;
+          if (t.nbTradeUses >= t.maximumNbTradeUses) return false;
+          return inputsOf(t).every((inp) => inp && invCount(bot, inp.name) >= inp.count);
+        };
+        console.log(
+          `[TradeDebug] ${bot.username} pass ${pass} villager ${villager.id}: ` +
+            (trades.length
+              ? trades
+                  .map(
+                    (t) =>
+                      `${inputsOf(t)
+                        .map((i) => (i ? `${i.count} ${i.name}` : "?"))
+                        .join(
+                          "+",
+                        )} -> ${t.outputItem ? `${t.outputItem.count} ${t.outputItem.name}` : "?"}${t.tradeDisabled ? " (disabled)" : ""}${canPay(t) ? " [ok]" : ""}`,
+                  )
+                  .join("; ")
+              : "no trades (unprofessioned)"),
+        );
+        for (const t of trades) {
+          const inp = t?.inputItem1;
+          if (inp && CROPS[inp.name] && t.outputItem?.name === "emerald" && !t.tradeDisabled) {
+            cropWanted.set(inp.name, Math.max(cropWanted.get(inp.name) ?? 0, inp.count));
+          }
+        }
+        const foodTrade = bot.food < 14 ? trades.find((t) => canPay(t) && isFood(t.outputItem?.name)) : undefined;
+        const affordable = foodTrade ?? trades.find(canPay);
+        if (!affordable) {
+          bot.closeWindow(win);
+          continue;
+        }
+
+        const idx = trades.indexOf(affordable);
+        const sold = inputsOf(affordable)
+          .map((i) => `${i.count} ${i.name}`)
+          .join(" + ");
+        const got = affordable.outputItem ? `${affordable.outputItem.count} ${affordable.outputItem.name}` : "goods";
+        step(`Trading ${sold} → ${got}...`, 0.9);
+        try {
+          await bot.trade(win, idx, 1);
+        } catch (e) {
+          bot.closeWindow(win);
+          return { success: false, message: resumable(`The trade of ${sold} didn't go through (${String(e)}).`) };
+        }
+        console.log(`[TradeDebug] ${bot.username} TRADED ${sold} -> ${got}`);
+        // With an emerald in hand and bread on offer, buy the bread too.
+        const bread = trades.find(
+          (t) => t !== affordable && t.outputItem?.name === "bread" && canPay(t) && !t.tradeDisabled,
+        );
+        if (bread) {
+          try {
+            await bot.trade(win, trades.indexOf(bread), 1);
+            console.log(`[TradeDebug] ${bot.username} then bought ${bread.outputItem?.count} bread`);
+          } catch {
+            /* the first trade already counts */
+          }
+        }
+        bot.closeWindow(win);
+        return {
+          success: true,
+          message: `Traded ${sold} for ${got} at the village — What a Deal! should be banked.`,
+          stats: { villageX: VILLAGE.x, villageZ: VILLAGE.z },
+        };
+      }
+      return null;
+    };
+
+    const first = await tryVillagers(1);
+    if (first) return first;
+
+    // Meet a farmer's demand from the village's own fields: mature crops
+    // drop 1 to 4 each, so 22 carrots is about ten plants.
+    for (const [item, need] of cropWanted) {
+      if (signal.aborted) break;
+      const crop = CROPS[item];
+      const have = () => invCount(bot, item);
+      step(`Harvesting ${need} ${item} from the village fields...`, 0.8);
+      let dug = 0;
+      const deadline = Date.now() + 240_000;
+      while (have() < need && dug < 24 && Date.now() < deadline && !signal.aborted) {
+        const plant = bot.findBlock({
+          matching: (b) => b.name === crop.block && Number(b.getProperties()?.age ?? 0) >= crop.mature,
+          maxDistance: 48,
+        });
+        if (!plant) break;
         await safeGoto(
           bot,
-          new goals.GoalNear(villager.position.x, villager.position.y, villager.position.z, 2),
-          20_000,
+          new goals.GoalNear(plant.position.x, plant.position.y, plant.position.z, 2),
+          30_000,
           8_000,
         ).catch(() => {});
-        if (bot.entity.position.distanceTo(villager.position) > 3) await new Promise((r) => setTimeout(r, 800));
+        if (bot.entity.position.distanceTo(plant.position) > 4.5) break;
+        try {
+          await bot.dig(plant);
+          dug++;
+        } catch {
+          break;
+        }
+        const { collectNearbyDrops } = await import("../bot/navigation.js");
+        await collectNearbyDrops(bot, 4, 2000).catch(() => {});
       }
-      if (bot.entity.position.distanceTo(villager.position) > 4) continue;
-
-      let win;
-      try {
-        win = await bot.openVillager(villager);
-      } catch {
-        continue;
+      console.log(`[TradeDebug] ${bot.username} harvested ${dug} ${crop.block}: ${item} now ${have()} (need ${need})`);
+      if (have() >= need) {
+        const second = await tryVillagers(2);
+        if (second) return second;
       }
-      const trades = win?.trades ?? [];
-      const inputsOf = (t: (typeof trades)[number]) =>
-        t.hasItem2 && t.inputItem2 ? [t.inputItem1, t.inputItem2] : [t.inputItem1];
-
-      // Pick the first live trade whose inputs we can fully cover.
-      const canPay = (t: (typeof trades)[number]) => {
-        if (!t || t.tradeDisabled) return false;
-        if (t.nbTradeUses >= t.maximumNbTradeUses) return false;
-        return inputsOf(t).every((inp) => inp && invCount(bot, inp.name) >= inp.count);
-      };
-      // Name what the villager offers, so a "could afford" failure says why.
-      console.log(
-        `[TradeDebug] ${bot.username} villager ${villager.id}: ` +
-          (trades.length
-            ? trades
-                .map(
-                  (t) =>
-                    `${inputsOf(t)
-                      .map((i) => (i ? `${i.count} ${i.name}` : "?"))
-                      .join(
-                        "+",
-                      )} -> ${t.outputItem ? `${t.outputItem.count} ${t.outputItem.name}` : "?"}${t.tradeDisabled ? " (disabled)" : ""}${canPay(t) ? " [ok]" : ""}`,
-                )
-                .join("; ")
-            : "no trades (unprofessioned)"),
-      );
-      // Prefer food for emeralds when hungry and holding emeralds, else any
-      // affordable trade (selling coal is the usual first deal).
-      const isFood = (n: string | undefined) =>
-        !!n && /bread|cooked_|apple|cookie|pie|baked_potato|carrot|potato|melon/.test(n);
-      const foodTrade = bot.food < 14 ? trades.find((t) => canPay(t) && isFood(t.outputItem?.name)) : undefined;
-      const affordable = foodTrade ?? trades.find(canPay);
-
-      if (!affordable) {
-        bot.closeWindow(win);
-        continue;
-      }
-
-      const idx = trades.indexOf(affordable);
-      const sold = inputsOf(affordable)
-        .map((i) => `${i.count} ${i.name}`)
-        .join(" + ");
-      const got = affordable.outputItem ? `${affordable.outputItem.count} ${affordable.outputItem.name}` : "goods";
-      step(`Trading ${sold} → ${got}...`, 0.9);
-      try {
-        await bot.trade(win, idx, 1);
-      } catch (e) {
-        bot.closeWindow(win);
-        return { success: false, message: resumable(`The trade of ${sold} didn't go through (${String(e)}).`) };
-      }
-      bot.closeWindow(win);
-      return {
-        success: true,
-        message: `Traded ${sold} for ${got} at the village — What a Deal! should be banked.`,
-        stats: { villageX: VILLAGE.x, villageZ: VILLAGE.z },
-      };
     }
 
     return {
       success: false,
       message: resumable(
-        "Reached the village but no villager had a trade I could afford (need coal or crops, and a professioned villager).",
+        `Reached the village but no villager had a trade I could afford (carrying coal ${invCount(bot, "coal")}, sticks ${invCount(bot, "stick")}${[...cropWanted].map(([k, v]) => `, ${k} ${invCount(bot, k)}/${v}`).join("")}).`,
       ),
     };
   },
