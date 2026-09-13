@@ -74,6 +74,13 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   // more in the first 15 minutes of run 526, each following one of those
   // walks, with Flora rescued from y=-38. Callers assign canDig after this
   // returns, so the guard is an accessor that keeps reading false.
+  // Water is a last resort on every route. Run 587: three drownings, each a
+  // bot in a roofed cave lake (Atlas at (203, 41, -316), Forge at
+  // (482, 60, -415) under stone at 63), and the trade march died in that
+  // same lake. The library prices a water node like a land node; fifteen
+  // times the cost keeps paths on land whenever land exists.
+  moves.liquidCost = 15;
+
   // Depth floor for everyone but the miner, in the overworld: no step down
   // below y=48. Run 583: Flora, the farmer, walked from the village to
   // (382, -53, -317) and spent the hour between y=-41 and y=-18 with six
@@ -972,6 +979,7 @@ export function headUnderWater(bot: Bot): boolean {
 
 const swimTraceActive = new WeakMap<Bot, boolean>();
 const lastDrownPos = new WeakMap<Bot, Vec3>();
+const lastShoreGap = new WeakMap<Bot, number>();
 
 export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   if (!headUnderWater(bot)) return false; // head not submerged → breathing fine
@@ -1024,7 +1032,7 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   // 0.6, up from 0.3: Mason (run 581) drifted 0.05 blocks per five ticks
   // against a wall under stone, about 0.4 per period, and never qualified.
   // A swimming bot covers 1.5 to 3 blocks per period.
-  const pinned = !!lastPos && lastPos.distanceTo(bot.entity.position) < 0.6;
+  let pinned = !!lastPos && lastPos.distanceTo(bot.entity.position) < 0.6;
   lastDrownPos.set(bot, bot.entity.position.clone());
   let shore = null as ReturnType<typeof bot.blockAt> | null;
   for (let r = 1; r <= 8 && !shore; r++) {
@@ -1049,6 +1057,18 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   // with the pathfinder (documented above: Blade drowned 16x while being
   // rescued and shoved back under). Logged only when air is actually dropping,
   // since this runs on a 3s timer per bot.
+  // No progress toward the shore since the last period counts as pinned
+  // too: run 587's drownings drifted 0.03 blocks a tick along a wall under
+  // stone, never nearer the shore, and the dig waited until the air was gone.
+  if (shore?.position) {
+    const gapNow = shore.position.distanceTo(bot.entity.position);
+    const gapLast = lastShoreGap.get(bot);
+    if (gapLast !== undefined && gapLast - gapNow < 0.5) pinned = true;
+    lastShoreGap.set(bot, gapNow);
+  } else {
+    lastShoreGap.delete(bot);
+  }
+
   if (air < 16) {
     const s = shore?.position;
     console.log(
