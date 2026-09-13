@@ -240,6 +240,38 @@ export class BotBrain {
   private lastFishOverrideMs = 0;
   private lastHuntFoodOverrideMs = 0;
   private lastStashFoodMs = 0;
+  private lastBankGroceriesMs = 0;
+  /** Edible items aboard, pantry sense (run 599: Forge died mining with 37 potatoes). */
+  private pantryAboard(): number {
+    const re =
+      /(^bread$|^potato$|baked_potato|^cooked_|^beef$|^porkchop$|^mutton$|^chicken$|^rabbit$|^cod$|^salmon$|^apple$|^carrot$)/;
+    return this.bot.inventory
+      .items()
+      .filter((i) => re.test(i.name))
+      .reduce((n, i) => n + i.count, 0);
+  }
+  private pantryBanked(stashY: number): number {
+    const names = [
+      "bread",
+      "baked_potato",
+      "potato",
+      "carrot",
+      "apple",
+      "cooked_beef",
+      "cooked_porkchop",
+      "cooked_mutton",
+      "cooked_chicken",
+      "cooked_cod",
+      "cooked_salmon",
+      "beef",
+      "porkchop",
+      "mutton",
+      "chicken",
+      "cod",
+      "salmon",
+    ];
+    return names.reduce((n, k) => n + stashCount(k, stashY), 0);
+  }
   private lastWaxOffMs = 0;
   private lastHoneyMs = 0;
   private lastToolReturnMs = 0;
@@ -289,7 +321,11 @@ export class BotBrain {
     // ran in run 593 while three bots sat at 0 hunger. The village fields
     // feed the trip on their own (potato fallback, run 591 reached them),
     // so a hungry bot goes without an emerald too.
-    const foodRun = this.bot.food < 10;
+    // Run 599: the pantry emptied within ten minutes of the first courier
+    // trip (Atlas took 5 potatoes, Flora the last chicken) and four bots sat
+    // at 0 hunger while Forge, fed, went mining. The trip also runs for the
+    // team when the stash holds fewer than 8 edible items.
+    const foodRun = this.bot.food < 10 || (ledgerKnown() && this.pantryBanked(sp.y) < 8);
     if (tradeDone && !breadRun && !foodRun) return false;
     if (Date.now() - this.lastTradeMs < 1_800_000) return false;
     if ((this.bot.time?.timeOfDay ?? 0) >= 9000) return false;
@@ -1203,7 +1239,7 @@ export class BotBrain {
       inOverworld &&
       this.bot.username !== "Flora" &&
       this.bot.username !== "Atlas" &&
-      !forgeHoldingEast
+      (!forgeHoldingEast || this.pantryAboard() >= 12)
     ) {
       const sp = this.roleConfig.stashPos;
       const homeGap = Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z);
@@ -1754,11 +1790,21 @@ export class BotBrain {
         !this.roleConfig.primarySmith && this.bot.inventory.items().some((i) => i.name === "diamond");
       const cooledDown = Date.now() - this.lastIronOverrideMs > 180_000 && !(this.waxWaiting() && !pickless);
       const fitDive = this.bot.food >= 10;
+      // Run 599: Forge left the village fields with 37 potatoes, started a
+      // strip mine at (469, 11, -502) and died five times; the team's food
+      // went with him. A courier carrying a pantry load far from home walks
+      // home first (the walk-home override above) and mines after banking.
+      const spMine = this.roleConfig.stashPos;
+      const groceriesFar =
+        !!spMine &&
+        this.pantryAboard() >= 12 &&
+        Math.hypot(this.bot.entity.position.x - spMine.x, this.bot.entity.position.z - spMine.z) > 120;
       if (
         (!hasIron || wantsDive || pickless) &&
         !carryingDiamondForSmith &&
         cooledDown &&
         fitDive &&
+        !groceriesFar &&
         !this.tradeReady()
       ) {
         this.lastIronOverrideMs = Date.now();
@@ -2696,6 +2742,38 @@ export class BotBrain {
           result,
           /caught|fish/i.test(result),
         );
+        return;
+      }
+    }
+
+    // Bank the groceries. A bot at the stash with a pantry load aboard puts
+    // it in the chests (keeping the role's food reserve) so the pantry reflex
+    // below can feed the others.
+    if (config.bot.allowStrategyOverrides && !isSkillRunning(this.bot) && this.roleConfig.stashPos) {
+      const sp = this.roleConfig.stashPos;
+      const atStash =
+        Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 40 &&
+        this.bot.entity.position.y >= sp.y - 8;
+      const load = this.pantryAboard();
+      if (atStash && load >= 12 && Date.now() - this.lastBankGroceriesMs > 600_000) {
+        this.lastBankGroceriesMs = Date.now();
+        this.log.info("Brain", `OVERRIDE: ${load} food items aboard at the stash — banking the groceries`);
+        this.events.onThought("Food for the team goes in the chests.");
+        const { depositStash } = await import("../skills/stash.js");
+        const r = await depositStash(
+          this.bot,
+          sp,
+          this.roleConfig.keepItems,
+          undefined,
+          undefined,
+          8,
+          Date.now() + 120_000,
+        ).catch((e: Error) => e.message);
+        console.log(
+          `[Pantry] ${this.bot.username} banked groceries: ${String(r).slice(0, 100)}; aboard now ${this.pantryAboard()}`,
+        );
+        this.lastAction = "bank_groceries";
+        this.lastResult = String(r);
         return;
       }
     }
