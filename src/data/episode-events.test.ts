@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { EpisodeEventRecorder, contentReference, type EpisodeEventInput } from "./episode-events.js";
+import {
+  EpisodeEventRecorder,
+  contentReference,
+  type EpisodeEventInput,
+  currentCollectionContext,
+  getEpisodeEventRecorder,
+  setEpisodeEventRecorderForTests,
+} from "./episode-events.js";
 
 function event(overrides: Partial<EpisodeEventInput> = {}): EpisodeEventInput {
   return {
@@ -285,4 +292,53 @@ test("a throwing payload getter becomes a diagnostic instead of escaping capture
   assert.equal(recorder.health.complete, false);
   const diagnostic = JSON.parse(readFileSync(recorder.payloadPath(recorded.payloadRef), "utf8"));
   assert.equal(diagnostic.telemetryCapture.originalPayloadCaptured, false);
+});
+
+test("default recorder preserves launch context once, before any action, without inventing trial provenance", () => {
+  const keys = [
+    "DATASET_OPERATION_MODE",
+    "DATASET_TRIAL_ID",
+    "DATASET_GIT_COMMIT",
+    "DATASET_DIRTY_DIFF_HASH",
+    "DATASET_WORLD_SNAPSHOT_ID",
+    "DATASET_EVENT_DIR",
+  ];
+  const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  try {
+    for (const key of keys) delete process.env[key];
+    process.env.DATASET_OPERATION_MODE = "live";
+    process.env.DATASET_GIT_COMMIT = "a".repeat(40);
+    process.env.DATASET_DIRTY_DIFF_HASH = "b".repeat(64);
+    process.env.DATASET_EVENT_DIR = mkdtempSync(path.join(tmpdir(), "run-context-"));
+    setEpisodeEventRecorderForTests(null);
+    const recorder = getEpisodeEventRecorder();
+    const context = currentCollectionContext();
+    process.env.DATASET_OPERATION_MODE = "evaluation";
+    process.env.DATASET_TRIAL_ID = "changed-after-launch";
+    assert.deepEqual(currentCollectionContext(), context);
+    assert.equal(Object.isFrozen(context), true);
+    assert.equal(getEpisodeEventRecorder(), recorder);
+    const lines = readFileSync(recorder.eventPath, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0].kind, "observation");
+    assert.equal(lines[0].actionId, null);
+    assert.equal(lines[0].episodeId, `${recorder.runId}:_collector`);
+    const payload = JSON.parse(readFileSync(recorder.payloadPath(lines[0].payloadRef), "utf8"));
+    assert.equal(payload.stage, "run_context");
+    assert.equal(payload.collection.operationMode, "live");
+    assert.equal(payload.collection.trialId, null);
+    assert.equal(payload.collection.worldSnapshotId, null);
+    assert.deepEqual(payload.missingFields, ["trialId", "worldSnapshotId"]);
+    assert.equal(payload.claimsControlledTrial, false);
+    assert.equal(payload.provenanceSource, "launch_environment");
+  } finally {
+    for (const key of keys) {
+      if (original[key] === undefined) delete process.env[key];
+      else process.env[key] = original[key];
+    }
+    setEpisodeEventRecorderForTests(null);
+  }
 });

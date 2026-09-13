@@ -38,14 +38,19 @@ export interface CollectionContext {
   worldSnapshotId: string | null;
 }
 
-export function currentCollectionContext(): CollectionContext {
-  return {
+let launchCollectionContext: Readonly<CollectionContext> | null = null;
+
+/** Snapshot once: later environment changes cannot relabel a running process. */
+export function currentCollectionContext(): Readonly<CollectionContext> {
+  if (launchCollectionContext) return launchCollectionContext;
+  launchCollectionContext = Object.freeze({
     operationMode: process.env.DATASET_OPERATION_MODE || null,
     trialId: process.env.DATASET_TRIAL_ID || null,
     gitCommit: process.env.DATASET_GIT_COMMIT || null,
     dirtyDiffHash: process.env.DATASET_DIRTY_DIFF_HASH || null,
     worldSnapshotId: process.env.DATASET_WORLD_SNAPSHOT_ID || null,
-  };
+  });
+  return launchCollectionContext;
 }
 export interface TelemetryHealth {
   complete: boolean;
@@ -351,6 +356,26 @@ export function getEpisodeEventRecorder(): EpisodeEventRecorder {
       rootDir: process.env.DATASET_EVENT_DIR || path.resolve("logs", "episode-events-v1"),
       runId: DEFAULT_RUN_ID,
     });
+    const collection = currentCollectionContext();
+    defaultRecorder.record(
+      {
+        episodeId: `${defaultRecorder.runId}:_collector`,
+        botId: "_collector",
+        actionId: null,
+        requestId: null,
+        kind: "observation",
+      },
+      {
+        captureVersion: 1,
+        stage: "run_context",
+        provenanceSource: "launch_environment",
+        collection,
+        missingFields: Object.entries(collection)
+          .filter(([, value]) => value === null)
+          .map(([key]) => key),
+        claimsControlledTrial: false,
+      },
+    );
     defaultRecorder.recoverInterruptedActions();
   }
   return defaultRecorder;
@@ -374,4 +399,5 @@ export function recordEpisodeEvent(event: EpisodeEvent, payload: unknown): Episo
 
 export function setEpisodeEventRecorderForTests(recorder: EpisodeEventRecorder | null): void {
   defaultRecorder = recorder;
+  launchCollectionContext = null;
 }
