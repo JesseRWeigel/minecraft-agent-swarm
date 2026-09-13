@@ -124,6 +124,15 @@ Follow the [skill authoring guide](docs/skill-authoring-guide.md) for a complete
 3. Add it to the appropriate bot's `allowedSkills` in `src/bot/role.ts`
 4. Add a test in `src/skills/my-skill.test.ts`
 
+## Testing
+
+Run the quality gate through `npm test`. Its launcher creates a new temporary
+`DATASET_EVENT_DIR` before the child test process imports application modules,
+then removes only that directory when the child exits. This keeps test telemetry
+out of `logs/episode-events-v1`, including when a test fails. Direct
+`node --test` commands bypass this isolation and are not the project quality
+gate.
+
 ## Review Process
 
 - All PRs are reviewed by the maintainer ([@JesseRWeigel](https://github.com/JesseRWeigel))
