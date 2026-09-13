@@ -27,6 +27,10 @@ DEFAULT_MAX_EXPANDED_BYTES = 64 * 1024**3
 DEFAULT_MAX_MEMBERS = 100_000
 DEFAULT_RESERVE_BYTES = 40 * 1024**3
 MAX_TAR_ZERO_PADDING = 1024 * 1024
+MAX_CONDITIONS = 32
+MAX_SEEDS = 1024
+MAX_SCENARIOS = 256
+MAX_CAPTURED_JSON_BYTES = 64 * 1024 * 1024
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_COMMIT = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 _ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
@@ -199,10 +203,12 @@ def _load_plan(path: Path) -> LoadedPlan:
         raise PreparationError("prospective plan.kind must be prospective_pilot_plan")
     _require_id(plan["plan_id"], "prospective plan.plan_id")
     seeds = plan["seeds"]
-    if not isinstance(seeds, list) or len(seeds) < 2 or any(
+    if not isinstance(seeds, list) or not 2 <= len(seeds) <= MAX_SEEDS or any(
         type(seed) is not int or seed < 0 for seed in seeds
     ) or len(set(seeds)) != len(seeds):
-        raise PreparationError("prospective plan.seeds must have two unique non-negative integers")
+        raise PreparationError(
+            f"prospective plan.seeds must have 2 to {MAX_SEEDS} unique non-negative integers"
+        )
     budgets = plan["budgets"]
     if not isinstance(budgets, dict) or set(budgets) != _BUDGET_FIELDS:
         raise PreparationError(f"prospective plan.budgets must contain exactly {sorted(_BUDGET_FIELDS)}")
@@ -220,7 +226,14 @@ def _load_plan(path: Path) -> LoadedPlan:
 
     base = path.parent
     ref_keys = ("snapshot_manifest", "reset_manifest", "model_manifest", "scenario_manifest")
-    refs = {key: _load_ref(base, plan[key], key) for key in ref_keys}
+    refs: dict[str, CapturedFile] = {}
+    captured_bytes = len(plan_file.raw)
+    for key in ref_keys:
+        captured = _load_ref(base, plan[key], key)
+        captured_bytes += len(captured.raw)
+        if captured_bytes > MAX_CAPTURED_JSON_BYTES:
+            raise PreparationError("prospective plan exceeds the aggregate captured JSON limit")
+        refs[key] = captured
     parsed = {key: _parse_json(refs[key], key) for key in ref_keys}
     snapshot, reset, model, scenarios = (parsed[key] for key in ref_keys)
     if set(snapshot) != {"schema_version", "archive_format", "archive_sha256", "synthetic"}:
@@ -248,8 +261,8 @@ def _load_plan(path: Path) -> LoadedPlan:
     if set(scenarios) != {"schema_version", "scenarios"}:
         raise PreparationError("scenario_manifest has unsupported fields")
     _require_schema(scenarios, "scenario_manifest")
-    if not isinstance(scenarios["scenarios"], list) or not scenarios["scenarios"]:
-        raise PreparationError("scenario_manifest.scenarios must be a non-empty list")
+    if not isinstance(scenarios["scenarios"], list) or not 1 <= len(scenarios["scenarios"]) <= MAX_SCENARIOS:
+        raise PreparationError(f"scenario_manifest.scenarios must contain 1 to {MAX_SCENARIOS} entries")
     scenario_ids = [_require_id(item.get("id") if isinstance(item, dict) else None, "scenario id") for item in scenarios["scenarios"]]
     if len(set(scenario_ids)) != len(scenario_ids):
         raise PreparationError("scenario IDs must be unique")
@@ -261,8 +274,8 @@ def _load_plan(path: Path) -> LoadedPlan:
             raise PreparationError(f"scenario[{index}] has an unsupported task or goal")
 
     conditions = plan["conditions"]
-    if not isinstance(conditions, list) or not conditions:
-        raise PreparationError("prospective plan.conditions must be non-empty")
+    if not isinstance(conditions, list) or not 1 <= len(conditions) <= MAX_CONDITIONS:
+        raise PreparationError(f"prospective plan.conditions must contain 1 to {MAX_CONDITIONS} entries")
     configs: dict[str, dict[str, Any]] = {}
     ids: set[str] = set()
     baseline_count = 0
@@ -277,6 +290,9 @@ def _load_plan(path: Path) -> LoadedPlan:
             raise PreparationError(f"condition[{index}].kind is unsupported")
         baseline_count += condition["kind"] == "baseline"
         captured = _load_ref(base, condition["config"], f"condition[{index}].config")
+        captured_bytes += len(captured.raw)
+        if captured_bytes > MAX_CAPTURED_JSON_BYTES:
+            raise PreparationError("prospective plan exceeds the aggregate captured JSON limit")
         config = _parse_json(captured, f"condition[{index}].config")
         _require_schema(config, f"condition[{index}].config")
         if config.get("condition_id") != condition_id or config.get("kind") != condition["kind"]:
@@ -290,6 +306,11 @@ def _load_plan(path: Path) -> LoadedPlan:
 
 def _load_identity(path: Path, loaded: LoadedPlan) -> CapturedFile:
     captured = _capture_file(path, "runtime identity", MAX_IDENTITY_BYTES)
+    aggregate = len(loaded.plan_file.raw) + len(captured.raw) + sum(
+        len(item.raw) for item in loaded.refs.values()
+    )
+    if aggregate > MAX_CAPTURED_JSON_BYTES:
+        raise PreparationError("prospective plan exceeds the aggregate captured JSON limit")
     identity = _parse_json(captured, "runtime identity")
     required = {"schema_version", "provider", "model", "version", "conditions"}
     if set(identity) != required:
@@ -337,15 +358,6 @@ def _archive_signature(info: os.stat_result) -> tuple[int, int, int, int, int]:
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
-def _hash_fd(fd: int) -> str:
-    os.lseek(fd, 0, os.SEEK_SET)
-    hasher = hashlib.sha256()
-    while chunk := os.read(fd, 1024 * 1024):
-        hasher.update(chunk)
-    os.lseek(fd, 0, os.SEEK_SET)
-    return hasher.hexdigest()
-
-
 def _validate_member(member: tarfile.TarInfo) -> None:
     pure = PurePosixPath(member.name)
     if not member.name or "\\" in member.name or pure.is_absolute() or not pure.parts or any(part in {"", ".", ".."} for part in pure.parts):
@@ -354,46 +366,69 @@ def _validate_member(member: tarfile.TarInfo) -> None:
         raise PreparationError(f"unsafe archive member type: {member.name!r}")
 
 
+def _read_exact(stream: BinaryIO, byte_count: int, label: str) -> bytes:
+    chunks: list[bytes] = []
+    remaining = byte_count
+    while remaining:
+        chunk = stream.read(min(1024 * 1024, remaining))
+        if not chunk:
+            raise PreparationError(f"world archive is truncated in {label}")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+def _consume_exact(stream: BinaryIO, byte_count: int, label: str) -> None:
+    remaining = byte_count
+    while remaining:
+        chunk = stream.read(min(1024 * 1024, remaining))
+        if not chunk:
+            raise PreparationError(f"world archive is truncated in {label}")
+        remaining -= len(chunk)
+
+
 def _scan_tar_stream(stream: BinaryIO, max_members: int, max_expanded_bytes: int) -> dict[str, int]:
     members = regular_files = expanded_bytes = 0
     member_names: set[str] = set()
+    zero_headers = 0
     try:
-        with tarfile.open(fileobj=stream, mode="r|", bufsize=512) as archive:
-            while True:
-                member = archive.next()
-                if member is None:
-                    break
-                members += 1
-                if members > max_members:
-                    raise PreparationError("archive exceeds the member-count safety limit")
-                _validate_member(member)
-                normalized_name = str(PurePosixPath(member.name))
-                if normalized_name in member_names:
-                    raise PreparationError(f"duplicate archive member path: {member.name!r}")
-                member_names.add(normalized_name)
-                if member.isfile():
-                    regular_files += 1
-                    expanded_bytes += member.size
-                    if expanded_bytes > max_expanded_bytes:
-                        raise PreparationError("archive exceeds the expanded-byte safety limit")
-                    source = archive.extractfile(member)
-                    if source is None:
-                        raise PreparationError("world archive is not a valid tar stream")
-                    remaining = member.size
-                    while remaining:
-                        chunk = source.read(min(1024 * 1024, remaining))
-                        if not chunk:
-                            raise PreparationError("world archive is not a valid tar stream")
-                        remaining -= len(chunk)
-                    if source.read(1):
-                        raise PreparationError("archive member exceeds its declared size")
-                archive.members.clear()
+        while zero_headers < 2:
+            header = _read_exact(stream, tarfile.BLOCKSIZE, "header")
+            if header == tarfile.NUL * tarfile.BLOCKSIZE:
+                zero_headers += 1
+                continue
+            if zero_headers:
+                raise PreparationError("archive has an incomplete end marker")
+            try:
+                member = tarfile.TarInfo.frombuf(header, "utf-8", "surrogateescape")
+            except tarfile.HeaderError as exc:
+                raise PreparationError("world archive has an invalid tar header") from exc
+            members += 1
+            if members > max_members:
+                raise PreparationError("archive exceeds the member-count safety limit")
+            _validate_member(member)
+            normalized_name = str(PurePosixPath(member.name))
+            if normalized_name in member_names:
+                raise PreparationError(f"duplicate archive member path: {member.name!r}")
+            member_names.add(normalized_name)
+            if member.isdir() and member.size != 0:
+                raise PreparationError(f"archive directory has a payload: {member.name!r}")
+            if member.isfile():
+                regular_files += 1
+                expanded_bytes += member.size
+                if expanded_bytes > max_expanded_bytes:
+                    raise PreparationError("archive exceeds the expanded-byte safety limit")
+            _consume_exact(stream, member.size, f"member {member.name!r}")
+            padding_size = (-member.size) % tarfile.BLOCKSIZE
+            padding = _read_exact(stream, padding_size, "member padding")
+            if any(padding):
+                raise PreparationError(f"archive member has nonzero padding: {member.name!r}")
         trailing = stream.read(MAX_TAR_ZERO_PADDING + 1)
         if len(trailing) > MAX_TAR_ZERO_PADDING or any(trailing):
             raise PreparationError("archive contains nonzero or excessive trailing data")
     except PreparationError:
         raise
-    except (tarfile.TarError, EOFError, OSError) as exc:
+    except (EOFError, OSError) as exc:
         raise PreparationError("world archive is not a valid tar stream") from exc
     return {"member_count": members, "regular_file_count": regular_files, "expanded_bytes": expanded_bytes}
 
@@ -453,24 +488,33 @@ def _write_private(path: Path, raw: bytes, root: Path) -> None:
         os.close(fd)
 
 
-def _copy_archive_fd(fd: int, destination: Path, expected_hash: str, root: Path) -> tuple[str, int]:
+def _copy_archive_fd(
+    fd: int,
+    destination: Path,
+    expected_bytes: int,
+    root: Path,
+) -> tuple[str, int]:
     _ensure_private_directory(destination.parent, root)
     out_fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
     hasher = hashlib.sha256(); total = 0
     try:
         os.lseek(fd, 0, os.SEEK_SET)
-        while chunk := os.read(fd, 1024 * 1024):
+        remaining = expected_bytes
+        while remaining:
+            chunk = os.read(fd, min(1024 * 1024, remaining))
+            if not chunk:
+                raise PreparationError("world archive shrank while being copied")
             view = memoryview(chunk)
             while view:
                 written = os.write(out_fd, view)
                 view = view[written:]
-            hasher.update(chunk); total += len(chunk)
+            hasher.update(chunk); total += len(chunk); remaining -= len(chunk)
+        if os.read(fd, 1):
+            raise PreparationError("world archive grew while being copied")
         os.fchmod(out_fd, 0o600)
     finally:
         os.close(out_fd)
     observed = hasher.hexdigest()
-    if observed != expected_hash:
-        raise PreparationError("world archive changed while being copied")
     return observed, total
 
 
@@ -486,19 +530,37 @@ def prepare(plan_path: Path, archive_path: Path, identity_path: Path, output_pat
     created = False
     try:
         expected_archive_hash = loaded.snapshot["archive_sha256"]
-        archive_hash = _hash_fd(archive_fd)
-        if archive_hash != expected_archive_hash:
-            raise PreparationError(f"snapshot SHA-256 mismatch: expected {expected_archive_hash}, observed {archive_hash}")
         expected_suffix = ".tar.zst" if loaded.snapshot["archive_format"] == "tar.zst" else ".tar"
         if not archive_path.name.endswith(expected_suffix):
             raise PreparationError("world archive filename does not match snapshot archive_format")
-        archive_scan = _scan_archive(archive_fd, archive_path.name, max_members, max_expanded_bytes)
         input_bytes = initial_info.st_size + len(loaded.plan_file.raw) + len(identity_file.raw) + sum(len(item.raw) for item in loaded.refs.values())
         free_bytes = shutil.disk_usage(output_parent).free
         if free_bytes - input_bytes < reserve_bytes:
             raise PreparationError(f"copy would cross the {reserve_bytes}-byte free-space reserve")
         _mkdir_private(output_path); created = True
         copied: list[dict[str, Any]] = []
+        archive_destination = output_path / "inputs" / archive_path.name
+        copied_hash, copied_bytes = _copy_archive_fd(
+            archive_fd,
+            archive_destination,
+            initial_info.st_size,
+            output_path,
+        )
+        if copied_hash != expected_archive_hash:
+            raise PreparationError(
+                f"snapshot SHA-256 mismatch: expected {expected_archive_hash}, observed {copied_hash}"
+            )
+        if _archive_signature(os.fstat(archive_fd)) != _archive_signature(initial_info):
+            raise PreparationError("world archive changed during preparation")
+        private_archive_fd, _ = _open_regular(
+            archive_destination, "private world archive", max_archive_bytes
+        )
+        try:
+            archive_scan = _scan_archive(
+                private_archive_fd, archive_path.name, max_members, max_expanded_bytes
+            )
+        finally:
+            os.close(private_archive_fd)
         _write_private(output_path / "plan" / "plan.json", loaded.plan_file.raw, output_path)
         copied.append({"path": "plan/plan.json", "sha256": loaded.plan_file.sha256, "bytes": len(loaded.plan_file.raw)})
         for key, captured in sorted(loaded.refs.items()):
@@ -508,10 +570,6 @@ def prepare(plan_path: Path, archive_path: Path, identity_path: Path, output_pat
             copied.append({"path": f"plan/{relative}", "sha256": captured.sha256, "bytes": len(captured.raw)})
         _write_private(output_path / "runtime-identity.json", identity_file.raw, output_path)
         copied.append({"path": "runtime-identity.json", "sha256": identity_file.sha256, "bytes": len(identity_file.raw)})
-        archive_destination = output_path / "inputs" / archive_path.name
-        copied_hash, copied_bytes = _copy_archive_fd(archive_fd, archive_destination, expected_archive_hash, output_path)
-        if _archive_signature(os.fstat(archive_fd)) != _archive_signature(initial_info):
-            raise PreparationError("world archive changed during preparation")
         copied.append({"path": f"inputs/{archive_path.name}", "sha256": copied_hash, "bytes": copied_bytes})
         manifest = {
             "schema_version": 1, "status": "prepared_not_run", "live_ready": False, "reset_performed": False,

@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 
-from tools.pilot.prepare import PreparationError, main, prepare
+from tools.pilot.prepare import PreparationError, _copy_archive_fd, main, prepare
 
 
 def digest(path: Path) -> str:
@@ -156,7 +156,11 @@ class PrepareTests(unittest.TestCase):
             for content in (b"one", b"two"):
                 info = tarfile.TarInfo("ai-world/duplicate.dat"); info.size = len(content); archive.addfile(info, io.BytesIO(content))
         cases.append((self.archive.read_bytes(), "duplicate archive member"))
-        self._write_archive(self.archive, [("ai-world/large.dat", b"x" * 4096)]); cases.append((self.archive.read_bytes()[:1024], "valid tar stream"))
+        with self.archive.open("wb") as destination:
+            info = tarfile.TarInfo("pax"); info.type = tarfile.XHDTYPE; info.size = 10**12
+            destination.write(info.tobuf()); destination.write(b"\0" * 1024)
+        cases.append((self.archive.read_bytes(), "unsafe archive member type"))
+        self._write_archive(self.archive, [("ai-world/large.dat", b"x" * 4096)]); cases.append((self.archive.read_bytes()[:1024], "truncated"))
         self._write_archive(self.archive, [("ai-world/level.dat", b"ok")]); cases.append((self.archive.read_bytes() + b"nonzero trailing payload", "trailing data"))
         for index, (raw, message) in enumerate(cases):
             with self.subTest(index=index):
@@ -167,6 +171,48 @@ class PrepareTests(unittest.TestCase):
     def test_rejects_archive_when_storage_reserve_would_be_crossed(self):
         with self.assertRaisesRegex(PreparationError, "free-space reserve"):
             self._prepare(reserve_bytes=10**30)
+
+    def test_bounded_copy_rejects_growth_after_initial_size_capture(self):
+        source = self.root / "growing.bin"; source.write_bytes(b"a" * 512)
+        fd = os.open(source, os.O_RDONLY)
+        private = self.root / "private"; private.mkdir(mode=0o700)
+        source.write_bytes(b"a" * 512 + b"growth")
+        try:
+            with self.assertRaisesRegex(PreparationError, "grew"):
+                _copy_archive_fd(fd, private / "copy.bin", 512, private)
+        finally:
+            os.close(fd)
+
+    def test_rejects_excessive_plan_cardinality(self):
+        plan = self._read("plan.json")
+        plan["seeds"] = list(range(1025))
+        self._write("plan.json", plan)
+        with self.assertRaisesRegex(PreparationError, "2 to 1024"):
+            self._prepare()
+        plan["seeds"] = [11, 22]
+        template = plan["conditions"][1]
+        plan["conditions"] = [plan["conditions"][0]] + [
+            {**template, "id": f"coordination-{index}"} for index in range(32)
+        ]
+        self._write("plan.json", plan)
+        with self.assertRaisesRegex(PreparationError, "1 to 32"):
+            self._prepare()
+
+    def test_rejects_aggregate_json_over_64_mib(self):
+        padding = "x" * (15 * 1024 * 1024)
+        reset = self._read("reset.json"); reset["server_version"] = padding; self._write("reset.json", reset)
+        model = self._read("model.json"); model["version"] = padding; self._write("model.json", model)
+        scenarios = self._read("scenarios.json"); scenarios["scenarios"][0]["goal"]["padding"] = padding; self._write("scenarios.json", scenarios)
+        for name in ("baseline.json", "coordination.json"):
+            config = self._read(name); config["padding"] = padding; self._write(name, config)
+        plan = self._read("plan.json")
+        for field, name in (("reset_manifest", "reset.json"), ("model_manifest", "model.json"), ("scenario_manifest", "scenarios.json")):
+            plan[field] = self._ref(name)
+        for condition in plan["conditions"]:
+            condition["config"] = self._ref(f"{condition['id']}.json")
+        self._write("plan.json", plan)
+        with self.assertRaisesRegex(PreparationError, "aggregate captured JSON"):
+            self._prepare()
 
     def test_cli_prints_only_minimal_preparation_summary(self):
         output = io.StringIO()

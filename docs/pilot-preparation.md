@@ -64,16 +64,22 @@ python3 -m tools.pilot.prepare prepare \
 The default storage preflight preserves 40 GiB after the conservative input
 copy estimate. `--reserve-bytes` may be set explicitly for another reviewed
 filesystem policy. Source-size, expanded-size, and member-count limits are also
-configurable.
+configurable. Plans accept at most 1,024 seeds, 32 conditions, and 256
+scenarios. Captured plan JSON is limited to 16 MiB per file and 64 MiB in total.
 
-The preparer opens regular inputs without following symlinks, captures bounded
-JSON bytes before validation, verifies the archive from one stable descriptor,
-and copies those validated bytes with exclusive creation. Archive inspection
-reads every regular member's declared bytes without extraction and rejects
-truncation, nonzero or excessive trailing data, duplicate paths, traversal,
-links, devices, FIFOs, and excessive size or member count. The output root and
-subdirectories are mode `0700`; files are `0600`, independent of a permissive
-umask. `manifest.json` is written last.
+The preparer opens regular inputs without following symlinks and captures
+bounded JSON bytes before validation. It measures the archive once, copies
+exactly that many bytes from the same descriptor into its private owned
+directory, rejects shrinkage or one-byte growth, compares the copied digest to
+the plan, and scans only the stable private copy. Archive inspection parses raw
+512-byte headers, validates header checksums, consumes every declared regular
+file byte and padding byte without extraction, and requires a proper two-block
+end marker. It rejects truncation, nonzero or excessive trailing data,
+duplicate paths, traversal, links, devices, FIFOs, PAX headers, GNU long-name
+extensions, other extension records, and excessive size or member count. PAX
+and GNU long-name archives must be recreated with ordinary bounded names before
+preparation. The output root and subdirectories are mode `0700`; files are
+`0600`, independent of a permissive umask. `manifest.json` is written last.
 
 The CLI prints only the prepared status, manifest path, and manifest SHA-256.
 The private manifest retains input hashes and source identity for the later
