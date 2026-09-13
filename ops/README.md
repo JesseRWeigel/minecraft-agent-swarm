@@ -124,3 +124,5 @@ associate recovered synthetic terminal events with the context of their original
 `action_started`, rather than a later process launch. Running `npm start`
 directly bypasses this helper, so the recorder leaves unavailable provenance
 explicit instead of guessing it.
+
+The collector retains the launch manifest as a bounded allowlisted `launchSource` projection in `run_context`. Its `sourceProjectionSha256` covers only the five matched collection fields, capture time and untracked-source count/hash; it is not a hash of the full raw supervisor JSON. Missing or mismatched supplemental metadata is reported as unavailable or invalid. Neither a matching projection nor a world snapshot identifier verifies a restored world.
