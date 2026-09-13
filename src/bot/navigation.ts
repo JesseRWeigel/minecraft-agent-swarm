@@ -74,6 +74,20 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   // more in the first 15 minutes of run 526, each following one of those
   // walks, with Flora rescued from y=-38. Callers assign canDig after this
   // returns, so the guard is an accessor that keeps reading false.
+  // Depth floor for everyone but the miner, in the overworld: no step down
+  // below y=48. Run 583: Flora, the farmer, walked from the village to
+  // (382, -53, -317) and spent the hour between y=-41 and y=-18 with six
+  // climb-outs timing out at 240s each; Atlas dives the same way. The bots
+  // can still fall, and mining skills run on Forge, who is exempt; the
+  // Nether keeps its own depths.
+  const inOverworld = /overworld/.test(String(bot.game?.dimension ?? "overworld"));
+  if (bot.username !== "Forge" && inOverworld) {
+    const DEPTH_FLOOR = 48;
+    const origNeighborsDepth = moves.getNeighbors.bind(moves);
+    moves.getNeighbors = (node: any) =>
+      origNeighborsDepth(node).filter((n: any) => !(n.y < node.y && n.y < DEPTH_FLOOR));
+  }
+
   const pickless = !bot.inventory.items().some((i) => i.name.endsWith("_pickaxe"));
   if (pickless) {
     let wanted = moves.canDig;
