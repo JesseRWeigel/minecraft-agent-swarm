@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,16 +30,31 @@ export function discoverTestFiles() {
   ].sort();
 }
 
-function removeOwnedScratchDirectory(scratchDir) {
+function removeOwnedScratchDirectory(scratchDir, initialIdentity) {
   const temporaryRoot = realpathSync(tmpdir());
-  const resolvedScratch = realpathSync(scratchDir);
+  const absoluteScratch = path.resolve(scratchDir);
   if (
-    path.dirname(resolvedScratch) !== temporaryRoot ||
-    !path.basename(resolvedScratch).startsWith(SCRATCH_PREFIX)
+    path.dirname(absoluteScratch) !== temporaryRoot ||
+    !path.basename(absoluteScratch).startsWith(SCRATCH_PREFIX)
   ) {
-    throw new Error(`refusing to remove unowned test telemetry directory: ${resolvedScratch}`);
+    throw new Error(`refusing to remove unowned test telemetry directory: ${absoluteScratch}`);
   }
-  rmSync(resolvedScratch, { recursive: true });
+
+  const current = lstatSync(absoluteScratch, { bigint: true });
+  if (current.isSymbolicLink()) {
+    rmSync(absoluteScratch);
+    throw new Error(`test telemetry directory was replaced by a symlink: ${absoluteScratch}`);
+  }
+  if (
+    !current.isDirectory() ||
+    current.dev !== initialIdentity.dev ||
+    current.ino !== initialIdentity.ino ||
+    realpathSync(absoluteScratch) !== absoluteScratch
+  ) {
+    throw new Error(`test telemetry directory changed before cleanup: ${absoluteScratch}`);
+  }
+
+  rmSync(absoluteScratch, { recursive: true });
 }
 
 export function runTestProcess({
@@ -49,6 +64,7 @@ export function runTestProcess({
   stdio = "inherit",
 } = {}) {
   const scratchDir = mkdtempSync(path.join(realpathSync(tmpdir()), SCRATCH_PREFIX));
+  const initialIdentity = lstatSync(scratchDir, { bigint: true });
   const childEnv = { ...env };
   for (const key of [
     "NODE_TEST_CONTEXT",
@@ -75,7 +91,7 @@ export function runTestProcess({
     });
   } finally {
     try {
-      removeOwnedScratchDirectory(scratchDir);
+      removeOwnedScratchDirectory(scratchDir, initialIdentity);
     } catch (error) {
       cleanupError = error;
     }
@@ -95,6 +111,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     "--test-reporter",
     "--test-reporter-destination",
     "--test-shard",
+    "--test-skip-pattern",
     "--test-timeout",
   ]);
   const commandArgs = process.argv.slice(2);

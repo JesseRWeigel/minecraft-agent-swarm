@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -32,6 +32,12 @@ test("default telemetry recorder uses the test runner scratch directory", () => 
   });
   assert.equal(existsSync(recorder.eventPath), true);
   assert.ok(readdirSync(isolatedDir, { recursive: true }).length > 0);
+
+  if (process.env.CHILD_REPLACE_SCRATCH_WITH_SYMLINK === "1") {
+    writeFileSync(process.env.CHILD_SCRATCH_AUDIT_FILE, isolatedDir);
+    rmSync(isolatedDir, { recursive: true });
+    symlinkSync(process.env.CHILD_SYMLINK_TARGET, isolatedDir, "dir");
+  }
 
   if (process.env.CHILD_SHOULD_FAIL === "1") {
     assert.fail("intentional child failure after telemetry write");
