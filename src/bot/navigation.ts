@@ -79,7 +79,7 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   // (482, 60, -415) under stone at 63), and the trade march died in that
   // same lake. The library prices a water node like a land node; fifteen
   // times the cost keeps paths on land whenever land exists.
-  moves.liquidCost = 15;
+  (moves as unknown as { liquidCost: number }).liquidCost = 15; // present at runtime, absent from the typings
 
   // Depth floor for everyone but the miner, in the overworld: no step down
   // below y=48. Run 583: Flora, the farmer, walked from the village to
