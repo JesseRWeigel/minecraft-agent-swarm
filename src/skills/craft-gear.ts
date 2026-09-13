@@ -449,7 +449,15 @@ export const craftGearSkill: Skill = {
               .filter((i) => i.name === n)
               .reduce((s, i) => s + i.count, 0);
           const before = countOf(itemName);
+          const cobbleBefore = countOf("cobblestone");
+          const stickBefore = countOf("stick");
           await bot.craft(recipe, 1, table || undefined);
+          // Run 584: Blade's stone tier read recipe=yes, cobblestone and
+          // sticks then vanished, and no pick appeared, three times in an
+          // hour. Name the outcome so the next failure explains itself.
+          console.log(
+            `[GearDebug] craft ${itemName}: count ${before} -> ${countOf(itemName)}, cobble ${cobbleBefore} -> ${countOf("cobblestone")}, sticks ${stickBefore} -> ${countOf("stick")}, table ${table ? bot.entity.position.distanceTo(table.position).toFixed(1) : "none"} away, window ${bot.currentWindow ? bot.currentWindow.type : "none"}`,
+          );
           // VERIFY the craft actually produced the item. bot.craft can return
           // without error yet without crafting (e.g. not actually at the table),
           // which made craft_gear report phantom 'iron_pickaxe' successes while
@@ -476,7 +484,8 @@ export const craftGearSkill: Skill = {
             }
             break;
           }
-        } catch {
+        } catch (e) {
+          console.log(`[GearDebug] craft ${itemName} threw: ${String((e as Error)?.message ?? e)}`);
           continue;
         }
       }
