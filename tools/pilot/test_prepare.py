@@ -160,6 +160,11 @@ class PrepareTests(unittest.TestCase):
             info = tarfile.TarInfo("pax"); info.type = tarfile.XHDTYPE; info.size = 10**12
             destination.write(info.tobuf()); destination.write(b"\0" * 1024)
         cases.append((self.archive.read_bytes(), "unsafe archive member type"))
+        for archive_type in (tarfile.CONTTYPE, tarfile.GNUTYPE_SPARSE):
+            with self.archive.open("wb") as destination:
+                info = tarfile.TarInfo("unsupported"); info.type = archive_type
+                destination.write(info.tobuf()); destination.write(b"\0" * 1024)
+            cases.append((self.archive.read_bytes(), "unsafe archive member type"))
         self._write_archive(self.archive, [("ai-world/large.dat", b"x" * 4096)]); cases.append((self.archive.read_bytes()[:1024], "truncated"))
         self._write_archive(self.archive, [("ai-world/level.dat", b"ok")]); cases.append((self.archive.read_bytes() + b"nonzero trailing payload", "trailing data"))
         for index, (raw, message) in enumerate(cases):

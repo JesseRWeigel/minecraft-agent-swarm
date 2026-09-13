@@ -362,7 +362,7 @@ def _validate_member(member: tarfile.TarInfo) -> None:
     pure = PurePosixPath(member.name)
     if not member.name or "\\" in member.name or pure.is_absolute() or not pure.parts or any(part in {"", ".", ".."} for part in pure.parts):
         raise PreparationError(f"unsafe archive member path: {member.name!r}")
-    if not (member.isfile() or member.isdir()) or member.size < 0:
+    if member.type not in {tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE} or member.size < 0:
         raise PreparationError(f"unsafe archive member type: {member.name!r}")
 
 
