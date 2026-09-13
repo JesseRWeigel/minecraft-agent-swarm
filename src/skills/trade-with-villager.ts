@@ -3,7 +3,7 @@ import type { Entity } from "prismarine-entity";
 import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
-import { baseMoves, safeGoto } from "../bot/navigation.js";
+import { baseMoves, safeGoto, GoalNearXZAbove } from "../bot/navigation.js";
 
 /**
  * trade_with_villager — What a Deal! (adventure/trade), which fires the first
@@ -117,6 +117,7 @@ export const tradeWithVillagerSkill: Skill = {
     const gapToVillage = () => Math.hypot(bot.entity.position.x - VILLAGE.x, bot.entity.position.z - VILLAGE.z);
     const marchUntil = Date.now() + 360_000;
     let guard = 0;
+    let unwedges = 0;
     while (gapToVillage() > 40 && !signal.aborted && Date.now() < marchUntil) {
       const g = gapToVillage();
       step(`Marching to the village — ${Math.round(g)} blocks out...`, 0.1 + Math.min(0.5, (650 - g) / 1300));
@@ -124,7 +125,56 @@ export const tradeWithVillagerSkill: Skill = {
       const wx = Math.round(bot.entity.position.x + (VILLAGE.x - bot.entity.position.x) * t);
       const wz = Math.round(bot.entity.position.z + (VILLAGE.z - bot.entity.position.z) * t);
       const before = gapToVillage();
-      await safeGoto(bot, new goals.GoalNearXZ(wx, wz, 12), 45_000, 12_000).catch(() => {});
+      const legStart = Date.now();
+      let legError = "";
+      await safeGoto(bot, new GoalNearXZAbove(wx, wz, 12, 60), 45_000, 12_000).catch((e: Error) => {
+        legError = e.message;
+      });
+      // A leg that dies inside three seconds with "No path" never left the
+      // start: the bot is wedged in a stash chest (run 585: three legs
+      // rejected in one second at (289, 70, -314), five trips lost). Step
+      // onto a standable neighbour by hand and try the leg again.
+      if (Date.now() - legStart < 3000 && /No path/i.test(legError) && unwedges < 3) {
+        unwedges++;
+        const p = bot.entity.position.floored();
+        const { Vec3 } = await import("vec3");
+        let hopped = false;
+        for (const [dx, dz] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+          [1, 1],
+          [-1, -1],
+          [1, -1],
+          [-1, 1],
+        ]) {
+          for (const dy of [0, 1]) {
+            const feet = bot.blockAt(new Vec3(p.x + dx, p.y + dy, p.z + dz));
+            const head = bot.blockAt(new Vec3(p.x + dx, p.y + dy + 1, p.z + dz));
+            const floor = bot.blockAt(new Vec3(p.x + dx, p.y + dy - 1, p.z + dz));
+            if (
+              feet?.name === "air" &&
+              head?.name === "air" &&
+              floor?.boundingBox === "block" &&
+              !/chest|barrel/.test(floor.name)
+            ) {
+              await bot.lookAt(new Vec3(p.x + dx + 0.5, p.y + dy + 1, p.z + dz + 0.5), true).catch(() => {});
+              bot.setControlState("forward", true);
+              bot.setControlState("jump", true);
+              await new Promise((r) => setTimeout(r, 800));
+              bot.clearControlStates();
+              hopped = true;
+              break;
+            }
+          }
+          if (hopped) break;
+        }
+        console.log(
+          `[TradeDebug] ${bot.username} leg rejected at once (${legError}); unwedge ${unwedges}: ${hopped ? "hopped" : "no standable neighbour"} at ${bot.entity.position.floored()}`,
+        );
+        continue;
+      }
       if (before - gapToVillage() < 8 && ++guard >= 3) break;
       else if (before - gapToVillage() >= 8) guard = 0;
     }
