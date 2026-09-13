@@ -64,6 +64,23 @@ export const tradeWithVillagerSkill: Skill = {
     // coal aboard and 2,882 coal in the stash. Sixteen coal is one emerald
     // at an armorer, toolsmith or weaponsmith; carry enough for two trades
     // so a bread purchase can follow.
+    {
+      // Same rule inside the skill for the model's own invocations (run 596).
+      const { STASH_POS } = await import("../bot/role.js");
+      const y = bot.entity.position.y;
+      if (
+        y < STASH_POS.y - 12 &&
+        Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z) < 120
+      ) {
+        console.log(
+          `[TradeDebug] ${bot.username} underground at y=${y.toFixed(0)} (stash y=${STASH_POS.y}) — no march from here`,
+        );
+        return {
+          success: false,
+          message: `Underground at y=${Math.round(y)}; climb to the surface before the village trip.`,
+        };
+      }
+    }
     try {
       const { STASH_POS } = await import("../bot/role.js");
       const nearStash = Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z) < 90;

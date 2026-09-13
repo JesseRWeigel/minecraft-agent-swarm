@@ -293,6 +293,11 @@ export class BotBrain {
     if (Date.now() - this.lastTradeMs < 1_800_000) return false;
     if ((this.bot.time?.timeOfDay ?? 0) >= 9000) return false;
     if (Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) >= 40) return false;
+    // Run 596: the trip fired with Forge 47 blocks under the stash in a
+    // flooded cave (the XZ test alone said "near"), and every leg stalled
+    // at (309, 24, -325) for the whole trip while his hunger fell to 3.
+    // The march starts on the surface or not at all.
+    if (this.bot.entity.position.y < sp.y - 8) return false;
     const coal = this.bot.inventory
       .items()
       .filter((i) => i.name === "coal")
