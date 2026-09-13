@@ -135,6 +135,37 @@ export const tradeWithVillagerSkill: Skill = {
       }
     }
 
+    // Run 592: the first trip after a restart still lost every leg to "The
+    // goal was changed" in 0.0s, three unwedge hops included, while the
+    // second trip walked clean. Third pass on this symptom, so instrument:
+    // for the length of the march, every setGoal on this bot logs its caller.
+    const pf = bot.pathfinder as unknown as {
+      setGoal: (goal: unknown, dynamic?: boolean) => void;
+    };
+    const origSetGoal = pf.setGoal;
+    let goalLogs = 0;
+    pf.setGoal = function (goal: unknown, dynamic?: boolean) {
+      if (goalLogs < 16) {
+        goalLogs++;
+        const frames = (new Error().stack ?? "")
+          .split("\n")
+          .slice(2, 6)
+          .map((f) =>
+            f
+              .trim()
+              .replace(/^at /, "")
+              .replace(/\(.*\/src\//, "(src/"),
+          )
+          .join(" <- ");
+        const name = goal ? ((goal as { constructor?: { name?: string } }).constructor?.name ?? "goal") : "null";
+        console.log(`[TradeDebug] ${bot.username} setGoal(${name}) from ${frames}`);
+      }
+      return origSetGoal.call(this, goal, dynamic);
+    };
+    const restoreSetGoal = () => {
+      if (pf.setGoal !== origSetGoal) pf.setGoal = origSetGoal;
+    };
+
     const marchMoves = baseMoves(bot);
     (marchMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).canDig = true;
     (marchMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).allow1by1towers = true;
@@ -215,6 +246,7 @@ export const tradeWithVillagerSkill: Skill = {
       else if (before - gapToVillage() >= 8) guard = 0;
     }
 
+    restoreSetGoal();
     if (gapToVillage() > 48) {
       return {
         success: false,
@@ -308,7 +340,10 @@ export const tradeWithVillagerSkill: Skill = {
           }
         }
         const foodTrade = bot.food < 14 ? trades.find((t) => canPay(t) && isFood(t.outputItem?.name)) : undefined;
-        const affordable = foodTrade ?? trades.find(canPay);
+        // Run 592: Forge sold the What a Deal emerald to a cleric for 2
+        // redstone (the stash holds 811). Emeralds only leave for food.
+        const spendsEmerald = (t: (typeof trades)[number]) => inputsOf(t).some((i) => i?.name === "emerald");
+        const affordable = foodTrade ?? trades.find((t) => canPay(t) && !spendsEmerald(t));
         if (!affordable) {
           bot.closeWindow(win);
           continue;
