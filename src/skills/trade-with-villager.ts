@@ -197,6 +197,17 @@ export const tradeWithVillagerSkill: Skill = {
       const feet = bot.blockAt(bot.entity.position);
       return !!feet && /^(water|kelp|kelp_plant|seagrass|tall_seagrass|bubble_column)$/.test(feet.name);
     };
+    // Run 595: the guard fired in OPEN water at (379, 62, -371), a deep lake
+    // on the first leg, and ended a crossing that had already made 108
+    // blocks. Open water is a swim, and the pathfinder handles it. The
+    // guard now needs a roof within three blocks or a leg that just died at
+    // once with no valid start.
+    const roofed = () =>
+      [1, 2, 3].some((dy) => {
+        const a = bot.blockAt(bot.entity.position.offset(0, dy, 0));
+        return !!a && a.boundingBox === "block";
+      });
+    let lastLegNoStart = false;
 
     // --- March to the village in ~120-block hops (stays inside the OOM
     //     searchRadius cap; each hop re-plans from the new position). ---
@@ -208,7 +219,7 @@ export const tradeWithVillagerSkill: Skill = {
       // Afloat: no more legs. Every failed leg resets the pathfinder and
       // clears the drown reflex's keys (run 594). Hand the run back without
       // the resume marker so the executor does not re-enter at once.
-      if (afloat()) {
+      if (afloat() && (roofed() || lastLegNoStart)) {
         const p = bot.entity.position.floored();
         console.log(`[TradeDebug] ${bot.username} afloat at ${p} — no more legs, the drown reflex owns the keys`);
         restoreSetGoal();
@@ -240,6 +251,7 @@ export const tradeWithVillagerSkill: Skill = {
       console.log(
         `[TradeDebug] ${bot.username} leg to (${wx}, ${wz}) took ${((Date.now() - legStart) / 1000).toFixed(1)}s: ${legError || "resolved"}; gap ${Math.round(before)} -> ${Math.round(gapToVillage())}`,
       );
+      lastLegNoStart = Date.now() - legStart < 3000 && /No route from here|No path/.test(legError);
       if (Date.now() - legStart < 3000 && before - gapToVillage() < 2 && unwedges < 3) {
         unwedges++;
         const p = bot.entity.position.floored();
