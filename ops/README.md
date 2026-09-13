@@ -96,7 +96,12 @@ The tracked-diff hash does not cover untracked files. To make that limitation
 visible, the manifest separately records a deterministic content hash and count
 for untracked and ignored files under runtime source paths (`src`, `scripts`,
 `skills`, and root runtime manifests). Evaluation refuses to launch if that
-count is nonzero. A controlled evaluation also requires a nonempty trial and a
+count is nonzero. Scanning is fail-closed in every mode: state is limited to
+64 KiB, and runtime evidence is limited to 10,000 files, 64 MiB per file,
+256 MiB total, and a 4 MiB tracked-path listing. Files are hashed as streams;
+symlinks, FIFOs, other non-regular files, and inputs that change while hashing
+abort the launch. Trial IDs must match
+`[A-Za-z0-9][A-Za-z0-9._-]{0,127}`. A controlled evaluation also requires a nonempty trial and a
 operator-provided `WORLD_SNAPSHOT_ID` formatted as a SHA-256 content identifier.
 The helper passes it to the collector as `DATASET_WORLD_SNAPSHOT_ID`. Its presence is
 an operator assertion of snapshot identity, not proof that a restore was tested.

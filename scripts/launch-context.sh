@@ -6,7 +6,9 @@ capture_launch_context() {
   local state context git_commit dirty_hash trial_id world_snapshot_id untracked_runtime untracked_count untracked_hash
 
   if ! state=$(python3 - ops/state.json <<'PY'
-import json, sys
+import json, os, re, stat, sys
+
+MAX_STATE_BYTES = 64 * 1024
 
 def reject_duplicates(pairs):
     result = {}
@@ -17,13 +19,22 @@ def reject_duplicates(pairs):
     return result
 
 try:
-    with open(sys.argv[1], encoding='utf-8') as handle:
-        value = json.load(handle, object_pairs_hook=reject_duplicates)
+    descriptor = os.open(sys.argv[1], os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+    metadata = os.fstat(descriptor)
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_STATE_BYTES:
+        os.close(descriptor)
+        raise ValueError('operations state must be a regular file no larger than 64 KiB')
+    with os.fdopen(descriptor, 'rb') as handle:
+        raw = handle.read(MAX_STATE_BYTES + 1)
+    if len(raw) > MAX_STATE_BYTES:
+        raise ValueError('operations state exceeds 64 KiB')
+    value = json.loads(raw, object_pairs_hook=reject_duplicates,
+                       parse_constant=lambda token: (_ for _ in ()).throw(ValueError(f'invalid number: {token}')))
     if not isinstance(value, dict) or value.get('mode') not in ('live', 'maintenance', 'evaluation'):
         raise ValueError('invalid operations state')
     trial = value.get('trial')
-    if trial is not None and (not isinstance(trial, str) or not trial.strip()):
-        raise ValueError('trial must be a nonempty string or null')
+    if trial is not None and (not isinstance(trial, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', trial)):
+        raise ValueError('trial must match [A-Za-z0-9][A-Za-z0-9._-]{0,127} or be null')
     print(json.dumps({'mode': value['mode'], 'trial': trial}, separators=(',', ':')))
 except (OSError, ValueError, json.JSONDecodeError) as error:
     print(f'[Supervisor] Invalid operations state: {error}', file=sys.stderr)
@@ -37,7 +48,20 @@ PY
     echo '[Supervisor] Cannot resolve the launch checkout commit; refusing to launch.' >&2
     return 1
   fi
-  if ! dirty_hash=$(git diff --binary HEAD -- . | sha256sum | awk '{print $1}'); then
+  if ! dirty_hash=$(python3 - <<'PY'
+import hashlib, subprocess, sys
+process = subprocess.Popen(['git', 'diff', '--no-ext-diff', '--binary', 'HEAD', '--', '.'], stdout=subprocess.PIPE)
+digest = hashlib.sha256()
+while True:
+    chunk = process.stdout.read(1024 * 1024)
+    if not chunk:
+        break
+    digest.update(chunk)
+if process.wait() != 0:
+    sys.exit(1)
+print(digest.hexdigest())
+PY
+  ); then
     echo '[Supervisor] Cannot hash tracked launch changes; refusing to launch.' >&2
     return 1
   fi
@@ -48,22 +72,76 @@ PY
   # replaced below so a stale collector value cannot leak across launches.
   world_snapshot_id=${WORLD_SNAPSHOT_ID:-}
   if ! untracked_runtime=$(python3 - <<'PY'
-import hashlib, json, pathlib, subprocess, sys
+import hashlib, json, os, pathlib, stat, subprocess
+
+MAX_FILES = 10_000
+MAX_LIST_BYTES = 4 * 1024 * 1024
+MAX_FILE_BYTES = 64 * 1024 * 1024
+MAX_TOTAL_BYTES = 256 * 1024 * 1024
+
+def bounded_git_paths(args):
+    process = subprocess.Popen(args, stdout=subprocess.PIPE)
+    data = process.stdout.read(MAX_LIST_BYTES + 1)
+    if len(data) > MAX_LIST_BYTES:
+        process.kill()
+        process.wait()
+        raise ValueError('runtime source path list exceeds 4 MiB')
+    if process.wait() != 0:
+        raise subprocess.CalledProcessError(process.returncode, args)
+    return {item for item in data.split(b'\0') if item}
+
+tracked = bounded_git_paths(['git', 'ls-files', '-z', '--', 'src', 'scripts', 'skills', 'package.json', 'package-lock.json', 'tsconfig.json'])
 paths = set()
-for args in (
-    ['git', 'ls-files', '--others', '--exclude-standard', '-z', '--', 'src', 'scripts', 'skills', 'package.json', 'package-lock.json', 'tsconfig.json'],
-    ['git', 'ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', 'src', 'scripts', 'skills', 'package.json', 'package-lock.json', 'tsconfig.json'],
-):
-    result = subprocess.run(args, check=True, capture_output=True)
-    paths.update(item for item in result.stdout.split(b'\0') if item)
+for root_name in ('src', 'scripts', 'skills'):
+    root = pathlib.Path(root_name)
+    if not root.exists():
+        continue
+    for directory, directory_names, file_names in os.walk(root, followlinks=False):
+        for name in directory_names + file_names:
+            path = pathlib.Path(directory, name)
+            raw_path = os.fsencode(path.as_posix())
+            if raw_path not in tracked:
+                paths.add(raw_path)
+                if len(paths) > MAX_FILES:
+                    raise ValueError('runtime source file count exceeds 10000')
+for root_name in ('package.json', 'package-lock.json', 'tsconfig.json'):
+    path = pathlib.Path(root_name)
+    raw_path = os.fsencode(root_name)
+    if os.path.lexists(path):
+        if raw_path not in tracked:
+            paths.add(raw_path)
 digest = hashlib.sha256()
+total_size = 0
 for raw_path in sorted(paths):
     path = pathlib.Path(raw_path.decode('utf-8', 'surrogateescape'))
-    data = path.read_bytes()
+    metadata = path.lstat()
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError('runtime source contains a non-regular file')
+    if metadata.st_size > MAX_FILE_BYTES:
+        raise ValueError('runtime source file exceeds 64 MiB')
+    total_size += metadata.st_size
+    if total_size > MAX_TOTAL_BYTES:
+        raise ValueError('runtime source files exceed 256 MiB total')
     digest.update(len(raw_path).to_bytes(8, 'big'))
     digest.update(raw_path)
-    digest.update(len(data).to_bytes(8, 'big'))
-    digest.update(data)
+    digest.update(metadata.st_size.to_bytes(8, 'big'))
+    bytes_read = 0
+    descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+    opened_metadata = os.fstat(descriptor)
+    if (opened_metadata.st_dev, opened_metadata.st_ino, opened_metadata.st_size) != (metadata.st_dev, metadata.st_ino, metadata.st_size):
+        os.close(descriptor)
+        raise ValueError('runtime source changed before hashing')
+    with os.fdopen(descriptor, 'rb') as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            bytes_read += len(chunk)
+            if bytes_read > MAX_FILE_BYTES:
+                raise ValueError('runtime source file grew beyond 64 MiB while hashing')
+            digest.update(chunk)
+    if bytes_read != metadata.st_size:
+        raise ValueError('runtime source changed while hashing')
 print(json.dumps({'count': len(paths), 'sha256': digest.hexdigest()}, separators=(',', ':')))
 PY
   ); then

@@ -141,6 +141,34 @@ exit 143
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse((self.root / 'launches').exists())
 
+    def test_special_or_oversized_runtime_source_fails_without_launch(self):
+        (self.root / 'src').mkdir()
+        os.mkfifo(self.root / 'src/runtime.pipe')
+        result = self.run_script('run-swarm.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / 'launches').exists())
+
+        (self.root / 'src/runtime.pipe').unlink()
+        with (self.root / 'src/oversized.ts').open('wb') as handle:
+            handle.truncate(64 * 1024 * 1024 + 1)
+        result = self.run_script('run-swarm.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / 'launches').exists())
+
+    def test_oversized_state_and_invalid_trial_identifiers_fail_closed(self):
+        (self.root / 'ops/state.json').write_text('{"mode":"live","padding":"' + 'x' * (64 * 1024) + '"}')
+        result = self.run_script('run-swarm.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / 'launches').exists())
+
+        for trial in ['contains space', '../escape', 'x' * 129]:
+            with self.subTest(trial=trial):
+                self.state('evaluation', trial)
+                self.env['WORLD_SNAPSHOT_ID'] = 'a' * 64
+                result = self.run_script('run-swarm.sh')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((self.root / 'launches').exists())
+
     def test_invalid_mode_health_is_reported_as_invalid(self):
         (self.root / 'ops/state.json').write_text('{')
         result = self.run_script('swarm-health.sh')
