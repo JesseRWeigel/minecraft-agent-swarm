@@ -77,7 +77,24 @@ export const tradeWithVillagerSkill: Skill = {
       } else {
         console.log(`[TradeDebug] ${bot.username} goods aboard: coal ${invCount(bot, "coal")}, nearStash=${nearStash}`);
       }
+      // Emeralds banked by a deposit reflex come along too: one emerald is
+      // six bread at the farmer, and the What a Deal emerald sat in the
+      // stash while three bots ran at 0 hunger (run 584).
       if (nearStash) {
+        try {
+          const { stashCount, ledgerKnown } = await import("./stash-ledger.js");
+          if (invCount(bot, "emerald") < 1 && ledgerKnown() && stashCount("emerald", STASH_POS.y) >= 1) {
+            const r3 = await Promise.race([
+              withdrawStash(bot, STASH_POS, "emerald", 4),
+              new Promise<string>((res) => setTimeout(() => res("timeout"), 45_000)),
+            ]).catch((e: Error) => e.message);
+            console.log(
+              `[TradeDebug] ${bot.username} emerald withdraw: ${r3} (emeralds now ${invCount(bot, "emerald")})`,
+            );
+          }
+        } catch {
+          /* ledger unavailable */
+        }
         if (invCount(bot, "stick") < 32) {
           const r2 = await Promise.race([
             withdrawStash(bot, STASH_POS, "stick", 32),

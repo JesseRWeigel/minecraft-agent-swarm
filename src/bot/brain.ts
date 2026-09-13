@@ -275,7 +275,16 @@ export class BotBrain {
     const sp = this.roleConfig.stashPos;
     if (!sp) return false;
     const earned = readTeamEarned(BOT_ROSTER.map((b) => b.name));
-    if (earned.has("adventure/trade") || earned.has("minecraft:adventure/trade")) return false;
+    const tradeDone = earned.has("adventure/trade") || earned.has("minecraft:adventure/trade");
+    // After What a Deal the trip still pays: an emerald buys six bread. A
+    // bread run fires when an emerald is aboard or banked and food is low.
+    const emeralds =
+      this.bot.inventory
+        .items()
+        .filter((i) => i.name === "emerald")
+        .reduce((n, i) => n + i.count, 0) + (ledgerKnown() ? stashCount("emerald", sp.y) : 0);
+    const breadRun = emeralds >= 1 && this.bot.food < 10;
+    if (tradeDone && !breadRun) return false;
     if (Date.now() - this.lastTradeMs < 1_800_000) return false;
     if ((this.bot.time?.timeOfDay ?? 0) >= 9000) return false;
     if (Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) >= 40) return false;
@@ -2045,7 +2054,7 @@ export class BotBrain {
         .filter((i) => i.name === "coal")
         .reduce((s, i) => s + i.count, 0);
       const hasCoal = coalAboard >= 15 || (ledgerKnown() && stashCount("coal", spTrade?.y) >= 16);
-      if (!tradeDone && cooledTrade && todTrade < 9000 && nearStashTrade && hasCoal) {
+      if ((!tradeDone || this.tradeReady()) && cooledTrade && todTrade < 9000 && nearStashTrade && hasCoal) {
         this.lastTradeMs = Date.now();
         this.log.info("Brain", "OVERRIDE: no village nearby — marching to sell coal for What a Deal!");
         this.events.onThought("Coal in my pack, a village on the horizon. Time to strike a deal.");
