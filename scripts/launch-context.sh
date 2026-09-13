@@ -44,6 +44,8 @@ PY
 
   DATASET_OPERATION_MODE=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["mode"])' "$state")
   trial_id=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["trial"] or "")' "$state")
+  # WORLD_SNAPSHOT_ID is operator input. DATASET_WORLD_SNAPSHOT_ID is always
+  # replaced below so a stale collector value cannot leak across launches.
   world_snapshot_id=${WORLD_SNAPSHOT_ID:-}
   if ! untracked_runtime=$(python3 - <<'PY'
 import hashlib, json, pathlib, subprocess, sys
@@ -86,23 +88,23 @@ PY
     fi
   fi
 
-  export DATASET_OPERATION_MODE GIT_COMMIT="$git_commit" DIRTY_DIFF_HASH="$dirty_hash"
-  if [[ -n "$trial_id" ]]; then export TRIAL_ID="$trial_id"; else unset TRIAL_ID; fi
-  if [[ -n "$world_snapshot_id" ]]; then export WORLD_SNAPSHOT_ID="$world_snapshot_id"; else unset WORLD_SNAPSHOT_ID; fi
+  export DATASET_OPERATION_MODE DATASET_GIT_COMMIT="$git_commit" DATASET_DIRTY_DIFF_HASH="$dirty_hash"
+  if [[ -n "$trial_id" ]]; then export DATASET_TRIAL_ID="$trial_id"; else unset DATASET_TRIAL_ID; fi
+  if [[ -n "$world_snapshot_id" ]]; then export DATASET_WORLD_SNAPSHOT_ID="$world_snapshot_id"; else unset DATASET_WORLD_SNAPSHOT_ID; fi
 
-  context=$(DATASET_OPERATION_MODE="$DATASET_OPERATION_MODE" TRIAL_ID="${TRIAL_ID:-}" \
-    GIT_COMMIT="$GIT_COMMIT" DIRTY_DIFF_HASH="$DIRTY_DIFF_HASH" \
-    WORLD_SNAPSHOT_ID="${WORLD_SNAPSHOT_ID:-}" UNTRACKED_COUNT="$untracked_count" UNTRACKED_HASH="$untracked_hash" \
+  context=$(DATASET_OPERATION_MODE="$DATASET_OPERATION_MODE" DATASET_TRIAL_ID="${DATASET_TRIAL_ID:-}" \
+    DATASET_GIT_COMMIT="$DATASET_GIT_COMMIT" DATASET_DIRTY_DIFF_HASH="$DATASET_DIRTY_DIFF_HASH" \
+    DATASET_WORLD_SNAPSHOT_ID="${DATASET_WORLD_SNAPSHOT_ID:-}" UNTRACKED_COUNT="$untracked_count" UNTRACKED_HASH="$untracked_hash" \
     python3 - <<'PY'
 import datetime, json, os
 value = {
     'schema_version': 1,
     'captured_at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
     'operation_mode': os.environ['DATASET_OPERATION_MODE'],
-    'trial_id': os.environ['TRIAL_ID'] or None,
-    'git_commit': os.environ['GIT_COMMIT'],
-    'tracked_dirty_diff_sha256': os.environ['DIRTY_DIFF_HASH'],
-    'world_snapshot_id': os.environ['WORLD_SNAPSHOT_ID'] or None,
+    'trial_id': os.environ['DATASET_TRIAL_ID'] or None,
+    'git_commit': os.environ['DATASET_GIT_COMMIT'],
+    'tracked_dirty_diff_sha256': os.environ['DATASET_DIRTY_DIFF_HASH'],
+    'world_snapshot_id': os.environ['DATASET_WORLD_SNAPSHOT_ID'] or None,
     'untracked_runtime_file_count': int(os.environ['UNTRACKED_COUNT']),
     'untracked_runtime_sha256': os.environ['UNTRACKED_HASH'],
     'runtime_command': ['npm', 'start'],

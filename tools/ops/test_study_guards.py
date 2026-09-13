@@ -71,16 +71,18 @@ class StudyGuards(unittest.TestCase):
         self.assertEqual((self.root / 'launches').read_text(), 'launch\n')
 
     def test_launch_exports_commit_clean_diff_and_leaves_unknown_fields_empty(self):
+        self.env['DATASET_TRIAL_ID'] = 'stale-trial'
+        self.env['DATASET_WORLD_SNAPSHOT_ID'] = 'b' * 64
         self.fake('npm', 'env | sort > launch-env; exit 143')
         result = self.run_script('run-swarm.sh')
         self.assertEqual(result.returncode, 0, result.stderr)
         env = dict(line.split('=', 1) for line in (self.root / 'launch-env').read_text().splitlines() if '=' in line)
         commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=self.root, check=True, capture_output=True, text=True).stdout.strip()
-        self.assertEqual(env['GIT_COMMIT'], commit)
-        self.assertEqual(env['DIRTY_DIFF_HASH'], hashlib.sha256(b'').hexdigest())
+        self.assertEqual(env['DATASET_GIT_COMMIT'], commit)
+        self.assertEqual(env['DATASET_DIRTY_DIFF_HASH'], hashlib.sha256(b'').hexdigest())
         self.assertEqual(env['DATASET_OPERATION_MODE'], 'live')
-        self.assertNotIn('TRIAL_ID', env)
-        self.assertNotIn('WORLD_SNAPSHOT_ID', env)
+        self.assertNotIn('DATASET_TRIAL_ID', env)
+        self.assertNotIn('DATASET_WORLD_SNAPSHOT_ID', env)
         manifest = json.loads(env['SWARM_LAUNCH_CONTEXT_JSON'])
         self.assertEqual(manifest['git_commit'], commit)
         self.assertEqual(manifest['runtime_command'], ['npm', 'start'])
@@ -88,7 +90,7 @@ class StudyGuards(unittest.TestCase):
     def test_tracked_dirty_hash_is_recaptured_for_each_restart(self):
         self.fake('npm', '''
 count=$(wc -l < launches 2>/dev/null || echo 0)
-printf '%s\n' "$DIRTY_DIFF_HASH" >> hashes
+printf '%s\n' "$DATASET_DIRTY_DIFF_HASH" >> hashes
 echo launch >> launches
 if [[ "$count" == "0" ]]; then printf 'changed\n' > tracked.txt; exit 1; fi
 exit 143
@@ -122,8 +124,8 @@ exit 143
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual((self.root / 'launches').read_text(), 'launch\n')
         env = dict(line.split('=', 1) for line in (self.root / 'launch-env').read_text().splitlines() if '=' in line)
-        self.assertEqual(env['TRIAL_ID'], 'trial-a')
-        self.assertEqual(env['WORLD_SNAPSHOT_ID'], 'a' * 64)
+        self.assertEqual(env['DATASET_TRIAL_ID'], 'trial-a')
+        self.assertEqual(env['DATASET_WORLD_SNAPSHOT_ID'], 'a' * 64)
 
     def test_duplicate_state_keys_and_untracked_evaluation_source_fail_closed(self):
         (self.root / 'ops/state.json').write_text('{"mode":"live","mode":"evaluation","trial":"trial-a"}')

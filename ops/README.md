@@ -97,7 +97,8 @@ visible, the manifest separately records a deterministic content hash and count
 for untracked and ignored files under runtime source paths (`src`, `scripts`,
 `skills`, and root runtime manifests). Evaluation refuses to launch if that
 count is nonzero. A controlled evaluation also requires a nonempty trial and a
-`WORLD_SNAPSHOT_ID` formatted as a SHA-256 content identifier. Its presence is
+operator-provided `WORLD_SNAPSHOT_ID` formatted as a SHA-256 content identifier.
+The helper passes it to the collector as `DATASET_WORLD_SNAPSHOT_ID`. Its presence is
 an operator assertion of snapshot identity, not proof that a restore was tested.
 
 Launch context describes one process launch. Changing tracked source, operations
