@@ -66,14 +66,18 @@ export const tradeWithVillagerSkill: Skill = {
     try {
       const { STASH_POS } = await import("../bot/role.js");
       const nearStash = Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z) < 90;
+      const { withdrawStash } = await import("./stash.js");
       if (invCount(bot, "coal") < 16 && nearStash) {
-        const { withdrawStash } = await import("./stash.js");
         step("Fetching coal from the stash to sell...", 0.05);
         const r = await Promise.race([
           withdrawStash(bot, STASH_POS, "coal", 32),
           new Promise<string>((res) => setTimeout(() => res("timeout"), 60_000)),
         ]).catch((e: Error) => e.message);
         console.log(`[TradeDebug] ${bot.username} coal withdraw: ${r} (coal now ${invCount(bot, "coal")})`);
+      } else {
+        console.log(`[TradeDebug] ${bot.username} goods aboard: coal ${invCount(bot, "coal")}, nearStash=${nearStash}`);
+      }
+      if (nearStash) {
         if (invCount(bot, "stick") < 32) {
           const r2 = await Promise.race([
             withdrawStash(bot, STASH_POS, "stick", 32),
@@ -81,8 +85,6 @@ export const tradeWithVillagerSkill: Skill = {
           ]).catch((e: Error) => e.message);
           console.log(`[TradeDebug] ${bot.username} stick withdraw: ${r2} (sticks now ${invCount(bot, "stick")})`);
         }
-      } else {
-        console.log(`[TradeDebug] ${bot.username} goods aboard: coal ${invCount(bot, "coal")}, nearStash=${nearStash}`);
       }
     } catch (e) {
       console.log(`[TradeDebug] ${bot.username} coal withdraw skipped: ${(e as Error).message}`);
@@ -256,11 +258,36 @@ export const tradeWithVillagerSkill: Skill = {
       step(`Harvesting ${need} ${item} from the village fields...`, 0.8);
       let dug = 0;
       const deadline = Date.now() + 240_000;
+      // Census first (run 580: "harvested 0 carrots" twice with no word on
+      // what the fields held). Every crop block within 48, by type and age.
+      const census: Record<string, Record<string, number>> = {};
+      for (const pos of bot.findBlocks({
+        matching: (b) => ["carrots", "potatoes", "wheat", "beetroots", "farmland"].includes(b.name),
+        maxDistance: 48,
+        count: 600,
+      })) {
+        const b = bot.blockAt(pos);
+        if (!b) continue;
+        const age = b.name === "farmland" ? "-" : String(b.getProperties()?.age ?? "?");
+        census[b.name] = census[b.name] ?? {};
+        census[b.name][age] = (census[b.name][age] ?? 0) + 1;
+      }
+      console.log(
+        `[TradeDebug] ${bot.username} crops within 48 of (${Math.round(bot.entity.position.x)}, ${Math.round(bot.entity.position.z)}): ${JSON.stringify(census)}`,
+      );
       while (have() < need && dug < 24 && Date.now() < deadline && !signal.aborted) {
-        const plant = bot.findBlock({
-          matching: (b) => b.name === crop.block && Number(b.getProperties()?.age ?? 0) >= crop.mature,
-          maxDistance: 48,
-        });
+        // Mature first; an immature plant still drops one item, which is
+        // enough when the mature ones are gone.
+        const plant =
+          bot.findBlock({
+            matching: (b) => b.name === crop.block && Number(b.getProperties()?.age ?? 0) >= crop.mature,
+            maxDistance: 48,
+          }) ??
+          bot.findBlock({
+            matching: (b) =>
+              b.name === crop.block && Number(b.getProperties()?.age ?? 0) >= Math.floor(crop.mature / 2),
+            maxDistance: 48,
+          });
         if (!plant) break;
         await safeGoto(
           bot,
