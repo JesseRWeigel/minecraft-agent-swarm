@@ -69,6 +69,7 @@ import {
   type ActionStatus,
 } from "../data/episode-events.js";
 import type { ProviderResponseMetadata } from "../llm/provider.js";
+import { captureActionObservation } from "../data/action-observation.js";
 
 export interface ChatMessage {
   source: "minecraft" | "twitch" | "youtube";
@@ -97,6 +98,8 @@ interface ActionCapture {
   episodeId: string;
   botId: string;
   startPayloadRef: string;
+  beforeObservationRef: string;
+  observationTelemetryComplete: boolean;
   interruptionGeneration: number;
   outcome?: ActionOutcome;
 }
@@ -3025,12 +3028,27 @@ export class BotBrain {
         collection: currentCollectionContext(),
       },
     );
+    let beforeObservationRef = "unavailable:observation_capture_failed";
+    let observationTelemetryComplete = false;
+    try {
+      const observation = captureActionObservation(this.bot, botId, actionId, "before_execution");
+      const recorded = appendEpisodeEvent({ botId, episodeId, actionId, requestId, kind: "observation" }, observation);
+      beforeObservationRef = recorded.payloadRef;
+      observationTelemetryComplete = observation.capture.complete && recorded.payloadRef.startsWith("sha256:");
+    } catch (error) {
+      this.log.warn(
+        "Brain:telemetry",
+        `Before-action state observation failed: ${(error as Error)?.message ?? String(error)}`,
+      );
+    }
     return {
       actionId,
       requestId,
       episodeId,
       botId,
       startPayloadRef: started.payloadRef,
+      beforeObservationRef,
+      observationTelemetryComplete,
       interruptionGeneration: this.interruptionGeneration,
     };
   }
@@ -3044,12 +3062,39 @@ export class BotBrain {
     details: Record<string, unknown> = {},
   ): ActionOutcome {
     if (capture.outcome) return capture.outcome;
+    let terminalObservationRef = "unavailable:observation_capture_failed";
+    let terminalObservationComplete = false;
+    try {
+      const observation = captureActionObservation(this.bot, capture.botId, capture.actionId, "at_terminal");
+      const recorded = appendEpisodeEvent(
+        {
+          botId: capture.botId,
+          episodeId: capture.episodeId,
+          actionId: capture.actionId,
+          requestId: capture.requestId,
+          kind: "observation",
+        },
+        observation,
+      );
+      terminalObservationRef = recorded.payloadRef;
+      terminalObservationComplete = observation.capture.complete && recorded.payloadRef.startsWith("sha256:");
+    } catch (error) {
+      this.log.warn(
+        "Brain:telemetry",
+        `Terminal state observation failed: ${(error as Error)?.message ?? String(error)}`,
+      );
+    }
+    const observationRefs = {
+      beforeExecution: capture.beforeObservationRef,
+      atTerminal: terminalObservationRef,
+    };
+    const observationTelemetryComplete = capture.observationTelemetryComplete && terminalObservationComplete;
     const outcome: ActionOutcome = {
       actionId: capture.actionId,
       status,
       reasonCode,
       resultText,
-      evidenceRefs: [capture.startPayloadRef, ...evidenceRefs],
+      evidenceRefs: [capture.startPayloadRef, capture.beforeObservationRef, ...evidenceRefs, terminalObservationRef],
     };
     // Mark terminal before persistence so a later callback failure cannot emit
     // a contradictory second terminal event for this invocation.
@@ -3062,7 +3107,17 @@ export class BotBrain {
         requestId: capture.requestId,
         kind: "action_finished",
       },
-      { captureVersion: 1, outcome, ...details },
+      {
+        captureVersion: 1,
+        outcome,
+        observationRefs,
+        observationTelemetry: {
+          complete: observationTelemetryComplete,
+          limitation:
+            "Same-process Mineflayer client samples; deltas alone do not establish success, transfer attribution, or recovery.",
+        },
+        ...details,
+      },
     );
     return outcome;
   }

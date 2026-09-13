@@ -24,6 +24,7 @@ function setup() {
     health: 20,
     food: 20,
     entity: { position: new Vec3(0, 64, 0) },
+    game: { dimension: "minecraft:overworld" },
     inventory: { items: () => [], slots: [] },
     time: { timeOfDay: 1000 },
     pathfinder: { setGoal: () => {} },
@@ -279,6 +280,43 @@ test("stopped brains and the drowning guard produce explicit non-execution outco
   assert.equal(drowning.status, "blocked");
   assert.equal(drowning.reasonCode, "drowning_safety_gate");
   assert.equal(drowningExecuted, false);
+});
+
+test("each action records exactly one before and terminal client-state observation with terminal refs", async () => {
+  for (const mode of ["executed", "blocked", "cancelled"] as const) {
+    const { brain, recorder } = setup();
+    let executions = 0;
+    brain.actionExecutor = async () => {
+      executions++;
+      return "No verified effect.";
+    };
+    if (mode === "blocked") brain.recentFailures.set("explore", "recent failure");
+    if (mode === "blocked") brain.failureExpiry.set("explore", Date.now() + 60_000);
+    if (mode === "cancelled") brain.stopped = true;
+
+    const outcome = await brain.executeDecision({ thought: "observe", action: "explore", params: {} });
+    const records = payloads(recorder);
+    const observations = records.filter(
+      ({ event, payload }) =>
+        event.kind === "observation" &&
+        event.actionId === outcome.actionId &&
+        (payload.stage === "before_execution" || payload.stage === "at_terminal"),
+    );
+    assert.equal(observations.length, 2);
+    assert.equal(observations.filter(({ payload }) => payload.stage === "before_execution").length, 1);
+    assert.equal(observations.filter(({ payload }) => payload.stage === "at_terminal").length, 1);
+    assert.ok(observations.every(({ payload }) => payload.source === "mineflayer_client_state"));
+    const terminal = records.find(
+      ({ event }) => event.kind === "action_finished" && event.actionId === outcome.actionId,
+    )!;
+    assert.deepEqual(terminal.payload.observationRefs, {
+      beforeExecution: observations.find(({ payload }) => payload.stage === "before_execution")!.event.payloadRef,
+      atTerminal: observations.find(({ payload }) => payload.stage === "at_terminal")!.event.payloadRef,
+    });
+    assert.ok(outcome.evidenceRefs.includes(terminal.payload.observationRefs.beforeExecution));
+    assert.ok(outcome.evidenceRefs.includes(terminal.payload.observationRefs.atTerminal));
+    assert.equal(executions, mode === "executed" ? 1 : 0);
+  }
 });
 
 test("pre-execution callback failures still produce exactly one terminal event", async () => {
