@@ -57,7 +57,7 @@ interface LaunchSourceEvidence {
   capturedAt?: string;
   untrackedRuntimeFileCount?: number;
   untrackedRuntimeSha256?: string;
-  manifestSha256?: string;
+  sourceProjectionSha256?: string;
 }
 
 /** Preserve a bounded allowlisted projection of the supervisor assertion.
@@ -96,7 +96,23 @@ export function launchSourceEvidence(
       capturedAt: value.captured_at_utc,
       untrackedRuntimeFileCount: value.untracked_runtime_file_count,
       untrackedRuntimeSha256: value.untracked_runtime_sha256,
-      manifestSha256: createHash("sha256").update(raw, "utf8").digest("hex"),
+      sourceProjectionSha256: createHash("sha256")
+        .update(
+          JSON.stringify({
+            collection: {
+              operationMode: context.operationMode,
+              trialId: context.trialId,
+              gitCommit: context.gitCommit,
+              dirtyDiffHash: context.dirtyDiffHash,
+              worldSnapshotId: context.worldSnapshotId,
+            },
+            capturedAt: value.captured_at_utc,
+            untrackedRuntimeFileCount: value.untracked_runtime_file_count,
+            untrackedRuntimeSha256: value.untracked_runtime_sha256,
+          }),
+          "utf8",
+        )
+        .digest("hex"),
     };
   } catch {
     return { status: "invalid" };

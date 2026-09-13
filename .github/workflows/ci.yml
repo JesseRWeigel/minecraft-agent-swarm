@@ -68,4 +68,4 @@ jobs:
           python3 -m unittest discover -s tools/ops
           python3 -m unittest discover -s tools/benchmark
       - name: Check study shell syntax
-        run: bash -n scripts/ops-mode.sh scripts/ops-state.sh scripts/run-swarm.sh scripts/swarm-health.sh scripts/backup-world.sh
+        run: bash -n scripts/launch-context.sh scripts/ops-mode.sh scripts/ops-state.sh scripts/run-swarm.sh scripts/swarm-health.sh scripts/backup-world.sh

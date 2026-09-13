@@ -370,6 +370,10 @@ test("launch source evidence retains only validated fields and must match collec
   assert.equal(result.untrackedRuntimeFileCount, 2);
   assert.equal(result.untrackedRuntimeSha256, "c".repeat(64));
   assert.doesNotMatch(JSON.stringify(result), /secret-sentinel/);
+  assert.equal(
+    result.sourceProjectionSha256,
+    launchSourceEvidence(JSON.stringify({ ...manifest, unexpected: "different" }), context).sourceProjectionSha256,
+  );
   assert.equal(launchSourceEvidence(undefined, context).status, "unavailable");
   assert.equal(launchSourceEvidence("{", context).status, "invalid");
   assert.equal(
