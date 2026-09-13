@@ -1,4 +1,5 @@
 """Exercise operations scripts with fake npm/RCON; no world or model access."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,11 +19,17 @@ class StudyGuards(unittest.TestCase):
         (self.root / 'scripts').mkdir()
         (self.root / 'ops').mkdir()
         (self.root / 'bin').mkdir()
-        for name in ['run-swarm.sh', 'swarm-health.sh', 'ops-state.sh', 'backup-world.sh', 'ops-mode.sh']:
+        for name in ['run-swarm.sh', 'launch-context.sh', 'swarm-health.sh', 'ops-state.sh', 'backup-world.sh', 'ops-mode.sh']:
             source = ROOT / 'scripts' / name
             if source.exists():
                 shutil.copy2(source, self.root / 'scripts' / name)
         self.state('live')
+        (self.root / 'tracked.txt').write_text('initial\n')
+        subprocess.run(['git', 'init', '-q'], cwd=self.root, check=True)
+        subprocess.run(['git', 'config', 'user.email', 'fixture@example.invalid'], cwd=self.root, check=True)
+        subprocess.run(['git', 'config', 'user.name', 'Fixture'], cwd=self.root, check=True)
+        subprocess.run(['git', 'add', '.'], cwd=self.root, check=True)
+        subprocess.run(['git', 'commit', '-qm', 'fixture'], cwd=self.root, check=True)
         self.env = dict(os.environ, PATH=str(self.root / 'bin') + ':' + os.environ['PATH'], RESTART_CAP='3', COOLDOWN_S='0')
         self.fake('npm', 'echo launch >> launches; exit 143')
 
@@ -31,8 +38,8 @@ class StudyGuards(unittest.TestCase):
         target.write_text('#!/bin/bash\n' + code + '\n')
         target.chmod(0o755)
 
-    def state(self, value):
-        (self.root / 'ops/state.json').write_text(json.dumps({'mode': value, 'trial': None}))
+    def state(self, value, trial=None):
+        (self.root / 'ops/state.json').write_text(json.dumps({'mode': value, 'trial': trial}))
 
     def run_script(self, name, *args):
         return subprocess.run(['bash', str(self.root / 'scripts' / name), *args], cwd=self.root, env=self.env, capture_output=True, text=True, timeout=10)
@@ -62,6 +69,75 @@ class StudyGuards(unittest.TestCase):
         self.fake('sleep', "printf '%s' '{\"mode\":\"maintenance\"}' > ops/state.json")
         self.assertEqual(self.run_script('run-swarm.sh').returncode, 0)
         self.assertEqual((self.root / 'launches').read_text(), 'launch\n')
+
+    def test_launch_exports_commit_clean_diff_and_leaves_unknown_fields_empty(self):
+        self.fake('npm', 'env | sort > launch-env; exit 143')
+        result = self.run_script('run-swarm.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        env = dict(line.split('=', 1) for line in (self.root / 'launch-env').read_text().splitlines() if '=' in line)
+        commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=self.root, check=True, capture_output=True, text=True).stdout.strip()
+        self.assertEqual(env['GIT_COMMIT'], commit)
+        self.assertEqual(env['DIRTY_DIFF_HASH'], hashlib.sha256(b'').hexdigest())
+        self.assertEqual(env['DATASET_OPERATION_MODE'], 'live')
+        self.assertNotIn('TRIAL_ID', env)
+        self.assertNotIn('WORLD_SNAPSHOT_ID', env)
+        manifest = json.loads(env['SWARM_LAUNCH_CONTEXT_JSON'])
+        self.assertEqual(manifest['git_commit'], commit)
+        self.assertEqual(manifest['runtime_command'], ['npm', 'start'])
+
+    def test_tracked_dirty_hash_is_recaptured_for_each_restart(self):
+        self.fake('npm', '''
+count=$(wc -l < launches 2>/dev/null || echo 0)
+printf '%s\n' "$DIRTY_DIFF_HASH" >> hashes
+echo launch >> launches
+if [[ "$count" == "0" ]]; then printf 'changed\n' > tracked.txt; exit 1; fi
+exit 143
+''')
+        result = self.run_script('run-swarm.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        hashes = (self.root / 'hashes').read_text().splitlines()
+        self.assertEqual(hashes[0], hashlib.sha256(b'').hexdigest())
+        expected = subprocess.run(['git', 'diff', '--binary', 'HEAD', '--', '.'], cwd=self.root, check=True, capture_output=True).stdout
+        self.assertEqual(hashes[1], hashlib.sha256(expected).hexdigest())
+        self.assertNotEqual(hashes[0], hashes[1])
+
+    def test_evaluation_requires_trial_and_sha256_world_snapshot_before_launch(self):
+        for trial, snapshot in [(None, 'a' * 64), ('trial-a', None), ('trial-a', 'snapshot-label')]:
+            with self.subTest(trial=trial, snapshot=snapshot):
+                (self.root / 'launches').unlink(missing_ok=True)
+                self.state('evaluation', trial)
+                if snapshot is None:
+                    self.env.pop('WORLD_SNAPSHOT_ID', None)
+                else:
+                    self.env['WORLD_SNAPSHOT_ID'] = snapshot
+                result = self.run_script('run-swarm.sh')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((self.root / 'launches').exists())
+
+    def test_evaluation_exit_never_automatically_restarts_trial(self):
+        self.state('evaluation', 'trial-a')
+        self.env['WORLD_SNAPSHOT_ID'] = 'a' * 64
+        self.fake('npm', 'echo launch >> launches; env | sort > launch-env; exit 1')
+        result = self.run_script('run-swarm.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.root / 'launches').read_text(), 'launch\n')
+        env = dict(line.split('=', 1) for line in (self.root / 'launch-env').read_text().splitlines() if '=' in line)
+        self.assertEqual(env['TRIAL_ID'], 'trial-a')
+        self.assertEqual(env['WORLD_SNAPSHOT_ID'], 'a' * 64)
+
+    def test_duplicate_state_keys_and_untracked_evaluation_source_fail_closed(self):
+        (self.root / 'ops/state.json').write_text('{"mode":"live","mode":"evaluation","trial":"trial-a"}')
+        self.env['WORLD_SNAPSHOT_ID'] = 'a' * 64
+        result = self.run_script('run-swarm.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / 'launches').exists())
+
+        self.state('evaluation', 'trial-a')
+        (self.root / 'src').mkdir()
+        (self.root / 'src/untracked.ts').write_text('export {}\n')
+        result = self.run_script('run-swarm.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / 'launches').exists())
 
     def test_invalid_mode_health_is_reported_as_invalid(self):
         (self.root / 'ops/state.json').write_text('{')

@@ -42,13 +42,16 @@ fast_failures=0
 # not be undone by an automatic restart. FORCE_START=1 overrides for a
 # deliberate operator launch inside the window.
 source scripts/ops-mode.sh
+source scripts/launch-context.sh
 
 while (( restarts < RESTART_CAP )); do
-  # Recheck immediately before EVERY launch, including after the cooldown.
-  if ! current_mode=$(ops_mode); then
-    echo "[Supervisor] Operations state is missing or invalid; refusing to launch." >&2
+  # Capture and strictly validate state immediately before EVERY launch,
+  # including after the cooldown. This context is immutable in the child.
+  if ! capture_launch_context; then
+    echo "[Supervisor] Launch context is unavailable; refusing to launch." >&2
     exit 1
   fi
+  current_mode=$DATASET_OPERATION_MODE
   if [[ "$current_mode" == "maintenance" ]] && { (( restarts > 0 )) || [[ "${FORCE_START:-0}" != "1" ]]; }; then
     echo "[Supervisor] ops mode is MAINTENANCE — refusing automatic launch (FORCE_START=1 permits a deliberate initial launch)."
     exit 0
@@ -61,6 +64,13 @@ while (( restarts < RESTART_CAP )); do
 
   ran=$(( $(date +%s) - started ))
   echo "[Supervisor] Swarm exited code=$code after ${ran}s"
+
+  # A controlled trial is one process launch. Continuing after any exit would
+  # silently mix a new runtime session into the same trial identity.
+  if [[ "$DATASET_OPERATION_MODE" == "evaluation" ]]; then
+    echo "[Supervisor] Evaluation process exited; automatic restart is disabled for this trial."
+    [[ $code -eq 0 ]] && exit 0 || exit "$code"
+  fi
 
   # 143/137 are our own SIGTERM/SIGKILL from a deliberate redeploy. Do not fight
   # an operator who is intentionally stopping the swarm.

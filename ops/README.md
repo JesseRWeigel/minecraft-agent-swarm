@@ -80,3 +80,39 @@ The backup cleanup trap is installed before disabling autosave so a failed
 flush still attempts `save-on`. Failure to restore autosave emits an explicit
 operator error. These script paths are tested with fake npm/RCON commands:
 `python3 -m unittest discover -s tools/ops`.
+
+### Launch provenance
+
+Immediately before each `npm start`, the supervisor captures the checkout's
+`HEAD`, the SHA-256 of `git diff --binary HEAD -- .`, and the current operations
+mode and trial. A clean tracked tree therefore has the standard SHA-256 of empty
+input (`e3b0c442...b855`). Unknown trial and world identities remain unset; the
+supervisor does not invent identifiers. The same values and a compact JSON
+manifest are bound to the child process through its environment. The manifest
+contains only identifiers, hashes, counts, capture time, and the runtime command;
+it contains no diff contents or credentials.
+
+The tracked-diff hash does not cover untracked files. To make that limitation
+visible, the manifest separately records a deterministic content hash and count
+for untracked and ignored files under runtime source paths (`src`, `scripts`,
+`skills`, and root runtime manifests). Evaluation refuses to launch if that
+count is nonzero. A controlled evaluation also requires a nonempty trial and a
+`WORLD_SNAPSHOT_ID` formatted as a SHA-256 content identifier. Its presence is
+an operator assertion of snapshot identity, not proof that a restore was tested.
+
+Launch context describes one process launch. Changing tracked source, operations
+state, or the world during the process does not rewrite its captured context and
+invalidates a controlled evaluation. Any evaluation process exit ends the trial
+run; the supervisor will not silently restart it under the same trial ID. Live
+mode retains the normal crash-restart behavior, and maintenance plus
+`FORCE_START=1` keeps its existing deliberate-initial-launch semantics.
+
+The dataset recorder freezes the five canonical environment fields on first
+access and writes a `run_context` event when the default recorder initializes;
+it does not infer that a controlled trial is valid from those fields. Default
+run IDs separate restarted processes. If an operator explicitly reuses
+`DATASET_RUN_ID`, consumers must treat each `run_context` as sequence-scoped and
+associate recovered synthetic terminal events with the context of their original
+`action_started`, rather than a later process launch. Running `npm start`
+directly bypasses this helper, so the recorder leaves unavailable provenance
+explicit instead of guessing it.
