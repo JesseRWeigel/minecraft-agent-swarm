@@ -52,6 +52,57 @@ export function currentCollectionContext(): Readonly<CollectionContext> {
   });
   return launchCollectionContext;
 }
+interface LaunchSourceEvidence {
+  status: "captured" | "unavailable" | "invalid";
+  capturedAt?: string;
+  untrackedRuntimeFileCount?: number;
+  untrackedRuntimeSha256?: string;
+  manifestSha256?: string;
+}
+
+/** Preserve a bounded allowlisted projection of the supervisor assertion.
+ * Matching fields identify the launch; they do not verify a world restore. */
+export function launchSourceEvidence(
+  raw: string | undefined,
+  context: Readonly<CollectionContext>,
+): LaunchSourceEvidence {
+  if (!raw) return { status: "unavailable" };
+  if (Buffer.byteLength(raw, "utf8") > 16384) return { status: "invalid" };
+  try {
+    const value = JSON.parse(raw);
+    if (
+      !value ||
+      typeof value !== "object" ||
+      Array.isArray(value) ||
+      value.schema_version !== 1 ||
+      value.operation_mode !== context.operationMode ||
+      value.trial_id !== context.trialId ||
+      value.git_commit !== context.gitCommit ||
+      value.tracked_dirty_diff_sha256 !== context.dirtyDiffHash ||
+      value.world_snapshot_id !== context.worldSnapshotId ||
+      typeof value.captured_at_utc !== "string" ||
+      value.captured_at_utc.length > 40 ||
+      !value.captured_at_utc.endsWith("Z") ||
+      !Number.isFinite(Date.parse(value.captured_at_utc)) ||
+      !Number.isSafeInteger(value.untracked_runtime_file_count) ||
+      value.untracked_runtime_file_count < 0 ||
+      typeof value.untracked_runtime_sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(value.untracked_runtime_sha256)
+    ) {
+      return { status: "invalid" };
+    }
+    return {
+      status: "captured",
+      capturedAt: value.captured_at_utc,
+      untrackedRuntimeFileCount: value.untracked_runtime_file_count,
+      untrackedRuntimeSha256: value.untracked_runtime_sha256,
+      manifestSha256: createHash("sha256").update(raw, "utf8").digest("hex"),
+    };
+  } catch {
+    return { status: "invalid" };
+  }
+}
+
 export interface TelemetryHealth {
   complete: boolean;
   lastError: string | null;
@@ -369,6 +420,7 @@ export function getEpisodeEventRecorder(): EpisodeEventRecorder {
         captureVersion: 1,
         stage: "run_context",
         provenanceSource: "launch_environment",
+        launchSource: launchSourceEvidence(process.env.SWARM_LAUNCH_CONTEXT_JSON, collection),
         collection,
         missingFields: Object.entries(collection)
           .filter(([, value]) => value === null)

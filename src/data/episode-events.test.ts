@@ -9,6 +9,7 @@ import {
   contentReference,
   type EpisodeEventInput,
   currentCollectionContext,
+  launchSourceEvidence,
   getEpisodeEventRecorder,
   setEpisodeEventRecorderForTests,
 } from "./episode-events.js";
@@ -341,4 +342,43 @@ test("default recorder preserves launch context once, before any action, without
     }
     setEpisodeEventRecorderForTests(null);
   }
+});
+
+test("launch source evidence retains only validated fields and must match collection context", () => {
+  const context = {
+    operationMode: "live",
+    trialId: null,
+    gitCommit: "a".repeat(40),
+    dirtyDiffHash: "b".repeat(64),
+    worldSnapshotId: null,
+  };
+  const manifest = {
+    schema_version: 1,
+    captured_at_utc: "2026-09-13T02:00:00Z",
+    operation_mode: "live",
+    trial_id: null,
+    git_commit: context.gitCommit,
+    tracked_dirty_diff_sha256: context.dirtyDiffHash,
+    world_snapshot_id: null,
+    untracked_runtime_file_count: 2,
+    untracked_runtime_sha256: "c".repeat(64),
+    runtime_command: ["npm", "start"],
+    unexpected: "secret-sentinel",
+  };
+  const result = launchSourceEvidence(JSON.stringify(manifest), context);
+  assert.equal(result.status, "captured");
+  assert.equal(result.untrackedRuntimeFileCount, 2);
+  assert.equal(result.untrackedRuntimeSha256, "c".repeat(64));
+  assert.doesNotMatch(JSON.stringify(result), /secret-sentinel/);
+  assert.equal(launchSourceEvidence(undefined, context).status, "unavailable");
+  assert.equal(launchSourceEvidence("{", context).status, "invalid");
+  assert.equal(
+    launchSourceEvidence(JSON.stringify({ ...manifest, git_commit: "d".repeat(40) }), context).status,
+    "invalid",
+  );
+  assert.equal(
+    launchSourceEvidence(JSON.stringify({ ...manifest, untracked_runtime_file_count: 0.5 }), context).status,
+    "invalid",
+  );
+  assert.equal(launchSourceEvidence(" ".repeat(16385), context).status, "invalid");
 });
