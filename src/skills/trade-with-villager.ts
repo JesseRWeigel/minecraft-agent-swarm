@@ -1,5 +1,6 @@
 import type { Bot } from "mineflayer";
 import type { Entity } from "prismarine-entity";
+import type { Vec3 } from "vec3";
 import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
@@ -169,7 +170,33 @@ export const tradeWithVillagerSkill: Skill = {
     const marchMoves = baseMoves(bot);
     (marchMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).canDig = true;
     (marchMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).allow1by1towers = true;
+    // Run 594: the second leg's path ran through a roofed cave lake at
+    // (483, 59, -421) (water to y=62 under stone at 63/64). Once afloat
+    // there the pathfinder had no valid start, the leg loop fired 25 legs
+    // in a row, each reset cleared the drown reflex's keys, and Forge
+    // drowned. Roofed water costs 60 extra per step on the march only, so
+    // A* takes the surface over the roof when one exists. Open water is
+    // unchanged (the global water price of run 588 broke ordinary walks).
+    const roofedWaterCost = (b: {
+      name?: string;
+      position?: { offset: (x: number, y: number, z: number) => Vec3 };
+    }) => {
+      if (!b?.position || !/^(water|kelp|kelp_plant|seagrass|tall_seagrass|bubble_column)$/.test(b.name ?? ""))
+        return 0;
+      for (let dy = 1; dy <= 3; dy++) {
+        const a = bot.blockAt(b.position.offset(0, dy, 0));
+        if (a && a.boundingBox === "block") return 60;
+      }
+      return 0;
+    };
+    (marchMoves as unknown as { exclusionAreasStep: ((b: never) => number)[] }).exclusionAreasStep = [
+      roofedWaterCost as unknown as (b: never) => number,
+    ];
     bot.pathfinder.setMovements(marchMoves);
+    const afloat = () => {
+      const feet = bot.blockAt(bot.entity.position);
+      return !!feet && /^(water|kelp|kelp_plant|seagrass|tall_seagrass|bubble_column)$/.test(feet.name);
+    };
 
     // --- March to the village in ~120-block hops (stays inside the OOM
     //     searchRadius cap; each hop re-plans from the new position). ---
@@ -178,6 +205,18 @@ export const tradeWithVillagerSkill: Skill = {
     let guard = 0;
     let unwedges = 0;
     while (gapToVillage() > 40 && !signal.aborted && Date.now() < marchUntil) {
+      // Afloat: no more legs. Every failed leg resets the pathfinder and
+      // clears the drown reflex's keys (run 594). Hand the run back without
+      // the resume marker so the executor does not re-enter at once.
+      if (afloat()) {
+        const p = bot.entity.position.floored();
+        console.log(`[TradeDebug] ${bot.username} afloat at ${p} — no more legs, the drown reflex owns the keys`);
+        restoreSetGoal();
+        return {
+          success: false,
+          message: `Afloat in water at (${p.x}, ${p.y}, ${p.z}) on the way to the village; swimming out before any more walking.`,
+        };
+      }
       const g = gapToVillage();
       step(`Marching to the village — ${Math.round(g)} blocks out...`, 0.1 + Math.min(0.5, (650 - g) / 1300));
       const t = Math.min(1, 120 / g);
