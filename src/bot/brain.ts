@@ -259,6 +259,29 @@ export class BotBrain {
   private lastBiomeRoamMs = 0;
   private biomeRoamIdx = 0;
   private lastTradeMs = 0;
+
+  /**
+   * The What a Deal trip is ready: unearned, cooled, daytime, near the stash,
+   * with coal aboard or in the stash band. The mining overrides ahead of it in
+   * the chain yield when this is true. Run 578: Forge stood beside the stash
+   * with 2,882 coal banked and spent the hour on the frontier ferry and four
+   * strip-mine runs; the trade override never got a turn.
+   */
+  private tradeReady(): boolean {
+    if (!this.roleConfig.allowedSkills.includes("trade_with_villager")) return false;
+    const sp = this.roleConfig.stashPos;
+    if (!sp) return false;
+    const earned = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+    if (earned.has("adventure/trade") || earned.has("minecraft:adventure/trade")) return false;
+    if (Date.now() - this.lastTradeMs < 1_800_000) return false;
+    if ((this.bot.time?.timeOfDay ?? 0) >= 9000) return false;
+    if (Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) >= 40) return false;
+    const coal = this.bot.inventory
+      .items()
+      .filter((i) => i.name === "coal")
+      .reduce((n, i) => n + i.count, 0);
+    return coal >= 15 || (ledgerKnown() && stashCount("coal", sp.y) >= 16);
+  }
   private lastBastionMs = 0;
   private lastArmorCraftMs = 0;
   private lastPickCraftMs = 0;
@@ -1612,7 +1635,7 @@ export class BotBrain {
       // y=-38 at 2 hearts and 0 food while the hunger override waited for
       // daylight.
       const fitF = this.bot.food >= 10; // health only returns above 18 food, so gate on food alone
-      if (wantsFrontier && cooledFrontier && nearBaseF && fitF) {
+      if (wantsFrontier && cooledFrontier && nearBaseF && fitF && !this.tradeReady()) {
         this.lastFrontierMs = Date.now();
         this.log.info("Brain", "OVERRIDE: base is mined out — ferrying to the frontier for fresh ore");
         this.events.onThought("Nothing left to dig here. To the fresh rock out east.");
@@ -1694,7 +1717,13 @@ export class BotBrain {
         !this.roleConfig.primarySmith && this.bot.inventory.items().some((i) => i.name === "diamond");
       const cooledDown = Date.now() - this.lastIronOverrideMs > 180_000 && !(this.waxWaiting() && !pickless);
       const fitDive = this.bot.food >= 10;
-      if ((!hasIron || wantsDive || pickless) && !carryingDiamondForSmith && cooledDown && fitDive) {
+      if (
+        (!hasIron || wantsDive || pickless) &&
+        !carryingDiamondForSmith &&
+        cooledDown &&
+        fitDive &&
+        !this.tradeReady()
+      ) {
         this.lastIronOverrideMs = Date.now();
         this.log.info(
           "Brain",
