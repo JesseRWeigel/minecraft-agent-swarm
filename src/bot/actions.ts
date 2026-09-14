@@ -1988,6 +1988,20 @@ async function sleepInBed(bot: Bot): Promise<string> {
 
   // Auto-place bed from inventory if none found nearby
   if (!bed) {
+    // Run 613: Forge slept at y=17 in a cave beside a flooded shaft at
+    // (207, 23..35, -326); every respawn put him back at the water and he
+    // drowned three times in fifteen minutes before the lethal-bed rule
+    // broke the bed. A bed goes on the surface or nowhere: no roof within
+    // six blocks and, in the overworld, no lower than y=56.
+    const inOverworld = /overworld/.test(String(bot.game?.dimension ?? "overworld"));
+    const feet = bot.entity.position.floored();
+    const roofed = [2, 3, 4, 5, 6].some((dy) => {
+      const b = bot.blockAt(feet.offset(0, dy, 0));
+      return !!b && b.boundingBox === "block";
+    });
+    if (inOverworld && (roofed || feet.y < 56)) {
+      return `Underground at y=${feet.y} — no bed goes down here. Climb to the surface first, then sleep.`;
+    }
     let bedItem = bot.inventory.items().find((i) => i.name.includes("bed"));
 
     // Self-sufficiency (same pattern as build_farm's hoe / smelt's furnace):
