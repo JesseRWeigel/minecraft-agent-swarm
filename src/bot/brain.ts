@@ -1084,7 +1084,13 @@ export class BotBrain {
         Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 40 &&
         this.bot.entity.position.y >= sp.y - 8;
       const load = this.pantryAboard();
-      if (atStash && load >= 12 && Date.now() - this.lastBankGroceriesMs > 600_000) {
+      // Run 607: Flora baked bread four times in an hour and ate every loaf
+      // while four bots sat at 0 hunger; nothing under a 12-item load ever
+      // reached the chests. A fed bot (hunger 12 or more) banks a load of
+      // four or more and keeps two.
+      const fed = this.bot.food >= 12;
+      const keepFood = fed ? 2 : 8;
+      if (atStash && (load >= 12 || (fed && load >= 4)) && Date.now() - this.lastBankGroceriesMs > 600_000) {
         this.lastBankGroceriesMs = Date.now();
         this.log.info("Brain", `OVERRIDE: ${load} food items aboard at the stash — banking the groceries`);
         this.events.onThought("Food for the team goes in the chests.");
@@ -1095,7 +1101,7 @@ export class BotBrain {
           this.roleConfig.keepItems,
           undefined,
           undefined,
-          8,
+          keepFood,
           Date.now() + 120_000,
         ).catch((e: Error) => e.message);
         console.log(
