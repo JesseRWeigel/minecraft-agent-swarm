@@ -991,6 +991,7 @@ const swimTraceActive = new WeakMap<Bot, boolean>();
 const lastDrownPos = new WeakMap<Bot, Vec3>();
 const lastShoreGap = new WeakMap<Bot, number>();
 
+const lastSwimYieldLog = new WeakMap<Bot, number>();
 export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   if (!headUnderWater(bot)) return false; // head not submerged → breathing fine
 
@@ -1006,6 +1007,38 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   // time the old threshold stopped it the ceiling fight was already lost.
   // Surface swimmers bob at ~20 air, so a genuine sub-16 reading while
   // head-submerged means trouble, never a routine lake crossing.
+  // Run 602: the setGoal trace named this reflex as the goal-setter that
+  // killed three march legs in a row at the open lake at (396, 61, -370):
+  // a surface swimmer with the pathfinder holding jump reads air 10 as his
+  // head bobs, the reflex cleared the goal every three seconds, and the leg
+  // loop re-issued it, so the crossing never finished ("enclosed at air=10,
+  // no diggable route — up=air" is that same swimmer). A live goal in open
+  // water near the surface with air to spare is a swim, and the pathfinder
+  // keeps it. The takeover below still runs under a roof, without a goal,
+  // or once air falls under 8.
+  {
+    const feet = bot.entity.position.floored();
+    const above = [1, 2, 3].map((dy) => bot.blockAt(feet.offset(0, dy, 0)));
+    const roofed = above.some((b) => !!b && b.boundingBox === "block");
+    const nearSurface = above.slice(1).some((b) => !!b && b.name === "air");
+    let moving = false;
+    try {
+      moving = !!bot.pathfinder.goal && bot.pathfinder.isMoving();
+    } catch {
+      moving = false;
+    }
+    if (!roofed && nearSurface && moving && air >= 8) {
+      const last = lastSwimYieldLog.get(bot) ?? 0;
+      if (Date.now() - last > 15_000) {
+        lastSwimYieldLog.set(bot, Date.now());
+        console.log(
+          `[Drown] ${bot.username} open-water swim with a live goal at air=${air} — leaving the keys to the pathfinder`,
+        );
+      }
+      return false;
+    }
+  }
+
   if (air < 16) {
     // Deliberate takeover: without the bump, safeGoto reads this stop as an
     // external one-shot and re-plans the same walk 3s later, dragging the
