@@ -1279,7 +1279,15 @@ export class BotBrain {
       inOverworld &&
       this.bot.username !== "Flora" &&
       this.bot.username !== "Atlas" &&
-      (!forgeHoldingEast || this.pantryAboard() >= 12)
+      // Runs 604 to 606: a pickless Forge at 0 hunger spent three hours on
+      // the eastern ground (a mountain pocket at y=150, then a cave at y=15)
+      // because the hive hold kept him from walking home, where the stash
+      // has cobblestone for a pick and the pantry. The hold yields to a
+      // courier load, a bare hand, or an empty stomach.
+      (!forgeHoldingEast ||
+        this.pantryAboard() >= 12 ||
+        !this.bot.inventory.items().some((i) => i.name.endsWith("_pickaxe")) ||
+        this.bot.food < 6)
     ) {
       const sp = this.roleConfig.stashPos;
       const homeGap = Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z);
