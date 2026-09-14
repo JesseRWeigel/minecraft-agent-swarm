@@ -40,6 +40,12 @@ class BudgetTests(unittest.TestCase):
             BudgetLimits.from_dict({**VALID, "timeout_seconds": math.inf})
         with self.assertRaisesRegex(BudgetError, "max_steps"):
             BudgetLimits.from_dict({**VALID, "max_steps": 1.5})
+        with self.assertRaisesRegex(BudgetError, "max_steps"):
+            BudgetTracker(BudgetLimits(-1, 10, 2, 8, 6))
+        with self.assertRaisesRegex(BudgetError, "timeout_seconds"):
+            BudgetTracker(BudgetLimits(2, math.nan, 2, 8, 6))
+        with self.assertRaisesRegex(BudgetError, "max_provider_requests"):
+            BudgetTracker(BudgetLimits(2, 10, True, 8, 6))
 
     def test_exact_request_and_step_boundaries_are_allowed_then_exhausted(self):
         clock = FakeClock()
@@ -119,6 +125,20 @@ class BudgetTests(unittest.TestCase):
         self.assertTrue(snapshot["exhausted"]["deadline"])
         self.assertFalse(snapshot["hard_preemption"])
         self.assertEqual(snapshot["deadline_enforcement"], "checked_at_budget_boundaries")
+
+    def test_late_request_finish_is_accounted_then_rejected(self):
+        clock = FakeClock()
+        tracker = BudgetTracker(BudgetLimits.from_dict(VALID), clock=clock)
+        tracker.reserve_request(input_tokens=3, max_output_tokens=4)
+        clock.value = 110.0
+        with self.assertRaisesRegex(BudgetExceeded, "deadline"):
+            tracker.finish_request(actual_output_tokens=2)
+        snapshot = tracker.snapshot()
+        self.assertEqual(snapshot["provider_requests"], 1)
+        self.assertEqual(snapshot["input_tokens"], 3)
+        self.assertEqual(snapshot["output_tokens"], 2)
+        self.assertEqual(snapshot["reserved_output_tokens"], 0)
+        self.assertFalse(snapshot["request_pending"])
 
     def test_clock_must_remain_finite_and_monotonic(self):
         clock = FakeClock()

@@ -82,7 +82,7 @@ class BudgetTracker:
             raise BudgetError("limits must be a BudgetLimits instance")
         if not callable(clock):
             raise BudgetError("clock must be callable")
-        self.limits = limits
+        self.limits = BudgetLimits.from_dict(asdict(limits))
         self._clock = clock
         self._started_at = self._read_clock(initial=True)
         self._last_clock = self._started_at
@@ -143,6 +143,7 @@ class BudgetTracker:
             raise BudgetError("actual output tokens exceed the active reservation")
         self._output_tokens += actual_output_tokens
         self._reserved_output_tokens = None
+        self._check_deadline()
 
     def consume_step(self) -> None:
         """Charge one completed/attempted controller step before it starts."""
