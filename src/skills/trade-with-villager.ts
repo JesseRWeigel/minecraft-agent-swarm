@@ -95,9 +95,14 @@ export const tradeWithVillagerSkill: Skill = {
     const origSetGoal = pf.setGoal;
     let goalLogs = 0;
     pf.setGoal = function (goal: unknown, dynamic?: boolean) {
-      if (goalLogs < 16) {
+      // Run 611: the 16-line budget went on this skill's own safeGoto reset
+      // and goto pairs, so the foreign goal-setter stayed unnamed. Only
+      // callers outside safeGoto and the library's goto count now.
+      const stack = new Error().stack ?? "";
+      const ownWalk = /safeGoto|lib\/goto\.js/.test(stack);
+      if (!ownWalk && goalLogs < 16) {
         goalLogs++;
-        const frames = (new Error().stack ?? "")
+        const frames = stack
           .split("\n")
           .slice(2, 6)
           .map((f) =>
