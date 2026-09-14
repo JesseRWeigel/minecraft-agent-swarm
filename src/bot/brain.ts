@@ -335,6 +335,11 @@ export class BotBrain {
     // at (309, 24, -325) for the whole trip while his hunger fell to 3.
     // The march starts on the surface or not at all.
     if (this.bot.entity.position.y < sp.y - 8) return false;
+    // Run 603: a pickless Forge marched into a roofed hill pocket at
+    // (584, 70, -467), 43 blocks short, and every leg said "No path" for
+    // the rest of the trip: the march digs, and a bare hand cannot. The
+    // strip_mine re-arm runs first when no pickaxe is aboard.
+    if (!this.bot.inventory.items().some((i) => i.name.endsWith("_pickaxe"))) return false;
     const coal = this.bot.inventory
       .items()
       .filter((i) => i.name === "coal")

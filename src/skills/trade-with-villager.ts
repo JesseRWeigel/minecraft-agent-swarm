@@ -24,6 +24,8 @@ import { baseMoves, safeGoto, GoalNearXZAbove } from "../bot/navigation.js";
 // The plains village the server locates nearest our base. Villagers cluster
 // here; y is left to the pathfinder since the surface height varies.
 const VILLAGE = { x: 608, z: -496 };
+/** The village's crop field (census centre of runs 591 to 602). */
+const FIELD = { x: 585, z: -513 };
 
 function overworld(bot: Bot): boolean {
   return /overworld/.test(String(bot.game.dimension));
@@ -237,6 +239,21 @@ export const tradeWithVillagerSkill: Skill = {
     // --- March to the village in ~120-block hops (stays inside the OOM
     //     searchRadius cap; each hop re-plans from the new position). ---
     const gapToVillage = () => Math.hypot(bot.entity.position.x - VILLAGE.x, bot.entity.position.z - VILLAGE.z);
+    // Run 603: the trip counted as arrived 43 blocks from the village centre,
+    // on the far side from the field, and both harvests searched 48 blocks
+    // around the bot and found nothing. Stand at the field before looking.
+    const walkToField = async () => {
+      const gap = Math.hypot(bot.entity.position.x - FIELD.x, bot.entity.position.z - FIELD.z);
+      if (gap <= 24) return;
+      step(`Walking to the field — ${Math.round(gap)} blocks...`, 0.8);
+      const t0 = Date.now();
+      const err = await safeGoto(bot, new GoalNearXZAbove(FIELD.x, FIELD.z, 8, 60), 60_000, 12_000)
+        .then(() => "resolved")
+        .catch((e: Error) => e.message);
+      console.log(
+        `[TradeDebug] ${bot.username} field walk took ${((Date.now() - t0) / 1000).toFixed(1)}s: ${err}; now ${Math.round(Math.hypot(bot.entity.position.x - FIELD.x, bot.entity.position.z - FIELD.z))} from the field`,
+      );
+    };
     const marchUntil = Date.now() + 360_000;
     let guard = 0;
     let unwedges = 0;
@@ -498,6 +515,7 @@ export const tradeWithVillagerSkill: Skill = {
       {
         const { shedJunk } = await import("../bot/navigation.js");
         await shedJunk(bot, 4).catch(() => {});
+        await walkToField();
       }
       while (have() < need && dug < 24 && Date.now() < deadline && !signal.aborted) {
         // Mature first; an immature plant still drops one item, which is
@@ -548,6 +566,7 @@ export const tradeWithVillagerSkill: Skill = {
       const { collectNearbyDrops, shedJunk } = await import("../bot/navigation.js");
       // Drops need open slots; toss bulk stone rather than dig into a full pack.
       await shedJunk(bot, 4).catch(() => {});
+      await walkToField();
       const deadline = Date.now() + 200_000;
       let dug = 0;
       while (dug < 24 && Date.now() < deadline && !signal.aborted) {
