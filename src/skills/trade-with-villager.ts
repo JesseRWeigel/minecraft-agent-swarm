@@ -615,8 +615,41 @@ export const tradeWithVillagerSkill: Skill = {
           break;
         }
       }
+      // Run 604: yield per trip fell 16 -> 11 -> 4 while 39 to 47 farmland
+      // blocks sat empty around the 17 planted ones. Every spare potato goes
+      // into empty farmland before the walk home, keeping four to eat.
+      let planted = 0;
+      const plantDeadline = Date.now() + 90_000;
+      while (invCount(bot, "potato") > 4 && planted < 24 && Date.now() < plantDeadline && !signal.aborted) {
+        const soil = bot.findBlock({
+          matching: (b) => b.name === "farmland",
+          maxDistance: 32,
+          useExtraInfo: (b) => {
+            const above = bot.blockAt(b.position.offset(0, 1, 0));
+            return !!above && above.name === "air";
+          },
+        });
+        if (!soil) break;
+        step(`Planting the empty farmland (${planted} so far)...`, 0.88);
+        await safeGoto(
+          bot,
+          new goals.GoalNear(soil.position.x, soil.position.y + 1, soil.position.z, 2),
+          30_000,
+          8_000,
+        ).catch(() => {});
+        if (bot.entity.position.distanceTo(soil.position) > 4.5) break;
+        const seed = bot.inventory.items().find((i) => i.name === "potato");
+        if (!seed) break;
+        try {
+          await bot.equip(seed, "hand");
+          await bot.placeBlock(soil, new Vec3(0, 1, 0));
+          planted++;
+        } catch {
+          break;
+        }
+      }
       console.log(
-        `[TradeDebug] ${bot.username} potato fallback: dug ${dug}, replanted ${replanted}, ate ${ate}, carrying ${invCount(bot, "potato")}, hunger now ${bot.food}`,
+        `[TradeDebug] ${bot.username} potato fallback: dug ${dug}, replanted ${replanted}, ate ${ate}, planted ${planted} more, carrying ${invCount(bot, "potato")}, hunger now ${bot.food}`,
       );
       if (dug > 0) {
         return {
