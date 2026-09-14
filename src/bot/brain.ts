@@ -2422,14 +2422,26 @@ export class BotBrain {
     // string, and the armory audit found zero anywhere while holding 63
     // arrows. Spiders are the source and Blade is the bot built to fight
     // them; everyone else keeps their distance.
-    if (config.bot.allowStrategyOverrides && !isSkillRunning(this.bot) && this.bot.username === "Blade") {
+    // Runs 605 to 611: the reflex never fired in seven hours while fishing,
+    // the one food loop that fed a bot to 17 hunger, stayed dead for lack
+    // of string (stash 3, two of them 66 blocks underground). Any bot with
+    // a sword now hunts a spider within 24 blocks whenever the stash holds
+    // fewer than 2 string, bow or no bow.
+    const swordAboard = this.bot.inventory.items().some((i) => i.name.endsWith("_sword"));
+    const spY = this.roleConfig.stashPos?.y ?? 70;
+    const stringShort = ledgerKnown() && stashCount("string", spY) < 2 && stashCount("fishing_rod", spY) < 1;
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      (this.bot.username === "Blade" || swordAboard)
+    ) {
       const earnedAim = readTeamEarned(BOT_ROSTER.map((b) => b.name));
       const aimDone = earnedAim.has("adventure/shoot_arrow") || earnedAim.has("minecraft:adventure/shoot_arrow");
       const cooledString = Date.now() - this.lastStringHuntMs > 120_000;
-      if (!aimDone && cooledString) {
+      if ((!aimDone || stringShort) && cooledString) {
         const { nearestSpider } = await import("../skills/hunt-string.js");
         const spider = nearestSpider(this.bot);
-        if (spider && this.bot.entity.position.distanceTo(spider.position) < 16) {
+        if (spider && this.bot.entity.position.distanceTo(spider.position) < 24) {
           this.lastStringHuntMs = Date.now();
           this.log.info("Brain", "OVERRIDE: spider in sight and the bow still needs string — hunting");
           this.events.onThought("Spider! Your silk funds an archery program.");
