@@ -271,6 +271,15 @@ function canSeeSky(bot: Bot): boolean {
   // east, so "sky > 0" declared her on the surface 23 times in an hour while
   // the reflex kept firing her back. Anything under 15 falls through to the
   // block scan, which sees the roof.
+  // Run 605: Forge sat two hours in a sealed pocket at (653, 150, -466)
+  // under three stone and two snow, and this function said "surface" 25
+  // times: the sky-light read came back 15 in that mountain section, and
+  // the SURFACE_Y shortcut below never looked up. A solid block within six
+  // above the feet is a roof, whatever the light says and however high up.
+  for (let dy = 2; dy <= 6; dy++) {
+    const b = bot.blockAt(f.offset(0, dy, 0));
+    if (b && b.boundingBox === "block") return false;
+  }
   if (f.y >= SURFACE_Y - 7) {
     try {
       const sky = (bot.world as unknown as { getSkyLight: (p: Vec3) => number }).getSkyLight(f.offset(0, 1, 0));
