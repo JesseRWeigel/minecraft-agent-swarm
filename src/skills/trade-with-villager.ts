@@ -277,7 +277,13 @@ export const tradeWithVillagerSkill: Skill = {
         `[TradeDebug] ${bot.username} leg to (${wx}, ${wz}) took ${((Date.now() - legStart) / 1000).toFixed(1)}s: ${legError || "resolved"}; gap ${Math.round(before)} -> ${Math.round(gapToVillage())}`,
       );
       lastLegNoStart = Date.now() - legStart < 3000 && /No route from here|No path/.test(legError);
-      if (Date.now() - legStart < 3000 && before - gapToVillage() < 2 && unwedges < 3) {
+      // Run 601: four trips stalled beside the stash chests at (303, 70,
+      // -325), every leg "Stuck — not making progress" after 25 to 40 s with
+      // the gap unchanged, and the pathfinder's own nudge moved 0.01 blocks.
+      // The hand hop below is for any leg that made no ground, however long
+      // it took.
+      const noGround = before - gapToVillage() < 2;
+      if ((Date.now() - legStart < 3000 || /Stuck/.test(legError)) && noGround && unwedges < 3) {
         unwedges++;
         const p = bot.entity.position.floored();
         const { Vec3 } = await import("vec3");
