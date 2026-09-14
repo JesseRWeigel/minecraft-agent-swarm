@@ -83,6 +83,39 @@ export const tradeWithVillagerSkill: Skill = {
         };
       }
     }
+    // Run 592: the first trip after a restart still lost every leg to "The
+    // goal was changed" in 0.0s, three unwedge hops included, while the
+    // second trip walked clean. Third pass on this symptom, so instrument:
+    // for the length of the march, every setGoal on this bot logs its caller.
+    // Run 610: the goods-step withdrawals also died "goal was changed" twice
+    // (coal 0, sticks 3 on arrival), so the trace now covers them too.
+    const pf = bot.pathfinder as unknown as {
+      setGoal: (goal: unknown, dynamic?: boolean) => void;
+    };
+    const origSetGoal = pf.setGoal;
+    let goalLogs = 0;
+    pf.setGoal = function (goal: unknown, dynamic?: boolean) {
+      if (goalLogs < 16) {
+        goalLogs++;
+        const frames = (new Error().stack ?? "")
+          .split("\n")
+          .slice(2, 6)
+          .map((f) =>
+            f
+              .trim()
+              .replace(/^at /, "")
+              .replace(/\(.*\/src\//, "(src/"),
+          )
+          .join(" <- ");
+        const name = goal ? ((goal as { constructor?: { name?: string } }).constructor?.name ?? "goal") : "null";
+        console.log(`[TradeDebug] ${bot.username} setGoal(${name}) from ${frames}`);
+      }
+      return origSetGoal.call(this, goal, dynamic);
+    };
+    const restoreSetGoal = () => {
+      if (pf.setGoal !== origSetGoal) pf.setGoal = origSetGoal;
+    };
+
     try {
       const { STASH_POS } = await import("../bot/role.js");
       const nearStash = Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z) < 90;
@@ -162,37 +195,6 @@ export const tradeWithVillagerSkill: Skill = {
         /* no goal */
       }
     }
-
-    // Run 592: the first trip after a restart still lost every leg to "The
-    // goal was changed" in 0.0s, three unwedge hops included, while the
-    // second trip walked clean. Third pass on this symptom, so instrument:
-    // for the length of the march, every setGoal on this bot logs its caller.
-    const pf = bot.pathfinder as unknown as {
-      setGoal: (goal: unknown, dynamic?: boolean) => void;
-    };
-    const origSetGoal = pf.setGoal;
-    let goalLogs = 0;
-    pf.setGoal = function (goal: unknown, dynamic?: boolean) {
-      if (goalLogs < 16) {
-        goalLogs++;
-        const frames = (new Error().stack ?? "")
-          .split("\n")
-          .slice(2, 6)
-          .map((f) =>
-            f
-              .trim()
-              .replace(/^at /, "")
-              .replace(/\(.*\/src\//, "(src/"),
-          )
-          .join(" <- ");
-        const name = goal ? ((goal as { constructor?: { name?: string } }).constructor?.name ?? "goal") : "null";
-        console.log(`[TradeDebug] ${bot.username} setGoal(${name}) from ${frames}`);
-      }
-      return origSetGoal.call(this, goal, dynamic);
-    };
-    const restoreSetGoal = () => {
-      if (pf.setGoal !== origSetGoal) pf.setGoal = origSetGoal;
-    };
 
     const marchMoves = baseMoves(bot);
     (marchMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).canDig = true;
