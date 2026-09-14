@@ -1095,10 +1095,18 @@ export class BotBrain {
         this.log.info("Brain", `OVERRIDE: ${load} food items aboard at the stash — banking the groceries`);
         this.events.onThought("Food for the team goes in the chests.");
         const { depositStash } = await import("../skills/stash.js");
+        // Run 608: Flora banked 87 items and kept all 5 loaves, because her
+        // role's generic "food" keep entry outranks the deposit's food
+        // reserve. A fed bot banks with the food entries stripped.
+        const foodEntry =
+          /^(food|bread|potato|baked_potato|cooked_|beef|porkchop|mutton|chicken|rabbit|cod|salmon|apple|carrot)/;
+        const keepList = fed
+          ? this.roleConfig.keepItems.filter((k) => !foodEntry.test(k.name))
+          : this.roleConfig.keepItems;
         const r = await depositStash(
           this.bot,
           sp,
-          this.roleConfig.keepItems,
+          keepList,
           undefined,
           undefined,
           keepFood,
