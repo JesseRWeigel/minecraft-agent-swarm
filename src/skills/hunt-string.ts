@@ -64,17 +64,30 @@ export const huntStringSkill: Skill = {
     if (weapon) await bot.equip(weapon, "hand").catch(() => {});
 
     bot.pathfinder.setMovements(baseMoves(bot));
-    const fightUntil = Date.now() + 30_000;
+    // Run 614: eight hunts, one kill. Flora swung 13 to 16 times at one
+    // spider without killing it (16 hp; even a bare hand needs 16 hits at
+    // most, a stone pick six): most swings landed out of reach after the
+    // spider moved off during the follow. Close to 1.2, look at it, and
+    // swing only inside three blocks; give the chase 45 s.
+    const fightUntil = Date.now() + 45_000;
     let swings = 0;
+    let misses = 0;
     try {
       while (target.isValid && Date.now() < fightUntil && !signal.aborted) {
         if (bot.entity.position.distanceTo(target.position) > 2.5) {
-          await safeGoto(bot, new goals.GoalFollow(target, 1.5), 6_000).catch(() => {});
+          await safeGoto(bot, new goals.GoalFollow(target, 1.2), 5_000).catch(() => {});
         }
         if (!target.isValid) break;
+        const reach = bot.entity.position.distanceTo(target.position);
+        if (reach > 3.0) {
+          misses++;
+          await new Promise((r) => setTimeout(r, 200));
+          continue;
+        }
+        await bot.lookAt(target.position.offset(0, 0.5, 0), true).catch(() => {});
         await bot.attack(target);
         swings++;
-        await new Promise((r) => setTimeout(r, 1150));
+        await new Promise((r) => setTimeout(r, 620));
       }
       step("Sweeping the drops...", 0.8);
       await collectNearbyDrops(bot, 8, 6000);
@@ -84,7 +97,7 @@ export const huntStringSkill: Skill = {
 
     const gained = countString(bot) - before;
     console.log(
-      `[HuntDebug] ${bot.username} vs ${target.name}: swings=${swings} targetDead=${!target.isValid} string ${before}->${before + gained}`,
+      `[HuntDebug] ${bot.username} vs ${target.name}: swings=${swings} outOfReach=${misses} weapon=${weapon?.name ?? "hand"} targetDead=${!target.isValid} string ${before}->${before + gained}`,
     );
     if (gained > 0) {
       return { success: true, message: `Got ${gained} string from the spider!`, stats: { string: gained } };
