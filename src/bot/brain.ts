@@ -1067,6 +1067,41 @@ export class BotBrain {
     // Safety overrides first
     if (await this.runSafetyOverrides()) return;
 
+    // Bank the groceries FIRST. Run 600: the courier walked 365 blocks home
+    // in 80 s with 13 potatoes and the ferry override, earlier in this
+    // chain, sent him back to the frontier before the banking step ran; he
+    // died there with the food. A bot at the stash with a pantry load puts
+    // it in the chests (keeping the role's food reserve) so the pantry reflex
+    // below can feed the others.
+    if (config.bot.allowStrategyOverrides && !isSkillRunning(this.bot) && this.roleConfig.stashPos) {
+      const sp = this.roleConfig.stashPos;
+      const atStash =
+        Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 40 &&
+        this.bot.entity.position.y >= sp.y - 8;
+      const load = this.pantryAboard();
+      if (atStash && load >= 12 && Date.now() - this.lastBankGroceriesMs > 600_000) {
+        this.lastBankGroceriesMs = Date.now();
+        this.log.info("Brain", `OVERRIDE: ${load} food items aboard at the stash — banking the groceries`);
+        this.events.onThought("Food for the team goes in the chests.");
+        const { depositStash } = await import("../skills/stash.js");
+        const r = await depositStash(
+          this.bot,
+          sp,
+          this.roleConfig.keepItems,
+          undefined,
+          undefined,
+          8,
+          Date.now() + 120_000,
+        ).catch((e: Error) => e.message);
+        console.log(
+          `[Pantry] ${this.bot.username} banked groceries: ${String(r).slice(0, 100)}; aboard now ${this.pantryAboard()}`,
+        );
+        this.lastAction = "bank_groceries";
+        this.lastResult = String(r);
+        return;
+      }
+    }
+
     // NIGHT REFLEX. playersSleepingPercentage=1 (Jesse-approved 2026-08-27)
     // means ONE sleeping bot skips the night for the whole server — but across
     // the first full night with the rule live, the models chose sleep ZERO
@@ -2742,38 +2777,6 @@ export class BotBrain {
           result,
           /caught|fish/i.test(result),
         );
-        return;
-      }
-    }
-
-    // Bank the groceries. A bot at the stash with a pantry load aboard puts
-    // it in the chests (keeping the role's food reserve) so the pantry reflex
-    // below can feed the others.
-    if (config.bot.allowStrategyOverrides && !isSkillRunning(this.bot) && this.roleConfig.stashPos) {
-      const sp = this.roleConfig.stashPos;
-      const atStash =
-        Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 40 &&
-        this.bot.entity.position.y >= sp.y - 8;
-      const load = this.pantryAboard();
-      if (atStash && load >= 12 && Date.now() - this.lastBankGroceriesMs > 600_000) {
-        this.lastBankGroceriesMs = Date.now();
-        this.log.info("Brain", `OVERRIDE: ${load} food items aboard at the stash — banking the groceries`);
-        this.events.onThought("Food for the team goes in the chests.");
-        const { depositStash } = await import("../skills/stash.js");
-        const r = await depositStash(
-          this.bot,
-          sp,
-          this.roleConfig.keepItems,
-          undefined,
-          undefined,
-          8,
-          Date.now() + 120_000,
-        ).catch((e: Error) => e.message);
-        console.log(
-          `[Pantry] ${this.bot.username} banked groceries: ${String(r).slice(0, 100)}; aboard now ${this.pantryAboard()}`,
-        );
-        this.lastAction = "bank_groceries";
-        this.lastResult = String(r);
         return;
       }
     }
