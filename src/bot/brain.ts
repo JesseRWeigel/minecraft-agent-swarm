@@ -1094,6 +1094,20 @@ export class BotBrain {
         this.lastBankGroceriesMs = Date.now();
         this.log.info("Brain", `OVERRIDE: ${load} food items aboard at the stash — banking the groceries`);
         this.events.onThought("Food for the team goes in the chests.");
+        // Bake first: raw potatoes feed one hunger each, baked five (run 609).
+        try {
+          const raw = this.bot.inventory
+            .items()
+            .filter((i) => i.name === "potato")
+            .reduce((n, i) => n + i.count, 0);
+          const hasFuel = this.bot.inventory.items().some((i) => i.name === "coal" || i.name === "charcoal");
+          if (raw >= 4 && hasFuel) {
+            const { bakePotatoes } = await import("../skills/bake-potatoes.js");
+            await bakePotatoes(this.bot, 16);
+          }
+        } catch (e) {
+          console.log(`[Bake] ${this.bot.username}: ${(e as Error).message}`);
+        }
         const { depositStash } = await import("../skills/stash.js");
         // Run 608: Flora banked 87 items and kept all 5 loaves, because her
         // role's generic "food" keep entry outranks the deposit's food
