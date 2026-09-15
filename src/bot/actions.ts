@@ -1626,6 +1626,17 @@ async function attackNearest(bot: Bot): Promise<string> {
     const COMBAT_TIMEOUT = 6000;
     const combatStart = Date.now();
     let kills = 0;
+    // Run 625: a pillager patrol at the stash shot six bots in an hour and
+    // both fights ended "still alive" at the timeout. Record the target's
+    // health at the start and the end so the next change is sized to the
+    // damage that actually landed.
+    const hp = (e: typeof target) => {
+      const raw = (e as unknown as { health?: number; metadata?: unknown[] }) ?? {};
+      const v = raw.health ?? (Array.isArray(raw.metadata) ? raw.metadata[9] : undefined);
+      return typeof v === "number" ? v.toFixed(1) : "?";
+    };
+    const hpStart = hp(target);
+    const weapon = bot.heldItem?.name ?? "hand";
 
     await new Promise<void>((resolve) => {
       const checkInterval = setInterval(() => {
@@ -1664,6 +1675,9 @@ async function attackNearest(bot: Bot): Promise<string> {
       const gained = countEdibleItems(bot) - foodBefore;
       return `Defeated ${targetName} using advanced combat!${gained > 0 ? ` Grabbed ${gained} food drop(s).` : " (grabbed drops)"}`;
     }
+    console.log(
+      `[FightDebug] ${bot.username} vs ${targetName}: ${((Date.now() - combatStart) / 1000).toFixed(1)}s, target hp ${hpStart} -> ${hp(target)}, weapon ${weapon}, my hp ${bot.health.toFixed(1)}, dist ${target.isValid ? target.position.distanceTo(bot.entity.position).toFixed(1) : "gone"}`,
+    );
     return `Fought ${targetName} for ${((Date.now() - combatStart) / 1000).toFixed(1)}s (still alive — may need to re-engage).`;
   }
 
