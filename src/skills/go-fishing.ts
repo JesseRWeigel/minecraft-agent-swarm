@@ -455,6 +455,16 @@ async function craftFishingRod(bot: Bot, signal: AbortSignal): Promise<void> {
       });
     }
   }
+  // Run 618: Mason reached the table with 2 string and 0 sticks (no planks
+  // to craft any) and bot.craft threw "missing ingredient". The stash holds
+  // hundreds of sticks; fetch three before the craft.
+  if (count("stick") < 3) {
+    const { withdrawStash } = await import("./stash.js");
+    const { STASH_POS } = await import("../bot/role.js");
+    const r = await withdrawStash(bot, STASH_POS, "stick", 3, 90_000).catch((e: Error) => e.message);
+    console.log(`[FishDebug] ${bot.username} stick top-up: ${r} (sticks now ${count("stick")})`);
+    if (count("stick") < 3) return;
+  }
 
   const rodItem = mcData.itemsByName["fishing_rod"];
   if (!rodItem) return;

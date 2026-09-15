@@ -241,10 +241,14 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
           );
         }
         if (bed.position.distanceTo(bot.entity.position) <= 5) {
+          // Run 618: "broke the lethal bed at (286, 70, -375)" was logged 144
+          // times in one hour. Check the block after the dig so a bed the
+          // server keeps is visible in the log instead of a phantom success.
           await bot.dig(bed);
           brain.resetBedClaim();
+          const after = bot.blockAt(bed.position)?.name ?? "?";
           console.log(
-            `[Bot] ${roleConfig.name} broke the lethal bed at ${bed.position} — respawn resets to world spawn, village bed-claim rearmed`,
+            `[Bot] ${roleConfig.name} broke the lethal bed at ${bed.position} (block now ${after}) — respawn resets to world spawn, village bed-claim rearmed`,
           );
         } else {
           console.log(`[Bot] ${roleConfig.name} could not reach the lethal bed at ${bed.position}`);
@@ -607,6 +611,24 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
   // Re-run spawn safety on every respawn
   // Only the first bot (Atlas) sends gamerule commands to avoid disconnect.spam kicks
   bot.on("spawn", async () => {
+    // Run 618: Forge died 153 times in one hour, once every twenty seconds,
+    // every time "fell 27 blocks from y=50" within 0.2 s of respawning at
+    // the world spawn after the death-loop rule had broken his bed. Hold
+    // the client still until the chunks around the spawn point have
+    // arrived, and record what it is standing on, so the next loop is
+    // readable from the log.
+    try {
+      const b = bot as unknown as { physicsEnabled: boolean };
+      b.physicsEnabled = false;
+      await Promise.race([bot.waitForChunksToLoad(), new Promise((r) => setTimeout(r, 8_000))]);
+      b.physicsEnabled = true;
+      const p = bot.entity.position.floored();
+      const under = [1, 2, 3].map((dy) => bot.blockAt(p.offset(0, -dy, 0))?.name ?? "?").join("/");
+      console.log(`[Respawn] ${roleConfig.name} at ${p} standing over ${under}`);
+    } catch (e) {
+      (bot as unknown as { physicsEnabled: boolean }).physicsEnabled = true;
+      console.log(`[Respawn] ${roleConfig.name} chunk wait failed: ${(e as Error).message}`);
+    }
     if (roleConfig.username === "Atlas") {
       bot.chat("/gamerule keepInventory true");
       await new Promise((r) => setTimeout(r, 500));
