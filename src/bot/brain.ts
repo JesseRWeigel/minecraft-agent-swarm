@@ -1873,7 +1873,12 @@ export class BotBrain {
       const carryingDiamondForSmith =
         !this.roleConfig.primarySmith && this.bot.inventory.items().some((i) => i.name === "diamond");
       const cooledDown = Date.now() - this.lastIronOverrideMs > 180_000 && !(this.waxWaiting() && !pickless);
-      const fitDive = this.bot.food >= 10;
+      // Run 631: Forge was pickless for over an hour with only coal aboard
+      // and food 3, so this gate never let the re-arm run; he dug out of
+      // caves by hand three times and died to a wall, a lake and lava. A
+      // pickless miner re-arms whatever his hunger; strip_mine supplies the
+      // pick from the stash before it digs.
+      const fitDive = this.bot.food >= 10 || pickless;
       // Run 599: Forge left the village fields with 37 potatoes, started a
       // strip mine at (469, 11, -502) and died five times; the team's food
       // went with him. A courier carrying a pantry load far from home walks
