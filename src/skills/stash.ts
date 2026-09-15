@@ -1420,7 +1420,7 @@ export async function withdrawStash(
   // scattered item is found in the first chest or two instead of the
   // sixtieth. The ledger snapshots contents on every open, so it is as
   // fresh as the last visit — a miss just falls through to the full scan.
-  const { chestsWithItem } = await import("./stash-ledger.js");
+  const { chestsWithItem, forgetChest } = await import("./stash-ledger.js");
   // Skip chests far off the stash level. Run 568: two of the three string
   // sat in a chest at (285, 4, -313), 66 blocks under the stash, and nine
   // withdraw scans burned their full 110s budget failing to reach it.
@@ -1430,6 +1430,13 @@ export async function withdrawStash(
     const block = bot.blockAt(new Vec3(known.x, known.y, known.z));
     if (block && (block.name === "chest" || block.name === "trapped_chest") && !chestsToTry.includes(block)) {
       chestsToTry.push(block);
+    } else if (block && block.name !== "chest" && block.name !== "trapped_chest") {
+      // Run 623: a loaded block that is no chest means the ledger entry is a
+      // phantom; stashCount kept promising 3 porkchop from it for a day.
+      forgetChest(known);
+      console.log(
+        `[Stash] ${bot.username}: ledger chest at ${known.x},${known.y},${known.z} is gone (block is ${block.name}) — forgotten`,
+      );
     }
   }
 

@@ -123,6 +123,19 @@ export function snapshotChest(
 }
 
 /**
+ * Drop a chest the world no longer has. Run 623: the ledger kept a chest at
+ * (288, 71, -324) holding 3 porkchop after the block was gone, so five
+ * hungry bots in one hour walked to the stash for a pantry that did not
+ * exist and burned their ten-minute cooldown on it.
+ */
+export function forgetChest(pos: { x: number; y: number; z: number }): boolean {
+  const key = `${Math.floor(pos.x)},${Math.floor(pos.y)},${Math.floor(pos.z)}`;
+  const had = chests.delete(key);
+  if (had) schedulePersist();
+  return had;
+}
+
+/**
  * Chest positions last seen holding an item whose name includes `matchName`,
  * most-recently-snapshotted first. Lets a withdrawal walk to the chest that
  * actually has the item instead of scanning a 60-chest sprawl in position
