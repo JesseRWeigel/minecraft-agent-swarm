@@ -2799,7 +2799,10 @@ export class BotBrain {
         stringHeld >= 2 ||
         !ledgerKnown() ||
         stashCount("fishing_rod", stashY) >= 1 ||
-        stashCount("string", stashY) >= 2;
+        stashCount("string", stashY) >= 2 ||
+        // Run 615: two string sit 66 blocks under the stash; the miner can
+        // reach that chest (deep withdraw), nobody else should try.
+        (this.bot.username === "Forge" && stashCount("string") >= 2);
       if ((chasesFishy || starving) && cooled && !canRig) {
         this.lastFishOverrideMs = Date.now();
         this.log.info(

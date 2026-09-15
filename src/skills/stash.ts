@@ -1373,6 +1373,10 @@ export async function withdrawStash(
   itemName: string,
   count: number,
   budgetMs = 110_000,
+  /** Also try chests far off the stash level. Run 615: the only string that
+   *  could rig a rod sat at (285, 4, -313), 66 blocks under the stash, and
+   *  the miner can walk his own shafts down to it. */
+  deepOk = false,
 ): Promise<string> {
   await safeGoto(bot, new goals.GoalNear(stashPos.x, stashPos.y, stashPos.z, 3), 30000);
 
@@ -1417,7 +1421,7 @@ export async function withdrawStash(
   // withdraw scans burned their full 110s budget failing to reach it.
   const offLevel = (y: number) => Math.abs(y - stashPos.y) > 10;
   for (const known of chestsWithItem(matchName)) {
-    if (offLevel(known.y)) continue;
+    if (!deepOk && offLevel(known.y)) continue;
     const block = bot.blockAt(new Vec3(known.x, known.y, known.z));
     if (block && (block.name === "chest" || block.name === "trapped_chest") && !chestsToTry.includes(block)) {
       chestsToTry.push(block);

@@ -80,7 +80,10 @@ export const goFishingSkill: Skill = {
           const r1 = await withdrawStash(bot, STASH_POS, "fishing_rod", 1).catch((e: Error) => e.message);
           console.log(`[FishDebug] ${bot.username} rod withdraw: ${r1}`);
           if (!bot.inventory.items().some((i) => i.name === "fishing_rod") && held("string") < 2) {
-            const r2 = await withdrawStash(bot, STASH_POS, "string", 2).catch((e: Error) => e.message);
+            // The miner may fetch string from the deep chest (run 615).
+            const r2 = await withdrawStash(bot, STASH_POS, "string", 2, 110_000, bot.username === "Forge").catch(
+              (e: Error) => e.message,
+            );
             console.log(`[FishDebug] ${bot.username} string withdraw: ${r2} (string now ${held("string")})`);
           }
           if (!bot.inventory.items().some((i) => i.name === "fishing_rod") && held("stick") < 3) {
