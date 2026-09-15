@@ -1161,7 +1161,17 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     const swimRoute = Object.values(neighbours).some((b) => b && (b.name === "water" || b.name === "air"));
     const budgetMs = Math.max(0, air) * 750 + Math.max(0, bot.health - 2) * 500;
     const needMs = escape ? bot.digTime(neighbours[escape.direction]!) : 0;
-    if (escape && needMs > budgetMs && swimRoute && !pinned) {
+    // Run 628: Blade stood on the bottom of two-deep water at (359, 61, -314)
+    // with air two blocks up, counted as pinned because the shore gap never
+    // closed, and the reflex dug north through cobblestone with 1 air left.
+    // A breath is one held jump away whenever the block above the head is
+    // air; the dig must yield to that whatever the pinned flag says.
+    const airAbove = !!neighbours.up && neighbours.up.name === "air";
+    if (escape && airAbove) {
+      console.log(
+        `[Drown] ${bot.username} air two blocks up at air=${air} — jumping for a breath instead of digging ${escape.direction}`,
+      );
+    } else if (escape && needMs > budgetMs && swimRoute && !pinned) {
       console.log(
         `[Drown] ${bot.username} skipping ${escape.direction} dig through ${escape.block.name}: ` +
           `${(needMs / 1000).toFixed(1)}s > ${(budgetMs / 1000).toFixed(1)}s of air — swimming for the shore`,
