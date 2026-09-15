@@ -258,6 +258,8 @@ export const huntFoodSkill: Skill = {
     const outingUntil = Date.now() + 150_000;
     let kills = 0;
     let swings = 0;
+    let misses = 0;
+    let lost = 0;
     let lastSpecies = target.name ?? "animal";
     let escaped = false;
     // Natural healing only runs at 18 food or more, so an outing that stops
@@ -271,12 +273,26 @@ export const huntFoodSkill: Skill = {
       const startDist = bot.entity.position.distanceTo(target.position);
       step(`Hunting a ${species} (${startDist.toFixed(0)} blocks away)...`, 0.5 + kills * 0.1);
       const fightUntil = Date.now() + 45_000;
+      // Run 626: "Killed 6 sheep but picked up no meat" with 7 swings. A
+      // target that left the client's view counted as a kill, and swings
+      // landed out of reach after the animal moved off during the follow.
+      // Same shape the spider hunt fixed in run 615: close to 1.2, look at
+      // it, swing only inside three blocks, and count a kill only when the
+      // animal vanished within six blocks.
+      let lastDist = bot.entity.position.distanceTo(target.position);
       try {
         while (target.isValid && Date.now() < fightUntil && !signal.aborted) {
           if (bot.entity.position.distanceTo(target.position) > 2.5) {
-            await safeGoto(bot, new goals.GoalFollow(target, 1.5), 8_000).catch(() => {});
+            await safeGoto(bot, new goals.GoalFollow(target, 1.2), 8_000).catch(() => {});
           }
           if (!target.isValid) break;
+          lastDist = bot.entity.position.distanceTo(target.position);
+          if (lastDist > 3.0) {
+            misses++;
+            await new Promise((r) => setTimeout(r, 300));
+            continue;
+          }
+          await bot.lookAt(target.position.offset(0, 0.5, 0), true).catch(() => {});
           await bot.attack(target);
           swings++;
           // Full attack-cooldown charge between swings (1.21 scales damage by charge).
@@ -290,7 +306,14 @@ export const huntFoodSkill: Skill = {
         escaped = true;
         break;
       }
-      kills++;
+      if (lastDist > 6) {
+        lost++;
+        console.log(
+          `[HuntDebug] ${bot.username} lost sight of the ${species} at ${lastDist.toFixed(1)} blocks (no kill)`,
+        );
+      } else {
+        kills++;
+      }
       target = nearestFoodAnimal(bot);
     }
 
@@ -302,7 +325,7 @@ export const huntFoodSkill: Skill = {
     // "ate 4, hunger 0 -> 0" while RCON read food 12 seconds later).
     await new Promise((r) => setTimeout(r, 800));
     console.log(
-      `[HuntDebug] ${bot.username} food hunt: kills=${kills} last=${lastSpecies} swings=${swings} ` +
+      `[HuntDebug] ${bot.username} food hunt: kills=${kills} lost=${lost} last=${lastSpecies} swings=${swings} outOfReach=${misses} ` +
         `meat +${gained} cooked=${cooked} ate=${eaten} hunger ${foodBefore}->${bot.food}`,
     );
     if (gained > 0) {
