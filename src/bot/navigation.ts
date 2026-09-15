@@ -988,6 +988,38 @@ export function headUnderWater(bot: Bot): boolean {
 }
 
 const swimTraceActive = new WeakMap<Bot, boolean>();
+/** Bots whose control-key setters already carry the drown key trace. */
+const keyTraceInstalled = new WeakSet<Bot>();
+/**
+ * Run 630: Forge reached air -1 five times with air one jump away, and the
+ * swim trace showed jump held at t=5 and gone by t=15 with the reflex still
+ * running. Something else owns the keys mid-rescue. Log who releases jump
+ * or clears the keys while a rescue trace is live.
+ */
+function installDrownKeyTrace(bot: Bot): void {
+  if (keyTraceInstalled.has(bot)) return;
+  keyTraceInstalled.add(bot);
+  const caller = () =>
+    (new Error().stack ?? "")
+      .split("\n")
+      .slice(3, 6)
+      .map((l) => l.trim().replace(/^at /, ""))
+      .join(" <- ");
+  const origSet = bot.setControlState.bind(bot);
+  bot.setControlState = (control, state) => {
+    if (control === "jump" && !state && swimTraceActive.get(bot) && bot.getControlState("jump")) {
+      console.log(`[DrownKeys] ${bot.username} jump released by ${caller()}`);
+    }
+    return origSet(control, state);
+  };
+  const origClear = bot.clearControlStates.bind(bot);
+  bot.clearControlStates = () => {
+    if (swimTraceActive.get(bot) && bot.getControlState("jump")) {
+      console.log(`[DrownKeys] ${bot.username} keys cleared by ${caller()}`);
+    }
+    return origClear();
+  };
+}
 const lastDrownPos = new WeakMap<Bot, Vec3>();
 const lastShoreGap = new WeakMap<Bot, number>();
 
@@ -1219,6 +1251,7 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   // and drowned. Every fifth tick for three seconds: where the body is, how
   // it moves, what keys are down, what the eye and feet are in.
   if (air < 12 && !swimTraceActive.get(bot)) {
+    installDrownKeyTrace(bot);
     swimTraceActive.set(bot, true);
     let ticks = 0;
     const target = shore?.position;
