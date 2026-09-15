@@ -496,6 +496,13 @@ async function craftFishingRod(bot: Bot, signal: AbortSignal): Promise<void> {
       `[FishDebug] ${bot.username} crafted a fishing rod (string ${count("string")}, sticks ${count("stick")} left)`,
     );
   } catch (e) {
-    console.log(`[FishDebug] ${bot.username} rod craft failed: ${(e as Error).message}`);
+    // Run 617: Mason had 2 string from a spider and 6 sticks, the recipe
+    // lookup passed, and bot.craft threw "missing ingredient". Log what the
+    // pack and the recipe held at that instant before changing anything.
+    const delta = (recipe as unknown as { delta?: { id: number; count: number }[] }).delta ?? [];
+    const named = delta.map((d) => `${bot.registry.items[d.id]?.name ?? d.id}:${d.count}`).join(" ");
+    console.log(
+      `[FishDebug] ${bot.username} rod craft failed: ${(e as Error).message}; string ${count("string")} sticks ${count("stick")} table ${table.position} dist ${bot.entity.position.distanceTo(table.position).toFixed(1)} delta ${named}`,
+    );
   }
 }
