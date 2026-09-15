@@ -30,7 +30,15 @@ import { RESUMABLE_PROTOCOL } from "./memory.js";
 import { config } from "../config.js";
 
 import { STASH_POS } from "./role.js";
-import { baseMoves, safeMoves, explorerMoves, safeGoto, collectNearbyDrops, bumpNavGeneration } from "./navigation.js";
+import {
+  baseMoves,
+  safeMoves,
+  explorerMoves,
+  safeGoto,
+  collectNearbyDrops,
+  bumpNavGeneration,
+  headUnderWater,
+} from "./navigation.js";
 /** Re-exported navigation helpers used by actions and skill implementations. */
 export { safeMoves, explorerMoves, safeGoto, collectNearbyDrops };
 
@@ -1182,6 +1190,13 @@ async function giveItem(bot: Bot, to: string, itemName: string, count: number): 
 
 async function explore(bot: Bot, direction: string): Promise<string> {
   const pos = bot.entity.position;
+  // Run 633: explore reset the pathfinder 16 times while a drown rescue was
+  // holding the keys (its own in-water branch below re-plans a walk). With
+  // short air the reflex owns the bot; the brain files this result as the
+  // drowning safety gate.
+  if (headUnderWater(bot) && (bot.oxygenLevel ?? 20) < 16) {
+    return "Underwater and short of air — surfacing first, try again once breathing.";
+  }
 
   // If in water, use pathfinder with free motion to navigate to surface/shore
   const currentBlock = bot.blockAt(pos);

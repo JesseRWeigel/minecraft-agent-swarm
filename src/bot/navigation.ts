@@ -634,7 +634,9 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
       // while the reflex held the keys. A walk does not start or restart
       // while the bot's head is under water with short air; it waits for
       // the rescue and the outer timeout still bounds it.
-      if (headUnderWater(bot) && (bot.oxygenLevel ?? 20) < 13) {
+      // < 16 matches the reflex's takeover threshold: run 633 still logged
+      // 15 attempts setting goals at air 13 to 15 while the rescue ran.
+      if (headUnderWater(bot) && (bot.oxygenLevel ?? 20) < 16) {
         if (!rescueWaitLogged) {
           rescueWaitLogged = true;
           console.log(`[Nav] ${bot.username} walk waits for the drown rescue (air ${bot.oxygenLevel})`);
