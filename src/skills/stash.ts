@@ -1548,6 +1548,19 @@ export async function withdrawStash(
 
   // Report the VERIFIED delta, not what container.withdraw claimed.
   const gained = countItem() - before;
+  // Run 620: Flora's 2 string counted here and were gone at the crafting
+  // table. Re-count after a second so a client-only (ghost) transfer that the
+  // server later reverts shows up next to the withdraw line.
+  if (gained > 0) {
+    setTimeout(() => {
+      const later = countItem() - before;
+      if (later < gained) {
+        console.log(
+          `[Stash] ${bot.username}: ${itemName} withdraw counted ${gained} at close, ${later} one second later (server reverted the transfer?)`,
+        );
+      }
+    }, 1000);
+  }
   if (gained <= 0 && withdrawn > 0) {
     return `Tried to withdraw ${itemName} but it never reached your inventory (stash transfer failed) — the stash may be empty of it. Gather it yourself or check a different item.`;
   }

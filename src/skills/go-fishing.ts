@@ -493,6 +493,13 @@ async function craftFishingRod(bot: Bot, signal: AbortSignal): Promise<void> {
   ).catch((e: Error) => {
     console.log(`[FishDebug] ${bot.username} walk to table failed: ${e.message}`);
   });
+  // Run 620: Flora entered with 2 string (withdraw verified from the client
+  // inventory) and bot.craft threw "missing ingredient" with string 0 at the
+  // table. Log the pack on arrival so the loss is placed on the walk or on
+  // the table window's server sync.
+  console.log(
+    `[FishDebug] ${bot.username} at table: string ${count("string")} sticks ${count("stick")} dist ${bot.entity.position.distanceTo(table.position).toFixed(1)}`,
+  );
   const recipe = bot.recipesFor(rodItem.id, null, 1, table)[0];
   if (!recipe) {
     console.log(
