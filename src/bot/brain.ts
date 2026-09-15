@@ -1021,7 +1021,15 @@ export class BotBrain {
       situation = `Health: ${this.bot.health}/20, Food: ${this.bot.food}/20. Assess situation.`;
     }
 
-    const decision = await queryReactive(this.roleConfig.name, situation, this.roleConfig.allowedActions);
+    // Run 621: 38 of 73 blocked "eat" picks came from this prompt, which
+    // still listed eat while the strategic menu had dropped it.
+    this.purgeExpiredFailures();
+    const reactiveMenu = this.roleConfig.allowedActions.filter((a) => !this.recentFailures.has(a));
+    const decision = await queryReactive(
+      this.roleConfig.name,
+      situation,
+      reactiveMenu.length ? reactiveMenu : this.roleConfig.allowedActions,
+    );
     // A reactive MOVE while a skill is walking steals the pathfinder: the
     // skill's goto rejects with "goal was changed", and run 500 logged 324
     // such interruptions for Blade and 130 for Flora in one hour, killing
