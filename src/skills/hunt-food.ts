@@ -280,6 +280,15 @@ export const huntFoodSkill: Skill = {
       // it, swing only inside three blocks, and count a kill only when the
       // animal vanished within six blocks.
       let lastDist = bot.entity.position.distanceTo(target.position);
+      // Run 627: two sheep "died" in three swings and a pig in one, with no
+      // meat, so some kills are still the client dropping the entity. Track
+      // the last health seen to size the next rule.
+      const hpOf = (e: typeof target) => {
+        const m = (e as unknown as { metadata?: unknown[] }).metadata;
+        const v = Array.isArray(m) ? m[9] : undefined;
+        return typeof v === "number" ? v : NaN;
+      };
+      let lastHp = hpOf(target);
       try {
         while (target.isValid && Date.now() < fightUntil && !signal.aborted) {
           if (bot.entity.position.distanceTo(target.position) > 2.5) {
@@ -287,6 +296,7 @@ export const huntFoodSkill: Skill = {
           }
           if (!target.isValid) break;
           lastDist = bot.entity.position.distanceTo(target.position);
+          lastHp = hpOf(target);
           if (lastDist > 3.0) {
             misses++;
             await new Promise((r) => setTimeout(r, 300));
@@ -313,6 +323,9 @@ export const huntFoodSkill: Skill = {
         );
       } else {
         kills++;
+        console.log(
+          `[HuntDebug] ${bot.username} ${species} gone at ${lastDist.toFixed(1)} blocks, last hp ${Number.isNaN(lastHp) ? "?" : lastHp.toFixed(1)}, swings so far ${swings}`,
+        );
       }
       target = nearestFoodAnimal(bot);
     }
