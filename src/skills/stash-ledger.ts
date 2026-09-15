@@ -141,13 +141,22 @@ export function forgetChest(pos: { x: number; y: number; z: number }): boolean {
  * actually has the item instead of scanning a 60-chest sprawl in position
  * order until the watchdog fires.
  */
+/**
+ * Substring match for stash lookups, minus the poisonous variant. Run 627:
+ * "potato" counted and withdrew 3 poisonous_potato for a starving Flora,
+ * and the eat action rightly refused them.
+ */
+export function stashItemMatches(name: string, matchName: string): boolean {
+  return name.includes(matchName) && !name.startsWith("poisonous_");
+}
+
 /** Total count of an item across ledger chests, optionally only those within 10 blocks of a y level. */
 export function stashCount(matchName: string, nearY?: number): number {
   let n = 0;
   for (const chest of chests.values()) {
     const y = Number(chest.pos.split(",")[1]);
     if (nearY !== undefined && Math.abs(y - nearY) > 10) continue;
-    for (const i of chest.items) if (i.name.includes(matchName)) n += i.count;
+    for (const i of chest.items) if (stashItemMatches(i.name, matchName)) n += i.count;
   }
   return n;
 }
@@ -160,7 +169,7 @@ export function ledgerKnown(): boolean {
 export function chestsWithItem(matchName: string): { x: number; y: number; z: number }[] {
   const hits: { pos: { x: number; y: number; z: number }; updatedAt: number }[] = [];
   for (const chest of chests.values()) {
-    if (chest.items.some((i) => i.name.includes(matchName))) {
+    if (chest.items.some((i) => stashItemMatches(i.name, matchName))) {
       const [x, y, z] = chest.pos.split(",").map(Number);
       hits.push({ pos: { x, y, z }, updatedAt: chest.updatedAt });
     }

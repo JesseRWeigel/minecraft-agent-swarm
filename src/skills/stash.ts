@@ -1420,7 +1420,7 @@ export async function withdrawStash(
   // scattered item is found in the first chest or two instead of the
   // sixtieth. The ledger snapshots contents on every open, so it is as
   // fresh as the last visit — a miss just falls through to the full scan.
-  const { chestsWithItem, forgetChest } = await import("./stash-ledger.js");
+  const { chestsWithItem, forgetChest, stashItemMatches } = await import("./stash-ledger.js");
   // Skip chests far off the stash level. Run 568: two of the three string
   // sat in a chest at (285, 4, -313), 66 blocks under the stash, and nine
   // withdraw scans burned their full 110s budget failing to reach it.
@@ -1467,7 +1467,7 @@ export async function withdrawStash(
   const countItem = () =>
     bot.inventory
       .items()
-      .filter((i) => i.name.includes(matchName))
+      .filter((i) => stashItemMatches(i.name, matchName))
       .reduce((s, i) => s + i.count, 0);
   const before = countItem();
 
@@ -1498,7 +1498,7 @@ export async function withdrawStash(
 
       for (const slot of container.containerItems()) {
         if (withdrawn >= needed) break;
-        if (slot.name.includes(matchName)) {
+        if (stashItemMatches(slot.name, matchName)) {
           // A FULL inventory makes withdraw throw — and the old silent catch
           // turned that into "no leather in the stash" while Forge stood at
           // an open chest holding five of them. Bank junk into this very
