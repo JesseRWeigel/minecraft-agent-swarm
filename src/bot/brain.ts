@@ -3157,12 +3157,18 @@ export class BotBrain {
 
     const context = this.buildContext();
     const memoryCtx = this.memStore.getMemoryContext();
+    // Run 619: "eat" was blocked for ten minutes after "No food in
+    // inventory", and the model still picked it 102 times in an hour (a
+    // third of all decisions) because the menu kept offering it and the
+    // RECENTLY FAILED note went unread. A blocked action leaves the menu.
+    this.purgeExpiredFailures();
+    const menu = this.roleConfig.allowedActions.filter((a) => !this.recentFailures.has(a));
     const role: RoleContext = {
       name: this.roleConfig.name,
       personality: this.roleConfig.personality,
       role: this.roleConfig.role,
       seasonGoal: this.roleConfig.seasonGoal ?? this.memStore.getSeasonGoal(),
-      allowedActions: this.roleConfig.allowedActions,
+      allowedActions: menu.length ? menu : this.roleConfig.allowedActions,
       allowedSkills: this.roleConfig.allowedSkills,
       priorities: this.roleConfig.priorities,
     };
