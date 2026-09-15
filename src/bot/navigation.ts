@@ -1004,6 +1004,13 @@ export function headUnderWater(bot: Bot): boolean {
 }
 
 const swimTraceActive = new WeakMap<Bot, boolean>();
+/**
+ * Where each bot last had its head in air. Run 634: Atlas and Blade each
+ * drowned "pinned" a few blocks inside roofed water, digging bare-handed
+ * digs of 19 to 188 s with under 12 s of air, when the way they swam in
+ * was still open behind them.
+ */
+const lastAirPos = new WeakMap<Bot, Vec3>();
 /** Bots whose control-key setters already carry the drown key trace. */
 const keyTraceInstalled = new WeakSet<Bot>();
 /**
@@ -1041,7 +1048,10 @@ const lastShoreGap = new WeakMap<Bot, number>();
 
 const lastSwimYieldLog = new WeakMap<Bot, number>();
 export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
-  if (!headUnderWater(bot)) return false; // head not submerged → breathing fine
+  if (!headUnderWater(bot)) {
+    lastAirPos.set(bot, bot.entity.position.clone());
+    return false; // head not submerged → breathing fine
+  }
 
   // When air is actually running out, this reflex must WIN the controls: the
   // pathfinder re-asserts movement every tick, so 1.2s rescue bursts lost the
@@ -1126,6 +1136,7 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   let pinned = !!lastPos && lastPos.distanceTo(bot.entity.position) < 0.6;
   lastDrownPos.set(bot, bot.entity.position.clone());
   let shore = null as ReturnType<typeof bot.blockAt> | null;
+  let swimTo: Vec3 | null = null; // set when a hopeless dig turns into a retreat toward known air
   for (let r = 1; r <= 8 && !shore; r++) {
     for (let dx = -r; dx <= r && !shore; dx++) {
       for (let dz = -r; dz <= r && !shore; dz++) {
@@ -1209,6 +1220,7 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     const swimRoute = Object.values(neighbours).some((b) => b && (b.name === "water" || b.name === "air"));
     const budgetMs = Math.max(0, air) * 750 + Math.max(0, bot.health - 2) * 500;
     const needMs = escape ? bot.digTime(neighbours[escape.direction]!) : 0;
+    const retreat = lastAirPos.get(bot);
     // Run 628: Blade stood on the bottom of two-deep water at (359, 61, -314)
     // with air two blocks up, counted as pinned because the shore gap never
     // closed, and the reflex dug north through cobblestone with 1 air left.
@@ -1218,6 +1230,11 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     if (escape && airAbove) {
       console.log(
         `[Drown] ${bot.username} air two blocks up at air=${air} — jumping for a breath instead of digging ${escape.direction}`,
+      );
+    } else if (escape && needMs > budgetMs && retreat && retreat.distanceTo(bot.entity.position) <= 24) {
+      swimTo = retreat;
+      console.log(
+        `[Drown] ${bot.username} dig ${escape.direction} through ${escape.block.name} needs ${(needMs / 1000).toFixed(1)}s > ${(budgetMs / 1000).toFixed(1)}s of air — retreating toward last air at ${retreat.floored()} (${retreat.distanceTo(bot.entity.position).toFixed(1)} blocks)`,
       );
     } else if (escape && needMs > budgetMs && swimRoute && !pinned) {
       console.log(
@@ -1293,8 +1310,9 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
 
   try {
     bot.setControlState("jump", true); // swim upward toward the surface for air
-    if (shore && shore.position) {
-      await bot.lookAt(shore.position.offset(0.5, 1.5, 0.5));
+    const swimTarget = swimTo ?? shore?.position ?? null;
+    if (swimTarget) {
+      await bot.lookAt(swimTarget.offset(0.5, 1.5, 0.5));
       bot.setControlState("forward", true);
       // No sprint: sprinting in water puts the player in the swimming pose,
       // whose eye height is 0.4, so a bobbing bot breathes only at the top
