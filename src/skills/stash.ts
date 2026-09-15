@@ -795,10 +795,15 @@ export function shouldKeep(
     "rabbit",
   ]);
   if (FOOD.has(itemName)) {
+    // Run 616: this counted STACKS. Forge baked 15 potatoes at the stash,
+    // the fed-bot reserve was 2, and the whole stack of 15 stayed aboard as
+    // "one food stack kept" while the pantry got none. The reserve is a
+    // count of items: a stack fits the reserve or it goes in the chest, and
+    // the pantry reflex hands a hungry bot eight back at once.
     const KEEP_FOOD = foodKeep;
     const kept = currentCounts.get("__food") ?? 0;
-    if (kept < KEEP_FOOD) {
-      currentCounts.set("__food", kept + 1);
+    if (kept + itemCount <= KEEP_FOOD) {
+      currentCounts.set("__food", kept + itemCount);
       return true;
     }
     return false;
