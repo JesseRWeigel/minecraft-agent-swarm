@@ -2890,7 +2890,10 @@ export class BotBrain {
           this.events.onThought("The pantry has food. Fetch some before the long walk.");
           const { withdrawStash } = await import("../skills/stash.js");
           const r = await withdrawStash(this.bot, sp, pick, want, 90_000).catch((e: Error) => e.message);
-          const got = this.bot.inventory.items().some((i) => i.name === pick);
+          // Run 624: the withdraw matches by substring, so "potato" fetched
+          // baked_potato, and this exact-name check said nothing arrived.
+          // Mason walked away twice with three baked potatoes uneaten.
+          const got = this.bot.inventory.items().some((i) => i.name.includes(pick));
           console.log(`[Pantry] ${this.bot.username} ${pick} x${want}: ${String(r).slice(0, 90)}; aboard=${got}`);
           if (got) {
             const ate = await this.executeActionUnlessPaused("eat", {});
