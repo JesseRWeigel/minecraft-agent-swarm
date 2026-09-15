@@ -1157,7 +1157,9 @@ export class BotBrain {
     // race against mob aggro that three straight 20-death nights kept losing
     // (the reflex used to start the 75s bed-walk only after the mobs were
     // already out).
-    if (timeOfDay >= 11800 && timeOfDay <= 23458 && !(this.bot as any).isSleeping) {
+    // 12542 is the first tick a bed accepts a sleeper; run 634 logged eight
+    // "it's not night" failures from starting at 11800.
+    if (timeOfDay >= 12542 && timeOfDay <= 23458 && !(this.bot as any).isSleeping) {
       const slept = await this.executeActionUnlessPaused("sleep", {});
       this.log.info("Brain", `Night reflex: sleep → ${slept}`);
       if (/zzz|sleeping/i.test(slept)) return; // in bed — skip the LLM turn
