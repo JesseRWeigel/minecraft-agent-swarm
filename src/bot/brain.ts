@@ -3219,7 +3219,16 @@ export class BotBrain {
       }`,
     ].join("\n");
 
-    const verdict = await queryCritic(this.roleConfig.name, criticContext, this.roleConfig.allowedActions);
+    // Run 622: 37 critic verdicts suggested "eat" while it was blocked, and
+    // the next-step path below executes without the strategic menu. Give the
+    // critic the same filtered list.
+    this.purgeExpiredFailures();
+    const criticMenu = this.roleConfig.allowedActions.filter((a) => !this.recentFailures.has(a));
+    const verdict = await queryCritic(
+      this.roleConfig.name,
+      criticContext,
+      criticMenu.length ? criticMenu : this.roleConfig.allowedActions,
+    );
     if (this.paused) return;
 
     // Update thought display
@@ -3232,6 +3241,9 @@ export class BotBrain {
       this.currentGoal = "";
       this.goalStepsLeft = 0;
       // Trigger strategic re-plan after a brief pause
+      setTimeout(() => this.triggerReplan(), 1000);
+    } else if (verdict.nextAction && verdict.success && this.recentFailures.has(verdict.nextAction)) {
+      this.log.info("Brain:critic", `Next step "${verdict.nextAction}" is blocked — re-planning instead`);
       setTimeout(() => this.triggerReplan(), 1000);
     } else if (verdict.nextAction && verdict.success) {
       // Critic suggests next step — execute directly without full LLM call
