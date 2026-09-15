@@ -1631,6 +1631,20 @@ async function attackNearest(bot: Bot): Promise<string> {
 
   // Use @nxg-org/mineflayer-custom-pvp for sustained, skilled combat
   // The plugin handles strafing, critical-hit timing, shield use, and target tracking
+  // Run 635: "Blade vs pillager: 6.1s, target hp 18 -> 18, weapon porkchop".
+  // He had just eaten and swung the food. Nothing in this action ever put
+  // a weapon in hand; the fight two minutes later with a stone sword took
+  // a pillager from 3 to 0. Equip the best melee tool before any swing.
+  const melee =
+    bot.inventory.items().find((i) => i.name.endsWith("_sword")) ??
+    bot.inventory.items().find((i) => i.name.endsWith("_axe")) ??
+    bot.inventory.items().find((i) => i.name.endsWith("_pickaxe"));
+  if (melee && bot.heldItem?.name !== melee.name) {
+    await bot.equip(melee, "hand").catch((e: Error) => {
+      console.log(`[FightDebug] ${bot.username} could not equip ${melee.name}: ${e.message}`);
+    });
+  }
+
   if ((bot as any).swordpvp) {
     const swordpvp = (bot as any).swordpvp;
 
