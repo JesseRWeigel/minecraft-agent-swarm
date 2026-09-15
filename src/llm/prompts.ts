@@ -29,6 +29,8 @@ export interface RoleContext {
   allowedActions?: string[];
   allowedSkills?: string[];
   priorities?: string;
+  /** True while "eat" is blacklisted (no food aboard), so the prompt stops recommending it. */
+  eatBlocked?: boolean;
 }
 
 /**
@@ -94,6 +96,18 @@ export function resolveAllowedActions(roleActions?: string[]): string[] {
 
 export function buildStrategicPrompt(role: RoleContext): string {
   const name = role.name;
+  // Runs 619 to 629: with "eat" off the menu the model still picked it 16 to
+  // 30 times an hour because this section told it to. Say what is true.
+  const foodSection = role.eatBlocked
+    ? `FOOD / DON'T STARVE:
+- You have NO food aboard and "eat" is unavailable this turn. Get food first:
+  invoke_skill {"skill":"hunt_food"} for animals, invoke_skill {"skill":"go_fishing"}
+  near open water, or withdraw_stash {"item":"bread"} at the stash. Do not pick eat.`
+    : `FOOD / DON'T STARVE:
+- If hunger is low: eat {} (eats the best food you have, including raw meat).
+- NO food in inventory? attack {} — when no monster is near it HUNTS the nearest
+  animal (cow/pig/sheep/chicken) and collects the meat. Then eat {}. Hunt BEFORE
+  you starve, not at 0 hunger.`;
 
   // Build action list — role-specific if configured, otherwise full list
   const actions = renderActions(resolveAllowedActions(role.allowedActions));
@@ -152,11 +166,7 @@ IRON PATH (the goal — don't mine plain stone when you want iron):
 - Then upgrade gear: invoke_skill {"skill":"craft_gear"}.
 - No ore in sight? invoke_skill {"skill":"strip_mine"} digs down to Y=11 and mines.
 
-FOOD / DON'T STARVE:
-- If hunger is low: eat {} (eats the best food you have, including raw meat).
-- NO food in inventory? attack {} — when no monster is near it HUNTS the nearest
-  animal (cow/pig/sheep/chicken) and collects the meat. Then eat {}. Hunt BEFORE
-  you starve, not at 0 hunger.
+${foodSection}
 
 RULES:
 - Respond ONLY with valid JSON. Keep "thought" under 120 chars — shown on stream.

@@ -3180,6 +3180,7 @@ export class BotBrain {
       role: this.roleConfig.role,
       seasonGoal: this.roleConfig.seasonGoal ?? this.memStore.getSeasonGoal(),
       allowedActions: menu.length ? menu : this.roleConfig.allowedActions,
+      eatBlocked: this.recentFailures.has("eat"),
       allowedSkills: this.roleConfig.allowedSkills,
       priorities: this.roleConfig.priorities,
     };
