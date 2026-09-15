@@ -626,8 +626,22 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
       if (stallDelayTimer) clearTimeout(stallDelayTimer);
       offPath();
     };
+    let rescueWaitLogged = false;
     const attempt = () => {
       if (settled) return; // outer timeout/stall fired during the retry delay
+      // Run 631: 377 of 437 jump releases during drown rescues came from the
+      // pathfinder walking a path that a retry here (or a skill) had set
+      // while the reflex held the keys. A walk does not start or restart
+      // while the bot's head is under water with short air; it waits for
+      // the rescue and the outer timeout still bounds it.
+      if (headUnderWater(bot) && (bot.oxygenLevel ?? 20) < 13) {
+        if (!rescueWaitLogged) {
+          rescueWaitLogged = true;
+          console.log(`[Nav] ${bot.username} walk waits for the drown rescue (air ${bot.oxygenLevel})`);
+        }
+        setTimeout(attempt, 500); // attempt() returns at once if the walk settled meanwhile
+        return;
+      }
       // pathfinder.stop() only raises a flag; the library acts on it at the
       // next node arrival or path reset, and a flag raised during a stall
       // (never arriving) lands on the NEXT walk, whose first path reset then

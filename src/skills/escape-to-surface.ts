@@ -3,7 +3,7 @@ import { Vec3 } from "vec3";
 import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
-import { baseMoves, safeGoto } from "../bot/navigation.js";
+import { baseMoves, safeGoto, headUnderWater } from "../bot/navigation.js";
 
 /**
  * escape_to_surface — free a bot that has softlocked underground.
@@ -107,6 +107,12 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<boole
   let digError = "";
   // Swimming sinks the bot mid-dig and the server aborts the dig ("Digging
   // aborted" at 416,13,-312, seven times). Float at the surface while digging.
+  // Run 631: this dig released the jump key 15 times while the drown reflex
+  // was holding it. With short air the reflex owns the keys; skip the dig.
+  if (headUnderWater(bot) && (bot.oxygenLevel ?? 20) < 13) {
+    console.log(`[EscapeDebug] ${bot.username}: dig skipped, drown rescue owns the keys (air ${bot.oxygenLevel})`);
+    return false;
+  }
   const floating = inWater(bot);
   if (floating) bot.setControlState("jump", true);
   await Promise.race([
@@ -321,6 +327,12 @@ export const escapeToSurfaceSkill: Skill = {
       bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
     } catch {
       /* no goal */
+    }
+    if (headUnderWater(bot) && (bot.oxygenLevel ?? 20) < 13) {
+      return {
+        success: false,
+        message: "Drowning — the drown reflex has the keys. Try escape_to_surface again once breathing.",
+      };
     }
 
     const startY = feet(bot).y;
