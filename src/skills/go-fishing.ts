@@ -507,19 +507,29 @@ async function craftFishingRod(bot: Bot, signal: AbortSignal): Promise<void> {
     );
     return;
   }
-  try {
-    await bot.craft(recipe, 1, table);
-    console.log(
-      `[FishDebug] ${bot.username} crafted a fishing rod (string ${count("string")}, sticks ${count("stick")} left)`,
-    );
-  } catch (e) {
-    // Run 617: Mason had 2 string from a spider and 6 sticks, the recipe
-    // lookup passed, and bot.craft threw "missing ingredient". Log what the
-    // pack and the recipe held at that instant before changing anything.
-    const delta = (recipe as unknown as { delta?: { id: number; count: number }[] }).delta ?? [];
-    const named = delta.map((d) => `${bot.registry.items[d.id]?.name ?? d.id}:${d.count}`).join(" ");
-    console.log(
-      `[FishDebug] ${bot.username} rod craft failed: ${(e as Error).message}; string ${count("string")} sticks ${count("stick")} table ${table.position} dist ${bot.entity.position.distanceTo(table.position).toFixed(1)} delta ${named}`,
-    );
+  // Run 621: Forge stood at the table with string 2 and sticks 9 (logged the
+  // line before) and bot.craft still threw "missing ingredient" with string
+  // 0 and sticks 7: the ingredients it had already moved into the grid were
+  // no longer visible to the next lookup, a window-state race. The grid's
+  // contents come back to the pack when the window closes, so close it,
+  // wait, re-count, and try again up to two more times.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await bot.craft(recipe, 1, table);
+      console.log(
+        `[FishDebug] ${bot.username} crafted a fishing rod on attempt ${attempt} (string ${count("string")}, sticks ${count("stick")} left)`,
+      );
+      return;
+    } catch (e) {
+      const delta = (recipe as unknown as { delta?: { id: number; count: number }[] }).delta ?? [];
+      const named = delta.map((d) => `${bot.registry.items[d.id]?.name ?? d.id}:${d.count}`).join(" ");
+      console.log(
+        `[FishDebug] ${bot.username} rod craft attempt ${attempt} failed: ${(e as Error).message}; string ${count("string")} sticks ${count("stick")} table ${table.position} dist ${bot.entity.position.distanceTo(table.position).toFixed(1)} delta ${named}`,
+      );
+      if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
+      await new Promise((r) => setTimeout(r, 1500));
+      console.log(`[FishDebug] ${bot.username} after window close: string ${count("string")} sticks ${count("stick")}`);
+      if (count("string") < 2 || count("stick") < 3 || signal.aborted) return;
+    }
   }
 }
