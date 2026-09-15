@@ -1319,7 +1319,16 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
       // of each bob (run 576: Forge on the lake surface, air stuck at 5).
       bot.setControlState("sprint", false);
     }
-    await bot.waitForTicks(40); // ~2s of swimming up/out of the 3s timer period; re-runs if still under
+    // Run 636: Forge sank from y=39 to 31 with air 12 -> 4 holding forward
+    // only; a strip_mine setGoal, a walk retry and this reflex's own reset
+    // had each cleared the jump key inside this two-second wait. Re-assert
+    // the keys every five ticks while the head is still under.
+    for (let i = 0; i < 8; i++) {
+      await bot.waitForTicks(5);
+      if (!headUnderWater(bot)) break;
+      if (!bot.getControlState("jump")) bot.setControlState("jump", true);
+      if (swimTarget && !bot.getControlState("forward")) bot.setControlState("forward", true);
+    }
   } catch {
     /* best effort — timer retries */
   } finally {

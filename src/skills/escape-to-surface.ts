@@ -319,6 +319,14 @@ export const escapeToSurfaceSkill: Skill = {
     const step = (message: string, progress: number) =>
       onProgress({ skillName: "escape_to_surface", phase: "Escape", progress, message, active: true });
 
+    // Run 636: the two goal resets below cleared the drown reflex's jump key
+    // while Forge was sinking; check the air before touching the pathfinder.
+    if (headUnderWater(bot) && (bot.oxygenLevel ?? 20) < 16) {
+      return {
+        success: false,
+        message: "Drowning — the drown reflex has the keys. Try escape_to_surface again once breathing.",
+      };
+    }
     // Stop any pathfinder goal fighting us for the controls. stop() alone
     // leaves the goal set, and the pathfinder tick cancels foreign digs while
     // a goal exists ("survived a 0s dig, Digging aborted" in a flooded shaft).
@@ -327,12 +335,6 @@ export const escapeToSurfaceSkill: Skill = {
       bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
     } catch {
       /* no goal */
-    }
-    if (headUnderWater(bot) && (bot.oxygenLevel ?? 20) < 13) {
-      return {
-        success: false,
-        message: "Drowning — the drown reflex has the keys. Try escape_to_surface again once breathing.",
-      };
     }
 
     const startY = feet(bot).y;
