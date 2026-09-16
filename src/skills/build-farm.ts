@@ -884,14 +884,18 @@ async function reachTable(bot: Bot): Promise<Block | null> {
   for (const table of near()) {
     if (bot.entity.position.distanceTo(table.position) <= TABLE_REACH) return table;
     setMovements(bot);
+    // Run 645: Mason harvested 2 wheat and then called five tables 19 to 27
+    // blocks away unreachable in turn, never moving, and baked nothing. The
+    // walk error was swallowed; name it, and give a 27-block walk 25 s.
+    let walkErr = "";
     try {
-      await gotoT(bot, new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2), 12_000);
-    } catch {
-      /* try the next table */
+      await gotoT(bot, new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2), 25_000);
+    } catch (e) {
+      walkErr = e instanceof Error ? e.message.slice(0, 70) : String(e);
     }
     if (bot.entity.position.distanceTo(table.position) <= TABLE_REACH) return table;
     console.log(
-      `[FarmDebug] ${bot.username}: table at ${table.position} unreachable (${Math.round(bot.entity.position.distanceTo(table.position))} blocks) — trying the next`,
+      `[FarmDebug] ${bot.username}: table at ${table.position} unreachable (${Math.round(bot.entity.position.distanceTo(table.position))} blocks${walkErr ? `; walk: ${walkErr}` : ""}) — trying the next`,
     );
   }
   // Place our own.
