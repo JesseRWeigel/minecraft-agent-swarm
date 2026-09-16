@@ -486,15 +486,8 @@ export const buildFarmSkill: Skill = {
     }
     setMovements(bot);
     try {
-      await Promise.race([
-        bot.pathfinder.goto(new goals.GoalNear(navigationTarget.x, navigationTarget.y, navigationTarget.z, 3)),
-        new Promise<void>((_, rej) =>
-          setTimeout(() => {
-            bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
-            rej(new Error("timeout"));
-          }, 15000),
-        ),
-      ]);
+      // Run 657: same stale-timer shape as gotoT; route through it.
+      await gotoT(bot, new goals.GoalNear(navigationTarget.x, navigationTarget.y, navigationTarget.z, 3), 15000);
     } catch {
       /* ok — try anyway */
     }
@@ -597,15 +590,24 @@ export const buildFarmSkill: Skill = {
         // (~4.5), and demanding a cell exactly one block away made the
         // pathfinder fail to stand on ~80% of shore plots (planted 1 of 5 per
         // run, "navigation or tilling failed"). Standing two out still tills.
-        await Promise.race([
-          bot.pathfinder.goto(new goals.GoalNear(targetPos.x, targetPos.y, targetPos.z, 2)),
-          new Promise<void>((_, rej) =>
-            setTimeout(() => {
-              bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
-              rej(new Error("timeout"));
-            }, 15000),
-          ),
-        ]);
+        // Run 657: this timer outlived a walk that finished early and fired
+        // setGoal(null) into the next plot's walk ("The goal was changed"
+        // x5 per pass, 0 of 9 plots planted three times in an hour). Same
+        // shape as the gotoT timer fixed on 2026-09-16 at 08:20Z: clear it.
+        let plotTimer: NodeJS.Timeout | undefined;
+        try {
+          await Promise.race([
+            bot.pathfinder.goto(new goals.GoalNear(targetPos.x, targetPos.y, targetPos.z, 2)),
+            new Promise<void>((_, rej) => {
+              plotTimer = setTimeout(() => {
+                bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
+                rej(new Error("timeout"));
+              }, 15000);
+            }),
+          ]);
+        } finally {
+          if (plotTimer) clearTimeout(plotTimer);
+        }
         if (targetPos.distanceTo(bot.entity.position) > 4.4) {
           skips.reach++;
           continue; // out of till reach
@@ -629,15 +631,9 @@ export const buildFarmSkill: Skill = {
             const standIn = bot.blockAt(targetPos.offset(ox, 1, oz));
             if (!ground || ground.name === "water" || ground.name === "air") continue;
             if (!standIn || (standIn.name !== "air" && !standIn.name.includes("grass"))) continue;
-            await Promise.race([
-              bot.pathfinder.goto(new goals.GoalBlock(targetPos.x + ox, targetPos.y + 1, targetPos.z + oz)),
-              new Promise<void>((_, rej) =>
-                setTimeout(() => {
-                  bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
-                  rej(new Error("timeout"));
-                }, 5000),
-              ),
-            ]).catch(() => {});
+            await gotoT(bot, new goals.GoalBlock(targetPos.x + ox, targetPos.y + 1, targetPos.z + oz), 5000).catch(
+              () => {},
+            );
             break;
           }
           const f2 = bot.entity.position.floored();
@@ -796,7 +792,7 @@ function installFarmGoalTrace(bot: Bot): void {
   };
 }
 
-async function gotoT(bot: Bot, goal: InstanceType<typeof goals.GoalNear>, ms = 15000): Promise<void> {
+async function gotoT(bot: Bot, goal: InstanceType<typeof goals.Goal>, ms = 15000): Promise<void> {
   // Run 650: the goal trace named this timer. It kept running after a walk
   // finished, and its setGoal(null) landed in the NEXT walk, so planting
   // passes ended 1 of 10 with "The goal was changed" seven times and the
