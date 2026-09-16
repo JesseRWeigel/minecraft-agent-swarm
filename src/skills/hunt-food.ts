@@ -268,7 +268,12 @@ export const huntFoodSkill: Skill = {
       lastSpecies = species;
       const startDist = bot.entity.position.distanceTo(target.position);
       step(`Hunting a ${species} (${startDist.toFixed(0)} blocks away)...`, 0.5 + kills * 0.1);
-      const fightUntil = Date.now() + 45_000;
+      // Run 660: eight hunts ended "got away after 0 or 1 swings" with the
+      // animal 0.3 to 1.5 blocks away. The 45 s budget started before a 92
+      // block approach, so the bot arrived with seconds left. The approach
+      // gets its own 45 s; the fight clock starts on first contact.
+      let fightUntil = Date.now() + 45_000;
+      let engaged = false;
       // Run 626: "Killed 6 sheep but picked up no meat" with 7 swings. A
       // target that left the client's view counted as a kill, and swings
       // landed out of reach after the animal moved off during the follow.
@@ -303,6 +308,10 @@ export const huntFoodSkill: Skill = {
           lastDist = bot.entity.position.distanceTo(target.position);
           lastGap = lastDist;
           lastHp = hpOf(target);
+          if (!engaged && lastDist <= 3.0) {
+            engaged = true;
+            fightUntil = Date.now() + 45_000;
+          }
           if (lastDist > 3.0) {
             misses++;
             await new Promise((r) => setTimeout(r, 300));
