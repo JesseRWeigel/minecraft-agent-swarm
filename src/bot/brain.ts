@@ -2180,7 +2180,10 @@ export class BotBrain {
       const spFort = this.roleConfig.stashPos;
       const nearStashFort =
         !!spFort && Math.hypot(this.bot.entity.position.x - spFort.x, this.bot.entity.position.z - spFort.z) < 40;
-      if (!fortDone && cooledFort && todFort < 11000 && nearStashFort && this.wornArmorCount() >= 2) {
+      // Run 661: Mason went to the Nether at 0 hunger four times today and
+      // died there each time. A fortress trip needs a fed, healthy bot.
+      const fitForNether = this.bot.food >= 8 && this.bot.health >= 14;
+      if (!fortDone && cooledFort && todFort < 11000 && nearStashFort && this.wornArmorCount() >= 2 && fitForNether) {
         this.lastFortressMs = Date.now();
         this.log.info("Brain", "OVERRIDE: the brewing branch waits on a fortress — running find_fortress");
         this.events.onThought("Somewhere out in that red haze stands a fortress. Today I go look.");
