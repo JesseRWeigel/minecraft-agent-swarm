@@ -863,7 +863,55 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
 /** Toss bulk junk until at least `minFree` slots are open. A full pocket
  *  refuses ground pickups AND chest withdrawals silently — the bug that ate
  *  a week of leather and ten gold ore. Call before any pickup that matters. */
-export async function shedJunk(bot: Bot, minFree = 2): Promise<number> {
+/** Food item names a hungry bot must always have room for. */
+export const FOOD_DROP =
+  /porkchop|beef|mutton|chicken|rabbit|^cod$|salmon|bread|potato|carrot|apple|cooked_|melon_slice|sweet_berries/;
+
+// Run 655: Mason stood on a porkchop at 0.4 blocks with zero free slots and
+// gained nothing; the junk list below found nothing to toss in a builder's
+// pack of planks, sand and seeds. With allowBulk a caller that needs room
+// for food may also drop the biggest stack of cheap bulk.
+const BULK = new Set([
+  "sand",
+  "red_sand",
+  "sandstone",
+  "wheat_seeds",
+  "beetroot_seeds",
+  "melon_seeds",
+  "pumpkin_seeds",
+  "oak_sapling",
+  "birch_sapling",
+  "spruce_sapling",
+  "oak_leaves",
+  "birch_leaves",
+  "spruce_leaves",
+  "oak_planks",
+  "birch_planks",
+  "spruce_planks",
+  "oak_log",
+  "birch_log",
+  "spruce_log",
+  "stick",
+  "white_wool",
+  "clay_ball",
+  "flint",
+  "feather",
+  "rotten_flesh",
+  "bone",
+  "string",
+  "kelp",
+  "seagrass",
+  "short_grass",
+  "snowball",
+  "mossy_cobblestone",
+  "stone",
+  "deepslate",
+  "calcite",
+  "moss_block",
+  "mud",
+]);
+
+export async function shedJunk(bot: Bot, minFree = 2, allowBulk = false): Promise<number> {
   if (bot.inventory.emptySlotCount() >= minFree) return 0;
   const JUNK = new Set([
     "cobblestone",
@@ -885,7 +933,19 @@ export async function shedJunk(bot: Bot, minFree = 2): Promise<number> {
       tossed++;
     }
   }
-  if (tossed > 0) console.log(`[Pocket] ${bot.username} shed ${tossed} junk stacks to make room`);
+  if (allowBulk && bot.inventory.emptySlotCount() < minFree) {
+    const bulk = bot.inventory
+      .items()
+      .filter((it) => BULK.has(it.name) && !FOOD_DROP.test(it.name))
+      .sort((x, y) => y.count - x.count);
+    for (const it of bulk) {
+      if (bot.inventory.emptySlotCount() >= minFree) break;
+      await bot.toss(it.type, null, it.count).catch(() => {});
+      tossed++;
+      console.log(`[Pocket] ${bot.username} dropped ${it.count} ${it.name} to make room for food`);
+    }
+  }
+  if (tossed > 0) console.log(`[Pocket] ${bot.username} shed ${tossed} stacks to make room`);
   return tossed;
 }
 
@@ -932,6 +992,9 @@ export async function collectNearbyDrops(bot: Bot, radius = 8, maxMs = 8000): Pr
       }
     })();
     const startGap = drop.position.distanceTo(bot.entity.position);
+    if (bot.inventory.emptySlotCount() === 0 && FOOD_DROP.test(itemName)) {
+      await shedJunk(bot, 1, true).catch(() => {});
+    }
     const countBefore = bot.inventory.items().reduce((n, i) => n + i.count, 0);
     let walkNote = "arrived";
     try {

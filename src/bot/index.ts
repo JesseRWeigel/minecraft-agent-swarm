@@ -158,6 +158,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
     const net = { posSent: 0, confirmSent: 0, tpRecv: 0, last: "" };
     const tpTimes: number[] = [];
     let lastStormLog = 0;
+    let stormClaims = 0;
     const client = bot._client as unknown as {
       write: (name: string, params: unknown) => void;
       on: (ev: string, fn: (p: any) => void) => void;
@@ -170,6 +171,23 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
     };
     client.on("position", (p: any) => {
       net.tpRecv++;
+      // Run 655: Blade drew 190 teleports at 217.3,45.0,-307.5 with the
+      // epsilon in place. Record the exact claim the server refused, with
+      // what the client thought it stood in, for the first three of a storm.
+      if (tpTimes.length >= 20 && stormClaims < 3 && bot.entity?.position) {
+        stormClaims++;
+        const e = bot.entity;
+        const c = e.position;
+        const blockName = (dx: number, dy: number, dz: number) => bot.blockAt(c.offset(dx, dy, dz))?.name ?? "?";
+        const ctrl = Object.entries(bot.controlState ?? {})
+          .filter(([, v]) => v)
+          .map(([k]) => k)
+          .join("+");
+        console.log(
+          `[StormClaim] ${roleConfig.name}: claim ${c.x.toFixed(3)},${c.y.toFixed(3)},${c.z.toFixed(3)} -> server ${Number(p?.x).toFixed(3)},${Number(p?.y).toFixed(3)},${Number(p?.z).toFixed(3)} vel ${e.velocity.x.toFixed(3)},${e.velocity.y.toFixed(3)},${e.velocity.z.toFixed(3)} ground=${e.onGround} ctrl=${ctrl || "none"} feet=${blockName(0, 0, 0)} head=${blockName(0, 1, 0)} above=${blockName(0, 2, 0)} below=${blockName(0, -1, 0)} x-=${blockName(-1, 0, 0)} x+=${blockName(1, 0, 0)} z-=${blockName(0, 0, -1)} z+=${blockName(0, 0, 1)}`,
+        );
+      }
+      if (tpTimes.length < 5) stormClaims = 0;
       // Run 652: 16,000 teleports in an hour is a client walking into blocks
       // the server still has. Name the moment it starts, once a minute.
       tpTimes.push(Date.now());

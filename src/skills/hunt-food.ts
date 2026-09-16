@@ -2,7 +2,7 @@ import type { Bot } from "mineflayer";
 import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
-import { GoalNearXZAbove, baseMoves, safeGoto, collectNearbyDrops } from "../bot/navigation.js";
+import { GoalNearXZAbove, baseMoves, safeGoto, collectNearbyDrops, shedJunk } from "../bot/navigation.js";
 
 /**
  * hunt_food — the swarm's pantry when the farm and the lake both fail.
@@ -145,21 +145,11 @@ export const huntFoodSkill: Skill = {
     bot.pathfinder.setMovements(baseMoves(bot));
 
     // A full pocket cannot pick the drop up. Shed mining junk first.
+    // Run 655: a builder's pack full of planks and seeds has no "junk" to
+    // toss, and the porkchop stayed on the ground. Make room for meat from
+    // bulk too.
     if (bot.inventory.emptySlotCount() < 2) {
-      const JUNK = new Set([
-        "cobblestone",
-        "cobbled_deepslate",
-        "dirt",
-        "gravel",
-        "andesite",
-        "diorite",
-        "granite",
-        "tuff",
-      ]);
-      for (const it of bot.inventory.items()) {
-        if (bot.inventory.emptySlotCount() >= 2) break;
-        if (JUNK.has(it.name)) await bot.toss(it.type, null, it.count).catch(() => {});
-      }
+      await shedJunk(bot, 2, true).catch(() => {});
     }
 
     // Already carrying meat: eat it and go home happy.
