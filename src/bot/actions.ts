@@ -2008,6 +2008,37 @@ async function tryPlace(bot: Bot, refBlock: any, face: Vec3): Promise<boolean> {
   ]);
 }
 
+/** Nearest standable block within `radius` with nothing solid in the six blocks above it. */
+function findOpenSkySpot(bot: Bot, radius: number): Vec3 | null {
+  const feet = bot.entity.position.floored();
+  let best: Vec3 | null = null;
+  let bestD = Infinity;
+  for (let dx = -radius; dx <= radius; dx++) {
+    for (let dz = -radius; dz <= radius; dz++) {
+      for (const dy of [0, 1, -1, 2, -2]) {
+        const p = feet.offset(dx, dy, dz);
+        const floor = bot.blockAt(p.offset(0, -1, 0));
+        const here = bot.blockAt(p);
+        const head = bot.blockAt(p.offset(0, 1, 0));
+        if (!floor || floor.boundingBox !== "block" || !here || here.name !== "air" || !head || head.name !== "air")
+          continue;
+        const roofed = [2, 3, 4, 5, 6].some((h) => {
+          const b = bot.blockAt(p.offset(0, h, 0));
+          return !!b && b.boundingBox === "block";
+        });
+        if (roofed) continue;
+        const d = p.distanceTo(feet);
+        if (d < bestD) {
+          bestD = d;
+          best = p;
+        }
+        break;
+      }
+    }
+  }
+  return best;
+}
+
 async function sleepInBed(bot: Bot): Promise<string> {
   // Already in bed — just wait for morning (counts as success so no blacklisting)
   if ((bot as any).isSleeping) return "Sleeping... zzz (waiting for morning)";
@@ -2042,8 +2073,24 @@ async function sleepInBed(bot: Bot): Promise<string> {
       const b = bot.blockAt(feet.offset(0, dy, 0));
       return !!b && b.boundingBox === "block";
     });
-    if (inOverworld && (roofed || feet.y < 56)) {
+    if (inOverworld && feet.y < 56) {
       return `Underground at y=${feet.y} — no bed goes down here. Climb to the surface first, then sleep.`;
+    }
+    if (inOverworld && roofed) {
+      // Run 637: eight refusals at y=56 to 82, under tree canopies and the
+      // village house roofs, while one sleeper skips the night for all five
+      // (playersSleepingPercentage is 1). Step out to the nearest block with
+      // open sky within eight blocks and place the bed there.
+      const open = findOpenSkySpot(bot, 8);
+      if (!open) {
+        return `Underground at y=${feet.y} — no bed goes down here. Climb to the surface first, then sleep.`;
+      }
+      console.log(`[Sleep] ${bot.username}: roof overhead at ${feet} — stepping out to ${open} to place the bed`);
+      await safeGoto(bot, new goals.GoalBlock(open.x, open.y, open.z), 20_000).catch(() => {});
+      const now = bot.entity.position.floored();
+      if (now.distanceTo(open) > 2) {
+        return `Roof overhead at y=${feet.y} and the open spot at ${open} was out of reach. Walk into the open, then sleep.`;
+      }
     }
     let bedItem = bot.inventory.items().find((i) => i.name.includes("bed"));
 
