@@ -1614,7 +1614,13 @@ export class BotBrain {
       // crop growth) than the initial build (4 min).
       const cooldownMs = hasFarm ? 480_000 : 240_000;
       const cooledDown = Date.now() - this.lastFarmOverrideMs > cooldownMs;
-      if (cooledDown) {
+      // Run 647: Atlas at 218 blocks and Flora at 184 blocks took the override,
+      // walked 90 s toward the site and timed out, three times in the hour.
+      // The walk-home reflex brings a far bot back; the farm waits for it.
+      const farmGap = Math.hypot(this.bot.entity.position.x - FARM_SITE.x, this.bot.entity.position.z - FARM_SITE.z);
+      if (cooledDown && farmGap > 120) {
+        this.log.info("Brain", `Farm override skipped: ${Math.round(farmGap)} blocks from the farm site`);
+      } else if (cooledDown) {
         this.lastFarmOverrideMs = Date.now();
         this.log.info(
           "Brain",
