@@ -59,6 +59,23 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   // ... pathing=true" every time. A thin water layer over a pit is a trap;
   // drops into water now obey maxDropDown like every other drop.
   (moves as unknown as { infiniteLiquidDropdownDistance: boolean }).infiniteLiquidDropdownDistance = false;
+  // Run 643: the cobblestone-roofed water channel at the village, water at
+  // (401, 60..61, -312) under cobblestone at y=62, drowned Forge twice in an
+  // hour and Blade twice the day before; every walk that dips into roofed
+  // water is a drowning. The trade march has priced roofed water at +60
+  // since run 583 without breaking its walks; open lakes cost nothing.
+  // Every walk now carries the same step cost.
+  const roofedWater = (b: { name?: string; position?: Vec3 }) => {
+    if (!b?.position || !/^(water|kelp|kelp_plant|seagrass|tall_seagrass|bubble_column)$/.test(b.name ?? "")) return 0;
+    for (let dy = 1; dy <= 3; dy++) {
+      const a = bot.blockAt(b.position.offset(0, dy, 0));
+      if (a && a.boundingBox === "block") return 60;
+    }
+    return 0;
+  };
+  (moves as unknown as { exclusionAreasStep: ((b: never) => number)[] }).exclusionAreasStep = [
+    roofedWater as unknown as (b: never) => number,
+  ];
   // The pathfinder ships with door opening OFF ("causes issues on non-Paper
   // servers"). This is Paper. Three bots stalled 3 blocks from a bed inside
   // a plank house with a 44-node path planned around it (NavDiag, run 503).
