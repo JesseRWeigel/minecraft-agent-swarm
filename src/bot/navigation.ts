@@ -1016,6 +1016,8 @@ const lastRetreatFrom = new WeakMap<Bot, Vec3>();
 /** When each bot's head went under, for an elapsed-time air estimate. */
 const submergedSince = new WeakMap<Bot, number>();
 const lastAirLagLog = new WeakMap<Bot, number>();
+/** Last server air value seen and when it last changed, to tell a stale reading from a breathing bot. */
+const lastServerAir = new WeakMap<Bot, { value: number; changedAt: number }>();
 /** Bots whose control-key setters already carry the drown key trace. */
 const keyTraceInstalled = new WeakSet<Bot>();
 /**
@@ -1072,10 +1074,18 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   // estimate from the time the head has been under.
   const serverAir = bot.oxygenLevel ?? 20;
   const localAir = 20 - Math.floor((Date.now() - (submergedSince.get(bot) ?? Date.now())) / 1000);
-  const air = Math.min(serverAir, localAir);
-  if (serverAir - localAir >= 5 && Date.now() - (lastAirLagLog.get(bot) ?? 0) > 15_000) {
+  // Run 642: the estimate alone over-fired 44 times an hour ("server 20,
+  // elapsed-based 14") on bots bobbing at the surface, whose air the server
+  // was refilling. A server value that has not moved for three seconds
+  // while the head is under is the stale case; only then does the estimate
+  // take over.
+  const prev = lastServerAir.get(bot);
+  if (!prev || prev.value !== serverAir) lastServerAir.set(bot, { value: serverAir, changedAt: Date.now() });
+  const serverStale = !!prev && prev.value === serverAir && Date.now() - prev.changedAt > 3_000;
+  const air = serverStale ? Math.min(serverAir, localAir) : serverAir;
+  if (serverStale && serverAir - localAir >= 5 && Date.now() - (lastAirLagLog.get(bot) ?? 0) > 15_000) {
     lastAirLagLog.set(bot, Date.now());
-    console.log(`[Drown] ${bot.username} air reading lags: server ${serverAir}, elapsed-based ${localAir}`);
+    console.log(`[Drown] ${bot.username} air reading stale: server ${serverAir} unchanged, elapsed-based ${localAir}`);
   }
   // <16, up from <12: Mason drowned four times in one night with a shore ONE
   // BLOCK away — at air 15 the pathfinder still owned the controls (an
