@@ -115,8 +115,19 @@ export const findFortressSkill: Skill = {
     }
 
     // --- Always walk home ---
+    // Run 658: Mason died in Nether lava, respawned at the village bed ten
+    // blocks from the portal, and this leg then walked him straight back
+    // through it; three Nether deaths in five minutes. A death aborts the
+    // skill, so honour the signal here, and never "return" through a portal
+    // from the Overworld side.
+    if (signal.aborted) {
+      return {
+        success: false,
+        message: "Fortress hunt aborted (death or interruption); not walking back through the portal.",
+      };
+    }
     step("Heading back through the portal...", 0.9);
-    if (homePortal) {
+    if (homePortal && inNether(bot)) {
       await safeGoto(
         bot,
         new goals.GoalNear(homePortal.position.x, homePortal.position.y, homePortal.position.z, 2),
