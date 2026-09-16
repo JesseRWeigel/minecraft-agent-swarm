@@ -7,6 +7,7 @@ import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
 import mcDataLoader from "minecraft-data";
 import { getBotMemoryStore } from "../bot/memory-registry.js";
+import { getActiveSkillName } from "./executor.js";
 import { config } from "../config.js";
 /** Below this the water is an aquifer and the dirt is unlit; the farm belongs on the surface. */
 const SURFACE_WATER_MIN_Y = 50;
@@ -93,6 +94,7 @@ export const buildFarmSkill: Skill = {
   },
 
   async execute(bot, params, signal, onProgress): Promise<SkillResult> {
+    installFarmGoalTrace(bot);
     // --- Step 0: Harvest mature wheat, then BAKE BREAD ---
     // The loop used to dead-end here: wheat was harvested but never turned into
     // bread (wheat isn't edible), so the team starved beside a working farm.
@@ -755,6 +757,45 @@ function countItem(bot: Bot, name: string): number {
  *  its harvest/bake/hoe phases used RAW gotos that block forever when the bot
  *  is stuck underground (the common food-spiral state). Same fix as the rest
  *  of the freeze-bug arc. */
+/** Bots whose pathfinder.setGoal already carries the farm goal trace. */
+const farmGoalTraced = new WeakSet<Bot>();
+/**
+ * Run 649: planting passes ended 1 of 10 and 1 of 11 with "The goal was
+ * changed before it could be completed!" seven and eight times each, and
+ * the bake's table walks died the same way. Something sets a pathfinder
+ * goal during the farm's short walks. While build_farm is the active
+ * skill, every setGoal from outside safeGoto and the library's goto logs
+ * its caller (the trade march's trace, run 610, named its culprit this way).
+ */
+function installFarmGoalTrace(bot: Bot): void {
+  if (farmGoalTraced.has(bot)) return;
+  farmGoalTraced.add(bot);
+  const pf = bot.pathfinder as unknown as { setGoal: (goal: unknown, dynamic?: boolean) => void };
+  const origSetGoal = pf.setGoal;
+  let logs = 0;
+  pf.setGoal = function (goal: unknown, dynamic?: boolean) {
+    if (getActiveSkillName(bot) === "build_farm" && logs < 24) {
+      const stack = new Error().stack ?? "";
+      if (!/safeGoto|lib\/goto\.js|gotoT/.test(stack)) {
+        logs++;
+        const frames = stack
+          .split("\n")
+          .slice(2, 6)
+          .map((f) =>
+            f
+              .trim()
+              .replace(/^at /, "")
+              .replace(/\(.*\/src\//, "(src/"),
+          )
+          .join(" <- ");
+        const name = goal ? ((goal as { constructor?: { name?: string } }).constructor?.name ?? "goal") : "null";
+        console.log(`[FarmDebug] ${bot.username} setGoal(${name}) from ${frames}`);
+      }
+    }
+    return origSetGoal.call(this, goal, dynamic);
+  };
+}
+
 async function gotoT(bot: Bot, goal: InstanceType<typeof goals.GoalNear>, ms = 15000): Promise<void> {
   await Promise.race([
     bot.pathfinder.goto(goal),
