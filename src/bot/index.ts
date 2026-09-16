@@ -1,4 +1,5 @@
 import mineflayer from "mineflayer";
+import { installPhysicsEpsilon } from "./physics-epsilon.js";
 import type { Vec3 } from "vec3";
 import pathfinderPkg from "mineflayer-pathfinder";
 const { pathfinder, goals } = pathfinderPkg;
@@ -62,6 +63,7 @@ async function ensureNeuralServer(): Promise<void> {
 let advancementSnapshotLogged = false;
 
 export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig = ATLAS_CONFIG) {
+  if (installPhysicsEpsilon()) console.log("[Physics] collision epsilon installed (1e-7)");
   startScoreboard();
   ensureNeuralServer().catch((e) => console.warn("[Bot] Neural spawn error:", e));
 
