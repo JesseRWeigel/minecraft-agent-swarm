@@ -788,8 +788,15 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
             // planting loop, 1 of 17 plots planted).
             const { aim } = hopPending;
             hopPending = null;
-            if (aim && hazardToward(bot, aim)) {
-              console.log(`[Nav] ${bot.username} hop toward ${aim.floored()} skipped: lava, fire or a drop ahead`);
+            // Run 658: a hop "toward facing" carried Mason off a Nether ledge,
+            // 28 blocks into lava. With no aim, check the way the bot faces
+            // (mineflayer's yaw: forward is -sin(yaw), -cos(yaw)).
+            const yaw = bot.entity.yaw;
+            const facingAim = aim ?? bot.entity.position.offset(-Math.sin(yaw) * 2, 0, -Math.cos(yaw) * 2);
+            if (hazardToward(bot, facingAim)) {
+              console.log(
+                `[Nav] ${bot.username} hop toward ${aim ? aim.floored() : "facing"} skipped: lava, fire or a drop ahead`,
+              );
               setTimeout(attempt, 3000);
               return;
             }
