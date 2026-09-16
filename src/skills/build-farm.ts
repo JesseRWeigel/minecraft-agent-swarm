@@ -294,6 +294,28 @@ export const buildFarmSkill: Skill = {
       const above = bot.blockAt(pos.offset(0, 1, 0));
       return !!above && CLEAR_ABOVE.has(above.name);
     };
+    // Run 644: Flora and Mason were refused 39 times in one hour with "best
+    // had 2 tillable neighbours" while the home farm at (304, 57, -311) stood
+    // planted with wheat. A planted plot has a crop above it, so it fails
+    // the clear-above test and the farm scores as bare shore. Planted
+    // farmland counts as part of a farm site.
+    const CROPS = new Set(["wheat", "potatoes", "carrots", "beetroots"]);
+    const isPlantedPlot = (pos: Vec3): boolean => {
+      const b = bot.blockAt(pos);
+      if (!b || b.name !== "farmland") return false;
+      const above = bot.blockAt(pos.offset(0, 1, 0));
+      return !!above && CROPS.has(above.name);
+    };
+    const scanPlanted = (wp: Vec3): number => {
+      let n = 0;
+      for (let dx = -6; dx <= 6; dx++) {
+        for (let dz = -6; dz <= 6; dz++) {
+          if (dx === 0 && dz === 0) continue;
+          if (isPlantedPlot(wp.offset(dx, 0, dz))) n++;
+        }
+      }
+      return n;
+    };
     const scanTillable = (wp: Vec3): Vec3[] => {
       const targets: Vec3[] = [];
       for (let dx = -6; dx <= 6; dx++) {
@@ -322,7 +344,7 @@ export const buildFarmSkill: Skill = {
       let bestN = -1;
       let bestWp: Vec3 | null = null;
       for (const wp of waters) {
-        const n = scanTillable(wp).length;
+        const n = scanTillable(wp).length + scanPlanted(wp);
         // 3 plots (was 4): FarmDebug at the site pond read "best had 3
         // tillable neighbours" three runs in a row and called it no water.
         if (n >= MIN_TILLABLE_RING) return bot.blockAt(wp);
@@ -424,6 +446,13 @@ export const buildFarmSkill: Skill = {
       if (farmTargets.length >= 48) break;
     }
     farmTargets.sort((a, b) => a.distanceTo(bot.entity.position) - b.distanceTo(bot.entity.position));
+    const growing = scanPlanted(waterPos);
+    if (farmTargets.length === 0 && growing >= MIN_TILLABLE_RING) {
+      return {
+        success: true,
+        message: `Farm at ${waterPos.x}, ${waterPos.z} has ${growing} plots growing and nothing free to till. Come back when they ripen and use build_farm to harvest.`,
+      };
+    }
     if (farmTargets.length === 0) {
       return {
         success: false,
