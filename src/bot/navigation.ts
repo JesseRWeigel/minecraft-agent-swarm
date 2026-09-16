@@ -73,8 +73,29 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
     }
     return 0;
   };
+  // Run 648: Forge died twice at the same surface lava pool at (522, 69,
+  // -504) on the village march, "tried to swim in lava". The pathfinder
+  // never steps into lava but walks its rim, and a sprint or a knock does
+  // the rest. A step whose horizontal neighbours or the block below them
+  // hold lava costs +40, so routes keep a block back from the rim.
+  const lavaEdge = (b: { name?: string; position?: Vec3 }) => {
+    if (!b?.position) return 0;
+    for (const [dx, dz] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      for (const dy of [0, -1]) {
+        const n = bot.blockAt(b.position.offset(dx, dy, dz));
+        if (n && (n.name === "lava" || n.name === "flowing_lava")) return 40;
+      }
+    }
+    return 0;
+  };
   (moves as unknown as { exclusionAreasStep: ((b: never) => number)[] }).exclusionAreasStep = [
     roofedWater as unknown as (b: never) => number,
+    lavaEdge as unknown as (b: never) => number,
   ];
   // The pathfinder ships with door opening OFF ("causes issues on non-Paper
   // servers"). This is Paper. Three bots stalled 3 blocks from a bed inside
