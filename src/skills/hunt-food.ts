@@ -260,6 +260,12 @@ export const huntFoodSkill: Skill = {
     let swings = 0;
     let misses = 0;
     let lost = 0;
+    // Run 640: four hunts ended "got away after 1 swing" with 45 s of chase
+    // each. Count the follow walks that failed and keep the last error so
+    // the next change knows whether the chase loses on speed or on paths.
+    let followFails = 0;
+    let lastFollowErr = "";
+    let lastGap = 0;
     let lastSpecies = target.name ?? "animal";
     let escaped = false;
     // Natural healing only runs at 18 food or more, so an outing that stops
@@ -292,10 +298,14 @@ export const huntFoodSkill: Skill = {
       try {
         while (target.isValid && Date.now() < fightUntil && !signal.aborted) {
           if (bot.entity.position.distanceTo(target.position) > 2.5) {
-            await safeGoto(bot, new goals.GoalFollow(target, 1.2), 8_000).catch(() => {});
+            await safeGoto(bot, new goals.GoalFollow(target, 1.2), 8_000).catch((e: Error) => {
+              followFails++;
+              lastFollowErr = e.message.slice(0, 60);
+            });
           }
           if (!target.isValid) break;
           lastDist = bot.entity.position.distanceTo(target.position);
+          lastGap = lastDist;
           lastHp = hpOf(target);
           if (lastDist > 3.0) {
             misses++;
@@ -338,7 +348,7 @@ export const huntFoodSkill: Skill = {
     // "ate 4, hunger 0 -> 0" while RCON read food 12 seconds later).
     await new Promise((r) => setTimeout(r, 800));
     console.log(
-      `[HuntDebug] ${bot.username} food hunt: kills=${kills} lost=${lost} last=${lastSpecies} swings=${swings} outOfReach=${misses} ` +
+      `[HuntDebug] ${bot.username} food hunt: kills=${kills} lost=${lost} last=${lastSpecies} swings=${swings} outOfReach=${misses} followFails=${followFails} lastGap=${lastGap.toFixed(1)}${lastFollowErr ? ` lastErr="${lastFollowErr}"` : ""} ` +
         `meat +${gained} cooked=${cooked} ate=${eaten} hunger ${foodBefore}->${bot.food}`,
     );
     if (gained > 0) {
