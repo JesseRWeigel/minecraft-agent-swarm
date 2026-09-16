@@ -1011,6 +1011,8 @@ const swimTraceActive = new WeakMap<Bot, boolean>();
  * was still open behind them.
  */
 const lastAirPos = new WeakMap<Bot, Vec3>();
+/** Where the last retreat period started, to tell a pinned retreat from a moving one. */
+const lastRetreatFrom = new WeakMap<Bot, Vec3>();
 /** Bots whose control-key setters already carry the drown key trace. */
 const keyTraceInstalled = new WeakSet<Bot>();
 /**
@@ -1232,7 +1234,26 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
         `[Drown] ${bot.username} air two blocks up at air=${air} — jumping for a breath instead of digging ${escape.direction}`,
       );
     } else if (escape && needMs > budgetMs && retreat && retreat.distanceTo(bot.entity.position) <= 24) {
-      swimTo = retreat;
+      // Run 638: Forge died twice pinned under stone with the straight-line
+      // retreat pressing forward+jump into rock, 3 and 22 blocks from air.
+      // When a retreat period moved the bot under half a block, hand the
+      // route to the pathfinder, which can go around the rock; the swim
+      // step keeps re-asserting jump underneath it.
+      const from = lastRetreatFrom.get(bot);
+      const pinnedRetreat = !!from && from.distanceTo(bot.entity.position) < 0.5;
+      lastRetreatFrom.set(bot, bot.entity.position.clone());
+      if (pinnedRetreat) {
+        console.log(
+          `[Drown] ${bot.username} retreat toward ${retreat.floored()} is pinned — pathing there instead (air ${air})`,
+        );
+        try {
+          bot.pathfinder.setGoal(new goals.GoalNear(retreat.x, retreat.y, retreat.z, 1));
+        } catch {
+          /* no path — the swim step still holds jump */
+        }
+      } else {
+        swimTo = retreat;
+      }
       console.log(
         `[Drown] ${bot.username} dig ${escape.direction} through ${escape.block.name} needs ${(needMs / 1000).toFixed(1)}s > ${(budgetMs / 1000).toFixed(1)}s of air — retreating toward last air at ${retreat.floored()} (${retreat.distanceTo(bot.entity.position).toFixed(1)} blocks)`,
       );
