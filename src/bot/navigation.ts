@@ -1221,6 +1221,20 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     // at the foot of a 14-block shaft started a 187s dig north instead.
     const swimRoute = Object.values(neighbours).some((b) => b && (b.name === "water" || b.name === "air"));
     const budgetMs = Math.max(0, air) * 750 + Math.max(0, bot.health - 2) * 500;
+    // Run 639: Forge's "dig up through stone needs 187.5s" was a bare-hand
+    // figure measured with the sword or torch he happened to hold, while a
+    // stone pickaxe sat in his pack. digTime and bot.dig both use the held
+    // item, so put the best pick in hand before either.
+    if (escape) {
+      const pick =
+        bot.inventory.items().find((i) => i.name === "diamond_pickaxe") ??
+        bot.inventory.items().find((i) => i.name === "iron_pickaxe") ??
+        bot.inventory.items().find((i) => i.name === "stone_pickaxe") ??
+        bot.inventory.items().find((i) => i.name === "wooden_pickaxe");
+      if (pick && bot.heldItem?.name !== pick.name) {
+        await bot.equip(pick, "hand").catch(() => {});
+      }
+    }
     const needMs = escape ? bot.digTime(neighbours[escape.direction]!) : 0;
     const retreat = lastAirPos.get(bot);
     // Run 628: Blade stood on the bottom of two-deep water at (359, 61, -314)
