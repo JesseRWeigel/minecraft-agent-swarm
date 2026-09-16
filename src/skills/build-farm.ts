@@ -797,15 +797,24 @@ function installFarmGoalTrace(bot: Bot): void {
 }
 
 async function gotoT(bot: Bot, goal: InstanceType<typeof goals.GoalNear>, ms = 15000): Promise<void> {
-  await Promise.race([
-    bot.pathfinder.goto(goal),
-    new Promise<void>((_, rej) =>
-      setTimeout(() => {
-        bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
-        rej(new Error("goto timeout"));
-      }, ms),
-    ),
-  ]);
+  // Run 650: the goal trace named this timer. It kept running after a walk
+  // finished, and its setGoal(null) landed in the NEXT walk, so planting
+  // passes ended 1 of 10 with "The goal was changed" seven times and the
+  // bake's table walks died the same way. Clear it when the walk settles.
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      bot.pathfinder.goto(goal),
+      new Promise<void>((_, rej) => {
+        timer = setTimeout(() => {
+          bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
+          rej(new Error("goto timeout"));
+        }, ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /** bot.dig with a hard timeout (see gotoT). */
