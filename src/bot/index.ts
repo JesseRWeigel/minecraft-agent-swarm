@@ -1,4 +1,5 @@
 import mineflayer from "mineflayer";
+import type { Vec3 } from "vec3";
 import pathfinderPkg from "mineflayer-pathfinder";
 const { pathfinder, goals } = pathfinderPkg;
 import customPvpPkg from "@nxg-org/mineflayer-custom-pvp";
@@ -153,6 +154,8 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
   // confirms its last teleport, so count both directions).
   {
     const net = { posSent: 0, confirmSent: 0, tpRecv: 0, last: "" };
+    const tpTimes: number[] = [];
+    let lastStormLog = 0;
     const client = bot._client as unknown as {
       write: (name: string, params: unknown) => void;
       on: (ev: string, fn: (p: any) => void) => void;
@@ -165,6 +168,16 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
     };
     client.on("position", (p: any) => {
       net.tpRecv++;
+      // Run 652: 16,000 teleports in an hour is a client walking into blocks
+      // the server still has. Name the moment it starts, once a minute.
+      tpTimes.push(Date.now());
+      while (tpTimes.length && tpTimes[0]! < Date.now() - 10_000) tpTimes.shift();
+      if (tpTimes.length >= 40 && Date.now() - lastStormLog > 60_000) {
+        lastStormLog = Date.now();
+        console.log(
+          `[TeleportStorm] ${roleConfig.name}: ${tpTimes.length} server teleports in 10 s to ${net.last}; client at ${bot.entity?.position?.floored()}, held ${bot.heldItem?.name ?? "nothing"}, digging ${bot.targetDigBlock ? `${bot.targetDigBlock.name} at ${bot.targetDigBlock.position}` : "nothing"}`,
+        );
+      }
       net.last = `${Number(p?.x).toFixed(1)},${Number(p?.y).toFixed(1)},${Number(p?.z).toFixed(1)} id=${p?.teleportId}`;
       if (net.tpRecv <= 3 || net.tpRecv % 25 === 0) {
         console.log(`[NetDebug] ${roleConfig.name} server teleport #${net.tpRecv}: ${net.last}`);
@@ -179,6 +192,61 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
       net.confirmSent = 0;
     }, 120_000);
     bot.once("end", () => clearInterval(timer));
+  }
+
+  // Dig confirmation guard (run 652: Mason stood inside the server's stone
+  // floor for two hours while the server put him back five times a second,
+  // 16,000 teleports in the hour. A clean probe client at the same spot
+  // walked freely, and the server's copy of the tunnel still had the blocks
+  // his client had "dug". mineflayer marks a dug block air the moment its
+  // own timer ends; the server answers an honoured dig with a block update
+  // about 60 ms later (probe dig, 2026-09-16). Trust the server: when no
+  // update reaches this position within 1.5 s, put the block back so the
+  // pathfinder stops walking into it, and say so.)
+  {
+    type UpdateFn = (point: Vec3, stateId: number) => void;
+    const patched = bot as unknown as { _updateBlockState: UpdateFn };
+    const orig = patched._updateBlockState;
+    let restoring = false;
+    let audited = 0;
+    let unconfirmed = 0;
+    patched._updateBlockState = (point: Vec3, stateId: number) => {
+      if (restoring || stateId !== 0) {
+        orig(point, stateId);
+        return;
+      }
+      const pos = point.floored();
+      const before = bot.blockAt(pos);
+      orig(point, stateId);
+      if (!before || before.type === 0) return;
+      let confirmed = false;
+      const ev = `blockUpdate:${pos}`;
+      const onServer = () => {
+        confirmed = true;
+      };
+      const emitter = bot as unknown as {
+        on: (event: string, fn: () => void) => void;
+        removeListener: (event: string, fn: () => void) => void;
+      };
+      emitter.on(ev, onServer);
+      setTimeout(() => {
+        emitter.removeListener(ev, onServer);
+        audited++;
+        if (confirmed) return;
+        const now = bot.blockAt(pos);
+        if (!now || now.type !== 0) return;
+        unconfirmed++;
+        restoring = true;
+        try {
+          orig(pos, before.stateId);
+        } finally {
+          restoring = false;
+        }
+        console.log(
+          `[DigAudit] ${roleConfig.name}: no server update for the dig of ${before.name} at ${pos} within 1.5 s; restored it (client at ${bot.entity.position.floored()}, held ${bot.heldItem?.name ?? "nothing"}, ${unconfirmed} unconfirmed of ${audited} digs)`,
+        );
+      }, 1500);
+    };
   }
 
   bot.once("spawn", () => {
