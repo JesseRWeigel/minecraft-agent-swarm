@@ -132,6 +132,24 @@ class RestoreTests(unittest.TestCase):
                 with self.assertRaises(RestoreError):
                     _decompress(self.archive, self.root / f"decoded-{index}", 20, 0.1, 0)
 
+    def test_restored_runtime_launch_boundary_uses_real_verifier(self):
+        from types import SimpleNamespace
+        from tools.pilot.server import run_server, ProcessError
+        self.restore(); pin = sha(self.output / "runtime-manifest.json")
+        calls = []
+        def fake_runner(argv, **kwargs):
+            calls.append(argv)
+            return SimpleNamespace(to_dict=lambda: {"status": "exited", "cleanup_uncertain": False, "ready": True, "live_benchmark": True, "manifest_sha256": "wrong"})
+        run_server(self.output, manifest_sha256=pin, timeout_seconds=1, runner=fake_runner, validate_executables=False)
+        self.assertEqual(len(calls), 1)
+        record = json.loads((self.output / "server-lifecycle.json").read_text())
+        self.assertEqual(record["manifest_sha256"], pin)
+        self.assertFalse(record["ready"])
+        self.assertFalse(record["live_benchmark"])
+        with self.assertRaises(ProcessError):
+            run_server(self.output, manifest_sha256=pin, timeout_seconds=1, runner=fake_runner, validate_executables=False)
+        self.assertEqual(len(calls), 1)
+
     def test_existing_destination_preserved(self):
         self.output.mkdir(); keep = self.output / "keep"; keep.write_text("preserve")
         with self.assertRaises(RestoreError): self.restore()

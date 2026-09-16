@@ -132,7 +132,7 @@ def run_owned(
     argv: list[str], *, cwd: Path, env: dict[str, str], timeout_seconds: float,
     stop_grace_seconds: float, log_limit_bytes: int = DEFAULT_LOG_LIMIT_BYTES,
 ) -> ProcessResult:
-    """Run one owned POSIX process group and clean every descendant on return."""
+    """Supervise the original POSIX process group; report incomplete pipe cleanup."""
     cwd = Path(cwd)
     _validate_process_inputs(argv, cwd, env, timeout_seconds, stop_grace_seconds, log_limit_bytes)
     if os.name != "posix":
@@ -439,6 +439,7 @@ def run_server(
         "schema_version": 1,
         "manifest_sha256": manifest_sha256,
         "live_benchmark": False,
+        "cleanup_scope": "original_process_group_and_captured_pipes",
         "claim_limit": "Process launch only; no readiness or task success was established.",
     }
     _write_json_exclusive(lifecycle_path, {
@@ -456,8 +457,9 @@ def run_server(
         )
         result_data = result.to_dict()
         lifecycle = {
-            **lifecycle_context,
             **result_data,
+            **lifecycle_context,
+            "ready": False,
             "cleanup_verified": not result_data.get("cleanup_uncertain", True),
         }
         _replace_json(lifecycle_path, lifecycle)

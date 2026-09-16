@@ -58,6 +58,11 @@ jobs:
       - name: Qualify generated-skill containment
         run: npm run test:sandbox
 
+      - name: Qualify isolated pilot network and filesystem
+        env:
+          PILOT_TEST_BWRAP: /usr/bin/bwrap
+        run: python3 -m unittest tools.pilot.test_server.SandboxLauncherTests.test_real_bwrap_hides_host_clears_secret_blocks_outbound_and_writes_runtime
+
   dataset-and-operations:
     runs-on: ubuntu-latest
     steps:
