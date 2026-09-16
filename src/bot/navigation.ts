@@ -889,6 +889,22 @@ export async function shedJunk(bot: Bot, minFree = 2): Promise<number> {
   return tossed;
 }
 
+function logDrop(
+  bot: Bot,
+  drop: { id: number; position: Vec3; isValid?: boolean },
+  itemName: string,
+  startGap: number,
+  walkNote: string,
+  countBefore: number,
+): void {
+  const gained = bot.inventory.items().reduce((n, i) => n + i.count, 0) - countBefore;
+  const still = bot.entities[drop.id];
+  const endGap = still ? still.position.distanceTo(bot.entity.position) : NaN;
+  console.log(
+    `[DropDetail] ${bot.username}: ${itemName} ${startGap.toFixed(1)} blocks away -> ${walkNote}, now ${still ? `${endGap.toFixed(1)} blocks away, entity still listed` : "entity gone"}, pack ${gained >= 0 ? "+" : ""}${gained}, bot at ${bot.entity.position.floored()}, free slots ${bot.inventory.emptySlotCount()}`,
+  );
+}
+
 export async function collectNearbyDrops(bot: Bot, radius = 8, maxMs = 8000): Promise<void> {
   const start = Date.now();
   await new Promise((r) => setTimeout(r, 800)); // let drops finish falling
@@ -905,13 +921,27 @@ export async function collectNearbyDrops(bot: Bot, radius = 8, maxMs = 8000): Pr
       .sort((a, b) => a.position.distanceTo(bot.entity.position) - b.position.distanceTo(bot.entity.position))[0];
     if (!drop) break;
     tried.add(drop.id);
+    // Run 654: Flora walked onto the drops of six sheep and six pigs and
+    // gained nothing while Atlas and Mason pick up fine. Name each drop and
+    // what happened at it, so the gap has a shape.
+    const itemName = (() => {
+      try {
+        return (drop as unknown as { getDroppedItem?: () => { name?: string } | null }).getDroppedItem?.()?.name ?? "?";
+      } catch {
+        return "?";
+      }
+    })();
+    const startGap = drop.position.distanceTo(bot.entity.position);
+    const countBefore = bot.inventory.items().reduce((n, i) => n + i.count, 0);
+    let walkNote = "arrived";
     try {
       // Stand exactly on the drop's block — GoalNear(r=1) can stop just outside
       // the pickup radius. An unreachable drop falls through to the next one.
       const p = drop.position.floored();
       await safeGoto(bot, new goals.GoalBlock(p.x, p.y, p.z), 6000);
       await new Promise((r) => setTimeout(r, 400)); // pickup tick
-    } catch {
+    } catch (e) {
+      walkNote = `walk failed: ${((e as Error)?.message ?? String(e)).slice(0, 50)}`;
       // Drop lodged in the canopy? Punch out the leaf it rests on/in so it
       // falls to walkable ground, then allow one retry. Leaf-lodged drops were
       // the top wood-loss cause (78% of chopped logs never collected).
@@ -939,8 +969,10 @@ export async function collectNearbyDrops(bot: Bot, radius = 8, maxMs = 8000): Pr
       } catch {
         /* leaf out of reach — leave the drop */
       }
+      logDrop(bot, drop, itemName, startGap, walkNote, countBefore);
       continue;
     }
+    logDrop(bot, drop, itemName, startGap, walkNote, countBefore);
   }
   const gained = bot.inventory.items().reduce((n, i) => n + i.count, 0) - slotsBefore;
   console.log(
