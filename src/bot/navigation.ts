@@ -1013,6 +1013,9 @@ const swimTraceActive = new WeakMap<Bot, boolean>();
 const lastAirPos = new WeakMap<Bot, Vec3>();
 /** Where the last retreat period started, to tell a pinned retreat from a moving one. */
 const lastRetreatFrom = new WeakMap<Bot, Vec3>();
+/** When each bot's head went under, for an elapsed-time air estimate. */
+const submergedSince = new WeakMap<Bot, number>();
+const lastAirLagLog = new WeakMap<Bot, number>();
 /** Bots whose control-key setters already carry the drown key trace. */
 const keyTraceInstalled = new WeakSet<Bot>();
 /**
@@ -1052,15 +1055,28 @@ const lastSwimYieldLog = new WeakMap<Bot, number>();
 export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   if (!headUnderWater(bot)) {
     lastAirPos.set(bot, bot.entity.position.clone());
+    submergedSince.delete(bot);
     return false; // head not submerged → breathing fine
   }
+  if (!submergedSince.has(bot)) submergedSince.set(bot, Date.now());
 
   // When air is actually running out, this reflex must WIN the controls: the
   // pathfinder re-asserts movement every tick, so 1.2s rescue bursts lost the
   // tug-of-war against an underwater goal (Blade drowned 16x in one run
   // mining lake-bed iron — rescued, shoved back down, drowned). Stop the
   // pathfinder + any dig before swimming; the brain re-plans afterwards.
-  const air = bot.oxygenLevel ?? 20;
+  // Run 641: Blade's trace read air 17 at t=30 and 0 at t=50, one second
+  // apart, under gravel; the client's air value arrives late, so every
+  // threshold here fired with the air already gone. Air drains one point
+  // a second under water, so take the lower of the server's value and an
+  // estimate from the time the head has been under.
+  const serverAir = bot.oxygenLevel ?? 20;
+  const localAir = 20 - Math.floor((Date.now() - (submergedSince.get(bot) ?? Date.now())) / 1000);
+  const air = Math.min(serverAir, localAir);
+  if (serverAir - localAir >= 5 && Date.now() - (lastAirLagLog.get(bot) ?? 0) > 15_000) {
+    lastAirLagLog.set(bot, Date.now());
+    console.log(`[Drown] ${bot.username} air reading lags: server ${serverAir}, elapsed-based ${localAir}`);
+  }
   // <16, up from <12: Mason drowned four times in one night with a shore ONE
   // BLOCK away — at air 15 the pathfinder still owned the controls (an
   // underwater mining goal dragging him along a flooded tunnel), and by the
