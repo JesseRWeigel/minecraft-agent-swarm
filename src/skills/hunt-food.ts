@@ -297,8 +297,14 @@ export const huntFoodSkill: Skill = {
       let lastHp = hpOf(target);
       try {
         while (target.isValid && Date.now() < fightUntil && !signal.aborted) {
-          if (bot.entity.position.distanceTo(target.position) > 2.5) {
-            await safeGoto(bot, new goals.GoalFollow(target, 1.2), 8_000).catch((e: Error) => {
+          const gap = bot.entity.position.distanceTo(target.position);
+          if (gap > 2.5) {
+            // Run 641: every failed chase was "Navigation timed out" on an
+            // animal 36 to 74 blocks away; eight seconds restarts the walk
+            // before it gets there, five times over. Give a far animal up to
+            // thirty seconds for the approach; a near one keeps eight.
+            const walkMs = Math.min(30_000, 8_000 + Math.round(gap) * 400);
+            await safeGoto(bot, new goals.GoalFollow(target, 1.2), walkMs).catch((e: Error) => {
               followFails++;
               lastFollowErr = e.message.slice(0, 60);
             });
