@@ -893,6 +893,12 @@ export async function collectNearbyDrops(bot: Bot, radius = 8, maxMs = 8000): Pr
   const start = Date.now();
   await new Promise((r) => setTimeout(r, 800)); // let drops finish falling
   const tried = new Set<number>();
+  // Run 651: Flora killed four chickens at 1.4 blocks and "picked up no
+  // meat". Count what the client can see and what the pack gained.
+  const seenAtStart = Object.values(bot.entities).filter(
+    (e) => e.name === "item" && e.position.distanceTo(bot.entity.position) < radius,
+  ).length;
+  const slotsBefore = bot.inventory.items().reduce((n, i) => n + i.count, 0);
   while (Date.now() - start < maxMs) {
     const drop = Object.values(bot.entities)
       .filter((e) => e.name === "item" && !tried.has(e.id) && e.position.distanceTo(bot.entity.position) < radius)
@@ -936,6 +942,10 @@ export async function collectNearbyDrops(bot: Bot, radius = 8, maxMs = 8000): Pr
       continue;
     }
   }
+  const gained = bot.inventory.items().reduce((n, i) => n + i.count, 0) - slotsBefore;
+  console.log(
+    `[Drops] ${bot.username}: ${seenAtStart} item entities within ${radius} at start, walked to ${tried.size}, pack +${gained} items`,
+  );
 }
 
 /**

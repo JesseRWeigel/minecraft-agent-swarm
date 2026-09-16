@@ -1074,6 +1074,18 @@ let lastBakeProblem = "";
 async function collectDrops(bot: Bot, names: Set<string>, radius: number, budgetMs: number): Promise<number> {
   const until = Date.now() + budgetMs;
   let walked = 0;
+  // Run 651: Mason broke 9 wheat plants at (282, 87, -516) and the bake then
+  // read "not enough wheat"; no "walked to" line fired, so this collector
+  // saw nothing to walk to. Count what the client can see before walking.
+  const seen = Object.values(bot.entities).filter(
+    (e) => e.name === "item" && !!e.position && e.position.distanceTo(bot.entity.position) < radius,
+  );
+  const named = seen.filter((e) => {
+    const it = e.getDroppedItem?.();
+    return !!it && names.has(it.name);
+  }).length;
+  const unreadable = seen.filter((e) => !e.getDroppedItem?.()).length;
+  const before = bot.inventory.items().reduce((n, i) => n + (names.has(i.name) ? i.count : 0), 0);
   while (Date.now() < until) {
     const drop = Object.values(bot.entities).find((e) => {
       if (e.name !== "item" || !e.position) return false;
@@ -1091,6 +1103,10 @@ async function collectDrops(bot: Bot, names: Set<string>, radius: number, budget
     }
     await new Promise((r) => setTimeout(r, 500));
   }
+  const after = bot.inventory.items().reduce((n, i) => n + (names.has(i.name) ? i.count : 0), 0);
+  console.log(
+    `[Drops] ${bot.username}: ${seen.length} item entities within ${radius}, ${named} matched ${[...names].join("/")}, ${unreadable} unreadable, walked ${walked}, picked up +${after - before}`,
+  );
   return walked;
 }
 
