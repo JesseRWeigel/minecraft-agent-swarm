@@ -288,6 +288,8 @@ export class BotBrain {
     this.bedClaimed = false;
   }
   private lastBedClaimMs = 0;
+  /** When the server last refused a sleep (monsters nearby), so the night reflex backs off. */
+  private lastSleepRefusedMs = 0;
   private lastGoldBankMs = 0;
   private lastFortressMs = 0;
   private lastPortalRelightMs = 0;
@@ -1159,10 +1161,21 @@ export class BotBrain {
     // already out).
     // 12542 is the first tick a bed accepts a sleeper; run 634 logged eight
     // "it's not night" failures from starting at 11800.
-    if (timeOfDay >= 12542 && timeOfDay <= 23458 && !(this.bot as any).isSleeping) {
+    // Run 646: "Sleep failed: bot is not sleeping" 20 times in one hour, the
+    // server refusing the bed for monsters nearby, and the reflex walked the
+    // bot back to the bed every strategic tick to be refused again while the
+    // mobs closed in. After a refusal the reflex stands down for 45 s so the
+    // normal planning (flee, fight) gets the turn.
+    if (
+      timeOfDay >= 12542 &&
+      timeOfDay <= 23458 &&
+      !(this.bot as any).isSleeping &&
+      Date.now() - this.lastSleepRefusedMs > 45_000
+    ) {
       const slept = await this.executeActionUnlessPaused("sleep", {});
       this.log.info("Brain", `Night reflex: sleep → ${slept}`);
       if (/zzz|sleeping/i.test(slept)) return; // in bed — skip the LLM turn
+      if (/not sleeping|monsters nearby|occupied/i.test(slept)) this.lastSleepRefusedMs = Date.now();
       // Sleep failed (no bed, hostiles nearby) — fall through to normal planning.
     }
 
