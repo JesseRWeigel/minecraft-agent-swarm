@@ -159,6 +159,9 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
     const tpTimes: number[] = [];
     let lastStormLog = 0;
     let stormClaims = 0;
+    let stormSince = 0;
+    let lastStormBreak = 0;
+    let lastStormRelog = 0;
     const client = bot._client as unknown as {
       write: (name: string, params: unknown) => void;
       on: (ev: string, fn: (p: any) => void) => void;
@@ -188,6 +191,36 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
         );
       }
       if (tpTimes.length < 5) stormClaims = 0;
+      // Storm breaker (run 656: Forge drew 620 teleports in two water storms
+      // with no controls pressed and drowned in both; a clean probe at the
+      // same spot drew none, so the fault was in his client's state). Stop
+      // the walk first; if the server is still refusing twenty seconds later,
+      // rejoin for a fresh world and physics, the way a player would relog.
+      const now = Date.now();
+      if (tpTimes.length >= 40) {
+        if (!stormSince) stormSince = now;
+        if (now - lastStormBreak > 5_000) {
+          lastStormBreak = now;
+          try {
+            bot.pathfinder?.setGoal(null);
+            bot.clearControlStates();
+          } catch {
+            /* nothing to clear */
+          }
+          console.log(
+            `[StormBreak] ${roleConfig.name}: ${tpTimes.length} teleports in 10 s; cleared the goal and controls`,
+          );
+        }
+        if (now - stormSince > 20_000 && now - lastStormRelog > 300_000) {
+          lastStormRelog = now;
+          console.log(
+            `[StormBreak] ${roleConfig.name}: still ${tpTimes.length} teleports in 10 s after ${Math.round((now - stormSince) / 1000)} s at ${net.last}; rejoining for a fresh world`,
+          );
+          setTimeout(() => bot.quit(), 200);
+        }
+      } else if (tpTimes.length < 5) {
+        stormSince = 0;
+      }
       // Run 652: 16,000 teleports in an hour is a client walking into blocks
       // the server still has. Name the moment it starts, once a minute.
       tpTimes.push(Date.now());
