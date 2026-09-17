@@ -844,12 +844,25 @@ export class BotBrain {
     });
   }
 
+  /** A hostile mob within `radius` blocks of the bot, by the perception rules. */
+  private hostileWithin(radius: number): boolean {
+    const me = this.bot.entity?.position;
+    if (!me) return false;
+    return !!this.bot.nearestEntity((e) => !!e.position && isHostile(e) && e.position.distanceTo(me) < radius);
+  }
+
   private checkVitals(): void {
     if (this.stopped || this.paused) return;
     const now = Date.now();
     if (now - this.lastReactiveMs < this.REACTIVE_COOLDOWN_MS) return;
 
     if (this.bot.health <= 6) {
+      // Run 675: on Normal a starving bot sits at 1 to 6 hp for hours, and this
+      // fired on every health tick: 176 reactive calls in the hour, 74 of them
+      // a "flee" with nothing in sight that jogged 15 blocks and aborted the
+      // hunt or farm pass that would have fed the bot. Low health with nobody
+      // around is the food layer's job; the hostile scanner covers the rest.
+      if (!this.hostileWithin(16)) return;
       this.pushEvent({
         type: "reactive",
         priority: 0,
@@ -1146,6 +1159,13 @@ export class BotBrain {
       situation = `Health: ${this.bot.health}/20, Food: ${this.bot.food}/20. Assess situation.`;
     }
 
+    // Run 675: damage and low-health prompts with nobody around drew "flee"
+    // 74 times in an hour. Say so, and the model can pick eat or idle.
+    const threatNear = reason === "hostile_nearby" || this.hostileWithin(16);
+    if (!threatNear) {
+      situation += `\nNo hostile within 16 blocks (food ${this.bot.food}/20): fleeing is pointless; eat if you can, otherwise idle or keep working.`;
+    }
+
     // Run 621: 38 of 73 blocked "eat" picks came from this prompt, which
     // still listed eat while the strategic menu had dropped it.
     this.purgeExpiredFailures();
@@ -1163,7 +1183,9 @@ export class BotBrain {
     // skill finish and only allow actions that do not move.
     const MOVING = new Set(["flee", "attack", "go_to", "explore", "hunt", "gather_wood", "mine_block"]);
     if (isSkillRunning(this.bot) && MOVING.has(decision.action)) {
-      const critical = this.bot.health <= 8 && (decision.action === "flee" || decision.action === "attack");
+      // A flee with no hostile in sight must never abort a skill (run 675).
+      const critical =
+        this.bot.health <= 8 && threatNear && (decision.action === "flee" || decision.action === "attack");
       if (critical) {
         this.log.info(
           "Brain",

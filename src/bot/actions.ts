@@ -1767,13 +1767,10 @@ async function flee(bot: Bot): Promise<string> {
   const hostile = bot.nearestEntity((e) => !!e.position && isHostile(e) && e.position.distanceTo(myPos) < 16);
 
   if (!hostile) {
-    // No hostile found — just move somewhere random to break the loop
-    const pos = bot.entity.position;
-    const angle = Math.random() * Math.PI * 2;
-    const target = pos.offset(Math.cos(angle) * 15, 0, Math.sin(angle) * 15);
-    bot.pathfinder.setMovements(safeMoves(bot));
-    await safeGoto(bot, new goals.GoalNear(target.x, target.y, target.z, 5), 8000);
-    return "Ran in a random direction — nothing visible to flee from.";
+    // Run 675: the random 15-block jog here ran 74 times in an hour for
+    // starving bots at low health, each one walking away from the stash or
+    // the farm and stealing the pathfinder. Nothing to flee from: stay put.
+    return "No hostile within 16 blocks — nothing to flee from, stayed put. Eat, or get back to work.";
   }
 
   // Run away from the threat.
