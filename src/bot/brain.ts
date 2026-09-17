@@ -870,6 +870,85 @@ export class BotBrain {
   // ─── Safety overrides ─────────────────────────────────────────────────────
 
   /** Check for water/underground and handle before LLM query. Returns true if override handled. */
+  private lastCapMs = 0;
+
+  /** A one-wide vertical hole open at the surface: air at the rim level and
+   *  for at least six blocks below, with three or four solid rim neighbours. */
+  private findDeepHole(
+    center: { x: number; y: number; z: number },
+    radius: number,
+  ): { x: number; z: number; top: number; depth: number; ref: Vec3; face: Vec3 } | null {
+    const bot = this.bot;
+    const solid = (p: Vec3) => {
+      const b = bot.blockAt(p);
+      return !!b && b.boundingBox === "block";
+    };
+    const air = (p: Vec3) => {
+      const b = bot.blockAt(p);
+      return !!b && b.name === "air";
+    };
+    const cx = Math.floor(center.x);
+    const cz = Math.floor(center.z);
+    const baseY = Math.floor(bot.entity.position.y);
+    for (let x = cx - radius; x <= cx + radius; x++) {
+      for (let z = cz - radius; z <= cz + radius; z++) {
+        // The rim: the highest solid neighbour level within a few blocks of the bot's own height.
+        for (let top = baseY + 3; top >= baseY - 4; top--) {
+          const cell = new Vec3(x, top, z);
+          if (!air(cell) || !air(cell.offset(0, 1, 0))) continue;
+          const sides: [Vec3, Vec3][] = [
+            [cell.offset(1, 0, 0), new Vec3(-1, 0, 0)],
+            [cell.offset(-1, 0, 0), new Vec3(1, 0, 0)],
+            [cell.offset(0, 0, 1), new Vec3(0, 0, -1)],
+            [cell.offset(0, 0, -1), new Vec3(0, 0, 1)],
+          ];
+          const solidSides = sides.filter(([p]) => solid(p));
+          if (solidSides.length < 3) continue;
+          let depth = 0;
+          while (depth < 40 && air(cell.offset(0, -1 - depth, 0))) depth++;
+          if (depth < 6) continue;
+          const [ref, face] = solidSides[0]!;
+          return { x, z, top, depth, ref, face };
+        }
+      }
+    }
+    return null;
+  }
+
+  private async capHole(
+    hole: { x: number; z: number; top: number; depth: number; ref: Vec3; face: Vec3 },
+    filler: string,
+  ): Promise<string> {
+    const bot = this.bot;
+    try {
+      const { safeGoto, baseMoves } = await import("./navigation.js");
+      const moves = baseMoves(bot);
+      (moves as unknown as { maxDropDown: number; canDig: boolean }).maxDropDown = 1;
+      (moves as unknown as { maxDropDown: number; canDig: boolean }).canDig = false;
+      bot.pathfinder.setMovements(moves);
+      // Stand on the far side of the reference block, never over the hole.
+      const standAt = hole.ref.offset(-hole.face.x, 1, -hole.face.z);
+      await safeGoto(bot, new navGoals.GoalNear(standAt.x, standAt.y, standAt.z, 1), 20_000);
+      const refBlock = bot.blockAt(hole.ref);
+      const item = bot.inventory.items().find((i) => i.name === filler);
+      if (!refBlock || !item) return "Cap failed: lost the reference block or the filler.";
+      await bot.equip(item, "hand");
+      await bot.placeBlock(refBlock, hole.face);
+      const placed = bot.blockAt(new Vec3(hole.x, hole.top, hole.z));
+      const ok = !!placed && placed.name !== "air";
+      console.log(
+        `[Cap] ${bot.username}: ${ok ? "capped" : "failed to cap"} a ${hole.depth}-deep hole at (${hole.x}, ${hole.top}, ${hole.z}) with ${filler}`,
+      );
+      return ok
+        ? `Capped a ${hole.depth}-deep hole at ${hole.x}, ${hole.top}, ${hole.z} with ${filler}.`
+        : `Cap failed at ${hole.x}, ${hole.top}, ${hole.z}: the block did not appear.`;
+    } catch (e) {
+      const msg = (e as Error)?.message ?? String(e);
+      console.log(`[Cap] ${bot.username}: cap failed at (${hole.x}, ${hole.top}, ${hole.z}): ${msg.slice(0, 80)}`);
+      return `Cap failed at ${hole.x}, ${hole.top}, ${hole.z}: ${msg.slice(0, 80)}`;
+    }
+  }
+
   private async runSafetyOverrides(): Promise<boolean> {
     // Teleport-based water/buried escapes are interventions — off by default so
     // bots must swim/dig out themselves (or die; keepInventory protects progress).
@@ -1573,6 +1652,39 @@ export class BotBrain {
           /bootstrapped|already/i.test(result),
         );
         return;
+      }
+    }
+
+    // Hole cap override (runs 658-661: a one-wide shaft beside the village
+    // crafting table, (297, 50..69, -315), killed Flora twice, Mason and
+    // Blade in four hours). Any bot at home with a spare block caps the top
+    // of a shaft deeper than six blocks, the way a player would.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.roleConfig.stashPos &&
+      Date.now() - this.lastCapMs > 600_000
+    ) {
+      const sp = this.roleConfig.stashPos;
+      const me = this.bot.entity.position;
+      const homeGapCap = Math.hypot(me.x - sp.x, me.z - sp.z);
+      const filler = this.bot.inventory
+        .items()
+        .find((i) => ["cobblestone", "dirt", "cobbled_deepslate", "stone"].includes(i.name));
+      if (homeGapCap < 24 && filler) {
+        const hole = this.findDeepHole(sp, 14);
+        if (hole) {
+          this.lastCapMs = Date.now();
+          this.log.info(
+            "Brain",
+            `OVERRIDE: a ${hole.depth}-deep hole at (${hole.x}, ${hole.top}, ${hole.z}) beside home — capping it with ${filler.name}`,
+          );
+          const result = await this.capHole(hole, filler.name);
+          this.events.onAction("cap_hole", result);
+          this.lastAction = "cap_hole";
+          this.lastResult = result;
+          return;
+        }
       }
     }
 
