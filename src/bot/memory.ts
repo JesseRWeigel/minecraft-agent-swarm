@@ -190,6 +190,9 @@ export class BotMemoryStore {
     "smelt_ores",
     "go_fishing",
     "build_bridge",
+    "hunt_food",
+    "escape_to_surface",
+    "hunt_string",
   ]);
 
   load(): BotMemory {
@@ -322,7 +325,20 @@ export class BotMemoryStore {
 
     const isPreconditionFail = !success && isPreconditionFailure(notes);
     const realFailures = skillAttempts.filter((a) => !a.success && !isPreconditionFailure(a.notes || ""));
-    if (!success && !isPreconditionFail && realFailures.length >= 5 && !this.memory.brokenSkillNames.includes(skill)) {
+    // Run 678: hunt_food, go_fishing, build_farm and escape_to_surface were
+    // each written into this list mid-run after five bad outings, and the
+    // strategic prompt then showed the farmer and the fighter "hunt_food
+    // (historically broken)" while they starved. The list exists for
+    // generated skills that can be deleted; hand-written skills in
+    // STATIC_SKILL_NAMES are fixed in code and never retire here.
+    const generated = !BotMemoryStore.STATIC_SKILL_NAMES.has(skill);
+    if (
+      !success &&
+      !isPreconditionFail &&
+      generated &&
+      realFailures.length >= 5 &&
+      !this.memory.brokenSkillNames.includes(skill)
+    ) {
       this.memory.brokenSkillNames.push(skill);
       console.log(`[Memory] ${skill} added to permanent broken skills list`);
     }

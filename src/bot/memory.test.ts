@@ -305,21 +305,22 @@ test("memory: portal siting and partial-frame reports are preconditions too", ()
   );
 });
 
-test("memory: static skills get added to brokenSkillNames but are healed on reload", () => {
-  const { store, file, cleanup } = tmpStore();
+test("memory: static skills are never marked broken; generated skills still are", () => {
+  const { store, cleanup } = tmpStore();
   try {
-    // build_house is a static skill — it CAN be added to brokenSkillNames at runtime
+    // Run 678: hunt_food and build_farm were written into brokenSkillNames
+    // mid-run after five bad outings and the prompt then called them
+    // "historically broken" while the swarm starved. Static skills are fixed
+    // in code; only generated skills can be retired here.
     for (let i = 0; i < 6; i++) {
       store.recordSkillAttempt("build_house", false, 5, "crashed");
+      store.recordSkillAttempt("hunt_food", false, 5, "The sheep got away after 0 swings.");
+      store.recordSkillAttempt("craftABedUsing3WoolAnd3Planks", false, 5, "crashed");
     }
     const broken = store.getBrokenSkills();
-    assert.ok(broken.has("build_house"), "static skills can be marked broken during a session");
-
-    // But on next load, static skills are healed from brokenSkillNames
-    const { store: store2 } = tmpStore();
-    (store2 as any).memoryFile = file;
-    const loaded = store2.load();
-    assert.ok(!loaded.brokenSkillNames.includes("build_house"), "build_house should be healed on load");
+    assert.ok(!broken.has("build_house"), "static skills never enter brokenSkillNames");
+    assert.ok(!broken.has("hunt_food"), "hunt_food never enters brokenSkillNames");
+    assert.ok(broken.has("craftABedUsing3WoolAnd3Planks"), "generated skills still retire after five real failures");
   } finally {
     cleanup();
   }

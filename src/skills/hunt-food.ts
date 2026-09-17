@@ -43,12 +43,13 @@ const RAW_TO_COOKED: Record<string, string> = {
   rabbit: "cooked_rabbit",
 };
 
-export function nearestFoodAnimal(bot: Bot) {
+export function nearestFoodAnimal(bot: Bot, exclude?: Set<number>) {
   let best: ReturnType<Bot["nearestEntity"]> = null;
   let bestScore = 0;
   for (const e of Object.values(bot.entities)) {
     const v = VALUE[e.name ?? ""];
     if (!v) continue;
+    if (exclude?.has(e.id)) continue;
     const d = e.position.distanceTo(bot.entity.position);
     if (d > 96) continue;
     const score = v / (1 + d / 40);
@@ -256,6 +257,12 @@ export const huntFoodSkill: Skill = {
     let followFails = 0;
     let lastFollowErr = "";
     let lastGap = 0;
+    // Run 678: 8 of 13 failed hunts were "got away after 0 swings" on sheep
+    // and chickens 70 to 89 blocks out whose follow walk ended in "No path",
+    // "Navigation timed out" or "Stuck" (across a river, on the far bank).
+    // The loop then re-picked the same animal until the clock ran out. An
+    // animal whose approach fails on a path error is dropped for this outing.
+    const unreachable = new Set<number>();
     let lastSpecies = target.name ?? "animal";
     let escaped = false;
     // Natural healing only runs at 18 food or more, so an outing that stops
@@ -299,10 +306,20 @@ export const huntFoodSkill: Skill = {
             // before it gets there, five times over. Give a far animal up to
             // thirty seconds for the approach; a near one keeps eight.
             const walkMs = Math.min(30_000, 8_000 + Math.round(gap) * 400);
+            let pathFail = false;
             await safeGoto(bot, new goals.GoalFollow(target, 1.2), walkMs).catch((e: Error) => {
               followFails++;
               lastFollowErr = e.message.slice(0, 60);
+              pathFail = /No path|timed out|Stuck/i.test(e.message);
             });
+            const stillFar = bot.entity.position.distanceTo(target.position) > 12;
+            if (pathFail && stillFar && !engaged) {
+              unreachable.add(target.id);
+              console.log(
+                `[HuntDebug] ${bot.username} cannot reach the ${species} ${stillFar ? Math.round(bot.entity.position.distanceTo(target.position)) : 0} blocks out (${lastFollowErr}); trying another animal`,
+              );
+              break;
+            }
           }
           if (!target.isValid) break;
           lastDist = bot.entity.position.distanceTo(target.position);
@@ -327,6 +344,14 @@ export const huntFoodSkill: Skill = {
       } catch {
         /* best effort; the deltas below are the verdict */
       }
+      if (target.isValid && unreachable.has(target.id)) {
+        target = nearestFoodAnimal(bot, unreachable);
+        if (!target) {
+          lastSpecies = species;
+          break;
+        }
+        continue;
+      }
       if (target.isValid) {
         escaped = true;
         break;
@@ -342,7 +367,7 @@ export const huntFoodSkill: Skill = {
           `[HuntDebug] ${bot.username} ${species} gone at ${lastDist.toFixed(1)} blocks, last hp ${Number.isNaN(lastHp) ? "?" : lastHp.toFixed(1)}, swings so far ${swings}`,
         );
       }
-      target = nearestFoodAnimal(bot);
+      target = nearestFoodAnimal(bot, unreachable);
     }
 
     const gained = countMeat(bot) - meatBefore;
@@ -365,6 +390,12 @@ export const huntFoodSkill: Skill = {
     }
     if (kills > 0) {
       return { success: false, message: `Killed ${kills} ${lastSpecies} but picked up no meat.` };
+    }
+    if (!escaped && unreachable.size && kills === 0) {
+      return {
+        success: false,
+        message: `No reachable food animal: ${unreachable.size} ${lastSpecies}${unreachable.size > 1 ? "s" : ""} in view but every approach failed on a path (${lastFollowErr || "no path"}). Scout another heading.`,
+      };
     }
     return { success: false, message: escaped ? `The ${lastSpecies} got away after ${swings} swings.` : "No kill." };
   },
