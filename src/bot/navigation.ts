@@ -1514,6 +1514,24 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
           );
         }
         if (breathing) rescueDigUntil.set(bot, Date.now() + digWindowMs);
+        // Run 670: the long dig blocked the swim step that holds jump, so
+        // Forge sank while digging and drowned in the column. Hold jump
+        // through the dig and abort it the moment the air stops holding.
+        let hold: NodeJS.Timeout | undefined;
+        if (breathing) {
+          bot.setControlState("jump", true);
+          hold = setInterval(() => {
+            if ((bot.oxygenLevel ?? 20) < 6) {
+              try {
+                bot.stopDigging();
+              } catch {
+                /* not digging */
+              }
+            } else if (!bot.getControlState("jump")) {
+              bot.setControlState("jump", true);
+            }
+          }, 250);
+        }
         await Promise.race([
           bot.dig(neighbours[escape.direction]!),
           new Promise<void>((resolve) => {
@@ -1528,6 +1546,7 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
           }),
         ]).finally(() => {
           clearTimeout(timer);
+          if (hold) clearInterval(hold);
           rescueDigUntil.set(bot, 0);
         });
       } catch {
