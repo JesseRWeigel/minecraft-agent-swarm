@@ -485,6 +485,11 @@ function getNavGeneration(bot: Bot): number {
  * - `stallStartDelayMs`: grace period before stall detection activates (use when thinkTimeout is high)
  */
 export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStartDelayMs = 0): Promise<void> {
+  // Run 684: hungry bots walk instead of sprinting (baseMoves), about 30%
+  // slower, and every walk budget was sized for a sprint: walk timeouts went
+  // 93 -> 136 in the hour and skill completions 50 -> 29. The budget follows
+  // the speed.
+  if ((bot.food ?? 20) < 15) timeoutMs = Math.round(timeoutMs * 1.4);
   // CLAMP the search for height-only goals at the one chokepoint every walk
   // passes through. GoalY asks A* for "any block at that height" — a frontier
   // that is the whole map — and with dig-enabled movements the successor
