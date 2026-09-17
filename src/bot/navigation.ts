@@ -1523,10 +1523,29 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   }
 
   try {
-    bot.setControlState("jump", true); // swim upward toward the surface for air
     const swimTarget = swimTo ?? shore?.position ?? null;
+    // Run 665: Blade and Forge drowned pressing forward+jump into a stone
+    // ceiling for fifty ticks, looking steeply at an air point 4 blocks up
+    // (Blade) or 22 blocks down (Forge). Under a roof, look level so the
+    // keys carry the bot sideways out from under it, and let it sink toward
+    // an air point that is well below instead of holding jump into the rock.
+    const roofBlock = bot.blockAt(bot.entity.position.offset(0, 2, 0));
+    const roofed = !!roofBlock && roofBlock.boundingBox === "block";
+    const dyTarget = swimTarget ? swimTarget.y - bot.entity.position.y : 0;
+    const wantJump = !(roofed && dyTarget < -3);
+    bot.setControlState("jump", wantJump); // swim upward toward the surface for air
     if (swimTarget) {
-      await bot.lookAt(swimTarget.offset(0.5, 1.5, 0.5));
+      if (roofed) {
+        await bot.lookAt(new Vec3(swimTarget.x + 0.5, bot.entity.position.y + 1.6, swimTarget.z + 0.5));
+        if (Date.now() - (lastAirLagLog.get(bot) ?? 0) > 3000) {
+          lastAirLagLog.set(bot, Date.now());
+          console.log(
+            `[Drown] ${bot.username} roofed by ${roofBlock?.name}: swimming level toward ${swimTarget.floored()} (dy ${dyTarget.toFixed(1)}, jump ${wantJump ? "held" : "released"})`,
+          );
+        }
+      } else {
+        await bot.lookAt(swimTarget.offset(0.5, 1.5, 0.5));
+      }
       bot.setControlState("forward", true);
       // No sprint: sprinting in water puts the player in the swimming pose,
       // whose eye height is 0.4, so a bobbing bot breathes only at the top
@@ -1540,7 +1559,7 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     for (let i = 0; i < 8; i++) {
       await bot.waitForTicks(5);
       if (!headUnderWater(bot)) break;
-      if (!bot.getControlState("jump")) bot.setControlState("jump", true);
+      if (wantJump && !bot.getControlState("jump")) bot.setControlState("jump", true);
       if (swimTarget && !bot.getControlState("forward")) bot.setControlState("forward", true);
     }
   } catch {
