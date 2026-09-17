@@ -1194,6 +1194,14 @@ const submergedSince = new WeakMap<Bot, number>();
 const lastAirLagLog = new WeakMap<Bot, number>();
 /** Last server air value seen and when it last changed, to tell a stale reading from a breathing bot. */
 const lastServerAir = new WeakMap<Bot, { value: number; changedAt: number }>();
+/** Last time the server reported air under 6; a bot whose air has stayed at 6
+ *  or more for twenty seconds of submersion is breathing between bobs. */
+const lastLowAirAt = new WeakMap<Bot, number>();
+/** Until when the drown reflex is running a dig it means to finish. */
+const rescueDigUntil = new WeakMap<Bot, number>();
+export function rescueDigging(bot: Bot): boolean {
+  return (rescueDigUntil.get(bot) ?? 0) > Date.now();
+}
 /** Bots whose control-key setters already carry the drown key trace. */
 const keyTraceInstalled = new WeakSet<Bot>();
 /**
@@ -1263,7 +1271,12 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   // top of it. The elapsed estimate read -247 and every dig through the cap
   // was aborted at a budget built from that number. A server value that has
   // held above 5 for twenty seconds is a bot that breathes; trust it.
-  const breathing = !!prev && prev.value === serverAir && serverAir >= 6 && Date.now() - prev.changedAt > 20_000;
+  // Run 669: his air bobbed 20 -> 7 -> 20, so "unchanged for twenty seconds"
+  // never held. Breathing is air that has stayed at 6 or more for twenty
+  // seconds of submersion, whatever it does in between.
+  if (serverAir < 6) lastLowAirAt.set(bot, Date.now());
+  const submergedMs = Date.now() - (submergedSince.get(bot) ?? Date.now());
+  const breathing = serverAir >= 6 && submergedMs > 20_000 && Date.now() - (lastLowAirAt.get(bot) ?? 0) > 20_000;
   const air = breathing ? serverAir : serverStale ? Math.min(serverAir, localAir) : serverAir;
   if (serverStale && serverAir - localAir >= 5 && Date.now() - (lastAirLagLog.get(bot) ?? 0) > 15_000) {
     lastAirLagLog.set(bot, Date.now());
@@ -1500,6 +1513,7 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
             `[Drown] ${bot.username} breathing at air ${air} in a sealed column — finishing the ${escape.direction} dig through ${escape.block.name} (${(needMs / 1000).toFixed(0)}s)`,
           );
         }
+        if (breathing) rescueDigUntil.set(bot, Date.now() + digWindowMs);
         await Promise.race([
           bot.dig(neighbours[escape.direction]!),
           new Promise<void>((resolve) => {
@@ -1512,7 +1526,10 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
               resolve();
             }, digWindowMs);
           }),
-        ]).finally(() => clearTimeout(timer));
+        ]).finally(() => {
+          clearTimeout(timer);
+          rescueDigUntil.set(bot, 0);
+        });
       } catch {
         /* couldn't dig (no tool, or interrupted) — fall through to swimming */
       }

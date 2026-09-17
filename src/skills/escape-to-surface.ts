@@ -3,7 +3,7 @@ import { Vec3 } from "vec3";
 import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
-import { baseMoves, safeGoto, headUnderWater } from "../bot/navigation.js";
+import { baseMoves, safeGoto, headUnderWater, rescueDigging } from "../bot/navigation.js";
 
 /**
  * escape_to_surface — free a bot that has softlocked underground.
@@ -111,6 +111,12 @@ async function handDig(bot: Bot, x: number, y: number, z: number): Promise<boole
   // was holding it. With short air the reflex owns the keys; skip the dig.
   if (headUnderWater(bot) && (bot.oxygenLevel ?? 20) < 13) {
     console.log(`[EscapeDebug] ${bot.username}: dig skipped, drown rescue owns the keys (air ${bot.oxygenLevel})`);
+    return false;
+  }
+  // Run 669: this dig aborted the reflex's 250 s cap dig every few seconds
+  // while Forge breathed in a sealed column. A rescue dig runs to its end.
+  if (rescueDigging(bot)) {
+    console.log(`[EscapeDebug] ${bot.username}: dig skipped, drown rescue is finishing its own dig`);
     return false;
   }
   const floating = inWater(bot);
