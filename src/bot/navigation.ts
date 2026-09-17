@@ -252,7 +252,10 @@ function hazardToward(bot: Bot, toward: Vec3): boolean {
   const dz = toward.z - here.z;
   const len = Math.hypot(dx, dz) || 1;
   const bad = new Set(["lava", "flowing_lava", "fire", "soul_fire", "magma_block", "campfire", "soul_campfire"]);
-  for (const step of [1, 2]) {
+  // Run 664: a 700 ms hop covers three blocks at a sprint; Mason walked off
+  // the same Nether ledge at (345, 57, -40) twice, 29 blocks into lava, with
+  // the drop one block past the old two-block look-ahead.
+  for (const step of [1, 2, 3]) {
     const x = Math.floor(here.x + (dx / len) * step);
     const z = Math.floor(here.z + (dz / len) * step);
     const y = Math.floor(here.y);

@@ -55,6 +55,10 @@ export const findFortressSkill: Skill = {
     const sweepMoves = baseMoves(bot);
     (sweepMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).canDig = true;
     (sweepMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).allow1by1towers = true;
+    // Run 664: the sweep's default four-block drop let Mason step off a
+    // Nether ledge into lava at the same spot two days running. Two is a
+    // stair, four is a cliff over lava.
+    (sweepMoves as unknown as { maxDropDown: number }).maxDropDown = 2;
     bot.pathfinder.setMovements(sweepMoves);
 
     // --- Cross over (proven routine) ---
