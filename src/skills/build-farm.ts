@@ -52,7 +52,12 @@ async function harvestAndBake(
     // Keep 2 loaves, bank the rest: the bakers made five loaves an hour and
     // ate every one while three bots that cannot bake asked the stash for
     // bread and got 'No bread in the stash'.
-    if (stashPos && !signal.aborted && breadHeld() > 2) {
+    // Run 682: passes bake one loaf at a time, so "more than 2 held" never
+    // tripped and the baker ate every loaf at 15 to 19 hunger while three
+    // bots sat at 0. A fed baker (14+ hunger) banks every loaf; a hungry one
+    // keeps two.
+    const fed = bot.food >= 14;
+    if (stashPos && !signal.aborted && (fed ? breadHeld() > 0 : breadHeld() > 2)) {
       try {
         const { depositStash } = await import("./stash.js");
         const keep = [
@@ -61,7 +66,7 @@ async function harvestAndBake(
           { name: "sword", minCount: 1 },
           { name: "axe", minCount: 1 },
         ];
-        await depositStash(bot, stashPos, keep, 0, false, 2);
+        await depositStash(bot, stashPos, keep, 0, false, fed ? 0 : 2);
         bankedNote = " Surplus bread banked to the pantry.";
       } catch {
         /* stash unreachable this pass — bread stays in the pack, banks next time */

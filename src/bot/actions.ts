@@ -1560,6 +1560,12 @@ async function eat(bot: Bot): Promise<string> {
   const have = new Map(bot.inventory.items().map((i) => [i.name, i]));
   const best = FOOD_PRIORITY.find((name) => have.has(name));
   if (!best) return "No food in inventory!";
+  // Run 682: the model picked "eat" at 15 to 19 hunger and the bakers ate
+  // every loaf while three bots sat at 0 hunger with an empty pantry. Food
+  // at 14+ is not worth a meal; keep it for the pantry or a real need.
+  if ((bot.food ?? 20) >= 14 && (bot.health ?? 20) >= 14) {
+    return `Not hungry enough to spend food (hunger ${bot.food}/20). Keep the ${best} for later or bank it with deposit_stash.`;
+  }
 
   await bot.equip(have.get(best)!, "hand");
   await bot.consume();
