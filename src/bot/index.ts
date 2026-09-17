@@ -162,6 +162,31 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
     let stormSince = 0;
     let lastStormBreak = 0;
     let lastStormRelog = 0;
+    // Long-stall breaker (run 667: Atlas spent the whole hour within one
+    // block at (515, 81, -612) with 112 stall reports, 21 dig-outs and 9
+    // climb-outs, while the pathfinder held a partial path and never pressed a
+    // key; the server saw diggable dirt and an allowed three-block drop. A
+    // rejoin gave the storm cases a clean client; give a pinned bot the same.)
+    const stallSamples: { t: number; p: Vec3 }[] = [];
+    let lastStallRelog = 0;
+    const stallTimer = setInterval(() => {
+      const p = bot.entity?.position;
+      if (!p) return;
+      const now = Date.now();
+      stallSamples.push({ t: now, p: p.clone() });
+      while (stallSamples.length && stallSamples[0]!.t < now - 600_000) stallSamples.shift();
+      if (stallSamples.length < 18) return; // ten minutes of 30 s samples
+      const spread = Math.max(...stallSamples.map((s) => s.p.distanceTo(p)));
+      if (spread > 3 || now - lastStallRelog < 1_800_000) return;
+      if ((bot as unknown as { isSleeping?: boolean }).isSleeping) return;
+      if (getActiveSkillName(bot) === "go_fishing") return; // a cast session stands still on purpose
+      lastStallRelog = now;
+      console.log(
+        `[StallBreak] ${roleConfig.name}: within ${spread.toFixed(1)} blocks of ${p.floored()} for ten minutes; rejoining for a fresh client`,
+      );
+      setTimeout(() => bot.quit(), 200);
+    }, 30_000);
+    bot.once("end", () => clearInterval(stallTimer));
     const client = bot._client as unknown as {
       write: (name: string, params: unknown) => void;
       on: (ev: string, fn: (p: any) => void) => void;
