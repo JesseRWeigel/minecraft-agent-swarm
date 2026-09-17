@@ -9,6 +9,17 @@ const { goals } = pkg;
 import { safeGoto } from "../bot/actions.js";
 import { baseMoves, safeMoves, isPreciousBlock } from "../bot/navigation.js";
 
+/** Walk budget for the stash trip, scaled by distance. Run 680: 24 walks to
+ *  the stash timed out in one hour, Forge from 77 to 157 blocks out and
+ *  Flora from 187 to 253, every one on the fixed 30 s below; a bot walks
+ *  about 2.5 blocks a second with pathing, so 100 blocks needs 40 s. */
+export function stashWalkMs(bot: Bot, stashPos: { x: number; y: number; z: number }, floorMs = 30_000): number {
+  const p = bot.entity?.position;
+  if (!p) return floorMs;
+  const dist = Math.hypot(p.x - stashPos.x, p.y - stashPos.y, p.z - stashPos.z);
+  return Math.min(120_000, Math.max(floorMs, Math.round(dist * 500)));
+}
+
 /** bot.openContainer with a hard timeout — a chest GUI that never opens (block
  *  not truly reachable/loaded) otherwise blocks forever, hanging the calling
  *  skill to the 240s watchdog. Fail fast (10s) so the skill recovers. */
@@ -883,7 +894,7 @@ export async function depositStash(
   const pickaxeKeep: string | null = canMine && bestPick ? bestPick.name : null;
   // Walk to stash area
   const startPos = bot.entity.position.clone();
-  await safeGoto(bot, new goals.GoalNear(stashPos.x, stashPos.y, stashPos.z, 3), 30000);
+  await safeGoto(bot, new goals.GoalNear(stashPos.x, stashPos.y, stashPos.z, 3), stashWalkMs(bot, stashPos));
   const movedDist = bot.entity.position.distanceTo(startPos);
 
   // Fail fast if we never actually reached the stash (underground / blocked /
@@ -922,7 +933,11 @@ export async function depositStash(
     digMoves.allow1by1towers = true;
     bot.pathfinder.setMovements(digMoves);
     try {
-      await safeGoto(bot, new goals.GoalNear(stashPos.x, stashPos.y, stashPos.z, 3), 25000);
+      await safeGoto(
+        bot,
+        new goals.GoalNear(stashPos.x, stashPos.y, stashPos.z, 3),
+        stashWalkMs(bot, stashPos, 25_000),
+      );
     } catch {
       /* best effort — the distance check below decides */
     } finally {
@@ -1394,7 +1409,7 @@ export async function withdrawStash(
    *  the miner can walk his own shafts down to it. */
   deepOk = false,
 ): Promise<string> {
-  await safeGoto(bot, new goals.GoalNear(stashPos.x, stashPos.y, stashPos.z, 3), 30000);
+  await safeGoto(bot, new goals.GoalNear(stashPos.x, stashPos.y, stashPos.z, 3), stashWalkMs(bot, stashPos));
 
   const category = categorizeItem(itemName);
 
