@@ -115,10 +115,24 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
     }
     return 0;
   };
+  // Runs 664-670: the pool under the village farm, ten blocks of water from
+  // y=47 to 56 with air above, drowned Blade twice, Mason and Flora. Roofed
+  // water is priced already; open deep water was free, and a walk to a plot
+  // on the pool's roof swam straight through it. A water cell with two more
+  // water blocks beneath it now costs +40. Shore and two-deep crossings stay
+  // free, so the village walks that a global water cost broke on 2026-09-13
+  // are untouched.
+  const deepWater = (b: { name?: string; position?: Vec3 }) => {
+    if (b.name !== "water" || !b.position) return 0;
+    const one = bot.blockAt(b.position.offset(0, -1, 0));
+    const two = bot.blockAt(b.position.offset(0, -2, 0));
+    return one?.name === "water" && two?.name === "water" ? 40 : 0;
+  };
   (moves as unknown as { exclusionAreasStep: ((b: never) => number)[] }).exclusionAreasStep = [
     roofedWater as unknown as (b: never) => number,
     lavaEdge as unknown as (b: never) => number,
     deathZone as unknown as (b: never) => number,
+    deepWater as unknown as (b: never) => number,
   ];
   // The pathfinder ships with door opening OFF ("causes issues on non-Paper
   // servers"). This is Paper. Three bots stalled 3 blocks from a bed inside
