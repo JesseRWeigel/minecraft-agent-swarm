@@ -61,6 +61,8 @@ async function ensureNeuralServer(): Promise<void> {
 // whichever bot happens to spin up first, rather than once per bot or once
 // per restart.
 let advancementSnapshotLogged = false;
+// Stall-breaker cooldown per bot name; survives the reconnect it triggers.
+const stallRelogAt = new Map<string, number>();
 
 export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig = ATLAS_CONFIG) {
   if (installPhysicsEpsilon()) console.log("[Physics] collision epsilon installed (1e-7)");
@@ -168,7 +170,6 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
     // key; the server saw diggable dirt and an allowed three-block drop. A
     // rejoin gave the storm cases a clean client; give a pinned bot the same.)
     const stallSamples: { t: number; p: Vec3 }[] = [];
-    let lastStallRelog = 0;
     const stallTimer = setInterval(() => {
       const p = bot.entity?.position;
       if (!p) return;
@@ -177,10 +178,14 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
       while (stallSamples.length && stallSamples[0]!.t < now - 600_000) stallSamples.shift();
       if (stallSamples.length < 18) return; // ten minutes of 30 s samples
       const spread = Math.max(...stallSamples.map((s) => s.p.distanceTo(p)));
-      if (spread > 3 || now - lastStallRelog < 1_800_000) return;
+      // Run 668: five rejoins in an hour for Forge, each ten minutes apart,
+      // because this cooldown lived in the bot instance and a reconnect
+      // reset it; each rejoin also threw away a long dig in progress.
+      if (spread > 3 || now - (stallRelogAt.get(roleConfig.name) ?? 0) < 1_800_000) return;
       if ((bot as unknown as { isSleeping?: boolean }).isSleeping) return;
       if (getActiveSkillName(bot) === "go_fishing") return; // a cast session stands still on purpose
-      lastStallRelog = now;
+      if (bot.targetDigBlock) return; // a long dig out of a sealed spot is progress
+      stallRelogAt.set(roleConfig.name, now);
       console.log(
         `[StallBreak] ${roleConfig.name}: within ${spread.toFixed(1)} blocks of ${p.floored()} for ten minutes; rejoining for a fresh client`,
       );

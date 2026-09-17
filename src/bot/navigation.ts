@@ -1258,7 +1258,13 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   const prev = lastServerAir.get(bot);
   if (!prev || prev.value !== serverAir) lastServerAir.set(bot, { value: serverAir, changedAt: Date.now() });
   const serverStale = !!prev && prev.value === serverAir && Date.now() - prev.changedAt > 3_000;
-  const air = serverStale ? Math.min(serverAir, localAir) : serverAir;
+  // Run 668: Forge sat in a sealed one-block water column for an hour with
+  // the server's air held at 7 to 15 the whole time; he was breathing at the
+  // top of it. The elapsed estimate read -247 and every dig through the cap
+  // was aborted at a budget built from that number. A server value that has
+  // held above 5 for twenty seconds is a bot that breathes; trust it.
+  const breathing = !!prev && prev.value === serverAir && serverAir >= 6 && Date.now() - prev.changedAt > 20_000;
+  const air = breathing ? serverAir : serverStale ? Math.min(serverAir, localAir) : serverAir;
   if (serverStale && serverAir - localAir >= 5 && Date.now() - (lastAirLagLog.get(bot) ?? 0) > 15_000) {
     lastAirLagLog.set(bot, Date.now());
     console.log(`[Drown] ${bot.username} air reading stale: server ${serverAir} unchanged, elapsed-based ${localAir}`);
@@ -1486,20 +1492,25 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
         // Bound the dig by the air budget: a dig that overruns it must not
         // hold the reflex (and its swim) hostage until the bot is dead.
         let timer: NodeJS.Timeout | undefined;
+        // A breathing bot in a sealed column can afford the whole dig; an
+        // abort at the budget throws the server's progress away every time.
+        const digWindowMs = breathing ? needMs + 10_000 : Math.max(1000, budgetMs);
+        if (breathing && needMs > budgetMs) {
+          console.log(
+            `[Drown] ${bot.username} breathing at air ${air} in a sealed column — finishing the ${escape.direction} dig through ${escape.block.name} (${(needMs / 1000).toFixed(0)}s)`,
+          );
+        }
         await Promise.race([
           bot.dig(neighbours[escape.direction]!),
           new Promise<void>((resolve) => {
-            timer = setTimeout(
-              () => {
-                try {
-                  bot.stopDigging();
-                } catch {
-                  /* not digging */
-                }
-                resolve();
-              },
-              Math.max(1000, budgetMs),
-            );
+            timer = setTimeout(() => {
+              try {
+                bot.stopDigging();
+              } catch {
+                /* not digging */
+              }
+              resolve();
+            }, digWindowMs);
           }),
         ]).finally(() => clearTimeout(timer));
       } catch {
