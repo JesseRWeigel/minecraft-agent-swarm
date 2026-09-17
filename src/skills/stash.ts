@@ -745,8 +745,19 @@ export function shouldKeep(
     return false;
   }
 
-  // Seeds: always keep (needed to replant).
-  if (itemName === "wheat_seeds") return true;
+  // Seeds: keep ONE stack to replant, deposit the rest. "Always keep" let
+  // harvest drops pile up until Flora carried 34 stacks (2,100 seeds) and
+  // Mason 15 in run 679: no free slot for meat, logs or drops, so pickups
+  // reported "+0", gathers failed and she walked 300 blocks for oak she
+  // could not carry.
+  if (itemName === "wheat_seeds") {
+    const kept = currentCounts.get("__seeds") ?? 0;
+    if (kept < 64) {
+      currentCounts.set("__seeds", kept + itemCount);
+      return true;
+    }
+    return false;
+  }
   // Wheat: keep only a tiny reserve, DEPOSIT the surplus so it POOLS in the
   // stash. Keeping all wheat (prior fix) backfired — harvests stayed scattered
   // across bots in sub-3 amounts, so no baker ever reached 3 and bread never

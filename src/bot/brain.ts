@@ -900,6 +900,7 @@ export class BotBrain {
 
   /** Check for water/underground and handle before LLM query. Returns true if override handled. */
   private lastCapMs = 0;
+  private lastSeedShedMs = 0;
 
   /** A one-wide vertical hole open at the surface: air at the rim level and
    *  for at least six blocks below, with three or four solid rim neighbours. */
@@ -1724,6 +1725,33 @@ export class BotBrain {
           /bootstrapped|already/i.test(result),
         );
         return;
+      }
+    }
+
+    // Pack hygiene: a seed glut. Run 679: Flora carried 34 stacks of wheat
+    // seeds and Mason 15, every slot, so meat, logs and drops could not be
+    // picked up and hunts ended "+0 meat". Keep one stack for replanting and
+    // toss the rest; the stash keep rule now banks surplus too, but a bot
+    // far from home needs the slots now.
+    if (Date.now() - this.lastSeedShedMs > 300_000) {
+      const seedStacks = this.bot.inventory.items().filter((i) => i.name === "wheat_seeds");
+      const seedTotal = seedStacks.reduce((n, i) => n + i.count, 0);
+      if (seedTotal > 192) {
+        this.lastSeedShedMs = Date.now();
+        const freeBefore = this.bot.inventory.emptySlotCount();
+        let tossed = 0;
+        for (const st of seedStacks.sort((a, b) => a.count - b.count)) {
+          if (seedTotal - tossed - st.count < 64) break;
+          try {
+            await this.bot.toss(st.type, null, st.count);
+            tossed += st.count;
+          } catch {
+            break;
+          }
+        }
+        console.log(
+          `[Pack] ${this.bot.username}: tossed ${tossed} wheat seeds (kept ${seedTotal - tossed}), free slots ${freeBefore} -> ${this.bot.inventory.emptySlotCount()}`,
+        );
       }
     }
 
