@@ -901,6 +901,7 @@ export class BotBrain {
   /** Check for water/underground and handle before LLM query. Returns true if override handled. */
   private lastCapMs = 0;
   private lastSeedShedMs = 0;
+  private lastBucketFishMs = 0;
 
   /** A one-wide vertical hole open at the surface: air at the rim level and
    *  for at least six blocks below, with three or four solid rim neighbours. */
@@ -3181,6 +3182,45 @@ export class BotBrain {
           /Hunger \d+ -> \d+/.test(result),
         );
         return;
+      }
+    }
+
+    // Tactical Fishing override (2026-09-17): 18 salmon within 150 blocks of
+    // the village and three bots carrying water buckets, and the point is one
+    // right-click. Fires for a capable bot with a bucket while a fish is in
+    // view and the advancement is unearned; the skill is bounded.
+    if (
+      config.bot.allowStrategyOverrides &&
+      this.roleConfig.allowedSkills.includes("bucket_fish") &&
+      !isSkillRunning(this.bot) &&
+      Date.now() - this.lastBucketFishMs > 600_000
+    ) {
+      const earnedFish = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+      const done =
+        earnedFish.has("husbandry/tactical_fishing") || earnedFish.has("minecraft:husbandry/tactical_fishing");
+      const hasBucket = this.bot.inventory.items().some((i) => i.name === "water_bucket" || i.name === "bucket");
+      if (!done && hasBucket) {
+        const { nearestFish } = await import("../skills/bucket-fish.js");
+        const fish = nearestFish(this.bot, 48);
+        if (fish) {
+          this.lastBucketFishMs = Date.now();
+          this.log.info(
+            "Brain",
+            `OVERRIDE: a ${fish.name} ${fish.position.distanceTo(this.bot.entity.position).toFixed(0)} blocks away and a bucket aboard — running bucket_fish`,
+          );
+          this.events.onThought("A fish, a bucket, and an idea.");
+          const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "bucket_fish" });
+          this.events.onAction("bucket_fish", result);
+          this.lastAction = "bucket_fish";
+          this.lastResult = result;
+          this.trackFailure(
+            "skill:bucket_fish",
+            { action: "bucket_fish", params: {} },
+            result,
+            /Scooped|Tactical/i.test(result),
+          );
+          return;
+        }
       }
     }
 

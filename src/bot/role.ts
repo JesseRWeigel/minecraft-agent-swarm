@@ -156,6 +156,7 @@ export const FLORA_CONFIG: BotRoleConfig = {
     "build_nether_portal",
     "breed_animals",
     "go_fishing",
+    "bucket_fish",
   ],
   keepItems: [
     { name: "_log", minCount: 3 },
@@ -215,6 +216,7 @@ export const FORGE_CONFIG: BotRoleConfig = {
     "harvest_honey",
 
     "go_fishing",
+    "bucket_fish",
   ],
   keepItems: [
     { name: "_log", minCount: 3 },
@@ -284,6 +286,7 @@ export const MASON_CONFIG: BotRoleConfig = {
     "setup_enchanting",
 
     "go_fishing",
+    "bucket_fish",
   ],
   keepItems: [
     { name: "_log", minCount: 3 },
