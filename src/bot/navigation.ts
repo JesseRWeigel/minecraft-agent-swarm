@@ -58,6 +58,12 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   // applied because every walk builds its moves here. In the Nether a
   // drop is a stair or a cliff over lava: two blocks, no more.
   if (String(bot.game?.dimension ?? "").includes("nether")) moves.maxDropDown = 2;
+  // Run 683: the farm baked 24 bread in an hour and its two bakers ate 18 of
+  // them at 0 to 11 hunger, sprinting everywhere in between. Walking costs
+  // no hunger; sprinting costs one point per 40 blocks and sprint-jumps four
+  // times that, so a bot covering 3,000 blocks an hour burns 75 hunger on
+  // legs alone. A bot under 15 hunger walks; fed bots keep the speed.
+  moves.allowSprinting = (bot.food ?? 20) >= 15;
   // The library allows a drop of ANY height when the landing block is water.
   // Run 597: a flooded shaft beside the stash, water at (306, 50, -324) over
   // a 23-block hole to a dry cobblestone floor at y=27, took six deaths in
