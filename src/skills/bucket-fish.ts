@@ -3,6 +3,7 @@ import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
 import { baseMoves, safeGoto } from "../bot/navigation.js";
+import { Vec3 } from "vec3";
 
 /**
  * bucket_fish — earn "Tactical Fishing" (husbandry/tactical_fishing): scoop a
@@ -87,6 +88,34 @@ export const bucketFishSkill: Skill = {
         return { success: false, message: "Could not fill the bucket from the water here." };
     }
 
+    // Run 686: Mason waded after a salmon at y=60 and went to 3 air under
+    // the lake while the walk goal sat on the fish. Never dive for a fish:
+    // take only fish near the surface, walk to a standing spot on the shore
+    // within reach, and use the bucket from there.
+    const nearSurface = (e: { position: Vec3 }) =>
+      /air/.test(bot.blockAt(e.position.offset(0, 2, 0))?.name ?? "") ||
+      /air/.test(bot.blockAt(e.position.offset(0, 1, 0))?.name ?? "");
+    const shoreSpot = (e: { position: Vec3 }): Vec3 | null => {
+      const c = e.position.floored();
+      let best: Vec3 | null = null;
+      let bestD = 3.2;
+      for (let dx = -3; dx <= 3; dx++)
+        for (let dz = -3; dz <= 3; dz++)
+          for (let dy = -1; dy <= 2; dy++) {
+            const feet = c.offset(dx, dy, dz);
+            const under = bot.blockAt(feet.offset(0, -1, 0));
+            const at = bot.blockAt(feet);
+            const head = bot.blockAt(feet.offset(0, 1, 0));
+            if (!under || under.boundingBox !== "block" || under.name === "water") continue;
+            if (!at || at.name !== "air" || !head || head.name !== "air") continue;
+            const d = feet.offset(0.5, 1.6, 0.5).distanceTo(e.position);
+            if (d < bestD) {
+              bestD = d;
+              best = feet;
+            }
+          }
+      return best;
+    };
     let fish = nearestFish(bot);
     if (!fish) {
       return {
@@ -99,24 +128,33 @@ export const bucketFishSkill: Skill = {
     const deadline = Date.now() + 120_000;
     let tries = 0;
     const tried = new Set<number>();
+    let skippedDeep = 0;
     while (fish && Date.now() < deadline && !signal.aborted && tries < 6) {
       tries++;
       tried.add(fish.id);
+      if (!nearSurface(fish)) {
+        skippedDeep++;
+        fish = nearestFishExcept(bot, tried);
+        continue;
+      }
+      const spot = shoreSpot(fish);
+      if (!spot) {
+        console.log(
+          `[FishDebug] ${bot.username}: ${fish.name} at ${fish.position.floored()} has no standing spot within reach; skipping`,
+        );
+        fish = nearestFishExcept(bot, tried);
+        continue;
+      }
       step(
         0.2 + tries * 0.1,
-        `Wading to a ${fish.name} ${fish.position.distanceTo(bot.entity.position).toFixed(0)} blocks away...`,
+        `Walking to the shore beside a ${fish.name} ${fish.position.distanceTo(bot.entity.position).toFixed(0)} blocks away...`,
       );
-      const end = Date.now() + 40_000;
-      while (
-        fish.isValid &&
-        Date.now() < end &&
-        fish.position.distanceTo(bot.entity.position) > 2.5 &&
-        !signal.aborted
-      ) {
-        const p = fish.position;
-        await safeGoto(bot, new goals.GoalNear(p.x, p.y, p.z, 2), 12_000).catch(() => {});
-      }
-      if (!fish.isValid || fish.position.distanceTo(bot.entity.position) > 3.5) {
+      await safeGoto(bot, new goals.GoalBlock(spot.x, spot.y, spot.z), 30_000).catch(() => {});
+      const gap = fish.isValid ? fish.position.distanceTo(bot.entity.position.offset(0, 1.6, 0)) : 99;
+      if (!fish.isValid || gap > 3.5 || (bot.oxygenLevel ?? 20) < 12) {
+        console.log(
+          `[FishDebug] ${bot.username}: ${fish.name} out of reach after the walk (gap ${gap.toFixed(1)}, air ${bot.oxygenLevel ?? 20}); next fish`,
+        );
         fish = nearestFishExcept(bot, tried);
         continue;
       }
@@ -124,21 +162,35 @@ export const bucketFishSkill: Skill = {
       if (!wb) return { success: false, message: "Lost the water bucket on the way." };
       await bot.equip(wb, "hand").catch(() => {});
       await bot.lookAt(fish.position.offset(0, 0.2, 0), true).catch(() => {});
-      try {
-        await bot.activateEntity(fish);
-      } catch {
-        /* the fish moved; try again */
+      for (let swing = 0; swing < 3 && fish.isValid && !fishBucket(bot); swing++) {
+        try {
+          await bot.activateEntityAt(fish, fish.position);
+        } catch {
+          /* fall through to the plain interact */
+        }
+        await new Promise((r) => setTimeout(r, 300));
+        if (!fishBucket(bot)) {
+          try {
+            await bot.activateEntity(fish);
+          } catch {
+            /* the fish moved; try again */
+          }
+        }
+        await new Promise((r) => setTimeout(r, 700));
+        console.log(
+          `[FishDebug] ${bot.username}: swing ${swing + 1} at ${fish.name} gap ${fish.position.distanceTo(bot.entity.position.offset(0, 1.6, 0)).toFixed(1)} held=${bot.heldItem?.name ?? "none"} result=${fishBucket(bot) ?? "nothing"}`,
+        );
       }
-      await new Promise((r) => setTimeout(r, 800));
       const got = fishBucket(bot);
       if (got) {
         console.log(`[Fish] ${bot.username}: scooped a ${fish.name} into a bucket at ${fish.position.floored()}`);
         return { success: true, message: `Scooped a ${fish.name} into a bucket (Tactical Fishing).`, stats: { tries } };
       }
+      fish = nearestFishExcept(bot, tried);
     }
     return {
       success: false,
-      message: `Waded after ${tries} fish and none went into the bucket. invoke_skill {"skill":"bucket_fish"} again to retry.`,
+      message: `Tried ${tries} fish (${skippedDeep} too deep to reach from shore) and none went into the bucket. invoke_skill {"skill":"bucket_fish"} again to retry.`,
     };
   },
 };
