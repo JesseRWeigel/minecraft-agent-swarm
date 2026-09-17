@@ -1,4 +1,5 @@
 import { Vec3 } from "vec3";
+import { getBotMemoryStore } from "./memory-registry.js";
 import type { Bot } from "mineflayer";
 import pkg from "mineflayer-pathfinder";
 import type { Move } from "mineflayer-pathfinder";
@@ -51,6 +52,11 @@ export class GoalNearXZAbove extends goals.GoalNearXZ {
 export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   const moves = new Movements(bot);
   moves.maxDropDown = 3; // 3 blocks = no fall damage, 4 = 1.5 hearts
+  // Runs 658-666: Mason stepped off the same Nether ledge at (345, 57, -40)
+  // into the lava sea on three days; the fortress sweep's own cap never
+  // applied because every walk builds its moves here. In the Nether a
+  // drop is a stair or a cliff over lava: two blocks, no more.
+  if (String(bot.game?.dimension ?? "").includes("nether")) moves.maxDropDown = 2;
   moves.allowParkour = false;
   // The library allows a drop of ANY height when the landing block is water.
   // Run 597: a flooded shaft beside the stash, water at (306, 50, -324) over
@@ -93,9 +99,26 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
     }
     return 0;
   };
+  // Run 666: Forge walked back to the same block beside a lake three times
+  // in ten minutes and a Drowned killed him there each time; the ledge above
+  // repeats the same way. A step within five blocks of a spot where this bot
+  // died in the last hour now costs +80, so routes bend around it.
+  const recentDeaths = (getBotMemoryStore(bot)?.getDeaths() ?? []).filter((d) => {
+    const t = d.timestamp ? Date.parse(d.timestamp) : NaN;
+    return Number.isFinite(t) && Date.now() - t < 3_600_000;
+  });
+  const deathZone = (b: { position?: Vec3 }) => {
+    const p = b.position;
+    if (!p || recentDeaths.length === 0) return 0;
+    for (const d of recentDeaths) {
+      if (Math.abs(p.y - d.y) <= 4 && Math.hypot(p.x - d.x, p.z - d.z) <= 5) return 80;
+    }
+    return 0;
+  };
   (moves as unknown as { exclusionAreasStep: ((b: never) => number)[] }).exclusionAreasStep = [
     roofedWater as unknown as (b: never) => number,
     lavaEdge as unknown as (b: never) => number,
+    deathZone as unknown as (b: never) => number,
   ];
   // The pathfinder ships with door opening OFF ("causes issues on non-Paper
   // servers"). This is Paper. Three bots stalled 3 blocks from a bed inside
