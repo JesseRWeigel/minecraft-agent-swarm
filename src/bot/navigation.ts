@@ -1,5 +1,5 @@
 import { Vec3 } from "vec3";
-import { getBotMemoryStore } from "./memory-registry.js";
+import { getBotMemoryStore, getAllMemoryStores } from "./memory-registry.js";
 import type { Bot } from "mineflayer";
 import pkg from "mineflayer-pathfinder";
 import type { Move } from "mineflayer-pathfinder";
@@ -107,6 +107,29 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
     const t = d.timestamp ? Date.parse(d.timestamp) : NaN;
     return Number.isFinite(t) && Date.now() - t < 3_600_000;
   });
+  // Run 681: four drownings in one hour, three of them in the flooded cavity
+  // east of the village farm (x 312-326, z -314..-300, y 50-56) that has now
+  // drowned nine bots in a day; a per-bot, one-hour memory forgets it between
+  // visits and never warns the next bot. A drowning anywhere on the team in
+  // the last day is a zone for everyone. A broad water cost regressed walks
+  // twice; these are 5-block spots around real deaths.
+  for (const store of getAllMemoryStores()) {
+    if (store === getBotMemoryStore(bot)) continue;
+    for (const d of store.getDeaths()) {
+      const t = d.timestamp ? Date.parse(d.timestamp) : NaN;
+      if (Number.isFinite(t) && Date.now() - t < 86_400_000 && /drown/i.test(d.cause ?? "")) recentDeaths.push(d);
+    }
+  }
+  for (const d of getBotMemoryStore(bot)?.getDeaths() ?? []) {
+    const t = d.timestamp ? Date.parse(d.timestamp) : NaN;
+    if (
+      Number.isFinite(t) &&
+      Date.now() - t >= 3_600_000 &&
+      Date.now() - t < 86_400_000 &&
+      /drown/i.test(d.cause ?? "")
+    )
+      recentDeaths.push(d);
+  }
   const deathZone = (b: { position?: Vec3 }) => {
     const p = b.position;
     if (!p || recentDeaths.length === 0) return 0;
