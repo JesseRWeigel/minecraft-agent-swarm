@@ -192,7 +192,11 @@ export const FORGE_CONFIG: BotRoleConfig = {
   leashRadius: 250,
   stashPos: STASH_POS,
   safeSpawn: { x: 280, y: 0, z: -320 },
-  allowedActions: ["mine_block", "gather_wood", "go_to", "eat", "sleep", "craft", "chat", "flee"],
+  // Run 677: Forge died six times in an hour to creepers, skeletons, a spider
+  // and an enderman with a stone sword in his pack and no way to swing it;
+  // the miner could only flee, and in a cave that means into the mob. The
+  // attack action equips the best sword and retreats from ranged mobs unarmed.
+  allowedActions: ["mine_block", "gather_wood", "go_to", "eat", "sleep", "craft", "chat", "flee", "attack"],
   allowedSkills: [
     "strip_mine",
     "mine_frontier",
