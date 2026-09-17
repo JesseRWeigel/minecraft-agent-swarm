@@ -889,11 +889,12 @@ export class BotBrain {
     };
     const cx = Math.floor(center.x);
     const cz = Math.floor(center.z);
-    const baseY = Math.floor(bot.entity.position.y);
+    const baseY = Math.floor(center.y);
+    let best: { x: number; z: number; top: number; depth: number; ref: Vec3; face: Vec3 } | null = null;
     for (let x = cx - radius; x <= cx + radius; x++) {
       for (let z = cz - radius; z <= cz + radius; z++) {
-        // The rim: the highest solid neighbour level within a few blocks of the bot's own height.
-        for (let top = baseY + 3; top >= baseY - 4; top--) {
+        // The rim: a surface-level cell within a few blocks of the stash's height.
+        for (let top = baseY + 4; top >= baseY - 4; top--) {
           const cell = new Vec3(x, top, z);
           if (!air(cell) || !air(cell.offset(0, 1, 0))) continue;
           const sides: [Vec3, Vec3][] = [
@@ -908,11 +909,12 @@ export class BotBrain {
           while (depth < 40 && air(cell.offset(0, -1 - depth, 0))) depth++;
           if (depth < 6) continue;
           const [ref, face] = solidSides[0]!;
-          return { x, z, top, depth, ref, face };
+          if (!best || depth > best.depth) best = { x, z, top, depth, ref, face };
+          break;
         }
       }
     }
-    return null;
+    return best;
   }
 
   private async capHole(
@@ -1671,8 +1673,13 @@ export class BotBrain {
       const filler = this.bot.inventory
         .items()
         .find((i) => ["cobblestone", "dirt", "cobbled_deepslate", "stone"].includes(i.name));
-      if (homeGapCap < 24 && filler) {
-        const hole = this.findDeepHole(sp, 14);
+      // Run 663: the finder scanned 14 blocks around the stash at the bot's
+      // own height, so a miner at y=10 chased cave holes and the crafting
+      // table shaft 18 blocks out was never in scope. Scan 20 blocks at the
+      // stash's surface band, from the surface only, deepest hole first.
+      const onSurface = Math.abs(me.y - sp.y) <= 6;
+      if (homeGapCap < 24 && filler && onSurface) {
+        const hole = this.findDeepHole(sp, 20);
         if (hole) {
           this.lastCapMs = Date.now();
           this.log.info(
