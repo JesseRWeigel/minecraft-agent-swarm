@@ -53,6 +53,16 @@ import { nearestNest } from "../skills/wax-copper.js";
 import { knownWaxedBlocks } from "./nests.js";
 import { nearestFoodAnimal } from "../skills/hunt-food.js";
 import { BotMemoryStore } from "./memory.js";
+
+/** Rim blocks a right-click activates instead of placing against (run 674:
+ *  every bot spent an hour trying to cap a shaft whose first solid rim block
+ *  was a furnace, and the click opened the furnace instead). */
+const INTERACTIVE_RIM =
+  /chest|furnace|smoker|crafting_table|barrel|door|trapdoor|bed|anvil|shulker|hopper|dispenser|dropper|lectern|loom|stonecutter|grindstone|cartography|smithing|brewing|beacon|enchanting|button|lever|fence_gate|note_block|jukebox|composter|cauldron|campfire|sign|repeater|comparator/;
+
+/** Holes whose cap failed, shared by every bot in the process, so a hole that
+ *  refuses a cap is left alone for an hour after two failures. */
+const capFailures = new Map<string, { n: number; at: number }>();
 import { getAllMemoryStores } from "./memory-registry.js";
 import { updateBulletin, formatTeamBulletin } from "./bulletin.js";
 import { createLogger } from "../util/logger.js";
@@ -908,7 +918,20 @@ export class BotBrain {
           let depth = 0;
           while (depth < 40 && air(cell.offset(0, -1 - depth, 0))) depth++;
           if (depth < 6) continue;
-          const [ref, face] = solidSides[0]!;
+          const failed = capFailures.get(`${x},${top},${z}`);
+          if (failed && failed.n >= 2 && Date.now() - failed.at < 3_600_000) continue;
+          // Prefer a plain rim block (a click on a furnace or chest opens it
+          // instead of placing) with a standable cell on its far side.
+          const standable = ([p, f]: [Vec3, Vec3]) => {
+            const stand = p.offset(-f.x, 0, -f.z);
+            return solid(stand.offset(0, -1, 0)) && air(stand) && air(stand.offset(0, 1, 0));
+          };
+          const ranked = [...solidSides].sort((a, b) => {
+            const score = (side: [Vec3, Vec3]) =>
+              (INTERACTIVE_RIM.test(bot.blockAt(side[0])?.name ?? "") ? 0 : 2) + (standable(side) ? 1 : 0);
+            return score(b) - score(a);
+          });
+          const [ref, face] = ranked[0]!;
           if (!best || depth > best.depth) best = { x, z, top, depth, ref, face };
           break;
         }
@@ -935,9 +958,16 @@ export class BotBrain {
       const item = bot.inventory.items().find((i) => i.name === filler);
       if (!refBlock || !item) return "Cap failed: lost the reference block or the filler.";
       await bot.equip(item, "hand");
-      await bot.placeBlock(refBlock, hole.face);
+      // Sneak so a click on a container rim still places instead of opening it.
+      bot.setControlState("sneak", true);
+      try {
+        await bot.placeBlock(refBlock, hole.face);
+      } finally {
+        bot.setControlState("sneak", false);
+      }
       const placed = bot.blockAt(new Vec3(hole.x, hole.top, hole.z));
       const ok = !!placed && placed.name !== "air";
+      if (!ok) this.noteCapFailure(hole);
       console.log(
         `[Cap] ${bot.username}: ${ok ? "capped" : "failed to cap"} a ${hole.depth}-deep hole at (${hole.x}, ${hole.top}, ${hole.z}) with ${filler}`,
       );
@@ -945,10 +975,22 @@ export class BotBrain {
         ? `Capped a ${hole.depth}-deep hole at ${hole.x}, ${hole.top}, ${hole.z} with ${filler}.`
         : `Cap failed at ${hole.x}, ${hole.top}, ${hole.z}: the block did not appear.`;
     } catch (e) {
+      bot.setControlState("sneak", false);
+      this.noteCapFailure(hole);
       const msg = (e as Error)?.message ?? String(e);
-      console.log(`[Cap] ${bot.username}: cap failed at (${hole.x}, ${hole.top}, ${hole.z}): ${msg.slice(0, 80)}`);
+      console.log(
+        `[Cap] ${bot.username}: cap failed at (${hole.x}, ${hole.top}, ${hole.z}) against ${bot.blockAt(hole.ref)?.name ?? "?"}: ${msg.slice(0, 80)}`,
+      );
       return `Cap failed at ${hole.x}, ${hole.top}, ${hole.z}: ${msg.slice(0, 80)}`;
     }
+  }
+
+  private noteCapFailure(hole: { x: number; z: number; top: number }): void {
+    const key = `${hole.x},${hole.top},${hole.z}`;
+    const prev = capFailures.get(key);
+    const n = (prev?.n ?? 0) + 1;
+    capFailures.set(key, { n, at: Date.now() });
+    if (n >= 2) console.log(`[Cap] hole at (${key}) failed ${n} caps; skipping it for an hour`);
   }
 
   private async runSafetyOverrides(): Promise<boolean> {
