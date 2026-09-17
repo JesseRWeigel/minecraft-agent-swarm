@@ -52,12 +52,12 @@ export class GoalNearXZAbove extends goals.GoalNearXZ {
 export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   const moves = new Movements(bot);
   moves.maxDropDown = 3; // 3 blocks = no fall damage, 4 = 1.5 hearts
+  moves.allowParkour = false;
   // Runs 658-666: Mason stepped off the same Nether ledge at (345, 57, -40)
   // into the lava sea on three days; the fortress sweep's own cap never
   // applied because every walk builds its moves here. In the Nether a
   // drop is a stair or a cliff over lava: two blocks, no more.
   if (String(bot.game?.dimension ?? "").includes("nether")) moves.maxDropDown = 2;
-  moves.allowParkour = false;
   // The library allows a drop of ANY height when the landing block is water.
   // Run 597: a flooded shaft beside the stash, water at (306, 50, -324) over
   // a 23-block hole to a dry cobblestone floor at y=27, took six deaths in
