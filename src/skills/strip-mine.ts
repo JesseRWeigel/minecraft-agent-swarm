@@ -670,6 +670,48 @@ export const stripMineSkill: Skill = {
 
       // Walk forward into cleared space
       const targetPos = pos.offset(forward.x, 0, forward.z);
+      // Run 672: Forge fell 51 blocks at step 10 of a tunnel at (157, 15, -321),
+      // and 6 and 27 blocks in the two runs before, each time stepping from a
+      // dug cell into a cave void. Look under the next cell first: bridge a
+      // void with a spare block placed against the current floor, or end the
+      // tunnel here with what it earned.
+      const under = bot.blockAt(targetPos.offset(0, -1, 0));
+      if (!under || under.boundingBox !== "block") {
+        const filler = bot.inventory
+          .items()
+          .find((i) =>
+            [
+              "cobblestone",
+              "cobbled_deepslate",
+              "dirt",
+              "stone",
+              "andesite",
+              "diorite",
+              "granite",
+              "tuff",
+              "netherrack",
+            ].includes(i.name),
+          );
+        const ref = bot.blockAt(pos.offset(0, -1, 0));
+        let bridged = false;
+        if (filler && ref && ref.boundingBox === "block" && under && /air$/.test(under.name)) {
+          try {
+            await bot.equip(filler, "hand");
+            await bot.placeBlock(ref, new Vec3(forward.x, 0, forward.z));
+            bridged = bot.blockAt(targetPos.offset(0, -1, 0))?.boundingBox === "block";
+          } catch {
+            /* could not bridge — end the tunnel below */
+          }
+        }
+        if (!bridged) {
+          return {
+            success: mined > 0,
+            message: `Tunnel reached a ${under?.name ?? "void"} floor at step ${step} — stopped before stepping into it. Mined ${mined} blocks. ${formatOres(oresFound)}`,
+            stats: { blocksMined: mined, oresFound: oresFound.length },
+          };
+        }
+        console.log(`[Skill] strip_mine bridged a void under the next cell at step ${step} with ${filler!.name}`);
+      }
       await moveToPosition(bot, targetPos);
 
       // Place torch every N blocks
