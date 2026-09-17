@@ -1502,7 +1502,7 @@ async function craftItem(bot: Bot, itemName: string, count: number): Promise<str
 // Raw meats are the critical addition: bots hunt animals and end up holding
 // raw_mutton/raw_beef, but the old list only knew cooked food — so a starving
 // bot with raw meat got "No food!" and died. Raw is weak but beats starvation.
-const FOOD_PRIORITY = [
+export const FOOD_PRIORITY = [
   "rabbit_stew",
   "cooked_beef",
   "cooked_porkchop",

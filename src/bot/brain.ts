@@ -24,7 +24,7 @@ import { BotRoleConfig, FARM_SITE, BOT_ROSTER } from "./role.js";
 import { queryStrategic, queryReactive, queryCritic, chatWithLLM, type LLMMessage } from "../llm/index.js";
 import type { RoleContext } from "../llm/prompts.js";
 import { getWorldContext, isHostile } from "./perception.js";
-import { executeAction } from "./actions.js";
+import { executeAction, FOOD_PRIORITY } from "./actions.js";
 import {
   digOutIfStuck,
   escapeWaterIfDrowning,
@@ -63,6 +63,9 @@ const INTERACTIVE_RIM =
 /** Holes whose cap failed, shared by every bot in the process, so a hole that
  *  refuses a cap is left alone for an hour after two failures. */
 const capFailures = new Map<string, { n: number; at: number }>();
+
+/** Exactly what the eat action will consume. */
+const EDIBLE = new Set<string>(FOOD_PRIORITY);
 import { getAllMemoryStores } from "./memory-registry.js";
 import { updateBulletin, formatTeamBulletin } from "./bulletin.js";
 import { createLogger } from "../util/logger.js";
@@ -885,9 +888,12 @@ export class BotBrain {
   }
 
   private hasEdibleAboard(): boolean {
-    const edible =
-      /(bread|cooked_|^cod$|^salmon$|apple|carrot|potato|baked|melon_slice|cookie|beef|porkchop|mutton|chicken|rabbit|rotten_flesh|tropical_fish)/;
-    return this.bot.inventory.items().some((i) => edible.test(i.name));
+    // Run 676: the old regex matched rabbit_hide, rabbit_foot and
+    // poisonous_potato, so Blade at 0 hunger with a rabbit hide drew a
+    // low-hunger reactive on every health tick (143 calls in the hour) and
+    // every "eat" answered "No food in inventory!". Use the eat action's own
+    // list, so this asks only when eat would succeed.
+    return this.bot.inventory.items().some((i) => EDIBLE.has(i.name));
   }
 
   // ─── Safety overrides ─────────────────────────────────────────────────────
