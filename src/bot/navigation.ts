@@ -115,24 +115,15 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
     }
     return 0;
   };
-  // Runs 664-670: the pool under the village farm, ten blocks of water from
-  // y=47 to 56 with air above, drowned Blade twice, Mason and Flora. Roofed
-  // water is priced already; open deep water was free, and a walk to a plot
-  // on the pool's roof swam straight through it. A water cell with two more
-  // water blocks beneath it now costs +40. Shore and two-deep crossings stay
-  // free, so the village walks that a global water cost broke on 2026-09-13
-  // are untouched.
-  const deepWater = (b: { name?: string; position?: Vec3 }) => {
-    if (b.name !== "water" || !b.position) return 0;
-    const one = bot.blockAt(b.position.offset(0, -1, 0));
-    const two = bot.blockAt(b.position.offset(0, -2, 0));
-    return one?.name === "water" && two?.name === "water" ? 40 : 0;
-  };
+  // (Tried a +40 step cost on deep open water at 08:17Z on 2026-09-17 for
+  // the pool under the village farm: rejected walks went 68 -> 100 -> 181
+  // an hour and "No path" 98 -> 135 -> 226 across the next two runs, the
+  // 2026-09-13 shape again, and farm-site walks started failing. Reverted at
+  // 10:2xZ; the pool needs a narrower answer than a route cost.)
   (moves as unknown as { exclusionAreasStep: ((b: never) => number)[] }).exclusionAreasStep = [
     roofedWater as unknown as (b: never) => number,
     lavaEdge as unknown as (b: never) => number,
     deathZone as unknown as (b: never) => number,
-    deepWater as unknown as (b: never) => number,
   ];
   // The pathfinder ships with door opening OFF ("causes issues on non-Paper
   // servers"). This is Paper. Three bots stalled 3 blocks from a bed inside
