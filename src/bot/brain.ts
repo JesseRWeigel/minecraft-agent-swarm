@@ -1237,6 +1237,37 @@ export class BotBrain {
     // Safety overrides first
     if (await this.runSafetyOverrides()) return;
 
+    // Heal first, ahead of every other override. Run 707: this block sat
+    // behind the farm, Nether-return and stranded rules, and Mason ran those
+    // for two hours at a quarter heart with bread aboard. Run 704: Mason stood at 6 health and 9 hunger at the
+    // village with three bread aboard for twenty minutes, under the 14-health
+    // gate both Nether trips need, while the planner picked other work and
+    // auto-eat never fired. A hurt bot short of the healing range eats what
+    // it carries before anything else, up to three meals.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.bot.health < 14 &&
+      this.bot.food < 18 &&
+      this.hasEdibleAboard() &&
+      Date.now() - this.lastHealEatMs > 60_000
+    ) {
+      this.lastHealEatMs = Date.now();
+      this.log.info(
+        "Brain",
+        `OVERRIDE: health ${this.bot.health.toFixed(0)}/20 at hunger ${this.bot.food}/20 with food aboard — eating to heal`,
+      );
+      let last = "";
+      for (let meal = 0; meal < 3; meal++) {
+        last = String(await this.executeActionUnlessPaused("eat", {}));
+        this.log.info("Brain", `Heal: ate -> ${last}`);
+        if (!/^Ate /.test(last) || (this.bot.food ?? 20) >= 18) break;
+      }
+      this.lastAction = "eat";
+      this.lastResult = last;
+      return;
+    }
+
     // Bank the groceries FIRST. Run 600: the courier walked 365 blocks home
     // in 80 s with 13 potatoes and the ferry override, earlier in this
     // chain, sent him back to the frontier before the banking step ran; he
@@ -3115,35 +3146,6 @@ export class BotBrain {
         );
         return;
       }
-    }
-
-    // Heal first. Run 704: Mason stood at 6 health and 9 hunger at the
-    // village with three bread aboard for twenty minutes, under the 14-health
-    // gate both Nether trips need, while the planner picked other work and
-    // auto-eat never fired. A hurt bot short of the healing range eats what
-    // it carries before anything else, up to three meals.
-    if (
-      config.bot.allowStrategyOverrides &&
-      !isSkillRunning(this.bot) &&
-      this.bot.health < 14 &&
-      this.bot.food < 18 &&
-      this.hasEdibleAboard() &&
-      Date.now() - this.lastHealEatMs > 60_000
-    ) {
-      this.lastHealEatMs = Date.now();
-      this.log.info(
-        "Brain",
-        `OVERRIDE: health ${this.bot.health.toFixed(0)}/20 at hunger ${this.bot.food}/20 with food aboard — eating to heal`,
-      );
-      let last = "";
-      for (let meal = 0; meal < 3; meal++) {
-        last = String(await this.executeActionUnlessPaused("eat", {}));
-        this.log.info("Brain", `Heal: ate -> ${last}`);
-        if (!/^Ate /.test(last) || (this.bot.food ?? 20) >= 18) break;
-      }
-      this.lastAction = "eat";
-      this.lastResult = last;
-      return;
     }
 
     // Pantry first. Run 598: the village trip brought 37 potatoes home while
