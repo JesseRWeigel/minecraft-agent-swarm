@@ -679,6 +679,22 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
     const pos = bot.entity.position;
     const cause = lastDeathMessage || "unknown";
     memStore.recordDeath(pos.x, pos.y, pos.z, cause);
+    // Runs 699-700: Mason fell 28 blocks from the same Nether ledge lip at
+    // y=57 into lava twice in an hour. The death spot sits at the bottom, so
+    // the route cost around it never touched the lip. Record the fall's
+    // starting height as a second spot, so the lip itself is priced.
+    {
+      const dropNow = fallTracker.dropFrom(pos.y);
+      if (dropNow > 3) {
+        const originY = fallTracker.originY();
+        memStore.recordDeath(
+          pos.x,
+          originY,
+          pos.z,
+          `${cause} (fall origin, ${dropNow.toFixed(0)} blocks above the death)`,
+        );
+      }
+    }
     recordDeath(roleConfig.name);
     recentDeathTimes.push(Date.now());
     while (recentDeathTimes.length > 12) recentDeathTimes.shift();

@@ -113,6 +113,8 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
     const t = d.timestamp ? Date.parse(d.timestamp) : NaN;
     return Number.isFinite(t) && Date.now() - t < 3_600_000;
   });
+  // Run 700: lava deaths and fall origins join the team-wide day-long zones
+  // (Mason fell from the same Nether ledge into lava twice in an hour).
   // Run 681: four drownings in one hour, three of them in the flooded cavity
   // east of the village farm (x 312-326, z -314..-300, y 50-56) that has now
   // drowned nine bots in a day; a per-bot, one-hour memory forgets it between
@@ -123,7 +125,8 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
     if (store === getBotMemoryStore(bot)) continue;
     for (const d of store.getDeaths()) {
       const t = d.timestamp ? Date.parse(d.timestamp) : NaN;
-      if (Number.isFinite(t) && Date.now() - t < 86_400_000 && /drown/i.test(d.cause ?? "")) recentDeaths.push(d);
+      if (Number.isFinite(t) && Date.now() - t < 86_400_000 && /drown|lava|fall origin/i.test(d.cause ?? ""))
+        recentDeaths.push(d);
     }
   }
   for (const d of getBotMemoryStore(bot)?.getDeaths() ?? []) {
@@ -132,7 +135,7 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
       Number.isFinite(t) &&
       Date.now() - t >= 3_600_000 &&
       Date.now() - t < 86_400_000 &&
-      /drown/i.test(d.cause ?? "")
+      /drown|lava|fall origin/i.test(d.cause ?? "")
     )
       recentDeaths.push(d);
   }
