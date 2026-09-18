@@ -107,11 +107,37 @@ export const lootBastionSkill: Skill = {
     while (gap() > 24 && !chest && !signal.aborted && Date.now() < marchUntil) {
       const g = gap();
       step(`Marching to the bastion — ${Math.round(g)} blocks out...`, 0.2 + Math.min(0.4, (387 - g) / 967));
-      const t = Math.min(1, 100 / g);
-      const wx = Math.round(bot.entity.position.x + (BASTION.x - bot.entity.position.x) * t);
-      const wz = Math.round(bot.entity.position.z + (BASTION.z - bot.entity.position.z) * t);
       const before = gap();
-      await safeGoto(bot, new goals.GoalNearXZ(wx, wz, 10), 45_000, 12_000).catch(() => {});
+      // Run 703: the march took 100-block waypoints, and from a netherrack
+      // shelf at (77, 91, -67) and again at (179, 95, -158) the planner
+      // answered "No path" or a phantom arrival for the same waypoint three
+      // times, which ended the trip 339 and then 133 blocks out. When the
+      // straight waypoint has no route, try a shorter hop and a slant to
+      // either side of the bearing before counting the leg dry.
+      const px = bot.entity.position.x;
+      const pz = bot.entity.position.z;
+      const bearing = Math.atan2(BASTION.z - pz, BASTION.x - px);
+      const tries: Array<[number, number, number]> = [
+        [100, 0, 45_000],
+        [50, 0, 30_000],
+        [50, 0.7, 30_000],
+        [50, -0.7, 30_000],
+      ];
+      for (const [len, slant, budget] of tries) {
+        if (signal.aborted || Date.now() >= marchUntil) break;
+        const reach = Math.min(len, g);
+        const wx = Math.round(px + Math.cos(bearing + slant) * reach);
+        const wz = Math.round(pz + Math.sin(bearing + slant) * reach);
+        const ok = await safeGoto(bot, new goals.GoalNearXZ(wx, wz, 10), budget, 12_000)
+          .then(() => true)
+          .catch(() => false);
+        if (slant !== 0 || len !== 100) {
+          console.log(
+            `[Bastion] ${bot.username}: fallback hop ${len} at ${slant > 0 ? "+" : ""}${slant.toFixed(1)} rad -> ${ok ? "reached" : "failed"}, gap ${Math.round(gap())}`,
+          );
+        }
+        if (ok || before - gap() >= 8) break;
+      }
       chest = bot.findBlock({ matching: (b) => b.name === "chest" || b.name === "trapped_chest", maxDistance: 48 });
       if (before - gap() < 8 && ++guard >= 3) break;
       else if (before - gap() >= 8) guard = 0;
