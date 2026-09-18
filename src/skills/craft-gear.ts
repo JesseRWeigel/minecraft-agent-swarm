@@ -610,7 +610,7 @@ export const craftGearSkill: Skill = {
 };
 
 /** Craft one gear item (tool/armor) at a crafting table, verifying it appeared. Returns true if crafted. */
-async function craftPiece(
+export async function craftPiece(
   bot: Bot,
   mcData: ReturnType<typeof mcDataLoader>,
   itemName: string,

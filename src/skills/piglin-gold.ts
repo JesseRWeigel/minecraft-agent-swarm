@@ -35,6 +35,27 @@ export async function wearGoldForPiglins(bot: Bot, tag: string, onStep?: (msg: s
     const { STASH_POS } = await import("../bot/role.js");
     await withdrawStash(bot, STASH_POS, "golden_boots", 1, 60_000).catch(() => {});
     gold = bot.inventory.items().find((i) => GOLD_PIECE.test(i.name));
+    if (!gold) {
+      // Run 709: the boots burned off Mason's feet in Nether fire (gold armour
+      // has 91 durability), and the stash held five gold ingots and no boots,
+      // so both Nether trips stood down. Forge a pair: four ingots at a table.
+      const ingots = () =>
+        bot.inventory
+          .items()
+          .filter((i) => i.name === "gold_ingot")
+          .reduce((n, i) => n + i.count, 0);
+      if (ingots() < 4) await withdrawStash(bot, STASH_POS, "gold_ingot", 4 - ingots(), 60_000).catch(() => {});
+      if (ingots() >= 4) {
+        onStep?.("Forging golden boots from stash gold...");
+        const { craftPiece } = await import("./craft-gear.js");
+        const mcDataLoader = (await import("minecraft-data")).default;
+        const ok = await craftPiece(bot, mcDataLoader(bot.version), "golden_boots", []).catch(() => false);
+        console.log(`[${tag}] ${bot.username}: golden boots forge ${ok ? "done" : "failed"} (ingots left ${ingots()})`);
+        gold = bot.inventory.items().find((i) => GOLD_PIECE.test(i.name));
+      } else {
+        console.log(`[${tag}] ${bot.username}: no golden boots and only ${ingots()} gold ingots reachable`);
+      }
+    }
   }
   if (gold) {
     const dest = gold.name.endsWith("boots")
