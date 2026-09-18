@@ -3384,7 +3384,14 @@ export class BotBrain {
         .filter((i) => i.name === "iron_ingot")
         .reduce((n, i) => n + i.count, 0);
       const ironReachable = ironAboard + (ledgerKnown() ? stashCount("iron_ingot", this.roleConfig.stashPos?.y) : 99);
-      if (((hasPick && ironReachable >= 4) || noSword) && cooledArmor) {
+      // Run 697: 472 leather in the stash and no iron; leather armour is a
+      // craft too, so a reachable hide counts the way ingots do.
+      const leatherReachable =
+        this.bot.inventory
+          .items()
+          .filter((i) => i.name === "leather")
+          .reduce((n, i) => n + i.count, 0) + (ledgerKnown() ? stashCount("leather", this.roleConfig.stashPos?.y) : 0);
+      if (((hasPick && (ironReachable >= 4 || leatherReachable >= 4)) || noSword) && cooledArmor) {
         this.lastArmorCraftMs = Date.now();
         this.log.info("Brain", "OVERRIDE: unarmoured with a pick in hand — running craft_gear to forge armour");
         this.events.onThought("A pick in hand but nothing on my back. Time to forge some armour.");

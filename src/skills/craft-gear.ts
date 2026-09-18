@@ -297,6 +297,38 @@ export const craftGearSkill: Skill = {
       }
     }
 
+    // Run 697: the stash held 472 leather and two iron ingots, and this skill
+    // only ever forged iron, so Mason went to the Nether in one chestplate and
+    // the fortress override's two-piece armour gate stayed shut afterwards.
+    // Leather armour is cheap (boots 4, helmet 5, leggings 7, tunic 8) and
+    // halves nothing, but it counts, and it keeps a bot alive a hit longer.
+    // Fill each empty armour slot with leather when iron cannot.
+    if (!signal.aborted && !gearExpired()) {
+      const LEATHER_BY_SLOT: [number, string, number][] = [
+        [8, "leather_boots", 4],
+        [5, "leather_helmet", 5],
+        [7, "leather_leggings", 7],
+        [6, "leather_chestplate", 8],
+      ];
+      const leatherHeld = () =>
+        bot.inventory
+          .items()
+          .filter((i) => i.name === "leather")
+          .reduce((s, i) => s + i.count, 0);
+      const empty = LEATHER_BY_SLOT.filter(([slot]) => !bot.inventory.slots[slot]);
+      const need = empty.reduce((s, [, , n]) => s + n, 0);
+      if (empty.length && leatherHeld() < need && stashPos) {
+        const { withdrawStash } = await import("./stash.js");
+        await withdrawStash(bot, stashPos, "leather", need - leatherHeld(), 60_000).catch(() => {});
+      }
+      for (const [, name, cost] of empty) {
+        if (signal.aborted || gearExpired()) break;
+        if (leatherHeld() < cost) continue;
+        const ok = await craftPiece(bot, mcData, name, crafted);
+        console.log(`[GearDebug] leather armour: ${name} ${ok ? "crafted" : "failed"} (leather now ${leatherHeld()})`);
+      }
+    }
+
     // Logs are not planks. Run 378: bots stood at the table with 8 logs and
     // 62 sticks, planks=0, and every pickaxe tier read recipe=NO — a wooden
     // pick needs 3 PLANKS and recipesFor only sees what is already in the
