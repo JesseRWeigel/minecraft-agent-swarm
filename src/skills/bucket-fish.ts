@@ -92,22 +92,27 @@ export const bucketFishSkill: Skill = {
     // the lake while the walk goal sat on the fish. Never dive for a fish:
     // take only fish near the surface, walk to a standing spot on the shore
     // within reach, and use the bucket from there.
+    // Run 687: every salmon seen was "too deep" with the surface test at two
+    // blocks; salmon cruise two to three blocks under the surface. Three
+    // blocks of water above the fish is still within reach from a shallow
+    // standing spot.
     const nearSurface = (e: { position: Vec3 }) =>
-      /air/.test(bot.blockAt(e.position.offset(0, 2, 0))?.name ?? "") ||
-      /air/.test(bot.blockAt(e.position.offset(0, 1, 0))?.name ?? "");
+      [1, 2, 3].some((dy) => /air/.test(bot.blockAt(e.position.offset(0, dy, 0))?.name ?? ""));
     const shoreSpot = (e: { position: Vec3 }): Vec3 | null => {
       const c = e.position.floored();
       let best: Vec3 | null = null;
-      let bestD = 3.2;
-      for (let dx = -3; dx <= 3; dx++)
-        for (let dz = -3; dz <= 3; dz++)
-          for (let dy = -1; dy <= 2; dy++) {
+      let bestD = 3.4;
+      for (let dx = -4; dx <= 4; dx++)
+        for (let dz = -4; dz <= 4; dz++)
+          for (let dy = -1; dy <= 3; dy++) {
             const feet = c.offset(dx, dy, dz);
             const under = bot.blockAt(feet.offset(0, -1, 0));
             const at = bot.blockAt(feet);
             const head = bot.blockAt(feet.offset(0, 1, 0));
-            if (!under || under.boundingBox !== "block" || under.name === "water") continue;
-            if (!at || at.name !== "air" || !head || head.name !== "air") continue;
+            // Solid footing with the head in air; feet may stand in one
+            // block of water (a player wades to the knees to reach a fish).
+            if (!under || under.boundingBox !== "block") continue;
+            if (!at || (at.name !== "air" && at.name !== "water") || !head || head.name !== "air") continue;
             const d = feet.offset(0.5, 1.6, 0.5).distanceTo(e.position);
             if (d < bestD) {
               bestD = d;

@@ -240,6 +240,35 @@ function inWater(bot: Bot): boolean {
   return !!b && (b.name === "water" || b.name === "flowing_water" || b.name === "bubble_column");
 }
 
+/** True when carving the next stair step toward (dx, dz) from feet (x, y, z)
+ *  would open a cell that touches water: the new feet, the new head, the
+ *  bot's own head clearance, the step block, and their side and top
+ *  neighbours. */
+function wouldFlood(bot: Bot, x: number, y: number, z: number, dx: number, dz: number): boolean {
+  const cells: [number, number, number][] = [
+    [x + dx, y + 1, z + dz],
+    [x + dx, y + 2, z + dz],
+    [x, y + 2, z],
+    [x + dx, y, z + dz],
+  ];
+  const isWater = (bx: number, by: number, bz: number) => {
+    const b = bot.blockAt(new Vec3(bx, by, bz));
+    return !!b && (b.name === "water" || b.name === "flowing_water" || b.name === "bubble_column");
+  };
+  const sides: [number, number, number][] = [
+    [1, 0, 0],
+    [-1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+    [0, 0, -1],
+  ];
+  for (const [cx, cy, cz] of cells) {
+    if (isWater(cx, cy, cz)) return true;
+    for (const [nx, ny, nz] of sides) if (isWater(cx + nx, cy + ny, cz + nz)) return true;
+  }
+  return false;
+}
+
 /** True when the bot's head is already above the water: nothing more to gain by swimming. */
 function headAboveWater(bot: Bot): boolean {
   const head = bot.blockAt(bot.entity.position.offset(0, 1, 0));
@@ -378,6 +407,7 @@ export const escapeToSurfaceSkill: Skill = {
     const deadline = Date.now() + 220_000;
     let lastY = startY;
     let stallCount = 0;
+    let wetTurns = 0;
 
     while (!signal.aborted && Date.now() < deadline) {
       if (died) return diedResult();
@@ -406,6 +436,29 @@ export const escapeToSurfaceSkill: Skill = {
       );
 
       const [dx, dz] = dirs[dirIdx];
+      // Run 687: two of the hour's three drownings were this staircase
+      // opening a wall into a water pocket (Forge at y=48, Blade at y=43;
+      // a 188 s dig with 0 air followed). Look at the cells about to be dug
+      // and every block touching them; water there floods the stair, so
+      // turn instead. Four wet turns in a row means boxed in by water.
+      if (wouldFlood(bot, f.x, f.y, f.z, dx, dz)) {
+        wetTurns++;
+        console.log(
+          `[Escape] ${bot.username}: water beside the stair toward (${dx}, ${dz}) at y=${f.y}; turning (${wetTurns}/4)`,
+        );
+        dirIdx = (dirIdx + 1) % dirs.length;
+        stallCount = 0;
+        if (wetTurns >= 4) {
+          bot.removeListener("death", onDeath);
+          return {
+            success: false,
+            message: `Boxed in by water at y=${f.y}: every stair direction opens into a water pocket. Move a few blocks along the cave and invoke_skill {"skill":"escape_to_surface"} again.`,
+            stats: { fromY: startY, toY: f.y },
+          };
+        }
+        continue;
+      }
+      wetTurns = 0;
       // One staircase step in this direction ends with the bot standing on the
       // block at (f+dir), one higher. Clear the two air blocks the bot will
       // occupy there, plus the block above its own head so it can rise.
