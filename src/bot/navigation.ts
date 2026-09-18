@@ -53,6 +53,26 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   const moves = new Movements(bot);
   moves.maxDropDown = 3; // 3 blocks = no fall damage, 4 = 1.5 hearts
   moves.allowParkour = false;
+  // Run 706: the planner's scaffolding list is dirt and cobblestone only, so
+  // the Nether marches' allow1by1towers never placed a block. Mason dug a
+  // one-wide netherrack shaft toward a bastion chest and stood in it for two
+  // hours with 179 netherrack in his pack and no route out. A player pillars
+  // up with whatever rock is aboard.
+  for (const name of [
+    "netherrack",
+    "cobbled_deepslate",
+    "blackstone",
+    "basalt",
+    "stone",
+    "andesite",
+    "diorite",
+    "granite",
+    "deepslate",
+    "tuff",
+  ]) {
+    const id = bot.registry.blocksByName[name]?.id;
+    if (id !== undefined && !moves.scafoldingBlocks.includes(id)) moves.scafoldingBlocks.push(id);
+  }
   // Runs 658-666: Mason stepped off the same Nether ledge at (345, 57, -40)
   // into the lava sea on three days; the fortress sweep's own cap never
   // applied because every walk builds its moves here. In the Nether a

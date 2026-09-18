@@ -1611,9 +1611,15 @@ export class BotBrain {
       // stranded and full-frame triggers stay: those are reactive rescues.
       const netherEntered = readTeamEarned(BOT_ROSTER.map((b) => b.name)).has("story/enter_the_nether");
       const cooledDown = Date.now() - this.lastPortalOverrideMs > 300_000;
+      // Run 706: this rescue runs ahead of the heal-eat rule, and Mason sat
+      // stranded at 0 hunger and a quarter heart with three bread aboard for
+      // two hours while it refired every five minutes. A hurt bot with food
+      // eats first; the march home follows.
+      const needsMealFirst = this.bot.health < 14 && this.bot.food < 18 && this.hasEdibleAboard();
       if (
         ((holdsDoorwayPick && !litPortalNearby && !netherEntered) || holdsFullFrame || strandedInNether) &&
-        cooledDown
+        cooledDown &&
+        !needsMealFirst
       ) {
         this.lastPortalOverrideMs = Date.now();
         this.log.info(
