@@ -254,6 +254,7 @@ export class BotBrain {
   private lastFishOverrideMs = 0;
   private lastHuntFoodOverrideMs = 0;
   private lastStashFoodMs = 0;
+  private lastHealEatMs = 0;
   private lastBankGroceriesMs = 0;
   /** Edible items aboard, pantry sense (run 599: Forge died mining with 37 potatoes). */
   private pantryAboard(): number {
@@ -3095,6 +3096,35 @@ export class BotBrain {
         );
         return;
       }
+    }
+
+    // Heal first. Run 704: Mason stood at 6 health and 9 hunger at the
+    // village with three bread aboard for twenty minutes, under the 14-health
+    // gate both Nether trips need, while the planner picked other work and
+    // auto-eat never fired. A hurt bot short of the healing range eats what
+    // it carries before anything else, up to three meals.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.bot.health < 14 &&
+      this.bot.food < 18 &&
+      this.hasEdibleAboard() &&
+      Date.now() - this.lastHealEatMs > 60_000
+    ) {
+      this.lastHealEatMs = Date.now();
+      this.log.info(
+        "Brain",
+        `OVERRIDE: health ${this.bot.health.toFixed(0)}/20 at hunger ${this.bot.food}/20 with food aboard — eating to heal`,
+      );
+      let last = "";
+      for (let meal = 0; meal < 3; meal++) {
+        last = String(await this.executeActionUnlessPaused("eat", {}));
+        this.log.info("Brain", `Heal: ate -> ${last}`);
+        if (!/^Ate /.test(last) || (this.bot.food ?? 20) >= 18) break;
+      }
+      this.lastAction = "eat";
+      this.lastResult = last;
+      return;
     }
 
     // Pantry first. Run 598: the village trip brought 37 potatoes home while
