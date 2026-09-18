@@ -56,6 +56,7 @@ export const bucketFishSkill: Skill = {
     const step = (progress: number, message: string) =>
       onProgress({ skillName: "bucket_fish", phase: "Fishing", progress, message, active: true });
     bot.pathfinder.setMovements(baseMoves(bot));
+    const submergedMs = makeSubmersionClock(bot);
 
     if (fishBucket(bot)) {
       return { success: true, message: `Already holding a ${fishBucket(bot)} (Tactical Fishing).` };
@@ -159,12 +160,12 @@ export const bucketFishSkill: Skill = {
         // then dip for the swing when the fish is a little deeper. Air stays
         // above 12 or the dip is skipped; the drown reflex still owns the keys
         // if anything goes wrong.
-        approached = await surfaceSwimTo(bot, fish, signal, step, tries);
+        approached = await surfaceSwimTo(bot, fish, signal, step, tries, submergedMs);
       }
-      if (!fish.isValid || !approached || (bot.oxygenLevel ?? 20) < 12) {
+      if (!fish.isValid || !approached || submergedMs() > 8000) {
         const gap = fish.isValid ? fish.position.distanceTo(bot.entity.position.offset(0, 1.6, 0)) : 99;
         console.log(
-          `[FishDebug] ${bot.username}: ${fish.isValid ? fish.name : "fish"} out of reach (gap ${gap.toFixed(1)}, air ${bot.oxygenLevel ?? 20}, depth ${fish.isValid ? depthBelowSurface(bot, fish.position) : "?"}); next fish`,
+          `[FishDebug] ${bot.username}: ${fish.isValid ? fish.name : "fish"} out of reach (gap ${gap.toFixed(1)}, under ${submergedMs()} ms, depth ${fish.isValid ? depthBelowSurface(bot, fish.position) : "?"}); next fish`,
         );
         fish = nearestFishExcept(bot, tried);
         continue;
@@ -225,6 +226,25 @@ function nearestFishExcept(bot: Bot, skip: Set<number>) {
   return best;
 }
 
+/** Run 690: bot.oxygenLevel read 7 and 8 while Mason stood on dry land 38
+ *  blocks from the water, so every air guard refused. The client's air
+ *  value lags the server; the skill now times its own submersion instead:
+ *  continuous milliseconds with the head under water, 0 when the head is in
+ *  air. A player has about 15 s of breath, so the guards use 8 s. */
+export function makeSubmersionClock(bot: Bot): () => number {
+  let since = 0;
+  return () => {
+    const head = bot.blockAt(bot.entity.position.offset(0, 1.6, 0));
+    const under = !!head && /water/.test(head.name);
+    if (!under) {
+      since = 0;
+      return 0;
+    }
+    if (!since) since = Date.now();
+    return Date.now() - since;
+  };
+}
+
 /** Blocks of water between the fish and the first air above it (0 = at the surface). */
 function depthBelowSurface(bot: Bot, p: Vec3): number {
   for (let dy = 1; dy <= 8; dy++) {
@@ -243,6 +263,7 @@ async function surfaceSwimTo(
   signal: AbortSignal,
   step: (progress: number, message: string) => void,
   tries: number,
+  submergedMs: () => number,
 ): Promise<boolean> {
   const inWater = () => /water/.test(bot.blockAt(bot.entity.position)?.name ?? "");
   const depth = depthBelowSurface(bot, fish.position);
@@ -267,7 +288,7 @@ async function surfaceSwimTo(
   const end = Date.now() + 25_000;
   let reached = false;
   while (Date.now() < end && fish.isValid && !signal.aborted) {
-    if ((bot.oxygenLevel ?? 20) < 12) break;
+    if (submergedMs() > 8000) break;
     const me = bot.entity.position;
     const flat = Math.hypot(fish.position.x - me.x, fish.position.z - me.z);
     if (flat <= 1.2) {
@@ -287,7 +308,7 @@ async function surfaceSwimTo(
   }
   // Dip: release jump so the bot sinks toward a fish two or three blocks down.
   const dipMs = Math.min(4500, Math.max(0, (depthBelowSurface(bot, fish.position) - 1) * 900));
-  if (dipMs > 0 && (bot.oxygenLevel ?? 20) >= 16) {
+  if (dipMs > 0 && submergedMs() < 1500) {
     // Look down at the fish so the sink runs toward it, then release jump.
     await bot.lookAt(fish.position, true).catch(() => {});
     bot.setControlState("forward", true);
@@ -299,7 +320,7 @@ async function surfaceSwimTo(
   }
   const gap = fish.position.distanceTo(bot.entity.position.offset(0, 1.6, 0));
   console.log(
-    `[FishDebug] ${bot.username}: surface swim reached ${fish.name}, gap ${gap.toFixed(1)}, depth ${depth}, air ${bot.oxygenLevel ?? 20}`,
+    `[FishDebug] ${bot.username}: surface swim reached ${fish.name}, gap ${gap.toFixed(1)}, depth ${depth}, under ${submergedMs()} ms`,
   );
   return gap <= 3.5;
 }
