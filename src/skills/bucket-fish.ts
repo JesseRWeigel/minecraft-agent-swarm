@@ -143,22 +143,28 @@ export const bucketFishSkill: Skill = {
         continue;
       }
       const spot = shoreSpot(fish);
-      if (!spot) {
-        console.log(
-          `[FishDebug] ${bot.username}: ${fish.name} at ${fish.position.floored()} has no standing spot within reach; skipping`,
+      let approached = false;
+      if (spot) {
+        step(
+          0.2 + tries * 0.1,
+          `Walking to the shore beside a ${fish.name} ${fish.position.distanceTo(bot.entity.position).toFixed(0)} blocks away...`,
         );
-        fish = nearestFishExcept(bot, tried);
-        continue;
+        await safeGoto(bot, new goals.GoalBlock(spot.x, spot.y, spot.z), 30_000).catch(() => {});
+        approached = fish.isValid && fish.position.distanceTo(bot.entity.position.offset(0, 1.6, 0)) <= 3.5;
       }
-      step(
-        0.2 + tries * 0.1,
-        `Walking to the shore beside a ${fish.name} ${fish.position.distanceTo(bot.entity.position).toFixed(0)} blocks away...`,
-      );
-      await safeGoto(bot, new goals.GoalBlock(spot.x, spot.y, spot.z), 30_000).catch(() => {});
-      const gap = fish.isValid ? fish.position.distanceTo(bot.entity.position.offset(0, 1.6, 0)) : 99;
-      if (!fish.isValid || gap > 3.5 || (bot.oxygenLevel ?? 20) < 12) {
+      if (!approached && fish.isValid) {
+        // Runs 687-688: every salmon sat two to five blocks under a lake with
+        // no shore block within reach, so the shore walk never swung. Do what
+        // a player does: swim on the surface above the fish with jump held,
+        // then dip for the swing when the fish is a little deeper. Air stays
+        // above 12 or the dip is skipped; the drown reflex still owns the keys
+        // if anything goes wrong.
+        approached = await surfaceSwimTo(bot, fish, signal, step, tries);
+      }
+      if (!fish.isValid || !approached || (bot.oxygenLevel ?? 20) < 12) {
+        const gap = fish.isValid ? fish.position.distanceTo(bot.entity.position.offset(0, 1.6, 0)) : 99;
         console.log(
-          `[FishDebug] ${bot.username}: ${fish.name} out of reach after the walk (gap ${gap.toFixed(1)}, air ${bot.oxygenLevel ?? 20}); next fish`,
+          `[FishDebug] ${bot.username}: ${fish.isValid ? fish.name : "fish"} out of reach (gap ${gap.toFixed(1)}, air ${bot.oxygenLevel ?? 20}, depth ${fish.isValid ? depthBelowSurface(bot, fish.position) : "?"}); next fish`,
         );
         fish = nearestFishExcept(bot, tried);
         continue;
@@ -186,8 +192,11 @@ export const bucketFishSkill: Skill = {
           `[FishDebug] ${bot.username}: swing ${swing + 1} at ${fish.name} gap ${fish.position.distanceTo(bot.entity.position.offset(0, 1.6, 0)).toFixed(1)} held=${bot.heldItem?.name ?? "none"} result=${fishBucket(bot) ?? "nothing"}`,
         );
       }
+      bot.setControlState("forward", false);
+      if (/water/.test(bot.blockAt(bot.entity.position)?.name ?? "")) bot.setControlState("jump", true);
       const got = fishBucket(bot);
       if (got) {
+        bot.clearControlStates();
         console.log(`[Fish] ${bot.username}: scooped a ${fish.name} into a bucket at ${fish.position.floored()}`);
         return { success: true, message: `Scooped a ${fish.name} into a bucket (Tactical Fishing).`, stats: { tries } };
       }
@@ -214,4 +223,73 @@ function nearestFishExcept(bot: Bot, skip: Set<number>) {
     }
   }
   return best;
+}
+
+/** Blocks of water between the fish and the first air above it (0 = at the surface). */
+function depthBelowSurface(bot: Bot, p: Vec3): number {
+  for (let dy = 1; dy <= 8; dy++) {
+    const b = bot.blockAt(p.offset(0, dy, 0));
+    if (!b || !/water/.test(b.name)) return dy - 1;
+  }
+  return 8;
+}
+
+/** Swim on the surface toward the fish with jump held, then dip for the swing
+ *  when the fish is up to three blocks down. Returns true when the fish is
+ *  within reach of the eyes. Never runs the air under 12. */
+async function surfaceSwimTo(
+  bot: Bot,
+  fish: { position: Vec3; isValid: boolean; name?: string },
+  signal: AbortSignal,
+  step: (progress: number, message: string) => void,
+  tries: number,
+): Promise<boolean> {
+  const inWater = () => /water/.test(bot.blockAt(bot.entity.position)?.name ?? "");
+  const depth = depthBelowSurface(bot, fish.position);
+  if (depth > 3) {
+    console.log(`[FishDebug] ${bot.username}: ${fish.name} is ${depth} blocks under the surface; too deep to dip for`);
+    return false;
+  }
+  // Get into the water first: the nearest water block to the bot, then the
+  // pathfinder walks to its edge.
+  if (!inWater()) {
+    const water = bot.findBlock({ matching: (b) => b.name === "water", maxDistance: 24 });
+    if (!water) return false;
+    step(0.2 + tries * 0.1, `Wading in toward a ${fish.name}...`);
+    await safeGoto(bot, new goals.GoalNear(water.position.x, water.position.y + 1, water.position.z, 1), 20_000).catch(
+      () => {},
+    );
+  }
+  const end = Date.now() + 25_000;
+  let reached = false;
+  while (Date.now() < end && fish.isValid && !signal.aborted) {
+    if ((bot.oxygenLevel ?? 20) < 12) break;
+    const me = bot.entity.position;
+    const flat = Math.hypot(fish.position.x - me.x, fish.position.z - me.z);
+    if (flat <= 1.2) {
+      reached = true;
+      break;
+    }
+    const surfaceY = fish.position.y + depthBelowSurface(bot, fish.position) + 0.5;
+    await bot.lookAt(new Vec3(fish.position.x, surfaceY, fish.position.z), true).catch(() => {});
+    bot.setControlState("forward", true);
+    bot.setControlState("jump", true);
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  bot.setControlState("forward", false);
+  if (!reached || !fish.isValid) {
+    if (inWater()) bot.setControlState("jump", true);
+    return false;
+  }
+  // Dip: release jump so the bot sinks toward a fish two or three blocks down.
+  const dipMs = Math.min(2200, Math.max(0, (depthBelowSurface(bot, fish.position) - 1) * 900));
+  if (dipMs > 0 && (bot.oxygenLevel ?? 20) >= 14) {
+    bot.setControlState("jump", false);
+    await new Promise((r) => setTimeout(r, dipMs));
+  }
+  const gap = fish.position.distanceTo(bot.entity.position.offset(0, 1.6, 0));
+  console.log(
+    `[FishDebug] ${bot.username}: surface swim reached ${fish.name}, gap ${gap.toFixed(1)}, depth ${depth}, air ${bot.oxygenLevel ?? 20}`,
+  );
+  return gap <= 3.5;
 }
