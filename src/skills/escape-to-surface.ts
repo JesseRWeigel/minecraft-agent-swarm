@@ -490,6 +490,19 @@ export const escapeToSurfaceSkill: Skill = {
               if (wouldFlood(bot, cx - dry[0], f.y, cz - dry[1], dry[0], dry[1]) && k > 1) break;
               await handDig(bot, cx, f.y, cz);
               await handDig(bot, cx, f.y + 1, cz);
+              // Run 694: two bots "suffocated in a wall" right after this
+              // retreat. A dig the server has not confirmed comes back on the
+              // client 1.5 s later, and the walk had already pushed the bot
+              // into it. Wait for the cells to read as air before stepping.
+              await new Promise((r) => setTimeout(r, 800));
+              const feetCell = bot.blockAt(new Vec3(cx, f.y, cz));
+              const headCell = bot.blockAt(new Vec3(cx, f.y + 1, cz));
+              if (!feetCell || !headCell || feetCell.boundingBox === "block" || headCell.boundingBox === "block") {
+                console.log(
+                  `[Escape] ${bot.username}: retreat cell at (${cx}, ${f.y}, ${cz}) still ${feetCell?.name ?? "?"}/${headCell?.name ?? "?"}; stopping the retreat`,
+                );
+                break;
+              }
               try {
                 await bot.lookAt(new Vec3(cx + 0.5, f.y + 1, cz + 0.5), true);
               } catch {

@@ -325,8 +325,15 @@ async function surfaceSwimTo(
       bestFlat = flat;
       lastGainAt = Date.now();
     } else if (Date.now() - lastGainAt > 6000) {
+      const keys =
+        Object.entries(bot.controlState ?? {})
+          .filter(([, v]) => v)
+          .map(([k]) => k)
+          .join("+") || "none";
+      const vel = bot.entity.velocity ? Math.hypot(bot.entity.velocity.x, bot.entity.velocity.z).toFixed(2) : "?";
+      const pf = bot.pathfinder as unknown as { goal?: unknown };
       console.log(
-        `[FishDebug] ${bot.username}: swim stalled at ${flat.toFixed(1)} blocks from the ${fish.name} (in water: ${inWater()}, moved ${bot.entity.position.distanceTo(startPos).toFixed(1)} since the wade)`,
+        `[FishDebug] ${bot.username}: swim stalled at ${flat.toFixed(1)} blocks from the ${fish.name} (in water: ${inWater()}, moved ${bot.entity.position.distanceTo(startPos).toFixed(1)} since the wade, keys=${keys}, vel=${vel}, goal=${pf.goal ? "set" : "none"}, feet=${bot.blockAt(bot.entity.position)?.name ?? "?"}, head=${bot.blockAt(bot.entity.position.offset(0, 1.6, 0))?.name ?? "?"}, yaw=${bot.entity.yaw.toFixed(2)})`,
       );
       break;
     }
