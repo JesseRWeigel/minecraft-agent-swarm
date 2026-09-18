@@ -36,6 +36,25 @@ const PRIZES = new Set([
   "diamond",
 ]);
 
+const EDIBLE = /^(bread|baked_potato|cooked_[a-z]+|beef|porkchop|mutton|chicken|cod|salmon|apple|carrot)$/;
+
+/**
+ * Run 705: no override runs while a skill holds the bot, and auto-eat is off,
+ * so a nine-minute raid ended at 0 hunger. A player eats on the march.
+ */
+async function eatOnTheMarch(bot: Bot): Promise<void> {
+  if ((bot.food ?? 20) >= 10) return;
+  const food = bot.inventory.items().find((i) => EDIBLE.test(i.name));
+  if (!food) return;
+  try {
+    await bot.equip(food, "hand");
+    await bot.consume();
+    console.log(`[Bastion] ${bot.username}: ate ${food.name} on the march, hunger ${bot.food}/20`);
+  } catch (e) {
+    console.log(`[Bastion] ${bot.username}: meal on the march failed: ${String(e).slice(0, 80)}`);
+  }
+}
+
 function inNether(bot: Bot): boolean {
   return String(bot.game.dimension).includes("nether");
 }
@@ -79,6 +98,28 @@ export const lootBastionSkill: Skill = {
           ),
         };
       }
+      // Run 705: both pickaxes wore out on the march and the raid ended
+      // pickless above the chest, at 0 hunger, in a one-wide shaft. Carry a
+      // second pick and a few meals when the stash has them; best effort.
+      const picks = () => bot.inventory.items().filter((i) => /_pickaxe$/.test(i.name)).length;
+      const edibleAboard = () => bot.inventory.items().some((i) => EDIBLE.test(i.name));
+      if (picks() < 2 || !edibleAboard()) {
+        const { withdrawStash } = await import("./stash.js");
+        const { STASH_POS } = await import("../bot/role.js");
+        if (picks() < 2) {
+          for (const name of ["iron_pickaxe", "stone_pickaxe"]) {
+            await withdrawStash(bot, STASH_POS, name, 1, 60_000).catch(() => {});
+            if (picks() >= 2) break;
+          }
+        }
+        if (!edibleAboard()) {
+          for (const name of ["bread", "baked_potato", "cooked_beef", "cooked_porkchop", "cooked_mutton"]) {
+            await withdrawStash(bot, STASH_POS, name, 4, 60_000).catch(() => {});
+            if (edibleAboard()) break;
+          }
+        }
+        console.log(`[Bastion] ${bot.username}: packed for the raid — picks ${picks()}, food aboard ${edibleAboard()}`);
+      }
       step("Stepping through the portal...", 0.1);
       const portal = bot.findBlock({ matching: (b) => b.name === "nether_portal", maxDistance: 64 });
       if (!portal)
@@ -106,6 +147,7 @@ export const lootBastionSkill: Skill = {
     let chest = bot.findBlock({ matching: (b) => b.name === "chest" || b.name === "trapped_chest", maxDistance: 48 });
     while (gap() > 24 && !chest && !signal.aborted && Date.now() < marchUntil) {
       const g = gap();
+      await eatOnTheMarch(bot);
       step(`Marching to the bastion — ${Math.round(g)} blocks out...`, 0.2 + Math.min(0.4, (387 - g) / 967));
       const before = gap();
       // Run 703: the march took 100-block waypoints, and from a netherrack

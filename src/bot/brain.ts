@@ -2358,7 +2358,20 @@ export class BotBrain {
       // hungry, hurt bot dies on the 387-block march before any chest.
       const hasGoldArmour = hasGoldPiece(this.bot);
       const fitForBastion = this.bot.food >= 8 && this.bot.health >= 14;
-      if (!bastionDone && cooledBastion && nearStashBastion && armoredForBastion && hasGoldArmour && fitForBastion) {
+      // Run 705: Mason reached the bastion and saw the chest 17 blocks below
+      // him, with both his pickaxes worn out on the netherrack march and no
+      // route the planner would take without digging. The raid needs a pick;
+      // the no-pickaxe override arms him before this fires.
+      const hasPickForBastion = this.bot.inventory.items().some((i) => /_pickaxe$/.test(i.name));
+      if (
+        !bastionDone &&
+        cooledBastion &&
+        nearStashBastion &&
+        armoredForBastion &&
+        hasGoldArmour &&
+        fitForBastion &&
+        hasPickForBastion
+      ) {
         this.lastBastionMs = Date.now();
         this.log.info("Brain", "OVERRIDE: the bastion is reachable — marching to loot a chest for Those Were the Days");
         this.events.onThought("The fortress is walled off by lava, but the bastion isn't. Time to raid it.");
