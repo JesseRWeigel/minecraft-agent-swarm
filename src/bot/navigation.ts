@@ -309,9 +309,23 @@ function hazardToward(bot: Bot, toward: Vec3): boolean {
   const dz = toward.z - here.z;
   const len = Math.hypot(dx, dz) || 1;
   const bad = new Set(["lava", "flowing_lava", "fire", "soul_fire", "magma_block", "campfire", "soul_campfire"]);
-  // Run 664: a 700 ms hop covers three blocks at a sprint; Mason walked off
-  // the same Nether ledge at (345, 57, -40) twice, 29 blocks into lava, with
-  // the drop one block past the old two-block look-ahead.
+  // Run 699: Mason's nudge hop at Nether (364, 57, -41) moved him 1.3
+  // blocks onto a ledge lip and he fell 28 blocks into lava; the check
+  // only looked along the hop line and only five blocks down. In the
+  // Nether a three-block drop is a cliff over lava, so the limit matches
+  // the walk cap there, the scan reaches eight down, and the cells beside
+  // each step count too (a lip slopes sideways as often as ahead).
+  const nether = String(bot.game?.dimension ?? "").includes("nether");
+  const dropLimit = nether ? 3 : 5;
+  const dropAt = (x: number, y: number, z: number) => {
+    let drop = 0;
+    for (let dy = -1; dy >= -8; dy--) {
+      const b = bot.blockAt(new Vec3(x, y + dy, z));
+      if (!b || b.boundingBox !== "empty") return { drop, floor: b?.name ?? "?" };
+      drop++;
+    }
+    return { drop, floor: "?" };
+  };
   for (const step of [1, 2, 3]) {
     const x = Math.floor(here.x + (dx / len) * step);
     const z = Math.floor(here.z + (dz / len) * step);
@@ -320,13 +334,19 @@ function hazardToward(bot: Bot, toward: Vec3): boolean {
       const b = bot.blockAt(new Vec3(x, y + dy, z));
       if (b && bad.has(b.name)) return true;
     }
-    let drop = 0;
-    for (let dy = -1; dy >= -5; dy--) {
-      const b = bot.blockAt(new Vec3(x, y + dy, z));
-      if (!b || b.boundingBox !== "empty") break;
-      drop++;
+    const cells: [number, number][] = nether
+      ? [
+          [x, z],
+          [x + 1, z],
+          [x - 1, z],
+          [x, z + 1],
+          [x, z - 1],
+        ]
+      : [[x, z]];
+    for (const [cx, cz] of cells) {
+      const { drop, floor } = dropAt(cx, y, cz);
+      if (drop >= dropLimit || bad.has(floor)) return true;
     }
-    if (drop >= 5) return true;
   }
   return false;
 }
