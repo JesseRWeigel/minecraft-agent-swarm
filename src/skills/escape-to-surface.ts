@@ -269,6 +269,29 @@ function wouldFlood(bot: Bot, x: number, y: number, z: number, dx: number, dz: n
   return false;
 }
 
+/** The horizontal direction with the fewest water blocks within three of
+ *  the cell it leads to, for backing away from a flooded pocket. */
+function driestDirection(bot: Bot, x: number, y: number, z: number, dirs: [number, number][]): [number, number] {
+  let best: [number, number] = dirs[0];
+  let bestWet = Infinity;
+  for (const [dx, dz] of dirs) {
+    const cx = x + dx * 3;
+    const cz = z + dz * 3;
+    let wet = 0;
+    for (let ox = -3; ox <= 3; ox++)
+      for (let oy = -1; oy <= 2; oy++)
+        for (let oz = -3; oz <= 3; oz++) {
+          const b = bot.blockAt(new Vec3(cx + ox, y + oy, cz + oz));
+          if (b && (b.name === "water" || b.name === "flowing_water")) wet++;
+        }
+    if (wet < bestWet) {
+      bestWet = wet;
+      best = [dx, dz];
+    }
+  }
+  return best;
+}
+
 /** True when the bot's head is already above the water: nothing more to gain by swimming. */
 function headAboveWater(bot: Bot): boolean {
   const head = bot.blockAt(bot.entity.position.offset(0, 1, 0));
@@ -408,6 +431,7 @@ export const escapeToSurfaceSkill: Skill = {
     let lastY = startY;
     let stallCount = 0;
     let wetTurns = 0;
+    let retreats = 0;
 
     while (!signal.aborted && Date.now() < deadline) {
       if (died) return diedResult();
@@ -449,6 +473,35 @@ export const escapeToSurfaceSkill: Skill = {
         dirIdx = (dirIdx + 1) % dirs.length;
         stallCount = 0;
         if (wetTurns >= 4) {
+          // Runs 692-693: "boxed in" fired 75 and 28 times an hour because
+          // the buried override re-invoked the climb from the same wet spot.
+          // Before giving up, tunnel three blocks level along the driest
+          // direction (fewest water blocks within three), then try again;
+          // two such retreats per climb.
+          if (retreats < 2) {
+            retreats++;
+            const dry = driestDirection(bot, f.x, f.y, f.z, dirs);
+            console.log(
+              `[Escape] ${bot.username}: boxed by water at y=${f.y}; tunnelling 3 blocks toward (${dry[0]}, ${dry[1]}) to dry ground (retreat ${retreats}/2)`,
+            );
+            for (let k = 1; k <= 3 && !signal.aborted; k++) {
+              const cx = f.x + dry[0] * k;
+              const cz = f.z + dry[1] * k;
+              if (wouldFlood(bot, cx - dry[0], f.y, cz - dry[1], dry[0], dry[1]) && k > 1) break;
+              await handDig(bot, cx, f.y, cz);
+              await handDig(bot, cx, f.y + 1, cz);
+              try {
+                await bot.lookAt(new Vec3(cx + 0.5, f.y + 1, cz + 0.5), true);
+              } catch {
+                /* look best-effort */
+              }
+              bot.setControlState("forward", true);
+              await new Promise((r) => setTimeout(r, 700));
+              bot.setControlState("forward", false);
+            }
+            wetTurns = 0;
+            continue;
+          }
           bot.removeListener("death", onDeath);
           return {
             success: false,
@@ -468,7 +521,6 @@ export const escapeToSurfaceSkill: Skill = {
 
       // The step block itself must be solid to stand on. If it's a hole, carve
       // it level for this move (walk forward flat) rather than stepping up.
-      const { Vec3 } = await import("vec3");
       const stepBlock = bot.blockAt(new Vec3(f.x + dx, f.y, f.z + dz));
       const steppingUp = !!stepBlock && stepBlock.boundingBox === "block";
       if (!steppingUp) {

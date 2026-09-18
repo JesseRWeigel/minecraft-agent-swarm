@@ -342,19 +342,26 @@ async function surfaceSwimTo(
     if (inWater()) bot.setControlState("jump", true);
     return false;
   }
-  // Dip: release jump so the bot sinks toward a fish two or three blocks down.
-  const dipMs = Math.min(4500, Math.max(0, (depthBelowSurface(bot, fish.position) - 1) * 900));
-  if (dipMs > 0 && submergedMs() < 1500) {
-    // Look down at the fish so the sink runs toward it, then release jump.
-    await bot.lookAt(fish.position, true).catch(() => {});
-    bot.setControlState("forward", true);
+  // Run 693: "reached" fired on the flat distance while the fish sat 5
+  // blocks below (gap 5.4) and the fixed 0.9 s sink never closed it; one
+  // "reached" line even showed gap 42 from a stale entity. Dive toward the
+  // fish until the eyes are within reach or 6 s under, then surface.
+  if (fish.position.distanceTo(bot.entity.position) > 10) return false;
+  const eyes = () => bot.entity.position.offset(0, 1.6, 0);
+  if (fish.position.distanceTo(eyes()) > 3.2 && submergedMs() < 1500) {
+    const diveEnd = Date.now() + 6500;
     bot.setControlState("jump", false);
     bot.setControlState("sneak", true);
-    await new Promise((r) => setTimeout(r, dipMs));
+    bot.setControlState("forward", true);
+    while (Date.now() < diveEnd && fish.isValid && !signal.aborted && submergedMs() < 6000) {
+      if (fish.position.distanceTo(eyes()) <= 3.0) break;
+      await bot.lookAt(fish.position, true).catch(() => {});
+      await new Promise((r) => setTimeout(r, 250));
+    }
     bot.setControlState("sneak", false);
     bot.setControlState("forward", false);
   }
-  const gap = fish.position.distanceTo(bot.entity.position.offset(0, 1.6, 0));
+  const gap = fish.position.distanceTo(eyes());
   console.log(
     `[FishDebug] ${bot.username}: surface swim reached ${fish.name}, gap ${gap.toFixed(1)}, depth ${depth}, under ${submergedMs()} ms`,
   );
