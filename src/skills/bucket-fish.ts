@@ -285,8 +285,18 @@ async function surfaceSwimTo(
       () => {},
     );
   }
-  const end = Date.now() + 25_000;
+  // Run 691: the swim loop ran its 25 s and ended 28 blocks from the fish
+  // with the bot never entering the water. The pathfinder keeps a goal after
+  // a timed-out goto and clears the control keys on its own ticks, so the
+  // manual forward+jump never held. Drop the goal first, give the swim a
+  // budget that fits a 30-block crossing, and stop when six seconds pass
+  // without closing a block.
+  bot.pathfinder.setGoal(null);
+  const startPos = bot.entity.position.clone();
+  const end = Date.now() + 60_000;
   let reached = false;
+  let bestFlat = Infinity;
+  let lastGainAt = Date.now();
   while (Date.now() < end && fish.isValid && !signal.aborted) {
     if (submergedMs() > 8000) break;
     const me = bot.entity.position;
@@ -295,10 +305,20 @@ async function surfaceSwimTo(
       reached = true;
       break;
     }
+    if (flat < bestFlat - 1) {
+      bestFlat = flat;
+      lastGainAt = Date.now();
+    } else if (Date.now() - lastGainAt > 6000) {
+      console.log(
+        `[FishDebug] ${bot.username}: swim stalled at ${flat.toFixed(1)} blocks from the ${fish.name} (in water: ${inWater()}, moved ${bot.entity.position.distanceTo(startPos).toFixed(1)} since the wade)`,
+      );
+      break;
+    }
     const surfaceY = fish.position.y + depthBelowSurface(bot, fish.position) + 0.5;
     await bot.lookAt(new Vec3(fish.position.x, surfaceY, fish.position.z), true).catch(() => {});
     bot.setControlState("forward", true);
     bot.setControlState("jump", true);
+    bot.setControlState("sprint", false);
     await new Promise((r) => setTimeout(r, 400));
   }
   bot.setControlState("forward", false);
