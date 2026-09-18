@@ -418,6 +418,20 @@ function trackPaths(bot: Bot): void {
   }
 }
 
+/** Run 695: Mason's pathfinder took a new goal every few seconds for 24
+ *  minutes and never produced a path ("lastPath ... 1442s ago", 1891 goal
+ *  updates, moving=false, no error in the log). A client in that state
+ *  never walks again until it rejoins. Returns how long goals have been set
+ *  with no path computed, or 0 when the planner is healthy or idle. */
+export function pathfinderDeadMs(bot: Bot): number {
+  const m = lastEvents.get(bot);
+  const gu = m?.goal_updated;
+  if (!gu || Date.now() - gu.at > 60_000 || gu.count < 30) return 0;
+  const lp = lastPath.get(bot);
+  const since = lp ? Date.now() - lp.at : Number.POSITIVE_INFINITY;
+  return since > 600_000 ? Math.min(since, 86_400_000) : 0;
+}
+
 function eventsNote(bot: Bot): string {
   const m = lastEvents.get(bot);
   if (!m) return "";

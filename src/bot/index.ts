@@ -25,7 +25,7 @@ import { BOT_ROSTER } from "./role.js";
 import { BotBrain, type ChatMessage, type BrainEvents } from "./brain.js";
 import { parseChatCommand } from "./chat-commands.js";
 import { executeChatCommand } from "./chat-command-handler.js";
-import { bumpNavGeneration, safeGoto, safeMoves } from "./navigation.js";
+import { bumpNavGeneration, safeGoto, safeMoves, pathfinderDeadMs } from "./navigation.js";
 import { recordDeath, startScoreboard } from "./scoreboard.js";
 import { createFallTracker, isFallDeath } from "./fall-tracker.js";
 import { shouldFleeOnRespawn } from "./respawn-safety.js";
@@ -178,6 +178,19 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
       while (stallSamples.length && stallSamples[0]!.t < now - 600_000) stallSamples.shift();
       if (stallSamples.length < 18) return; // ten minutes of 30 s samples
       const spread = Math.max(...stallSamples.map((s) => s.p.distanceTo(p)));
+      // Run 695: Mason's planner took a goal every few seconds for 24 minutes
+      // and never produced a path, with no error in the log; he drifted a few
+      // blocks on nudges, so the spread test below never fired. A dead
+      // planner is a dead client: rejoin the same way, same cooldown.
+      const deadMs = pathfinderDeadMs(bot);
+      if (deadMs > 0 && now - (stallRelogAt.get(roleConfig.name) ?? 0) >= 1_800_000 && !bot.targetDigBlock) {
+        stallRelogAt.set(roleConfig.name, now);
+        console.log(
+          `[StallBreak] ${roleConfig.name}: goals set but no path computed for ${Math.round(deadMs / 1000)} s at ${p.floored()}; rejoining for a fresh client`,
+        );
+        setTimeout(() => bot.quit(), 200);
+        return;
+      }
       // Run 668: five rejoins in an hour for Forge, each ten minutes apart,
       // because this cooldown lived in the bot instance and a reconnect
       // reset it; each rejoin also threw away a long dig in progress.
