@@ -278,8 +278,24 @@ async function surfaceSwimTo(
   // Get into the water first: the nearest water block to the bot, then the
   // pathfinder walks to its edge.
   if (!inWater()) {
-    const water = bot.findBlock({ matching: (b) => b.name === "water", maxDistance: 24 });
-    if (!water) return false;
+    let water = bot.findBlock({ matching: (b) => b.name === "water", maxDistance: 24 });
+    if (!water) {
+      // Run 692: the fish was 43 blocks out and no water lay within 24 of
+      // the bot, so this returned before any swim. Walk toward the fish
+      // first; the pathfinder stops at the shore.
+      step(
+        0.2 + tries * 0.1,
+        `Walking toward a ${fish.name} ${fish.position.distanceTo(bot.entity.position).toFixed(0)} blocks away...`,
+      );
+      await safeGoto(bot, new goals.GoalNearXZ(fish.position.x, fish.position.z, 6), 45_000).catch(() => {});
+      water = bot.findBlock({ matching: (b) => b.name === "water", maxDistance: 24 });
+      if (!water) {
+        console.log(
+          `[FishDebug] ${bot.username}: no water within 24 blocks after walking toward the ${fish.name} (now ${fish.isValid ? fish.position.distanceTo(bot.entity.position).toFixed(0) : "?"} away)`,
+        );
+        return false;
+      }
+    }
     step(0.2 + tries * 0.1, `Wading in toward a ${fish.name}...`);
     await safeGoto(bot, new goals.GoalNear(water.position.x, water.position.y + 1, water.position.z, 1), 20_000).catch(
       () => {},
