@@ -61,10 +61,24 @@ export const lootBastionSkill: Skill = {
     const marchMoves = baseMoves(bot);
     (marchMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).canDig = true;
     (marchMoves as unknown as { canDig: boolean; allow1by1towers: boolean }).allow1by1towers = true;
+    // Two is a stair, four is a cliff over lava: the same drop limit the
+    // fortress sweep took after Mason's ledge falls.
+    (marchMoves as unknown as { maxDropDown: number }).maxDropDown = 2;
     bot.pathfinder.setMovements(marchMoves);
 
     // --- Cross over (proven routine) ---
     if (!inNether(bot)) {
+      // Piglins shot armoured Forge dead at the bastion twice; one worn gold
+      // piece keeps them neutral. Wear it before the crossing, like the sweep.
+      const { wearGoldForPiglins } = await import("./piglin-gold.js");
+      if (!(await wearGoldForPiglins(bot, "Bastion", (m) => step(m, 0.05)))) {
+        return {
+          success: false,
+          message: resumable(
+            "No gold to wear: piglins kill a bot without a gold piece. Bank a golden_boots in the stash first.",
+          ),
+        };
+      }
       step("Stepping through the portal...", 0.1);
       const portal = bot.findBlock({ matching: (b) => b.name === "nether_portal", maxDistance: 64 });
       if (!portal)

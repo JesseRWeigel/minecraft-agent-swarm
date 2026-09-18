@@ -1,0 +1,53 @@
+import type { Bot } from "mineflayer";
+
+/**
+ * Piglins leave a player alone who wears any one gold armour piece. Every
+ * Nether trip past the portal (the fortress sweep, the bastion raid) wears a
+ * piece first, and the brain's trip gates count a piece worn OR carried.
+ *
+ * Run 701: Mason wore the golden boots home from a fortress sweep, and the
+ * bastion reflex then never fired again because its gate read only the pack
+ * (bot.inventory.items() skips the four armour slots).
+ */
+const GOLD_PIECE = /^golden_(boots|helmet|chestplate|leggings)$/;
+
+/** True when a worn armour slot holds a gold piece. */
+export function wornGold(bot: Bot): boolean {
+  const inv = bot.inventory;
+  return [5, 6, 7, 8].some((i) => !!inv.slots[i] && inv.slots[i]!.name.startsWith("golden_"));
+}
+
+/** A gold piece worn or in the pack: the brain's gate for a piglin-country trip. */
+export function hasGoldPiece(bot: Bot): boolean {
+  return wornGold(bot) || bot.inventory.items().some((i) => GOLD_PIECE.test(i.name));
+}
+
+/**
+ * Wear one gold piece before crossing, fetching golden boots from the stash
+ * when the pack holds none. Resolves to whether gold is worn afterwards.
+ */
+export async function wearGoldForPiglins(bot: Bot, tag: string, onStep?: (msg: string) => void): Promise<boolean> {
+  if (wornGold(bot)) return true;
+  let gold = bot.inventory.items().find((i) => GOLD_PIECE.test(i.name));
+  if (!gold) {
+    onStep?.("Fetching golden boots for the piglins...");
+    const { withdrawStash } = await import("./stash.js");
+    const { STASH_POS } = await import("../bot/role.js");
+    await withdrawStash(bot, STASH_POS, "golden_boots", 1, 60_000).catch(() => {});
+    gold = bot.inventory.items().find((i) => GOLD_PIECE.test(i.name));
+  }
+  if (gold) {
+    const dest = gold.name.endsWith("boots")
+      ? "feet"
+      : gold.name.endsWith("helmet")
+        ? "head"
+        : gold.name.endsWith("leggings")
+          ? "legs"
+          : "torso";
+    await bot.equip(gold, dest).catch(() => {});
+    console.log(
+      `[${tag}] ${bot.username}: wearing ${gold.name} for the piglins (${wornGold(bot) ? "on" : "equip failed"})`,
+    );
+  }
+  return wornGold(bot);
+}

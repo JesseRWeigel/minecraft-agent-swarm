@@ -68,41 +68,14 @@ export const findFortressSkill: Skill = {
       // Piglins leave a player alone who wears any one gold piece, and the
       // stash holds a pair of golden boots from the bastion trip. Wear gold
       // before crossing, fetching the boots from the stash when needed.
-      const wornGold = () => {
-        const inv = bot.inventory;
-        const slots = [inv.slots[5], inv.slots[6], inv.slots[7], inv.slots[8]];
-        return slots.some((it) => !!it && it.name.startsWith("golden_"));
-      };
-      if (!wornGold()) {
-        let gold = bot.inventory.items().find((i) => /^golden_(boots|helmet|chestplate|leggings)$/.test(i.name));
-        if (!gold) {
-          step("Fetching golden boots for the piglins...", 0.05);
-          const { withdrawStash } = await import("./stash.js");
-          const { STASH_POS } = await import("../bot/role.js");
-          await withdrawStash(bot, STASH_POS, "golden_boots", 1, 60_000).catch(() => {});
-          gold = bot.inventory.items().find((i) => /^golden_(boots|helmet|chestplate|leggings)$/.test(i.name));
-        }
-        if (gold) {
-          const dest = gold.name.endsWith("boots")
-            ? "feet"
-            : gold.name.endsWith("helmet")
-              ? "head"
-              : gold.name.endsWith("leggings")
-                ? "legs"
-                : "torso";
-          await bot.equip(gold, dest).catch(() => {});
-          console.log(
-            `[Fortress] ${bot.username}: wearing ${gold.name} for the piglins (${wornGold() ? "on" : "equip failed"})`,
-          );
-        }
-        if (!wornGold()) {
-          return {
-            success: false,
-            message: resumable(
-              "No gold to wear: piglins kill a bot without a gold piece. Bank a golden_boots (4 gold ingots at a crafting table) in the stash first.",
-            ),
-          };
-        }
+      const { wearGoldForPiglins } = await import("./piglin-gold.js");
+      if (!(await wearGoldForPiglins(bot, "Fortress", (m) => step(m, 0.05)))) {
+        return {
+          success: false,
+          message: resumable(
+            "No gold to wear: piglins kill a bot without a gold piece. Bank a golden_boots (4 gold ingots at a crafting table) in the stash first.",
+          ),
+        };
       }
       step("Stepping through the portal...", 0.1);
       const portal = bot.findBlock({ matching: (b) => b.name === "nether_portal", maxDistance: 64 });

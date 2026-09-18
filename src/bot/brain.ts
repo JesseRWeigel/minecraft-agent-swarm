@@ -49,6 +49,7 @@ import { stashCount, ledgerKnown } from "../skills/stash-ledger.js";
 import { handsBusy } from "../skills/fluid.js";
 import { skillRegistry } from "../skills/registry.js";
 import { isBuried } from "../skills/escape-to-surface.js";
+import { hasGoldPiece } from "../skills/piglin-gold.js";
 import { nearestNest } from "../skills/wax-copper.js";
 import { knownWaxedBlocks } from "./nests.js";
 import { nearestFoodAnimal } from "../skills/hunt-food.js";
@@ -2349,10 +2350,14 @@ export class BotBrain {
       // the raid stands down until the bot carries a gold armour piece to wear
       // for neutrality; without one it is the same futility as the naked runs.
       // No gold on any bot today, so this parks the run and lets Forge mine.
-      const hasGoldArmour = this.bot.inventory
-        .items()
-        .some((i) => /^golden_(helmet|chestplate|leggings|boots)$/.test(i.name));
-      if (!bastionDone && cooledBastion && nearStashBastion && armoredForBastion && hasGoldArmour) {
+      // Run 701: Mason came home from a fortress sweep WEARING the golden
+      // boots, and inventory.items() skips the armour slots, so this gate
+      // read "no gold" for hours while every other gate was met. Count a
+      // piece worn or carried. Same fitness rule as the fortress trip: a
+      // hungry, hurt bot dies on the 387-block march before any chest.
+      const hasGoldArmour = hasGoldPiece(this.bot);
+      const fitForBastion = this.bot.food >= 8 && this.bot.health >= 14;
+      if (!bastionDone && cooledBastion && nearStashBastion && armoredForBastion && hasGoldArmour && fitForBastion) {
         this.lastBastionMs = Date.now();
         this.log.info("Brain", "OVERRIDE: the bastion is reachable — marching to loot a chest for Those Were the Days");
         this.events.onThought("The fortress is walled off by lava, but the bastion isn't. Time to raid it.");
