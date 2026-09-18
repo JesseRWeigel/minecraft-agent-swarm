@@ -1563,8 +1563,15 @@ async function eat(bot: Bot): Promise<string> {
   // Run 682: the model picked "eat" at 15 to 19 hunger and the bakers ate
   // every loaf while three bots sat at 0 hunger with an empty pantry. Food
   // at 14+ is not worth a meal; keep it for the pantry or a real need.
-  if ((bot.food ?? 20) >= 14 && (bot.health ?? 20) >= 14) {
-    return `Not hungry enough to spend food (hunger ${bot.food}/20). Keep the ${best} for later or bank it with deposit_stash.`;
+  // Run 698: natural regeneration needs 18 hunger. With sprinting off under
+  // 15 the swarm sits at 8 to 17, and this guard then refused every meal at
+  // 14+ hunger for a hurt bot, so Atlas and Blade sat at one heart for an
+  // hour in full leather. A hurt bot may eat up to regeneration range; a
+  // healthy one still keeps its food.
+  const food = bot.food ?? 20;
+  const health = bot.health ?? 20;
+  if (food >= 18 || (food >= 14 && health >= 18)) {
+    return `Not hungry enough to spend food (hunger ${food}/20, health ${health.toFixed(0)}/20). Keep the ${best} for later or bank it with deposit_stash.`;
   }
 
   await bot.equip(have.get(best)!, "hand");
