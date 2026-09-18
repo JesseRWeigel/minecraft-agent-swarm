@@ -70,7 +70,11 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
     "deepslate",
     "tuff",
   ]) {
-    const id = bot.registry.blocksByName[name]?.id;
+    // Run 708: the planner counts scaffolding by ITEM id (movements.js:76
+    // pushes itemsByName ids and countScaffoldingItems compares item.type),
+    // and the first version of this list used block ids, so the towers
+    // still never placed. Mason stayed in the chimney another hour.
+    const id = bot.registry.itemsByName[name]?.id;
     if (id !== undefined && !moves.scafoldingBlocks.includes(id)) moves.scafoldingBlocks.push(id);
   }
   // Runs 658-666: Mason stepped off the same Nether ledge at (345, 57, -40)
