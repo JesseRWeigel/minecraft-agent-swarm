@@ -97,7 +97,7 @@ export const bucketFishSkill: Skill = {
     // blocks of water above the fish is still within reach from a shallow
     // standing spot.
     const nearSurface = (e: { position: Vec3 }) =>
-      [1, 2, 3].some((dy) => /air/.test(bot.blockAt(e.position.offset(0, dy, 0))?.name ?? ""));
+      [1, 2, 3, 4, 5, 6].some((dy) => /air/.test(bot.blockAt(e.position.offset(0, dy, 0))?.name ?? ""));
     const shoreSpot = (e: { position: Vec3 }): Vec3 | null => {
       const c = e.position.floored();
       let best: Vec3 | null = null;
@@ -246,8 +246,12 @@ async function surfaceSwimTo(
 ): Promise<boolean> {
   const inWater = () => /water/.test(bot.blockAt(bot.entity.position)?.name ?? "");
   const depth = depthBelowSurface(bot, fish.position);
-  if (depth > 3) {
-    console.log(`[FishDebug] ${bot.username}: ${fish.name} is ${depth} blocks under the surface; too deep to dip for`);
+  // Run 689: every salmon was four to six blocks down, past the three-block
+  // dip. A player dives that far on one breath; a bot at 16+ air has 12 s
+  // under water before the reflex takes over, and the dive below is capped
+  // at 4.5 s.
+  if (depth > 6) {
+    console.log(`[FishDebug] ${bot.username}: ${fish.name} is ${depth} blocks under the surface; too deep to dive for`);
     return false;
   }
   // Get into the water first: the nearest water block to the bot, then the
@@ -282,10 +286,16 @@ async function surfaceSwimTo(
     return false;
   }
   // Dip: release jump so the bot sinks toward a fish two or three blocks down.
-  const dipMs = Math.min(2200, Math.max(0, (depthBelowSurface(bot, fish.position) - 1) * 900));
-  if (dipMs > 0 && (bot.oxygenLevel ?? 20) >= 14) {
+  const dipMs = Math.min(4500, Math.max(0, (depthBelowSurface(bot, fish.position) - 1) * 900));
+  if (dipMs > 0 && (bot.oxygenLevel ?? 20) >= 16) {
+    // Look down at the fish so the sink runs toward it, then release jump.
+    await bot.lookAt(fish.position, true).catch(() => {});
+    bot.setControlState("forward", true);
     bot.setControlState("jump", false);
+    bot.setControlState("sneak", true);
     await new Promise((r) => setTimeout(r, dipMs));
+    bot.setControlState("sneak", false);
+    bot.setControlState("forward", false);
   }
   const gap = fish.position.distanceTo(bot.entity.position.offset(0, 1.6, 0));
   console.log(

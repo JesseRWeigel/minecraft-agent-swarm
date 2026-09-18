@@ -193,6 +193,29 @@ export class BotMemoryStore {
     "hunt_food",
     "escape_to_surface",
     "hunt_string",
+    // Run 689: bucket_fish, a hand-written skill added that day, was marked
+    // "permanently broken" after five outings. Every registered snake_case
+    // skill belongs here; generated skills are camelCase.
+    "bucket_fish",
+    "breed_animals",
+    "build_nether_portal",
+    "find_fortress",
+    "harvest_honey",
+    "hunt_leather",
+    "loot_bastion",
+    "mine_frontier",
+    "oh_shiny",
+    "return_from_nether",
+    "setup_enchanting",
+    "setup_stash",
+    "shoot_arrow",
+    "tame_animal",
+    "trade_with_villager",
+    "wax_copper",
+    "wax_off",
+    "craft_bucket",
+    "craft_flint_and_steel",
+    "fill_bucket",
   ]);
 
   load(): BotMemory {
