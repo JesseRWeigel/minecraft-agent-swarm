@@ -3111,7 +3111,12 @@ export class BotBrain {
         Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 60 &&
         this.bot.entity.position.y >= sp.y - 8;
       const cooled = Date.now() - this.lastStashFoodMs > 600_000;
-      if (this.bot.food <= 8 && !hasEdible && nearStash && cooled && ledgerKnown()) {
+      // Run 702: a bot heals only above 18 hunger, and this trip fired only
+      // at 8 or below. Mason sat at 12 health and 11 hunger for an hour beside
+      // a pantry holding potatoes, and both Nether trips gate on 14 health.
+      // A hurt bot short of the healing range fetches food as well.
+      const hurtAndUnderfed = this.bot.health < 14 && this.bot.food < 18;
+      if ((this.bot.food <= 8 || hurtAndUnderfed) && !hasEdible && nearStash && cooled && ledgerKnown()) {
         const PANTRY = [
           "bread",
           "baked_potato",
@@ -3137,7 +3142,7 @@ export class BotBrain {
           const want = Math.min(8, stashCount(pick, sp.y));
           this.log.info(
             "Brain",
-            `OVERRIDE: hunger ${this.bot.food}/20 — fetching ${want} ${pick} from the stash pantry`,
+            `OVERRIDE: hunger ${this.bot.food}/20, health ${this.bot.health.toFixed(0)}/20 — fetching ${want} ${pick} from the stash pantry`,
           );
           this.events.onThought("The pantry has food. Fetch some before the long walk.");
           const { withdrawStash } = await import("../skills/stash.js");
@@ -3148,8 +3153,13 @@ export class BotBrain {
           const got = this.bot.inventory.items().some((i) => i.name.includes(pick));
           console.log(`[Pantry] ${this.bot.username} ${pick} x${want}: ${String(r).slice(0, 90)}; aboard=${got}`);
           if (got) {
-            const ate = await this.executeActionUnlessPaused("eat", {});
-            this.log.info("Brain", `Pantry: ate -> ${ate}`);
+            // Eat up to the healing range: one meal from 11 lands at 16, still
+            // short of the 18 that starts regeneration.
+            for (let meal = 0; meal < 3; meal++) {
+              const ate = await this.executeActionUnlessPaused("eat", {});
+              this.log.info("Brain", `Pantry: ate -> ${ate}`);
+              if (!/^Ate /.test(String(ate)) || (this.bot.food ?? 20) >= 18) break;
+            }
           }
           this.lastAction = "pantry";
           this.lastResult = String(r);
