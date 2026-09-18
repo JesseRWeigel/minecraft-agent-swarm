@@ -55,6 +55,60 @@ async function eatOnTheMarch(bot: Bot): Promise<void> {
   }
 }
 
+/**
+ * March toward a Nether target in waypoints, eating on the way. Run 703: the
+ * march took 100-block waypoints, and from a netherrack shelf at (77, 91, -67)
+ * and again at (179, 95, -158) the planner answered "No path" or a phantom
+ * arrival for the same waypoint three times, which ended the trip 339 and
+ * then 133 blocks out. When the straight waypoint has no route, a leg tries
+ * a shorter hop and a slant to either side of the bearing before it counts
+ * as dry; three dry legs end the march.
+ */
+async function marchToward(
+  bot: Bot,
+  target: { x: number; z: number },
+  budgetMs: number,
+  signal: AbortSignal,
+  o: { label: string; progress: (gap: number) => number; step: (m: string, p: number) => void; stop: () => boolean },
+): Promise<number> {
+  const gap = () => Math.hypot(bot.entity.position.x - target.x, bot.entity.position.z - target.z);
+  const until = Date.now() + budgetMs;
+  let guard = 0;
+  while (!o.stop() && !signal.aborted && Date.now() < until) {
+    const g = gap();
+    await eatOnTheMarch(bot);
+    o.step(`${o.label} — ${Math.round(g)} blocks out...`, o.progress(g));
+    const before = gap();
+    const px = bot.entity.position.x;
+    const pz = bot.entity.position.z;
+    const bearing = Math.atan2(target.z - pz, target.x - px);
+    const tries: Array<[number, number, number]> = [
+      [100, 0, 45_000],
+      [50, 0, 30_000],
+      [50, 0.7, 30_000],
+      [50, -0.7, 30_000],
+    ];
+    for (const [len, slant, budget] of tries) {
+      if (signal.aborted || Date.now() >= until) break;
+      const reach = Math.min(len, g);
+      const wx = Math.round(px + Math.cos(bearing + slant) * reach);
+      const wz = Math.round(pz + Math.sin(bearing + slant) * reach);
+      const ok = await safeGoto(bot, new goals.GoalNearXZ(wx, wz, 10), budget, 12_000)
+        .then(() => true)
+        .catch(() => false);
+      if (slant !== 0 || len !== 100) {
+        console.log(
+          `[Bastion] ${bot.username}: fallback hop ${len} at ${slant > 0 ? "+" : ""}${slant.toFixed(1)} rad -> ${ok ? "reached" : "failed"}, gap ${Math.round(gap())}`,
+        );
+      }
+      if (ok || before - gap() >= 8) break;
+    }
+    if (before - gap() < 8 && ++guard >= 3) break;
+    else if (before - gap() >= 8) guard = 0;
+  }
+  return gap();
+}
+
 function inNether(bot: Bot): boolean {
   return String(bot.game.dimension).includes("nether");
 }
@@ -64,7 +118,7 @@ export const lootBastionSkill: Skill = {
   description:
     "Cross the nether portal and march to the bastion remnant, then open a loot chest inside it. Opening it earns Those Were the Days and can yield a saddle or crying obsidian.",
   params: {},
-  timeoutMs: 480_000,
+  timeoutMs: 900_000,
 
   estimateMaterials(): Record<string, number> {
     return {};
@@ -142,48 +196,18 @@ export const lootBastionSkill: Skill = {
 
     // --- March to the bastion in ~100-block hops (inside the searchRadius cap) ---
     const gap = () => Math.hypot(bot.entity.position.x - BASTION.x, bot.entity.position.z - BASTION.z);
-    const marchUntil = Date.now() + 300_000;
-    let guard = 0;
-    let chest = bot.findBlock({ matching: (b) => b.name === "chest" || b.name === "trapped_chest", maxDistance: 48 });
-    while (gap() > 24 && !chest && !signal.aborted && Date.now() < marchUntil) {
-      const g = gap();
-      await eatOnTheMarch(bot);
-      step(`Marching to the bastion — ${Math.round(g)} blocks out...`, 0.2 + Math.min(0.4, (387 - g) / 967));
-      const before = gap();
-      // Run 703: the march took 100-block waypoints, and from a netherrack
-      // shelf at (77, 91, -67) and again at (179, 95, -158) the planner
-      // answered "No path" or a phantom arrival for the same waypoint three
-      // times, which ended the trip 339 and then 133 blocks out. When the
-      // straight waypoint has no route, try a shorter hop and a slant to
-      // either side of the bearing before counting the leg dry.
-      const px = bot.entity.position.x;
-      const pz = bot.entity.position.z;
-      const bearing = Math.atan2(BASTION.z - pz, BASTION.x - px);
-      const tries: Array<[number, number, number]> = [
-        [100, 0, 45_000],
-        [50, 0, 30_000],
-        [50, 0.7, 30_000],
-        [50, -0.7, 30_000],
-      ];
-      for (const [len, slant, budget] of tries) {
-        if (signal.aborted || Date.now() >= marchUntil) break;
-        const reach = Math.min(len, g);
-        const wx = Math.round(px + Math.cos(bearing + slant) * reach);
-        const wz = Math.round(pz + Math.sin(bearing + slant) * reach);
-        const ok = await safeGoto(bot, new goals.GoalNearXZ(wx, wz, 10), budget, 12_000)
-          .then(() => true)
-          .catch(() => false);
-        if (slant !== 0 || len !== 100) {
-          console.log(
-            `[Bastion] ${bot.username}: fallback hop ${len} at ${slant > 0 ? "+" : ""}${slant.toFixed(1)} rad -> ${ok ? "reached" : "failed"}, gap ${Math.round(gap())}`,
-          );
-        }
-        if (ok || before - gap() >= 8) break;
-      }
-      chest = bot.findBlock({ matching: (b) => b.name === "chest" || b.name === "trapped_chest", maxDistance: 48 });
-      if (before - gap() < 8 && ++guard >= 3) break;
-      else if (before - gap() >= 8) guard = 0;
-    }
+    const findChest = () =>
+      bot.findBlock({ matching: (b) => b.name === "chest" || b.name === "trapped_chest", maxDistance: 48 });
+    let chest = findChest();
+    await marchToward(bot, BASTION, 300_000, signal, {
+      label: "Marching to the bastion",
+      progress: (g) => 0.2 + Math.min(0.4, (387 - g) / 967),
+      step,
+      stop: () => {
+        chest = findChest();
+        return !!chest || gap() <= 24;
+      },
+    });
 
     // Widen the search once we're in the neighbourhood — bastion chests sit in
     // ramparts and treasure rooms, not always dead-centre.
@@ -236,8 +260,21 @@ export const lootBastionSkill: Skill = {
     }
 
     // --- Walk home ---
+    // Run 710: the walk home was one 90-second walk over 387 blocks, and
+    // Mason died on that leg three times today (fire, a chimney, lava while
+    // fleeing a ghast) once the stranded rescue took over with 100-block
+    // hops. March home the way the march out works, hop by hop with the
+    // fallbacks, then step through.
     step("Heading back through the portal...", 0.9);
     if (homePortal) {
+      const home = { x: homePortal.position.x, z: homePortal.position.z };
+      const homeGap = () => Math.hypot(bot.entity.position.x - home.x, bot.entity.position.z - home.z);
+      await marchToward(bot, home, 300_000, signal, {
+        label: "Marching home to the portal",
+        progress: () => 0.9,
+        step,
+        stop: () => homeGap() <= 24,
+      });
       await safeGoto(
         bot,
         new goals.GoalNear(homePortal.position.x, homePortal.position.y, homePortal.position.z, 2),
