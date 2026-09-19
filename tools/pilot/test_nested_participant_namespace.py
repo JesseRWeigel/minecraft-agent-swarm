@@ -1,5 +1,4 @@
 """Opt-in synthetic qualification of nested participant containment."""
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -11,7 +10,7 @@ from tools.pilot.server import _validate_executable, run_owned
 
 
 CHILD = r'''
-import json, os, socket
+import json, os, socket, stat
 from pathlib import Path
 result = {}
 with socket.create_connection(("127.0.0.1", int(os.environ["ECHO_PORT"])), timeout=3) as client:
@@ -41,6 +40,18 @@ for entry in Path("/proc").iterdir():
         pass
 result["outer_process_visible"] = any("/outer.py" in item["command"] for item in processes)
 result["visible_pids"] = sorted(item["pid"] for item in processes)
+regular_fd_bytes = []
+for entry in Path("/proc/self/fd").iterdir():
+    try:
+        if not stat.S_ISREG(entry.stat().st_mode):
+            continue
+        with entry.open("rb") as descriptor:
+            regular_fd_bytes.append(descriptor.read(4096))
+    except OSError:
+        pass
+result["observer_secret_in_regular_fd"] = any(b"observer-secret" in data for data in regular_fd_bytes)
+result["outer_secret_in_regular_fd"] = any(b"outer-only-secret" in data for data in regular_fd_bytes)
+result["pid1_root_observer_secret_visible"] = Path("/proc/1/root/observer/secret").exists()
 path = Path("/participant-state/result.json")
 fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
 try:
@@ -52,6 +63,8 @@ finally:
 OUTER = r'''
 import json, os, socket, subprocess, threading
 from pathlib import Path
+secret_fd = os.open("/observer/secret", os.O_RDONLY)
+os.set_inheritable(secret_fd, True)
 listener = socket.socket()
 listener.bind(("127.0.0.1", 0))
 listener.listen(1)
@@ -82,7 +95,18 @@ argv.extend([
     "--bind", "/participant-state", "/participant-state",
     "--chdir", "/participant-state", "--", "/usr/bin/python3", "/tools/child.py",
 ])
-child = subprocess.run(argv, timeout=10, check=False, capture_output=True, text=True)
+child = subprocess.run(
+    argv,
+    timeout=10,
+    check=False,
+    capture_output=True,
+    text=True,
+    close_fds=True,
+    stdin=subprocess.DEVNULL,
+)
+os.lseek(secret_fd, 0, os.SEEK_SET)
+outer_secret_fd_valid = os.read(secret_fd, 4096) == b"observer-secret"
+os.close(secret_fd)
 thread.join(timeout=5)
 listener.close()
 participant = json.loads(Path("/participant-state/result.json").read_text())
@@ -94,6 +118,7 @@ trusted = {
     "observer_secret_unchanged": Path("/observer/secret").read_text() == "observer-secret",
     "observer_evidence_unchanged": Path("/observer/evidence").read_text() == "observer-evidence",
     "tool_canary_unchanged": Path("/outer-tools/canary").read_text() == "immutable",
+    "outer_secret_fd_valid": outer_secret_fd_valid,
 }
 path = Path("/observer/outer-result.json")
 fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
@@ -169,10 +194,14 @@ class NestedParticipantNamespaceTests(unittest.TestCase):
             self.assertTrue(child["observer_write_blocked"])
             self.assertTrue(child["tool_write_blocked"])
             self.assertFalse(child["outer_process_visible"])
+            self.assertFalse(child["observer_secret_in_regular_fd"])
+            self.assertFalse(child["outer_secret_in_regular_fd"])
+            self.assertFalse(child["pid1_root_observer_secret_visible"])
             self.assertEqual(child["visible_pids"], ["1", "2"])
             self.assertTrue(trusted["observer_secret_unchanged"])
             self.assertTrue(trusted["observer_evidence_unchanged"])
             self.assertTrue(trusted["tool_canary_unchanged"])
+            self.assertTrue(trusted["outer_secret_fd_valid"])
             self.assertEqual((observer / "secret").read_text(), "observer-secret")
             self.assertEqual((observer / "evidence").read_text(), "observer-evidence")
             self.assertEqual((tools / "canary").read_text(), "immutable")
