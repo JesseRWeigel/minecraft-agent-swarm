@@ -89,16 +89,18 @@ test("sanitizes endpoint identity and records no usernames or private role text"
 });
 
 test("selects the actual effective roster for single, capped, and invalid counts", () => {
-  assert.deepEqual(buildRuntimeConfiguration(input({ multiBotEnabled: false })).team.orderedRoles.map((r) => r.name), [
-    "Atlas",
-  ]);
-  assert.deepEqual(buildRuntimeConfiguration(input({ requestedBotCount: 1 })).team.orderedRoles.map((r) => r.name), [
-    "Atlas",
-  ]);
-  assert.deepEqual(buildRuntimeConfiguration(input({ requestedBotCount: 99 })).team.orderedRoles.map((r) => r.name), [
-    "Atlas",
-    "Flora",
-  ]);
+  assert.deepEqual(
+    buildRuntimeConfiguration(input({ multiBotEnabled: false })).team.orderedRoles.map((r) => r.name),
+    ["Atlas"],
+  );
+  assert.deepEqual(
+    buildRuntimeConfiguration(input({ requestedBotCount: 1 })).team.orderedRoles.map((r) => r.name),
+    ["Atlas"],
+  );
+  assert.deepEqual(
+    buildRuntimeConfiguration(input({ requestedBotCount: 99 })).team.orderedRoles.map((r) => r.name),
+    ["Atlas", "Flora"],
+  );
   assert.deepEqual(buildRuntimeConfiguration(input({ requestedBotCount: Number.NaN })).team.orderedRoles, []);
 });
 
