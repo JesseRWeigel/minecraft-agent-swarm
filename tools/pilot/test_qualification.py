@@ -13,6 +13,7 @@ def evidence(mode="forward", passed=True):
         "claimsLiveBenchmarkResult": False,
         "endpoint": {"host": "127.0.0.1", "gamePort": 25585, "rconPort": 25595},
         "username": "PilotProbe",
+        "minecraftVersion": "1.21.4",
         "movementMode": mode,
         "before": {
             "position": {"x": 0, "y": 64, "z": 0},
@@ -129,6 +130,18 @@ class Tests(unittest.TestCase):
             self.call("bool-schema", runner=self.runner(ev=malformed))["status"],
             "failed",
         )
+
+    def test_missing_or_wrong_minecraft_version_never_passes(self):
+        for index, version in enumerate([None, "1.21.5", 1214]):
+            malformed = evidence()
+            if version is None:
+                del malformed["minecraftVersion"]
+            else:
+                malformed["minecraftVersion"] = version
+            report = self.call(
+                f"bad-version-{index}", runner=self.runner(ev=malformed)
+            )
+            self.assertEqual(report["status"], "failed")
 
     def test_runner_exception_still_writes_failed_summary(self):
         report = self.call('raised', runner=lambda *a, **k: (_ for _ in ()).throw(RuntimeError('secret')))

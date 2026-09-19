@@ -89,6 +89,7 @@ def _evidence(path, mode):
         and type(value.get("schemaVersion")) is int and value.get("schemaVersion") == 1
         and value.get("movementMode") == mode
         and value.get("username") == "PilotProbe"
+        and value.get("minecraftVersion") == "1.21.4"
         and value.get("claimsLiveBenchmarkResult") is False
         and value.get("endpoint")
         == {"host": "127.0.0.1", "gamePort": 25585, "rconPort": 25595}

@@ -11,6 +11,10 @@ port 25585 and RCON uses 25595. Only this private copy enables RCON and offline
 login for `PilotProbe`. A generated credential stays in private runtime state;
 it is not passed in command-line arguments. The live server's authentication,
 ports, world, and ops mode are not changed.
+The client is pinned to the Minecraft 1.21.4 protocol. It passes that version
+explicitly to Mineflayer and records `minecraftVersion: "1.21.4"` in evidence.
+It does not use the disabled server-status endpoint for protocol autodetection.
+Evidence for any other or missing version is rejected.
 
 ## Inputs and execution
 
