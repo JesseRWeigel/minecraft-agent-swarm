@@ -74,16 +74,15 @@ export async function marchToward(
   const gap = () => Math.hypot(bot.entity.position.x - target.x, bot.entity.position.z - target.z);
   const until = Date.now() + budgetMs;
   let guard = 0;
-  // Run 716: Mason died "tried to swim in lava" after falling 47.5 blocks
-  // from y=77, and the fall tracker recorded him standing on cobblestone in
-  // mid-air with no controls and no path. He was on top of a one-by-one
-  // pillar of his own making: the height carried in the waypoint asks the
-  // planner for a specific y, and with towers enabled it builds a tower to
-  // get there. Over the Nether that tower is a diving board. The march digs
-  // and bridges, and it never pillars.
+  // The march's movement profile, settled by two measured runs. Run 715 had
+  // towers, a three-block drop and parkour: it carried Mason 491 blocks to
+  // 39 from the fortress, and killed him twice, once off a 47-block pillar
+  // of his own making. Run 717 had no towers: no pillar falls, and the march
+  // stalled 390 blocks out, because Nether terrain needs the climb. So keep
+  // the climb and drop the two settings that turn a stall into a fall.
   const marchMoves = baseMoves(bot);
   (marchMoves as unknown as { canDig: boolean }).canDig = true;
-  (marchMoves as unknown as { allow1by1towers: boolean }).allow1by1towers = false;
+  (marchMoves as unknown as { allow1by1towers: boolean }).allow1by1towers = true;
   (marchMoves as unknown as { maxDropDown: number }).maxDropDown = 2;
   (marchMoves as unknown as { allowParkour: boolean }).allowParkour = false;
   bot.pathfinder.setMovements(marchMoves);
