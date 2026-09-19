@@ -122,7 +122,10 @@ def _evidence(path, mode):
         }
         and before.get("dimension") == after.get("dimension")
         and agreement <= 1.5
+        and value.get("handshakeSent") is True
         and checks.get("transportIntact") is True
+        and checks.get("initialPositionsAgree") is True
+        and checks.get("terminalSettled") is True
     )
     if mode == "forward":
         valid = value.get("status") == "passed" and common and 0.5 <= horizontal <= 10

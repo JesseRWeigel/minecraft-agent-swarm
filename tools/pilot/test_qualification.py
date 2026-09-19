@@ -15,6 +15,7 @@ def evidence(mode="forward", passed=True):
         "username": "PilotProbe",
         "minecraftVersion": "1.21.4",
         "movementMode": mode,
+        "handshakeSent": True,
         "before": {
             "position": {"x": 0, "y": 64, "z": 0},
             "dimension": "minecraft:overworld",
@@ -26,7 +27,11 @@ def evidence(mode="forward", passed=True):
             "health": 20,
         },
         "mineflayer": {"after": {"x": distance, "y": 64, "z": 0}},
-        "checks": {"transportIntact": True},
+        "checks": {
+            "transportIntact": True,
+            "initialPositionsAgree": True,
+            "terminalSettled": True,
+        },
     }
 
 class Tests(unittest.TestCase):
@@ -140,6 +145,27 @@ class Tests(unittest.TestCase):
                 malformed["minecraftVersion"] = version
             report = self.call(
                 f"bad-version-{index}", runner=self.runner(ev=malformed)
+            )
+            self.assertEqual(report["status"], "failed")
+
+    def test_missing_or_false_handshake_barriers_never_pass(self):
+        mutations = [
+            ("handshakeSent", None),
+            ("handshakeSent", False),
+            ("initialPositionsAgree", None),
+            ("initialPositionsAgree", False),
+            ("terminalSettled", None),
+            ("terminalSettled", False),
+        ]
+        for index, (field, value) in enumerate(mutations):
+            malformed = evidence()
+            container = malformed if field == "handshakeSent" else malformed["checks"]
+            if value is None:
+                del container[field]
+            else:
+                container[field] = value
+            report = self.call(
+                f"bad-barrier-{index}", runner=self.runner(ev=malformed)
             )
             self.assertEqual(report["status"], "failed")
 
