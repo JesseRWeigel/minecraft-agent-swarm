@@ -12,6 +12,7 @@ function fixture({ move = true, health = 20, dimension = "minecraft:overworld", 
   bot.entity = { position: { x: 0, y: 64, z: 0 } };
   bot.health = 20;
   bot.game = { dimension };
+  bot.waitForTicks = async (ticks) => assert.equal(ticks, 1);
   bot.setControlState = (k, v) => controls.push([k, v]);
   bot.quit = async () => {
     bot.closed = true;
@@ -297,4 +298,85 @@ test("transport events caused by cleanup do not invalidate a completed capture",
   const report = await runQualification(f.args);
   assert.equal(report.status, "passed");
   assert.equal(report.checks.transportIntact, true);
+});
+
+test("waits for an initial physics tick before querying readiness", async () => {
+  const f = fixture();
+  let releaseTick;
+  f.bot.waitForTicks = () =>
+    new Promise((resolve) => {
+      releaseTick = resolve;
+    });
+  const result = runQualification(f.args);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(f.calls.length, 0);
+  releaseTick();
+  assert.equal((await result).status, "passed");
+});
+
+test("retains the last server observation when terminal convergence times out", async () => {
+  const f = fixture();
+  let positionQueries = 0;
+  const report = await runQualification({
+    ...f.args,
+    operationTimeoutMs: 10,
+    sleep: async (ms) => {
+      if (ms === 1000) f.bot.entity.position.z = 3;
+    },
+    connectRcon: async () => ({
+      end: f.rcon.end,
+      send: async (command) => {
+        if (command.endsWith(" Pos")) {
+          positionQueries += 1;
+          if (positionQueries > 1) return "PilotProbe has the following entity data: [0d, 64d, 0d]";
+        }
+        return f.rcon.send(command);
+      },
+    }),
+  });
+  assert.equal(report.status, "failed");
+  assert.deepEqual(report.after.position, { x: 0, y: 64, z: 0 });
+  assert.equal(report.checks.terminalSettled, false);
+  assert.ok(report.checks.terminalPollCount >= 1);
+  assert.ok(report.checks.terminalElapsedMs >= 0);
+});
+
+test("a server correction can settle while the movement predicate still fails", async () => {
+  const f = fixture();
+  let positionQueries = 0;
+  const report = await runQualification({
+    ...f.args,
+    connectRcon: async () => ({
+      end: f.rcon.end,
+      send: async (command) => {
+        if (command.endsWith(" Pos")) {
+          positionQueries += 1;
+          if (positionQueries > 1) {
+            f.bot.entity.position.z = 0;
+            return "PilotProbe has the following entity data: [0d, 64d, 0d]";
+          }
+        }
+        return f.rcon.send(command);
+      },
+    }),
+  });
+  assert.equal(report.status, "failed");
+  assert.equal(report.checks.terminalSettled, true);
+  assert.equal(report.checks.displacement, 0);
+  assert.equal(report.checks.displacementInBounds, false);
+});
+
+test("retains initial evidence when the action later fails", async () => {
+  const f = fixture({ move: false });
+  const report = await runQualification({
+    ...f.args,
+    sleep: async (ms) => {
+      if (ms === 1000) throw new Error("action failed");
+    },
+  });
+  assert.equal(report.status, "failed");
+  assert.deepEqual(report.before.position, { x: 0, y: 64, z: 0 });
+  assert.deepEqual(report.mineflayer.before, { x: 0, y: 64, z: 0 });
+  assert.equal(report.checks.initialPositionsAgree, true);
+  assert.equal("after" in report, false);
 });

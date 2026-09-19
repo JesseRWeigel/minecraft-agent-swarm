@@ -105,6 +105,39 @@ async function observe(rcon, { deadlineMs, now, operationTimeoutMs }) {
   }
   return { position: out.Pos, dimension: out.Dimension, health: out.Health };
 }
+async function settleTerminal(rcon, bot, { deadlineMs, now, sleep, operationTimeoutMs }) {
+  const startedMs = now();
+  let observation,
+    mineflayerPosition,
+    pollCount = 0;
+  while (now() < deadlineMs) {
+    try {
+      observation = await observe(rcon, { deadlineMs, now, operationTimeoutMs });
+      pollCount += 1;
+      mineflayerPosition = finitePos(bot.entity?.position);
+      if (mineflayerPosition && distance(observation.position, mineflayerPosition) <= 1.5) {
+        return {
+          observation,
+          mineflayerPosition,
+          settled: true,
+          pollCount,
+          elapsedMs: Math.max(0, now() - startedMs),
+        };
+      }
+    } catch {
+      break;
+    }
+    const delay = Math.min(50, Math.max(0, deadlineMs - now()));
+    if (delay) await bounded(() => sleep(delay), delay + 1, "terminal poll sleep").catch(() => {});
+  }
+  return {
+    observation,
+    mineflayerPosition,
+    settled: false,
+    pollCount,
+    elapsedMs: Math.max(0, now() - startedMs),
+  };
+}
 function destroySocket(value) {
   for (const socket of [value?.socket, value?._client?.socket]) {
     try {
@@ -210,6 +243,7 @@ export async function runQualification({
     bot.on?.("end", markTransportFailed);
     bot.on?.("kicked", markTransportFailed);
     await waitSpawn(bot, readyTimeoutMs);
+    await bounded(() => bot.waitForTicks(1), operationTimeoutMs, "initial physics tick");
     const ready = await connectReady(connectRcon, {
       deadlineMs: now() + readyTimeoutMs,
       now,
@@ -220,15 +254,40 @@ export async function runQualification({
     const before = ready.observation;
     const mineBefore = finitePos(bot.entity?.position);
     if (!mineBefore) throw new Error("Mineflayer position unavailable");
+    const initialAgreement = distance(before.position, mineBefore);
+    report = {
+      ...report,
+      before,
+      mineflayer: { before: mineBefore },
+      checks: { initialRconMineflayerDistance: initialAgreement, initialPositionsAgree: initialAgreement <= 1.5 },
+    };
+    if (initialAgreement > 1.5) throw new Error("initial positions disagree");
     if (movement === "forward") bot.setControlState("forward", true);
     try {
       await bounded(() => sleep(actionMs), actionMs + operationTimeoutMs, "movement action");
     } finally {
       bot.setControlState("forward", false);
     }
-    const after = await observe(rcon, { deadlineMs: now() + operationTimeoutMs, now, operationTimeoutMs });
-    const mineAfter = finitePos(bot.entity?.position);
-    if (!mineAfter) throw new Error("Mineflayer position unavailable");
+    const terminal = await settleTerminal(rcon, bot, {
+      deadlineMs: now() + operationTimeoutMs,
+      now,
+      sleep,
+      operationTimeoutMs,
+    });
+    const after = terminal.observation;
+    const mineAfter = terminal.mineflayerPosition;
+    report = {
+      ...report,
+      ...(after ? { after } : {}),
+      mineflayer: { ...report.mineflayer, ...(mineAfter ? { after: mineAfter } : {}) },
+      checks: {
+        ...report.checks,
+        terminalSettled: terminal.settled,
+        terminalPollCount: terminal.pollCount,
+        terminalElapsedMs: terminal.elapsedMs,
+      },
+    };
+    if (!after || !mineAfter) throw new Error("terminal observation unavailable");
     const transportIntact = !transportFailed;
     captureComplete = true;
     const displacement = horizontalDistance(before.position, after.position),
@@ -236,6 +295,7 @@ export async function runQualification({
       agreement = distance(after.position, mineAfter);
     const passed =
       transportIntact &&
+      terminal.settled &&
       displacement >= 0.5 &&
       displacement <= 10 &&
       after.health > 0 &&
@@ -248,6 +308,7 @@ export async function runQualification({
       after,
       mineflayer: { before: mineBefore, after: mineAfter },
       checks: {
+        ...report.checks,
         displacement,
         displacement3d,
         transportIntact,
