@@ -8,7 +8,7 @@ import { performance } from "node:perf_hooks";
 
 const ACTOR = "PilotProbe";
 const FIELDS = ["Pos", "Dimension", "Health"];
-const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const ID_PATTERN = /[A-Za-z0-9][A-Za-z0-9._-]{0,63}/;
 const MAX_RESPONSE_BYTES = 65536;
 const MAX_COORDINATE = 30_000_000;
 const MAX_HEALTH = 2048;
@@ -26,8 +26,8 @@ function validateOptions({ rcon, phase, trialId, actionId, nowMonotonic, nowUtc,
   if (
     typeof trialId !== "string" ||
     typeof actionId !== "string" ||
-    !ID_PATTERN.test(trialId) ||
-    !ID_PATTERN.test(actionId)
+    ID_PATTERN.exec(trialId)?.[0] !== trialId ||
+    ID_PATTERN.exec(actionId)?.[0] !== actionId
   )
     throw new RangeError("invalid supervisor ID");
   if (typeof nowMonotonic !== "function" || typeof nowUtc !== "function")
@@ -134,6 +134,7 @@ export async function sampleActor({
     for (const field of FIELDS) {
       const window = {
         field,
+        sent: false,
         startedAtUtc: null,
         finishedAtUtc: null,
         startedMonotonicMs: null,
@@ -146,10 +147,17 @@ export async function sampleActor({
       window.startedMonotonicMs = queryStarted;
       window.startedAtUtc = utc();
       const remaining = deadline - queryStarted;
-      if (remaining <= 0) throw new SampleFailure("timeout");
+      if (remaining <= 0) {
+        window.finishedMonotonicMs = queryStarted;
+        window.finishedAtUtc = window.startedAtUtc;
+        window.durationMs = 0;
+        window.outcome = "timeout";
+        throw new SampleFailure("timeout");
+      }
       let reply;
       let sendFailure;
       try {
+        window.sent = true;
         reply = await boundedSend(rcon, `data get entity ${ACTOR} ${field}`, remaining);
       } catch (error) {
         sendFailure = error instanceof SampleFailure ? error : new SampleFailure("query_failed");

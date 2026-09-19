@@ -203,6 +203,29 @@ test("fails at the exact query deadline and when final timestamp consumes the bu
   );
 });
 
+test("does not send a query whose window starts at the overall deadline", async () => {
+  const f = fixture();
+  const result = await sampleActor({
+    rcon: f.rcon,
+    phase: "before",
+    trialId: "trial-01",
+    actionId: "walk-01",
+    operationTimeoutMs: 10,
+    nowMonotonic: monotonicSequence([0, 1, 2, 10, 11]),
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(result.errorCode, "timeout");
+  assert.equal(f.calls.length, 1);
+  assert.deepEqual(Object.keys(result.observations), ["position"]);
+  const unsent = result.sample.queryWindows[1];
+  assert.equal(unsent.field, "Dimension");
+  assert.equal(unsent.sent, false);
+  assert.equal(unsent.outcome, "timeout");
+  assert.equal(unsent.finishedMonotonicMs, unsent.startedMonotonicMs);
+  assert.equal(unsent.finishedAtUtc, unsent.startedAtUtc);
+  assert.equal(unsent.durationMs, 0);
+});
+
 test("timeout and late rejection do not create an unhandled rejection", async () => {
   const unhandled = [];
   const listener = (reason) => unhandled.push(reason);
@@ -282,6 +305,8 @@ test("rejects invalid API inputs before querying", async () => {
   await assert.rejects(() => sampleActor({ ...valid, phase: "other" }), /phase/);
   await assert.rejects(() => sampleActor({ ...valid, trialId: "../escape" }), /supervisor ID/);
   await assert.rejects(() => sampleActor({ ...valid, trialId: "trial\nforged" }), /supervisor ID/);
+  await assert.rejects(() => sampleActor({ ...valid, trialId: "trial-forged\n" }), /supervisor ID/);
+  await assert.rejects(() => sampleActor({ ...valid, actionId: "action-forged\r" }), /supervisor ID/);
   await assert.rejects(() => sampleActor({ ...valid, actionId: "action\tforged" }), /supervisor ID/);
   await assert.rejects(() => sampleActor({ ...valid, trialId: 123 }), /supervisor ID/);
   await assert.rejects(() => sampleActor({ ...valid, actionId: undefined }), /supervisor ID/);
