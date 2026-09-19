@@ -154,3 +154,51 @@ they do not prove when unread kernel-pipe bytes were sent. If phase freshness
 must be authenticated, add a supervisor-generated begin challenge to the wire
 contract. Never treat a well-formed completion message as proof of action
 execution; that must come from the protected observer.
+
+## Implemented read-only sampler prerequisite
+
+The existing `server-observer.mjs` remains the explicit diagnostic CLI: it can
+capture a named actor and raw inventory responses, and its snapshot/version
+identity is asserted rather than verified. This new sampler has a narrower
+fixed-actor contract and an overall monotonic budget; it does not replace or
+silently change that CLI or historical artifacts.
+
+`tools/pilot/protected-observer.mjs` exports `sampleActor` for the future trusted
+observer process. It accepts a supervisor-owned RCON adapter, `before` or
+`terminal` phase, fixed supervisor trial/action IDs, and a maximum 5-second
+overall sampling budget. It sends only these commands for `PilotProbe`:
+
+```text
+data get entity PilotProbe Pos
+data get entity PilotProbe Dimension
+data get entity PilotProbe Health
+```
+
+Each result includes sample and per-query UTC/monotonic timing, completed
+partial observations, and a generic failure code when appropriate. Exact
+deadline equality fails. Adapter rejection and timeout retain the failed-query
+timing when clocks remain valid. The parser rejects oversized or malformed
+responses, unknown dimensions, nonfinite values, coordinates beyond the
+qualification's 30-million-unit bound, and health outside 0 through 2048.
+These are fixed qualification limits, not support for arbitrary modded servers.
+
+Zero health is retained as valid observed state. `status: sampled` means the
+queries completed and parsed; it does not mean the actor is alive or its task
+succeeded. Completed observations remain available when a later query fails.
+Raw replies and adapter exception messages are omitted to avoid copying
+credentials or unbounded diagnostics into the evidence object.
+
+API configuration errors reject before querying. Runtime sampling failures
+return structured failed results. Await deadlines cannot cancel the underlying
+transport: the future supervisor must close/destroy the RCON connection, bound
+its transport buffers, write evidence through its owned descriptor, and enforce
+process/resource cleanup. This library neither connects to a server nor starts
+a protected process. Tests use fake adapters and clocks; the actual-game
+qualification remains on the historical same-process path.
+
+Qualification summaries also now retain the SHA-256 of stable, bounded, private
+raw evidence even when its JSON or identity is invalid. Separate
+`evidence_valid_for_requested_mode` and
+`namespace_lifecycle_valid_for_requested_mode` booleans distinguish a captured
+file hash from acceptance. Unsafe or unstable captures remain unhashed. Original
+failed evidence is preserved rather than rewritten into a valid-looking form.
