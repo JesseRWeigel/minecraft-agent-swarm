@@ -66,7 +66,7 @@ async function eatOnTheMarch(bot: Bot): Promise<void> {
  */
 export async function marchToward(
   bot: Bot,
-  target: { x: number; z: number },
+  target: { x: number; z: number; y?: number },
   budgetMs: number,
   signal: AbortSignal,
   o: { label: string; progress: (gap: number) => number; step: (m: string, p: number) => void; stop: () => boolean },
@@ -93,7 +93,17 @@ export async function marchToward(
       const reach = Math.min(len, g);
       const wx = Math.round(px + Math.cos(bearing + slant) * reach);
       const wz = Math.round(pz + Math.sin(bearing + slant) * reach);
-      const ok = await safeGoto(bot, new goals.GoalNearXZ(wx, wz, 10), budget, 12_000)
+      // Run 714: a GoalNearXZ ignores height, so the approach to the fortress
+      // walked Mason down a ravine, y 56 to 37 over four failed legs, and he
+      // died in lava at y=31 thirty-seven blocks short. When the target's
+      // height is known, each waypoint carries it, moving at most sixteen
+      // blocks of height per leg so the route still follows the terrain.
+      const wy =
+        target.y === undefined
+          ? undefined
+          : Math.round(bot.entity.position.y + Math.max(-16, Math.min(16, target.y - bot.entity.position.y)));
+      const goal = wy === undefined ? new goals.GoalNearXZ(wx, wz, 10) : new goals.GoalNear(wx, wy, wz, 12);
+      const ok = await safeGoto(bot, goal, budget, 12_000)
         .then(() => true)
         .catch(() => false);
       if (slant !== 0 || len !== 100) {

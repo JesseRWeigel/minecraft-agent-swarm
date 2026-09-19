@@ -170,7 +170,7 @@ export const findFortressSkill: Skill = {
       // The approach was one 45-second walk repeated for two minutes; the
       // bricks sit up to 128 blocks off. March in hops like the bastion raid.
       const brickGap = () => Math.hypot(bot.entity.position.x - seen.x, bot.entity.position.z - seen.z);
-      await marchToward(bot, { x: seen.x, z: seen.z }, 240_000, signal, {
+      await marchToward(bot, { x: seen.x, y: seen.y, z: seen.z }, 240_000, signal, {
         label: "Walking to the bricks",
         progress: () => 0.75,
         step,
