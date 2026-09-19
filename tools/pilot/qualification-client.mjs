@@ -174,6 +174,8 @@ export async function runQualification({
   if (movement !== "forward" && movement !== "stationary") throw new RangeError("invalid movement");
   let bot,
     rcon,
+    captureComplete = false,
+    transportFailed = false,
     report = {
       schemaVersion: 1,
       status: "failed",
@@ -192,7 +194,12 @@ export async function runQualification({
         return closeBot(lateBot);
       },
     );
-    bot.on?.("error", () => {});
+    const markTransportFailed = () => {
+      if (!captureComplete) transportFailed = true;
+    };
+    bot.on?.("error", markTransportFailed);
+    bot.on?.("end", markTransportFailed);
+    bot.on?.("kicked", markTransportFailed);
     await waitSpawn(bot, readyTimeoutMs);
     const ready = await connectReady(connectRcon, {
       deadlineMs: now() + readyTimeoutMs,
@@ -213,10 +220,13 @@ export async function runQualification({
     const after = await observe(rcon, { deadlineMs: now() + operationTimeoutMs, now, operationTimeoutMs });
     const mineAfter = finitePos(bot.entity?.position);
     if (!mineAfter) throw new Error("Mineflayer position unavailable");
+    const transportIntact = !transportFailed;
+    captureComplete = true;
     const displacement = horizontalDistance(before.position, after.position),
       displacement3d = distance(before.position, after.position),
       agreement = distance(after.position, mineAfter);
     const passed =
+      transportIntact &&
       displacement >= 0.5 &&
       displacement <= 10 &&
       after.health > 0 &&
@@ -231,6 +241,7 @@ export async function runQualification({
       checks: {
         displacement,
         displacement3d,
+        transportIntact,
         rconMineflayerDistance: agreement,
         healthPositive: after.health > 0,
         dimensionUnchanged: before.dimension === after.dimension,

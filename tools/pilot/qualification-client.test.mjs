@@ -179,7 +179,8 @@ test("keeps late bot errors handled and removes timed-out spawn listeners", asyn
   const report = await runQualification({ ...f.args, readyTimeoutMs: 5 });
   assert.equal(report.status, "failed");
   assert.equal(f.bot.listenerCount("spawn"), 0);
-  assert.equal(f.bot.listenerCount("kicked"), 0);
+  assert.equal(f.bot.listenerCount("kicked"), 1);
+  assert.equal(f.bot.listenerCount("end"), 1);
   assert.doesNotThrow(() => f.bot.emit("error", new Error("late transport error")));
 });
 
@@ -255,4 +256,38 @@ test("vertical falling does not satisfy the forward movement predicate", async (
   assert.equal(report.checks.displacement, 0);
   assert.equal(report.checks.displacement3d, 4);
   assert.equal(report.checks.displacementInBounds, false);
+});
+
+test("post-spawn transport failures invalidate an otherwise passing capture", async () => {
+  for (const [event, payload] of [
+    ["error", new Error("connection reset")],
+    ["end", "socketClosed"],
+    ["kicked", "server stopped"],
+  ]) {
+    const f = fixture();
+    const report = await runQualification({
+      ...f.args,
+      sleep: async (ms) => {
+        if (ms === 1000) {
+          f.bot.entity.position.z = 1;
+          f.bot.emit(event, payload);
+        }
+      },
+    });
+    assert.equal(report.status, "failed", event);
+    assert.equal(report.checks.transportIntact, false, event);
+    assert.equal(report.checks.displacementInBounds, true, event);
+  }
+});
+
+test("transport events caused by cleanup do not invalidate a completed capture", async () => {
+  const f = fixture();
+  f.bot.quit = async () => {
+    f.bot.emit("end", "quit");
+    f.bot.emit("error", new Error("late cleanup error"));
+    f.bot.closed = true;
+  };
+  const report = await runQualification(f.args);
+  assert.equal(report.status, "passed");
+  assert.equal(report.checks.transportIntact, true);
 });
