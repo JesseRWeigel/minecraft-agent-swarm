@@ -35,7 +35,7 @@ export async function runQualification({createBot,connectRcon,writeEvidence,now=
   const displacement=distance(before.position,after.position), agreement=distance(after.position,mineAfter);
   const passed=displacement>=0.5&&displacement<=10&&after.health>0&&before.dimension===after.dimension&&agreement<=1.5;
   report={...report,status:passed?"passed":"failed",before,after,mineflayer:{before:mineBefore,after:mineAfter},checks:{displacement,rconMineflayerDistance:agreement,healthPositive:after.health>0,dimensionUnchanged:before.dimension===after.dimension,displacementInBounds:displacement>=0.5&&displacement<=10,positionsAgree:agreement<=1.5}};
- }catch(e){report={...report,status:"failed",error:String(e?.message??e).slice(0,256)}}finally{
+ }catch(e){report={...report,status:"failed",error:"qualification failed"}}finally{
   try{bot?.setControlState?.("forward",false)}catch{}
   try{await bounded(()=>bot?.quit?.("qualification complete"),1000,"bot quit")}catch{}
   try{await bounded(()=>rcon?.end?.(),1000,"RCON close")}catch{}
