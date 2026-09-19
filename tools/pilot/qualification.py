@@ -46,6 +46,19 @@ def _sha(path):
             h.update(chunk)
     return h.hexdigest()
 
+def _reject_duplicate_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite_constant(token):
+    raise ValueError(f"invalid JSON numeric constant: {token}")
+
+
 def _capture_json(path, maximum):
     try:
         fd, info = prep._open_regular(Path(path), 'qualification evidence', maximum)
@@ -68,8 +81,13 @@ def _capture_json(path, maximum):
         os.close(fd)
     raw = b''.join(chunks)
     try:
-        return (json.loads(raw), hashlib.sha256(raw).hexdigest())
-    except (UnicodeError, json.JSONDecodeError):
+        value = json.loads(
+            raw,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite_constant,
+        )
+        return (value, hashlib.sha256(raw).hexdigest())
+    except (UnicodeError, ValueError, RecursionError):
         return (None, None)
 
 def _position(value):
@@ -78,8 +96,20 @@ def _position(value):
     items = [value.get(key) for key in ("x", "y", "z")]
     if any(type(item) not in (int, float) for item in items):
         return None
-    point = tuple(float(item) for item in items)
+    try:
+        point = tuple(float(item) for item in items)
+    except (OverflowError, ValueError):
+        return None
     return point if all(math.isfinite(item) for item in point) else None
+
+
+def _positive_finite_number(value):
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value) and value > 0
+    except (OverflowError, ValueError):
+        return False
 
 
 def _evidence(path, mode):
@@ -104,24 +134,27 @@ def _evidence(path, mode):
         return value, digest, False
     before_position = _position(before.get("position"))
     after_position = _position(after.get("position"))
+    mine_before = _position(mineflayer.get("before"))
     mine_after = _position(mineflayer.get("after"))
-    if None in (before_position, after_position, mine_after):
+    if None in (before_position, after_position, mine_before, mine_after):
         return value, digest, False
     horizontal = math.hypot(
         after_position[0] - before_position[0],
         after_position[2] - before_position[2],
     )
-    agreement = math.dist(after_position, mine_after)
+    initial_agreement = math.dist(before_position, mine_before)
+    terminal_agreement = math.dist(after_position, mine_after)
+    before_dimension = before.get("dimension")
     common = (
-        isinstance(after.get("health"), (int, float))
-        and not isinstance(after.get("health"), bool)
-        and math.isfinite(after["health"])
-        and after["health"] > 0
-        and before.get("dimension") in {
+        _positive_finite_number(before.get("health"))
+        and _positive_finite_number(after.get("health"))
+        and isinstance(before_dimension, str)
+        and before_dimension in {
             "minecraft:overworld", "minecraft:the_nether", "minecraft:the_end"
         }
-        and before.get("dimension") == after.get("dimension")
-        and agreement <= 1.5
+        and before_dimension == after.get("dimension")
+        and initial_agreement <= 1.5
+        and terminal_agreement <= 1.5
         and value.get("handshakeSent") is True
         and checks.get("transportIntact") is True
         and checks.get("initialPositionsAgree") is True

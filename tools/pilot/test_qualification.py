@@ -26,7 +26,10 @@ def evidence(mode="forward", passed=True):
             "dimension": "minecraft:overworld",
             "health": 20,
         },
-        "mineflayer": {"after": {"x": distance, "y": 64, "z": 0}},
+        "mineflayer": {
+            "before": {"x": 0, "y": 64, "z": 0},
+            "after": {"x": distance, "y": 64, "z": 0},
+        },
         "checks": {
             "transportIntact": True,
             "initialPositionsAgree": True,
@@ -68,6 +71,17 @@ class Tests(unittest.TestCase):
                 p.write_text(json.dumps(value))
                 os.chmod(p, 384)
             self.argv = argv
+            return self.result(code)
+        return run
+
+    def raw_runner(self, raw_evidence, code=0):
+        def run(argv, **kw):
+            evidence_path = kw["cwd"] / "qualification-evidence.json"
+            evidence_path.write_bytes(raw_evidence)
+            os.chmod(evidence_path, 384)
+            life = kw["cwd"] / "namespace-result.json"
+            life.write_text(json.dumps(LIFE))
+            os.chmod(life, 384)
             return self.result(code)
         return run
 
@@ -199,6 +213,77 @@ class Tests(unittest.TestCase):
             return self.result()
         self.assertEqual(self.call('symlink-evidence', runner=symlink_runner)['status'], 'failed')
 
+    def test_malformed_json_numbers_and_structure_preserve_failed_summary(self):
+        valid = json.dumps(evidence())
+        malformed_cases = [
+            valid.replace('"x": 0', '"x": ' + ('9' * 4000), 1).encode(),
+            valid.replace('"x": 0', '"x": ' + ('9' * 5000), 1).encode(),
+            ('[' * 1100 + '0' + ']' * 1100).encode(),
+        ]
+        for index, raw in enumerate(malformed_cases):
+            name = f"malformed-json-{index}"
+            report = self.call(name, runner=self.raw_runner(raw))
+            self.assertEqual(report["status"], "failed")
+            if index == 0:
+                self.assertEqual(len(report["evidence_sha256"]), 64)
+            else:
+                self.assertIsNone(report["evidence_sha256"])
+            self.assertEqual(
+                (self.root / name / "runtime/qualification-evidence.json").read_bytes(),
+                raw,
+            )
+            self.assertTrue((self.root / name / "qualification-summary.json").is_file())
+
+    def test_duplicate_keys_and_nonfinite_constants_fail_closed(self):
+        valid = json.dumps(evidence())
+        malformed_cases = [
+            valid.replace('"status": "passed"', '"status": "failed", "status": "passed"', 1).encode(),
+            valid.replace('"health": 20', '"health": NaN', 1).encode(),
+            valid.replace('"health": 20', '"health": Infinity', 1).encode(),
+        ]
+        for index, raw in enumerate(malformed_cases):
+            name = f"ambiguous-json-{index}"
+            report = self.call(name, runner=self.raw_runner(raw))
+            self.assertEqual(report["status"], "failed")
+            self.assertIsNone(report["evidence_sha256"])
+            self.assertEqual(
+                (self.root / name / "runtime/qualification-evidence.json").read_bytes(),
+                raw,
+            )
+            self.assertTrue((self.root / name / "qualification-summary.json").is_file())
+
+    def test_wrong_dimension_type_and_huge_coordinate_fail_without_losing_summary(self):
+        malformed = evidence()
+        malformed["before"]["dimension"] = ["minecraft:overworld"]
+        report = self.call("bad-dimension-type", runner=self.runner(ev=malformed))
+        self.assertEqual(report["status"], "failed")
+        self.assertTrue((self.root / "bad-dimension-type/qualification-summary.json").is_file())
+
+        malformed = evidence()
+        malformed["before"]["position"]["x"] = 10 ** 4000
+        report = self.call("huge-coordinate", runner=self.runner(ev=malformed))
+        self.assertEqual(report["status"], "failed")
+        self.assertTrue((self.root / "huge-coordinate/qualification-summary.json").is_file())
+
+    def test_initial_agreement_and_both_health_values_are_recomputed(self):
+        malformed = evidence()
+        malformed["mineflayer"]["before"]["x"] = 100
+        self.assertEqual(
+            self.call("false-initial-agreement", runner=self.runner(ev=malformed))["status"],
+            "failed",
+        )
+        for index, (section, health) in enumerate([
+            ("before", 0),
+            ("before", True),
+            ("after", -1),
+            ("after", float("inf")),
+        ]):
+            malformed = evidence()
+            malformed[section]["health"] = health
+            self.assertEqual(
+                self.call(f"bad-health-{index}", runner=self.runner(ev=malformed))["status"],
+                "failed",
+            )
     def test_symlinked_workspace_parent_is_rejected(self):
         real = self.root / 'real'
         real.mkdir()
