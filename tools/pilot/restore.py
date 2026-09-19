@@ -190,13 +190,13 @@ def _extract(archive, output):
     return records
 
 
-def restore(archive, archive_sha256, jar, jar_sha256, eula, output, *, reserve_bytes=RESERVE, max_expanded_bytes=MAX_EXPANDED):
+def restore(archive, archive_sha256, jar, jar_sha256, eula, output, *, reserve_bytes=RESERVE, max_expanded_bytes=MAX_EXPANDED, bootstrap=None):
     archive, jar, eula, output = map(Path, (archive, jar, eula, output))
     try:
         _pin(archive_sha256); _pin(jar_sha256)
         if type(reserve_bytes) is not int or reserve_bytes < 0 or type(max_expanded_bytes) is not int or not 0 < max_expanded_bytes <= MAX_EXPANDED:
             raise RestoreError("invalid storage bounds")
-        parent = prep._validate_destination(output, [archive, jar, eula])
+        parent = prep._validate_destination(output, [archive, jar, eula] + ([Path(bootstrap)] if bootstrap is not None else []))
         eula_file = prep._capture_file(eula, "existing accepted EULA", 64 * 1024); _eula(eula_file.raw)
         if not (archive.name.endswith(".tar") or archive.name.endswith(".tar.zst")):
             raise RestoreError("backup must be .tar or .tar.zst")
@@ -206,12 +206,20 @@ def restore(archive, archive_sha256, jar, jar_sha256, eula, output, *, reserve_b
             _copy_pinned(archive, copied, archive_sha256, MAX_ARCHIVE, private, reserve_bytes)
             copied_jar = private / "server.jar"
             jar_bytes = _copy_pinned(jar, copied_jar, jar_sha256, MAX_JAR, private, reserve_bytes)
+            bootstrap_record = None
+            if bootstrap is not None:
+                from tools.pilot.bootstrap import inspect_bootstrap
+                bootstrap_record = inspect_bootstrap(copied_jar)
+                if bootstrap_record is None:
+                    raise RestoreError("pinned JAR declares no supported bootstrap dependency")
+                bootstrap_record = dict(bootstrap_record)
+                bootstrap_record["bytes"] = _copy_pinned(Path(bootstrap), private / "bootstrap.jar", bootstrap_record["sha256"], MAX_JAR, private, reserve_bytes)
             tar_path = copied
             if archive.name.endswith(".tar.zst"):
                 tar_path = private / "snapshot.tar"
                 _decompress(copied, tar_path, max_expanded_bytes + MAX_MEMBERS * 1024 + prep.MAX_TAR_ZERO_PADDING, 300, reserve_bytes)
             scan, discarded = _inspect(tar_path, max_expanded_bytes)
-            _space(parent, scan["expanded_bytes"] + jar_bytes + len(eula_file.raw) + 16 * 1024**2, reserve_bytes)
+            _space(parent, scan["expanded_bytes"] + jar_bytes + (bootstrap_record["bytes"] if bootstrap_record else 0) + len(eula_file.raw) + 16 * 1024**2, reserve_bytes)
             prep._mkdir_private(output)
             records = _extract(tar_path, output)
             # Copy the already verified private jar; no original input is reopened.
@@ -220,7 +228,10 @@ def restore(archive, archive_sha256, jar, jar_sha256, eula, output, *, reserve_b
                 prep._write_private(output / name, raw, output)
                 records.append({"path": name, "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)})
             records.append({"path": "server.jar", "sha256": jar_sha256, "bytes": jar_bytes})
-            manifest = {"schema_version": 1, "kind": "isolated_minecraft_runtime", "status": "restored_not_started", "snapshot_sha256": archive_sha256, "server_jar_sha256": jar_sha256, "world_name": "ai-world", "world_roots": sorted(WORLD_ROOTS), "isolated_network_required": True, "eula_source": "existing_operator_accepted_file", "discarded_archive_entries": discarded, "archive_scan": scan, "files": sorted(records, key=lambda x: x["path"]), "claim_limit": CLAIM_LIMIT}
+            if bootstrap_record:
+                _copy_pinned(private / "bootstrap.jar", output / bootstrap_record["path"], bootstrap_record["sha256"], MAX_JAR, output, reserve_bytes)
+                records.append(bootstrap_record)
+            manifest = {"bootstrap": bootstrap_record, "schema_version": 1, "kind": "isolated_minecraft_runtime", "status": "restored_not_started", "snapshot_sha256": archive_sha256, "server_jar_sha256": jar_sha256, "world_name": "ai-world", "world_roots": sorted(WORLD_ROOTS), "isolated_network_required": True, "eula_source": "existing_operator_accepted_file", "discarded_archive_entries": discarded, "archive_scan": scan, "files": sorted(records, key=lambda x: x["path"]), "claim_limit": CLAIM_LIMIT}
             prep._write_private(output / "runtime-manifest.json", (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode(), output)
             return manifest
     except (prep.PreparationError, OSError, ValueError, UnicodeError, tarfile.TarError, subprocess.TimeoutExpired) as exc:
@@ -236,8 +247,8 @@ def verify_runtime(runtime_dir, manifest_sha256):
         captured = prep._capture_file(runtime / "runtime-manifest.json", "runtime manifest", 32 * 1024**2)
         if captured.sha256 != manifest_sha256: raise RestoreError("runtime manifest hash mismatch")
         manifest = prep._parse_json(captured, "runtime manifest")
-        fields = {"schema_version", "kind", "status", "snapshot_sha256", "server_jar_sha256", "world_name", "world_roots", "isolated_network_required", "eula_source", "discarded_archive_entries", "archive_scan", "files", "claim_limit"}
-        if set(manifest) != fields or manifest.get("eula_source") != "existing_operator_accepted_file" or manifest.get("claim_limit") != CLAIM_LIMIT:
+        fields = {"bootstrap", "schema_version", "kind", "status", "snapshot_sha256", "server_jar_sha256", "world_name", "world_roots", "isolated_network_required", "eula_source", "discarded_archive_entries", "archive_scan", "files", "claim_limit"}
+        if set(manifest) not in (fields, fields - {"bootstrap"}) or manifest.get("eula_source") != "existing_operator_accepted_file" or manifest.get("claim_limit") != CLAIM_LIMIT:
             raise RestoreError("invalid runtime manifest claims")
         discarded = manifest["discarded_archive_entries"]
         if not isinstance(discarded, list) or any(not isinstance(item, str) or item not in DISCARDED for item in discarded) or len(discarded) != len(set(discarded)):
@@ -248,18 +259,24 @@ def verify_runtime(runtime_dir, manifest_sha256):
         if type(manifest.get("schema_version")) is not int or manifest["schema_version"] != 1 or manifest.get("kind") != "isolated_minecraft_runtime" or manifest.get("status") != "restored_not_started" or manifest.get("isolated_network_required") is not True or manifest.get("world_name") != "ai-world" or manifest.get("world_roots") != sorted(WORLD_ROOTS):
             raise RestoreError("unsupported runtime manifest")
         _pin(manifest["snapshot_sha256"]); _pin(manifest["server_jar_sha256"])
+        bootstrap_record = manifest.get("bootstrap")
+        if bootstrap_record is not None:
+            if not isinstance(bootstrap_record, dict) or set(bootstrap_record) != {"path", "sha256", "bytes"} or not isinstance(bootstrap_record["path"], str) or not re.fullmatch(r"cache/mojang_[0-9]+\.[0-9]+(?:\.[0-9]+)?\.jar", bootstrap_record["path"]) or type(bootstrap_record["bytes"]) is not int or not 0 < bootstrap_record["bytes"] <= MAX_JAR:
+                raise RestoreError("invalid bootstrap record")
+            _pin(bootstrap_record["sha256"])
+        extra_paths = {bootstrap_record["path"]} if bootstrap_record else set()
         entries = manifest["files"]
-        if not isinstance(entries, list) or not 4 <= len(entries) <= MAX_MEMBERS + 3: raise RestoreError("invalid runtime file count")
+        if not isinstance(entries, list) or not 4 <= len(entries) <= MAX_MEMBERS + 4: raise RestoreError("invalid runtime file count")
         expected = set(); total = 0
         for entry in entries:
             if not isinstance(entry, dict) or set(entry) != {"path", "sha256", "bytes"}: raise RestoreError("invalid runtime file record")
             name = entry["path"]
             if not isinstance(name, str) or name in expected or name.startswith("/") or "\\" in name or any(part in {"", ".", ".."} for part in name.split("/")): raise RestoreError("invalid runtime file path")
-            if name not in {"server.jar", "server.properties", "eula.txt"} and name.split("/")[0] not in WORLD_ROOTS: raise RestoreError("unexpected runtime file")
+            if name not in {"server.jar", "server.properties", "eula.txt"} | extra_paths and name.split("/")[0] not in WORLD_ROOTS: raise RestoreError("unexpected runtime file")
             _pin(entry["sha256"])
             if type(entry["bytes"]) is not int or not 0 <= entry["bytes"] <= MAX_EXPANDED: raise RestoreError("invalid runtime file size")
             total += entry["bytes"]
-            if total > MAX_EXPANDED + MAX_JAR + 1024**2: raise RestoreError("runtime exceeds safety bound")
+            if total > MAX_EXPANDED + 2 * MAX_JAR + 1024**2: raise RestoreError("runtime exceeds safety bound")
             fd, info = prep._open_regular(runtime / name, "runtime file", entry["bytes"])
             try:
                 if info.st_mode & 0o077 or info.st_size != entry["bytes"]: raise RestoreError("runtime file privacy or size mismatch")
@@ -271,6 +288,11 @@ def verify_runtime(runtime_dir, manifest_sha256):
                 if os.read(fd, 1) or digest.hexdigest() != entry["sha256"] or prep._archive_signature(info) != prep._archive_signature(os.fstat(fd)): raise RestoreError("runtime file hash mismatch or changed")
             finally: os.close(fd)
             expected.add(name)
+        if bootstrap_record:
+            from tools.pilot.bootstrap import inspect_bootstrap
+            declared = inspect_bootstrap(runtime / "server.jar")
+            if declared != {key: bootstrap_record[key] for key in ("path", "sha256")} or bootstrap_record not in entries:
+                raise RestoreError("bootstrap record disagrees with pinned JAR or files")
         world_records = [entry for entry in entries if entry["path"].split("/")[0] in WORLD_ROOTS]
         world_bytes = sum(entry["bytes"] for entry in world_records)
         if scan["regular_file_count"] != len(world_records) + len(discarded) or not world_bytes <= scan["expanded_bytes"] <= world_bytes + len(discarded) * 1024**2:
@@ -283,10 +305,10 @@ def verify_runtime(runtime_dir, manifest_sha256):
         seen = set(); count = 0
         for directory, dirs, files in os.walk(runtime, followlinks=False):
             count += len(dirs) + len(files)
-            if count > MAX_MEMBERS + 4: raise RestoreError("runtime tree too large")
+            if count > MAX_MEMBERS + 6: raise RestoreError("runtime tree too large")
             for name in dirs:
                 relative = (Path(directory) / name).relative_to(runtime).parts
-                if relative[0] not in WORLD_ROOTS or len(relative) > 32:
+                if (relative[0] not in WORLD_ROOTS and not (bootstrap_record and relative == ("cache",))) or len(relative) > 32:
                     raise RestoreError("unexpected runtime directory")
             for name in dirs + files:
                 path = Path(directory) / name
@@ -305,9 +327,10 @@ def main(argv=None):
     for name in ["archive", "jar", "eula", "output"]: parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--archive-sha256", required=True); parser.add_argument("--jar-sha256", required=True)
     parser.add_argument("--reserve-bytes", type=int, default=RESERVE)
+    parser.add_argument("--bootstrap", type=Path, help="existing cached bootstrap JAR; hash/path come from the pinned server JAR")
     args = parser.parse_args(argv)
     try:
-        manifest = restore(args.archive, args.archive_sha256, args.jar, args.jar_sha256, args.eula, args.output, reserve_bytes=args.reserve_bytes)
+        manifest = restore(args.archive, args.archive_sha256, args.jar, args.jar_sha256, args.eula, args.output, reserve_bytes=args.reserve_bytes, bootstrap=args.bootstrap)
     except RestoreError as exc:
         print(f"error: {exc}", file=__import__("sys").stderr); return 2
     pin = prep._capture_file(args.output / "runtime-manifest.json", "runtime manifest", 32 * 1024**2).sha256

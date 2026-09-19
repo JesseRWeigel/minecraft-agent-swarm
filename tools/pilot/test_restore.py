@@ -6,6 +6,7 @@ import tarfile
 import tempfile
 import subprocess
 import shutil
+import zipfile
 from unittest.mock import patch
 import unittest
 
@@ -149,6 +150,28 @@ class RestoreTests(unittest.TestCase):
         with self.assertRaises(ProcessError):
             run_server(self.output, manifest_sha256=pin, timeout_seconds=1, runner=fake_runner, validate_executables=False)
         self.assertEqual(len(calls), 1)
+
+    def test_pinned_bootstrap_cache_is_copied_and_verified(self):
+        cached = self.root / "mojang.jar"; cached.write_bytes(b"cached bootstrap bytes")
+        with zipfile.ZipFile(self.jar, "w") as jar:
+            jar.writestr("META-INF/download-context", sha(cached) + "\thttps://piston-data.mojang.com/v1/objects/fixture/server.jar\tmojang_1.21.4.jar")
+        manifest = self.restore(bootstrap=cached)
+        self.assertEqual(manifest["bootstrap"]["path"], "cache/mojang_1.21.4.jar")
+        self.assertEqual((self.output / manifest["bootstrap"]["path"]).read_bytes(), cached.read_bytes())
+        verify_runtime(self.output, sha(self.output / "runtime-manifest.json"))
+        restored_cache = self.output / manifest["bootstrap"]["path"]
+        restored_cache.write_bytes(b"tampered")
+        with self.assertRaises(RestoreError):
+            verify_runtime(self.output, sha(self.output / "runtime-manifest.json"))
+        self.output = self.root / "bad-cache"; cached.write_bytes(b"wrong")
+        with self.assertRaises(RestoreError): self.restore(bootstrap=cached)
+        self.assertFalse(self.output.exists())
+
+    def test_legacy_manifest_without_bootstrap_remains_verifiable(self):
+        self.restore(); path = self.output / "runtime-manifest.json"
+        manifest = json.loads(path.read_text()); del manifest["bootstrap"]
+        path.write_text(json.dumps(manifest))
+        self.assertEqual(verify_runtime(self.output, sha(path)), manifest)
 
     def test_existing_destination_preserved(self):
         self.output.mkdir(); keep = self.output / "keep"; keep.write_text("preserve")

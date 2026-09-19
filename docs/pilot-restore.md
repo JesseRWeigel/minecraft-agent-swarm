@@ -57,5 +57,21 @@ nonprivate paths before launch. Hashes establish byte identity only: Minecraft
 format validity, exact server version, readiness, the loaded world, and trial
 validity remain unverified until separate real-server qualification.
 
-No live archive or real server was used to test this implementation. Tests use
+Automated regression tests use
 small synthetic `.tar` and `.tar.zst` archives and a non-executable fake JAR.
+
+## Offline Paper bootstrap cache
+
+Paperclip requires a vanilla-server cache before its first boot. For a pinned
+Paper JAR that declares `META-INF/download-context`, add
+`--bootstrap /private/cache/mojang_1.21.4.jar` to restore. The destination filename
+and SHA-256 are derived from that pinned JAR's bounded metadata. The supplied
+cache is copied and hashed from a stable descriptor, then listed in the runtime
+manifest. Nothing is downloaded and existing generated libraries are not copied.
+The launcher still has no network access.
+
+Only the declared `cache/mojang_<numeric-version>.jar` file is permitted. A
+wrong cache hash, unsupported declaration, or altered manifest is rejected.
+Older runtime manifests without a bootstrap field remain valid; omitting the
+cache may cause an honest offline startup failure. The bootstrap cache is an
+explicit input, never discovered automatically from the live server directory.
