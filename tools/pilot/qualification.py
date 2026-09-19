@@ -46,6 +46,16 @@ def _passed_evidence(path):
   return json.loads(path.read_text()).get("status")=="passed"
  except (OSError,ValueError,AttributeError):return False
 
+def _worker_outcome(path):
+ try:
+  info=path.stat()
+  if info.st_mode & 0o077 or info.st_size>65536:return None
+  value=json.loads(path.read_text())
+  fields={"schema_version","status","readiness","client","client_returncode","java_returncode","stop_sent","term_sent","kill_sent"}
+  if not isinstance(value,dict) or set(value)!=fields:return None
+  return value
+ except (OSError,ValueError,AttributeError):return None
+
 def run_qualification(*,workspace,restore_kwargs,tool_snapshot,tool_manifest_sha256,bwrap_path=Path("/usr/bin/bwrap"),runner=run_owned,restore_fn=restore_mod.restore,validate_bwrap=True):
  workspace=_private_new(workspace);runtime=workspace/"runtime";tools_input=Path(tool_snapshot)
  if validate_bwrap: bwrap_path=_validate_executable(Path(bwrap_path),"bwrap",expected_name="bwrap")
@@ -71,7 +81,8 @@ def run_qualification(*,workspace,restore_kwargs,tool_snapshot,tool_manifest_sha
   argv=_build_sandbox_argv(runtime,bwrap_path=Path(bwrap_path),command=[str(python),"/pilot-code/namespace_worker.py",str(evidence)])
   marker=argv.index("--proc");argv[marker:marker]=["--ro-bind",str(tools),"/pilot-tools","--ro-bind",str(code),"/pilot-code"]
   result=runner(argv,cwd=runtime,env={"PATH":"/usr/bin:/bin","LANG":"C"},timeout_seconds=180,stop_grace_seconds=15,log_limit_bytes=1024*1024)
-  summary={"schema_version":1,"status":"completed" if result.returncode==0 and not result.timed_out and not result.cleanup_uncertain and not result.stdout_truncated and not result.stderr_truncated and _passed_evidence(evidence) else "failed","runtime_manifest_sha256":manifest_sha,"snapshot_sha256":manifest.get("snapshot_sha256"),"server_jar_sha256":manifest.get("server_jar_sha256"),"qualification_config":{"base_server_properties_sha256":original_properties,"online_mode":False,"enforce_secure_profile":False,"game_port":25585,"rcon_port":25595},"worker_sha256":worker_hash,"tool_manifest_sha256":tool_manifest_sha256,"qualification_server_properties_sha256":_sha(runtime/"server.properties"),"tool_client_sha256":_sha(tools/"qualification-client.mjs"),"independent_observer_process":False,"claim_limit":"Same-process Mineflayer and RCON qualification only; not an independent observer or benchmark result.","process":result.to_dict()}
+  worker_outcome=_worker_outcome(runtime/"namespace-result.json")
+  summary={"schema_version":1,"status":"completed" if worker_outcome is not None and worker_outcome.get("status")=="passed" and result.returncode==0 and not result.timed_out and not result.cleanup_uncertain and not result.stdout_truncated and not result.stderr_truncated and _passed_evidence(evidence) else "failed","runtime_manifest_sha256":manifest_sha,"snapshot_sha256":manifest.get("snapshot_sha256"),"server_jar_sha256":manifest.get("server_jar_sha256"),"qualification_config":{"base_server_properties_sha256":original_properties,"online_mode":False,"enforce_secure_profile":False,"game_port":25585,"rcon_port":25595},"worker_sha256":worker_hash,"tool_manifest_sha256":tool_manifest_sha256,"qualification_server_properties_sha256":_sha(runtime/"server.properties"),"tool_client_sha256":_sha(tools/"qualification-client.mjs"),"independent_observer_process":False,"claim_limit":"Same-process Mineflayer and RCON qualification only; not an independent observer or benchmark result.","process":result.to_dict(),"namespace_lifecycle":worker_outcome}
   _write(workspace/"qualification-summary.json",(json.dumps(summary,sort_keys=True,indent=2)+"\n").encode())
   return summary
  finally:

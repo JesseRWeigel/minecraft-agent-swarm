@@ -13,7 +13,7 @@ class Tests(unittest.TestCase):
  def test_fixed_namespace_contract_private_delta_and_no_secret_argv(self):
   seen={}
   def runner(argv,**kw):
-   seen["argv"]=argv;seen["kw"]=kw;e=kw["cwd"]/"qualification-evidence.json";e.write_text(json.dumps({"status":"passed"}));os.chmod(e,0o600);return self.result()
+   seen["argv"]=argv;seen["kw"]=kw;e=kw["cwd"]/"qualification-evidence.json";e.write_text(json.dumps({"status":"passed"}));os.chmod(e,0o600);n=kw["cwd"]/"namespace-result.json";n.write_text(json.dumps({"schema_version":1,"status":"passed","readiness":"ready","client":"exited","client_returncode":0,"java_returncode":0,"stop_sent":True,"term_sent":False,"kill_sent":False}));os.chmod(n,0o600);return self.result()
   with mock.patch('tools.pilot.qualification.restore_mod.verify_runtime',return_value={}), mock.patch('tools.pilot.qualification.verify_tools',return_value={}):
    report=run_qualification(workspace=self.root/'work',restore_kwargs={},tool_snapshot=self.tools,tool_manifest_sha256="c"*64,runner=runner,restore_fn=self.restore,validate_bwrap=False)
   self.assertEqual(report['status'],'completed');self.assertFalse(report['independent_observer_process']);self.assertIn('--unshare-net',seen['argv']);self.assertIn('/pilot-tools',seen['argv']);self.assertIn('/pilot-code',seen['argv']);self.assertNotIn('rcon.password',' '.join(seen['argv']));self.assertNotIn('PILOT_RCON_PASSWORD',seen['kw']['env']);self.assertFalse((self.root/'work/runtime/.qualification-rcon-password').exists());self.assertEqual((self.root/'work').stat().st_mode&0o777,0o700);props=(self.root/'work/runtime/server.properties').read_text();self.assertIn(QUAL_PROPERTIES,props);self.assertRegex(props,r'rcon.password=\S+');self.assertEqual((self.root/'work/qualification-summary.json').stat().st_mode&0o777,0o600)
@@ -27,4 +27,12 @@ class Tests(unittest.TestCase):
   with mock.patch('tools.pilot.qualification.restore_mod.verify_runtime',return_value={}), mock.patch('tools.pilot.qualification.verify_tools',return_value={}):
    report=run_qualification(workspace=self.root/'failed',restore_kwargs={},tool_snapshot=self.tools,tool_manifest_sha256="c"*64,restore_fn=self.restore,validate_bwrap=False,runner=lambda *a,**k:self.result(1))
   self.assertEqual(report['status'],'failed')
+ def test_java_nonzero_can_never_qualify(self):
+  def runner(argv,**kw):
+   for name,value in [("qualification-evidence.json",{"status":"passed"}),("namespace-result.json",{"schema_version":1,"status":"failed","readiness":"ready","client":"exited","client_returncode":0,"java_returncode":1,"stop_sent":True,"term_sent":False,"kill_sent":False})]:
+    p=kw["cwd"]/name;p.write_text(json.dumps(value));os.chmod(p,0o600)
+   return self.result(0)
+  with mock.patch("tools.pilot.qualification.restore_mod.verify_runtime",return_value={}),mock.patch("tools.pilot.qualification.verify_tools",return_value={}):
+   report=run_qualification(workspace=self.root/"java-failed",restore_kwargs={},tool_snapshot=self.tools,tool_manifest_sha256="c"*64,runner=runner,restore_fn=self.restore,validate_bwrap=False)
+  self.assertEqual(report["status"],"failed");self.assertEqual(report["namespace_lifecycle"]["java_returncode"],1)
 if __name__=='__main__':unittest.main()
