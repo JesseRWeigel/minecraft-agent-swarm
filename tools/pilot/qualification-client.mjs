@@ -229,6 +229,7 @@ export async function runQualification({
           username: USERNAME,
           auth: "offline",
           version: MINECRAFT_VERSION,
+          respawn: false,
         }),
       operationTimeoutMs,
       "bot create",

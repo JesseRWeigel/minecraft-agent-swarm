@@ -68,6 +68,7 @@ function fixture({ move = true, health = 20, dimension = "minecraft:overworld", 
           username: "PilotProbe",
           auth: "offline",
           version: "1.21.4",
+          respawn: false,
         });
         return bot;
       },

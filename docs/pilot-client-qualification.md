@@ -15,6 +15,10 @@ The client is pinned to the Minecraft 1.21.4 protocol. It passes that version
 explicitly to Mineflayer and records `minecraftVersion: "1.21.4"` in evidence.
 It does not use the disabled server-status endpoint for protocol autodetection.
 Evidence for any other or missing version is rejected.
+The qualification client also disables Mineflayer's automatic respawn so a
+death cannot be replaced by a fresh player state before terminal observation.
+Future client tool snapshots must be rebuilt and pinned after this client
+changes; historical snapshots and recorded attempts remain unchanged.
 
 ## Inputs and execution
 
