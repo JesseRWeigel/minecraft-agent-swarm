@@ -80,8 +80,13 @@ def inspect_bootstrap(jar_path: Path):
     except PreparationError as exc:
         raise BootstrapError(str(exc)) from exc
     initial_signature = _archive_signature(info)
-    source = _BoundedReader(os.fdopen(os.dup(fd), "rb", buffering=0), info.st_size)
+    source = None
+    duplicate_fd = None
     try:
+        duplicate_fd = os.dup(fd)
+        stream = os.fdopen(duplicate_fd, "rb", buffering=0)
+        duplicate_fd = None  # stream now owns the duplicate descriptor
+        source = _BoundedReader(stream, info.st_size)
         _eocd(source, info.st_size)
         source.seek(0)
         with zipfile.ZipFile(source) as archive:
@@ -105,11 +110,16 @@ def inspect_bootstrap(jar_path: Path):
     except (zipfile.BadZipFile, RuntimeError, OSError, EOFError) as exc:
         raise BootstrapError("invalid ZIP archive") from exc
     finally:
-        source.close()
         try:
-            final_signature = _archive_signature(os.fstat(fd))
+            if source is not None:
+                source.close()
+            elif duplicate_fd is not None:
+                os.close(duplicate_fd)
         finally:
-            os.close(fd)
+            try:
+                final_signature = _archive_signature(os.fstat(fd))
+            finally:
+                os.close(fd)
         if final_signature != initial_signature:
             raise BootstrapError("bootstrap JAR changed during inspection")
     try:

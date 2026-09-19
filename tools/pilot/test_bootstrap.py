@@ -57,4 +57,25 @@ class Tests(unittest.TestCase):
  def test_malformed_port_is_normalized(self):
   line = self.line().replace('piston-data.mojang.com', 'piston-data.mojang.com:bad')
   with self.assertRaises(BootstrapError): inspect_bootstrap(self.jar([('META-INF/download-context', line)]))
+ def test_reader_construction_failures_close_descriptors(self):
+  from tools.pilot import bootstrap
+  path = self.jar([('META-INF/download-context', self.line())])
+  real_open, real_dup = bootstrap._open_regular, os.dup
+  for stage in ('dup', 'fdopen'):
+   captured = []
+   def capture_open(*args):
+    fd, info = real_open(*args); captured.append(fd); return fd, info
+   def capture_dup(fd):
+    copy = real_dup(fd); captured.append(copy); return copy
+   try:
+    with mock.patch.object(bootstrap, '_open_regular', side_effect=capture_open):
+     with mock.patch.object(os, 'dup', side_effect=OSError('synthetic') if stage == 'dup' else capture_dup):
+      with mock.patch.object(os, 'fdopen', side_effect=OSError('synthetic')):
+       with self.assertRaises(BootstrapError): inspect_bootstrap(path)
+    for fd in captured:
+     with self.assertRaises(OSError): os.fstat(fd)
+   finally:
+    for fd in captured:
+     try: os.close(fd)
+     except OSError: pass
 if __name__=='__main__':unittest.main()
