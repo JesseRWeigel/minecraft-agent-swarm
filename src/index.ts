@@ -2,7 +2,7 @@ import { createBot } from "./bot/index.js";
 import { createTwitchChat } from "./stream/twitch.js";
 import { startOverlay, addChatMessage } from "./stream/overlay.js";
 import { config } from "./config.js";
-import { getAuthoredSkillNames, loadDynamicSkills } from "./skills/dynamic-loader.js";
+import { getDynamicSkillNames, loadDynamicSkills } from "./skills/dynamic-loader.js";
 import { BOT_ROSTER, BotRoleConfig } from "./bot/role.js";
 import { startUnifiedViewer } from "./stream/unified-viewer.js";
 import { abortActiveSkill, getActiveSkillName } from "./skills/executor.js";
@@ -196,7 +196,7 @@ async function main() {
     requestedBotCount: config.multiBot.count,
     roster: BOT_ROSTER,
     builtInSkillNames: getBuiltInSkillNames(),
-    authoredSkillNames: getAuthoredSkillNames(),
+    loadedDynamicSkillNames: getDynamicSkillNames(),
     generatedSkillNames: getGeneratedSkillNames(),
   });
 

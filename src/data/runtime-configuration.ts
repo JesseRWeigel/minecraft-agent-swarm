@@ -29,7 +29,7 @@ export interface RuntimeConfigurationInput {
   requestedBotCount: number;
   roster: RuntimeRoleInput[];
   builtInSkillNames: Iterable<string>;
-  authoredSkillNames: Iterable<string>;
+  loadedDynamicSkillNames: Iterable<string>;
   generatedSkillNames: Iterable<string>;
   nodeVersion?: string;
 }
@@ -100,10 +100,12 @@ export function buildRuntimeConfiguration(input: RuntimeConfigurationInput) {
     prioritiesSha256: sha256(role.priorities),
     seasonGoalSha256: textHash(role.seasonGoal),
   }));
+  const generatedNames = [...input.generatedSkillNames].sort();
+  const generatedSet = new Set(generatedNames);
   const skills = {
     builtInNames: [...input.builtInSkillNames].sort(),
-    authoredNames: [...input.authoredSkillNames].sort(),
-    generatedNames: [...input.generatedSkillNames].sort(),
+    authoredNames: [...input.loadedDynamicSkillNames].filter((name) => !generatedSet.has(name)).sort(),
+    generatedNames,
   };
   const roleProjectionSha256 = canonicalSha256(orderedRoles);
   const inventorySha256 = canonicalSha256(skills);

@@ -39,6 +39,26 @@ Request, action-start, and trajectory records include an explicit collection-con
 
 Unset values remain `null`; collection never invents them. These fields support later joins to the separately maintained operations ledger. They do not prove that the world snapshot is consistent or that a named trial followed an evaluation protocol.
 
+The collector's first payload is run_context. After provider configuration has
+passed startup validation and authored plus approved generated skills have
+finished loading, the entry point records one runtime_configuration observation
+before starting viewers or bots and before making any provider request. It
+contains the resolved provider and requested strategic/fast model tags, a
+sanitized endpoint identity (scheme, hostname, port, and a hash of the path),
+the effective ordered roster, hashes of private role prompt text, the sorted
+names and canonical hash of skills that actually loaded, and the Node version.
+It excludes usernames, endpoint credentials/query/fragment, memory contents,
+and rendered prompts. Exact rendered messages and request parameters remain
+canonical in each content-addressed model_request payload.
+
+runtime_configuration.llm.immutableModelIdentity is explicitly not_captured; a
+model tag does not prove a model digest, quantization, runtime version, or loaded
+model. Those facts require a separately verified offline model manifest. The
+runtime event is post-preflight evidence: failures in provider validation,
+generated-skill sandbox validation, or generated-skill loading can occur before
+it is recorded and therefore remain represented only by absent
+runtime-configuration evidence. A write failure follows normal recorder health
+behavior and must not be interpreted as a persisted event.
 The event recorder exposes an in-process health state. Any event or trajectory write failure marks it incomplete and emits a visible `[Telemetry]` error without crashing gameplay. Each trajectory v2 row snapshots that health after its action events were attempted. Consumers must exclude or explicitly classify rows whose `telemetry.complete` is false, including rows with dangling evidence references. A whole-device failure can still prevent both the event and health snapshot from reaching disk; this is not durable transaction storage.
 
 Recovery is deliberately narrow. `recoverInterruptedActions()` reconciles unmatched starts in the explicitly selected, inactive run file and marks them `unknown/process_interrupted` with a synthesized flag. The default startup creates a new random run ID and does not scan previous runs. An unterminated final line, including otherwise valid JSON without its newline, or a mismatched embedded run ID marks the recorder incomplete and blocks appends and recovery without changing the original bytes. Serialization failures store an explicit diagnostic payload rather than claiming the original payload was captured; subsequent writes return an unavailable reference without further I/O. Offline cross-run auditing for missing terminals remains a future task.

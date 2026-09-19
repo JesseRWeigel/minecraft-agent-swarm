@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import {
   appendEpisodeEvent,
+  EpisodeEventRecorder,
   currentEpisodeId,
   getEpisodeEventRecorder,
   setEpisodeEventRecorderForTests,
@@ -48,7 +49,7 @@ function input(overrides: Partial<RuntimeConfigurationInput> = {}): RuntimeConfi
       },
     ],
     builtInSkillNames: ["zeta", "alpha"],
-    authoredSkillNames: ["voyagerB", "voyagerA"],
+    loadedDynamicSkillNames: ["voyagerB", "generatedZ", "voyagerA", "generatedA"],
     generatedSkillNames: ["generatedZ", "generatedA"],
     nodeVersion: "v22.test",
     ...overrides,
@@ -106,7 +107,7 @@ test("canonical hashes are stable while ordered role prompt inputs remain signif
   const reorderedSkills = buildRuntimeConfiguration(
     input({
       builtInSkillNames: ["alpha", "zeta"],
-      authoredSkillNames: ["voyagerA", "voyagerB"],
+      loadedDynamicSkillNames: ["generatedA", "voyagerA", "generatedZ", "voyagerB"],
       generatedSkillNames: ["generatedA", "generatedZ"],
     }),
   );
@@ -120,6 +121,7 @@ test("canonical hashes are stable while ordered role prompt inputs remain signif
     buildRuntimeConfiguration(reversedActions).promptProvenance.roleProjectionSha256,
   );
   assert.deepEqual(first.skills.builtInNames, ["alpha", "zeta"]);
+  assert.deepEqual(first.skills.authoredNames, ["voyagerA", "voyagerB"]);
   assert.equal(first.llm.immutableModelIdentity.status, "not_captured");
   assert.equal(first.promptProvenance.actualRenderedPromptEvidence, "model_request.payloadRef");
 });
@@ -156,6 +158,9 @@ test("records one runtime configuration after run context and before later event
       payloads.map((payload) => payload.stage ?? (payload.sentinel ? "later_request" : "unknown")),
       ["run_context", "runtime_configuration", "later_request"],
     );
+    assert.equal(rows[0].runId, rows[1].runId);
+    assert.equal(rows[1].sequence, rows[0].sequence + 1);
+    assert.equal(rows[1].episodeId, rows[1].runId + ":_collector");
     assert.equal(rows[1].botId, "_collector");
     assert.equal(rows[1].actionId, null);
     assert.equal(rows[1].requestId, null);
@@ -164,4 +169,17 @@ test("records one runtime configuration after run context and before later event
     else process.env.DATASET_EVENT_DIR = originalDir;
     setEpisodeEventRecorderForTests(null);
   }
+});
+
+test("a failed recorder write stays unavailable and never claims a persisted runtime event", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "runtime-configuration-failure-"));
+  const blockedRoot = path.join(root, "occupied");
+  writeFileSync(blockedRoot, "not a directory");
+  const recorder = new EpisodeEventRecorder({ rootDir: blockedRoot, runId: "failed-runtime-config" });
+
+  const event = recordRuntimeConfiguration(input(), recorder);
+
+  assert.equal(recorder.health.complete, false);
+  assert.match(event.payloadRef, /^unavailable:/);
+  assert.equal(existsSync(recorder.eventPath), false);
 });
