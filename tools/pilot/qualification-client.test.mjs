@@ -44,7 +44,13 @@ function fixture({ move = true, health = 20, dimension = "minecraft:overworld", 
     },
     args: {
       createBot: async (options) => {
-        assert.deepEqual(options, { host: "127.0.0.1", port: 25585, username: "PilotProbe", auth: "offline" });
+        assert.deepEqual(options, {
+          host: "127.0.0.1",
+          port: 25585,
+          username: "PilotProbe",
+          auth: "offline",
+          version: "1.21.4",
+        });
         return bot;
       },
       connectRcon: async (options) => {
@@ -67,6 +73,7 @@ test("fixed movement qualification passes only independent matching evidence", a
   assert.equal(r.status, "passed");
   assert.equal(r.claimsLiveBenchmarkResult, false);
   assert.equal(r.movementMode, "forward");
+  assert.equal(r.minecraftVersion, "1.21.4");
   assert.equal(r.checks.displacement, 1);
   assert.deepEqual(f.calls, [
     "data get entity PilotProbe Pos",

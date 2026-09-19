@@ -5,7 +5,8 @@ import { parseArgs } from "node:util";
 const HOST = "127.0.0.1",
   GAME_PORT = 25585,
   RCON_PORT = 25595,
-  USERNAME = "PilotProbe";
+  USERNAME = "PilotProbe",
+  MINECRAFT_VERSION = "1.21.4";
 const QUERY_FIELDS = ["Pos", "Dimension", "Health"];
 const sleepDefault = (ms) => new Promise((r) => setTimeout(r, ms));
 function finitePos(p) {
@@ -182,11 +183,19 @@ export async function runQualification({
       claimsLiveBenchmarkResult: false,
       endpoint: { host: HOST, gamePort: GAME_PORT, rconPort: RCON_PORT },
       username: USERNAME,
+      minecraftVersion: MINECRAFT_VERSION,
       movementMode: movement,
     };
   try {
     bot = await boundedAcquire(
-      () => createBot({ host: HOST, port: GAME_PORT, username: USERNAME, auth: "offline" }),
+      () =>
+        createBot({
+          host: HOST,
+          port: GAME_PORT,
+          username: USERNAME,
+          auth: "offline",
+          version: MINECRAFT_VERSION,
+        }),
       operationTimeoutMs,
       "bot create",
       (lateBot) => {
