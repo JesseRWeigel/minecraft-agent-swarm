@@ -43,11 +43,13 @@ def _safe_name(name: str) -> None:
 
 
 def _safe_relative(value: str) -> PurePosixPath:
+    if not isinstance(value, str):
+        raise ClientToolsError("unsafe manifest path")
     try:
         relative = PurePosixPath(value)
     except (TypeError, ValueError) as exc:
         raise ClientToolsError("unsafe manifest path") from exc
-    if not value or relative.is_absolute() or relative.as_posix() != value:
+    if not value or not relative.parts or relative.is_absolute() or relative.as_posix() != value:
         raise ClientToolsError("unsafe manifest path")
     for part in relative.parts:
         _safe_name(part)
@@ -116,6 +118,8 @@ def _scan_modules(root: Path) -> tuple[list[_SourceFile], list[str], list[tuple[
                     raise ClientToolsError("node_modules .bin entry is not a directory")
                 excluded.append(destination)
                 continue
+            if entry.name == ".bin":
+                raise ClientToolsError(".bin directories are only allowed directly under node_modules")
             if stat.S_ISDIR(info.st_mode):
                 visit(Path(entry.path), child_relative)
             elif stat.S_ISREG(info.st_mode):
@@ -368,7 +372,7 @@ def verify_tools(root: Path, manifest_sha256: str) -> dict[str, object]:
     excluded = manifest["excluded_paths"]
     if not isinstance(files, list) or not isinstance(excluded, list) or len(files) > MAX_FILES:
         raise ClientToolsError("invalid snapshot manifest")
-    if excluded != sorted(set(excluded)):
+    if not all(isinstance(value, str) for value in excluded) or excluded != sorted(set(excluded)):
         raise ClientToolsError("invalid excluded path list")
     for value in excluded:
         relative = _safe_relative(value)
@@ -399,7 +403,9 @@ def verify_tools(root: Path, manifest_sha256: str) -> dict[str, object]:
         if record["path"] <= previous or record["path"] == "manifest.json":
             raise ClientToolsError("file records must be uniquely sorted")
         previous = record["path"]
-        if record["path"] not in ("bin/node", "qualification-client.mjs") and relative.parts[0] != "node_modules":
+        if record["path"] not in ("bin/node", "qualification-client.mjs") and (
+            relative.parts[0] != "node_modules" or len(relative.parts) < 2
+        ):
             raise ClientToolsError("invalid file destination")
         if ".bin" in relative.parts:
             raise ClientToolsError("excluded .bin path appears in file records")

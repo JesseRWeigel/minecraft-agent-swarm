@@ -35,6 +35,15 @@ class ClientToolsTests(unittest.TestCase):
         kwargs.setdefault("reserve_bytes", 0)
         return snapshot_tools(self.node, self.modules, self.client, self.output, **kwargs)
 
+    def rewrite_manifest(self, change):
+        path = self.output / "manifest.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        change(document)
+        raw = (json.dumps(document, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        path.write_bytes(raw)
+        path.chmod(0o600)
+        return hashlib.sha256(raw).hexdigest()
+
     def test_snapshots_private_bytes_and_verifies_by_manifest_pin(self):
         result = self.snapshot()
         manifest_path = self.output / "manifest.json"
@@ -96,6 +105,14 @@ class ClientToolsTests(unittest.TestCase):
                     os.mkfifo(replacement)
                 elif replacement == unsafe:
                     replacement.write_bytes(b"x")
+
+    def test_rejects_non_package_bin_directories_instead_of_creating_unverifiable_snapshot(self):
+        hidden = self.modules / "pkg" / "assets" / ".bin"
+        hidden.mkdir(parents=True)
+        (hidden / "data").write_bytes(b"unexpected")
+        with self.assertRaisesRegex(ClientToolsError, r"\.bin"):
+            self.snapshot()
+        self.assertFalse(self.output.exists())
 
     def test_rejects_observed_source_mutation_and_removes_partial_output(self):
         payload = self.modules / "pkg" / "large.bin"
@@ -185,6 +202,22 @@ class ClientToolsTests(unittest.TestCase):
         (self.output / "unlisted-empty").mkdir()
         with self.assertRaises(ClientToolsError):
             verify_tools(self.output, result["manifest_sha256"])
+
+    def test_verification_normalizes_malformed_manifest_path_types(self):
+        malformed = [
+            lambda document: document.__setitem__("excluded_paths", [None]),
+            lambda document: document.__setitem__("excluded_paths", ["node_modules/.bin", 7]),
+            lambda document: document.__setitem__("excluded_paths", ["."]),
+            lambda document: document["files"][0].__setitem__("path", None),
+            lambda document: document["files"][0].__setitem__("path", "."),
+            lambda document: document["files"][0].__setitem__("path", "node_modules"),
+        ]
+        for index, change in enumerate(malformed):
+            self.output = self.root / f"malformed-{index}"
+            self.snapshot()
+            pin = self.rewrite_manifest(change)
+            with self.assertRaises(ClientToolsError, msg=f"case {index}"):
+                verify_tools(self.output, pin)
 
 
 if __name__ == "__main__":
