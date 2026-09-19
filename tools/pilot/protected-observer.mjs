@@ -3,6 +3,8 @@ import { performance } from "node:perf_hooks";
 // This library bounds how long it awaits a query, but cannot cancel an adapter
 // transport. The future supervisor remains responsible for closing/destroying
 // the RCON connection after every sample, including timeout and failure paths.
+// Health zero is retained as an authoritative death observation. This sampler
+// records state and does not decide whether the actor is alive or successful.
 
 const ACTOR = "PilotProbe";
 const FIELDS = ["Pos", "Dimension", "Health"];
@@ -55,7 +57,7 @@ function parseReply(field, text) {
   }
   const match = value.match(new RegExp(`^(${number})f?$`));
   const health = match ? +match[1] : Number.NaN;
-  if (!Number.isFinite(health) || health <= 0 || health > MAX_HEALTH) throw new SampleFailure("invalid_response");
+  if (!Number.isFinite(health) || health < 0 || health > MAX_HEALTH) throw new SampleFailure("invalid_response");
   return health;
 }
 
@@ -123,11 +125,12 @@ export async function sampleActor({
   };
 
   let started;
+  let deadline;
   try {
     started = monotonic();
     result.sample.startedMonotonicMs = started;
     result.sample.startedAtUtc = utc();
-    const deadline = started + operationTimeoutMs;
+    deadline = started + operationTimeoutMs;
     for (const field of FIELDS) {
       const window = {
         field,
@@ -145,21 +148,28 @@ export async function sampleActor({
       const remaining = deadline - queryStarted;
       if (remaining <= 0) throw new SampleFailure("timeout");
       let reply;
+      let sendFailure;
       try {
         reply = await boundedSend(rcon, `data get entity ${ACTOR} ${field}`, remaining);
       } catch (error) {
-        const failure = error instanceof SampleFailure ? error : new SampleFailure("query_failed");
-        window.outcome = failure.code;
-        throw failure;
+        sendFailure = error instanceof SampleFailure ? error : new SampleFailure("query_failed");
+        window.outcome = sendFailure.code;
       }
-      const queryFinished = monotonic();
-      window.finishedMonotonicMs = queryFinished;
-      window.finishedAtUtc = utc();
-      window.durationMs = queryFinished - queryStarted;
-      if (queryFinished > deadline) {
+      let queryFinished;
+      try {
+        queryFinished = monotonic();
+        window.finishedMonotonicMs = queryFinished;
+        window.durationMs = queryFinished - queryStarted;
+        window.finishedAtUtc = utc();
+      } catch (error) {
+        window.outcome = "clock_invalid";
+        throw error;
+      }
+      if (queryFinished >= deadline) {
         window.outcome = "timeout";
         throw new SampleFailure("timeout");
       }
+      if (sendFailure) throw sendFailure;
       try {
         const parsed = parseReply(field, reply);
         if (field === "Pos") result.observations.position = parsed;
@@ -181,6 +191,10 @@ export async function sampleActor({
     result.sample.finishedMonotonicMs = finished;
     result.sample.durationMs = started === undefined ? null : finished - started;
     result.sample.finishedAtUtc = utc();
+    if (result.status === "sampled" && deadline !== undefined && finished >= deadline) {
+      result.status = "failed";
+      result.errorCode = "timeout";
+    }
   } catch {
     result.status = "failed";
     result.errorCode = "clock_invalid";

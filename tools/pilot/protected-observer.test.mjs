@@ -14,6 +14,11 @@ function clocks() {
   };
 }
 
+function monotonicSequence(values) {
+  let index = 0;
+  return () => values[Math.min(index++, values.length - 1)];
+}
+
 function fixture(overrides = {}) {
   const calls = [];
   const replies = {
@@ -113,7 +118,7 @@ test("rejects malformed positions, dimensions, health, prefixes, and oversized r
     { Pos: "PilotProbe has the following entity data: [NaN, 2d, 3d]" },
     { Pos: "PilotProbe has the following entity data: [30000001d, 2d, 3d]" },
     { Dimension: 'PilotProbe has the following entity data: "minecraft:custom"' },
-    { Health: "PilotProbe has the following entity data: 0f" },
+    { Health: "PilotProbe has the following entity data: -1f" },
     { Health: "PilotProbe has the following entity data: 999999f" },
     { Health: "another actor: 20f" },
     { Pos: "x".repeat(65537) },
@@ -129,6 +134,20 @@ test("rejects malformed positions, dimensions, health, prefixes, and oversized r
     assert.equal(result.status, "failed");
     assert.equal(result.errorCode, "invalid_response");
   }
+});
+
+test("retains zero health as a sampled death observation without judging success", async () => {
+  const result = await sampleActor({
+    rcon: fixture({ Health: "PilotProbe has the following entity data: 0f" }).rcon,
+    phase: "terminal",
+    trialId: "trial-01",
+    actionId: "walk-01",
+    ...clocks(),
+  });
+  assert.equal(result.status, "sampled");
+  assert.equal(result.observations.health, 0);
+  assert.equal("success" in result, false);
+  assert.equal("alive" in result, false);
 });
 
 test("enforces one overall deadline and marks replies completed after it as late", async () => {
@@ -152,6 +171,36 @@ test("enforces one overall deadline and marks replies completed after it as late
   assert.equal(result.status, "failed");
   assert.equal(result.errorCode, "timeout");
   assert.deepEqual(Object.keys(result.observations), ["position"]);
+});
+
+test("fails at the exact query deadline and when final timestamp consumes the budget", async () => {
+  const atQueryDeadline = await sampleActor({
+    rcon: fixture().rcon,
+    phase: "before",
+    trialId: "trial-01",
+    actionId: "walk-01",
+    operationTimeoutMs: 10,
+    nowMonotonic: monotonicSequence([0, 1, 10, 11]),
+  });
+  assert.equal(atQueryDeadline.status, "failed");
+  assert.equal(atQueryDeadline.errorCode, "timeout");
+  assert.equal(atQueryDeadline.sample.queryWindows[0].outcome, "timeout");
+
+  const finalAtDeadline = await sampleActor({
+    rcon: fixture().rcon,
+    phase: "terminal",
+    trialId: "trial-01",
+    actionId: "walk-01",
+    operationTimeoutMs: 10,
+    nowMonotonic: monotonicSequence([0, 1, 2, 3, 4, 5, 6, 10]),
+  });
+  assert.equal(finalAtDeadline.status, "failed");
+  assert.equal(finalAtDeadline.errorCode, "timeout");
+  assert.equal(finalAtDeadline.sample.durationMs, 10);
+  assert.equal(
+    finalAtDeadline.sample.queryWindows.every(({ outcome }) => outcome === "completed"),
+    true,
+  );
 });
 
 test("timeout and late rejection do not create an unhandled rejection", async () => {
@@ -192,6 +241,9 @@ test("synchronous adapter failure is generic and does not leak its message", asy
   assert.equal(result.status, "failed");
   assert.equal(result.errorCode, "query_failed");
   assert.equal(result.sample.queryWindows[0].outcome, "query_failed");
+  assert.equal(typeof result.sample.queryWindows[0].finishedAtUtc, "string");
+  assert.equal(typeof result.sample.queryWindows[0].finishedMonotonicMs, "number");
+  assert.equal(typeof result.sample.queryWindows[0].durationMs, "number");
   assert.doesNotMatch(JSON.stringify(result), /should-not-leak/);
 });
 
@@ -229,6 +281,8 @@ test("rejects invalid API inputs before querying", async () => {
   const valid = { rcon: fixture().rcon, phase: "before", trialId: "trial-01", actionId: "walk-01" };
   await assert.rejects(() => sampleActor({ ...valid, phase: "other" }), /phase/);
   await assert.rejects(() => sampleActor({ ...valid, trialId: "../escape" }), /supervisor ID/);
+  await assert.rejects(() => sampleActor({ ...valid, trialId: "trial\nforged" }), /supervisor ID/);
+  await assert.rejects(() => sampleActor({ ...valid, actionId: "action\tforged" }), /supervisor ID/);
   await assert.rejects(() => sampleActor({ ...valid, trialId: 123 }), /supervisor ID/);
   await assert.rejects(() => sampleActor({ ...valid, actionId: undefined }), /supervisor ID/);
   await assert.rejects(() => sampleActor({ ...valid, actionId: "x".repeat(65) }), /supervisor ID/);
