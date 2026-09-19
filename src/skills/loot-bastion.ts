@@ -74,16 +74,22 @@ export async function marchToward(
   const gap = () => Math.hypot(bot.entity.position.x - target.x, bot.entity.position.z - target.z);
   const until = Date.now() + budgetMs;
   let guard = 0;
-  // The march's movement profile, settled by two measured runs. Run 715 had
-  // towers, a three-block drop and parkour: it carried Mason 491 blocks to
-  // 39 from the fortress, and killed him twice, once off a 47-block pillar
-  // of his own making. Run 717 had no towers: no pillar falls, and the march
-  // stalled 390 blocks out, because Nether terrain needs the climb. So keep
-  // the climb and drop the two settings that turn a stall into a fall.
+  // The march's movement profile, settled by three measured runs against the
+  // same 490-block route to the fortress sighting.
+  //   715  towers on,  three-block drop : reached 39 blocks out
+  //   717  towers off, two-block drop   : stalled at 390
+  //   718  towers on,  two-block drop   : stalled at 395
+  // So the drop limit is the variable that decides whether this terrain is
+  // passable at all, and towers are not. Three blocks is also the height a
+  // player takes without damage, so it costs nothing to allow. The falls
+  // that killed Mason on the 715 route were twenty-two and forty-seven
+  // blocks, which no planner ever chose; they came from walking off a ledge
+  // or a pillar top after a walk ended, and those spots are now recorded as
+  // fall origins that every bot's routes avoid for a day.
   const marchMoves = baseMoves(bot);
   (marchMoves as unknown as { canDig: boolean }).canDig = true;
   (marchMoves as unknown as { allow1by1towers: boolean }).allow1by1towers = true;
-  (marchMoves as unknown as { maxDropDown: number }).maxDropDown = 2;
+  (marchMoves as unknown as { maxDropDown: number }).maxDropDown = 3;
   (marchMoves as unknown as { allowParkour: boolean }).allowParkour = false;
   bot.pathfinder.setMovements(marchMoves);
   while (!o.stop() && !signal.aborted && Date.now() < until) {
