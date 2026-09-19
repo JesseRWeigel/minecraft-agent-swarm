@@ -1,4 +1,5 @@
 import json
+import math
 import unittest
 
 from tools.pilot.participant_protocol import (
@@ -151,6 +152,36 @@ class ParticipantProtocolTests(unittest.TestCase):
             protocol, _ = self.make()
             with self.assertRaises(ParticipantProtocolError):
                 protocol.feed(line("ready", **{field: 0}))
+
+    def test_cannot_buffer_future_phase_bytes_before_supervisor_transitions(self):
+        protocol, _ = self.make()
+        future = line("action_finished")
+        self.assertEqual(protocol.feed(line("ready") + future[:10]), ("ready",))
+        with self.assertRaisesRegex(ParticipantProtocolError, "buffered before supervisor begin"):
+            protocol.begin()
+
+        protocol, _ = self.make()
+        protocol.feed(line("ready"))
+        protocol.begin()
+        self.assertEqual(protocol.feed(line("action_finished") + b"{"), ("action_finished",))
+        with self.assertRaisesRegex(ParticipantProtocolError, "buffered before supervisor finalize"):
+            protocol.finalize()
+
+    def test_rejects_nonfinite_and_backwards_supervisor_clock_samples(self):
+        for invalid in (math.nan, math.inf, -math.inf):
+            with self.assertRaisesRegex(ParticipantProtocolError, "monotonic clock"):
+                ParticipantProtocol(trial_id="trial-01", action_id="walk-01", now=lambda: invalid)
+
+        protocol, clock = self.make()
+        clock.value -= 1
+        with self.assertRaisesRegex(ParticipantProtocolError, "monotonic clock"):
+            protocol.check_deadline()
+
+        protocol, clock = self.make()
+        protocol.feed(line("ready"))
+        clock.value = math.nan
+        with self.assertRaisesRegex(ParticipantProtocolError, "monotonic clock"):
+            protocol.begin()
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ provide containment, or establish a protected observer boundary.
 from __future__ import annotations
 
 import json
+import math
 import re
 import time
 from collections.abc import Callable
@@ -73,12 +74,12 @@ class ParticipantProtocol:
         self.trial_id = trial_id
         self.action_id = action_id
         self._now = now
-        started = float(now())
-        self._deadline = started + READY_TIMEOUT_SECONDS
         self._buffer = bytearray()
         self._total_bytes = 0
         self._state = "awaiting_ready"
         self._failure_reason: str | None = None
+        self._last_now: float | None = None
+        self._deadline = self._sample_now() + READY_TIMEOUT_SECONDS
 
     @property
     def state(self) -> str:
@@ -97,10 +98,20 @@ class ParticipantProtocol:
         if self._failure_reason is not None:
             raise ParticipantProtocolError(self._failure_reason)
 
+    def _sample_now(self) -> float:
+        try:
+            sample = float(self._now())
+        except (TypeError, ValueError, OverflowError):
+            self._fail("invalid supervisor monotonic clock")
+        if not math.isfinite(sample) or (self._last_now is not None and sample < self._last_now):
+            self._fail("invalid supervisor monotonic clock")
+        self._last_now = sample
+        return sample
+
     def check_deadline(self):
         """Fail when the current supervisor-owned phase deadline has expired."""
         self._ensure_active()
-        if self._state in {"awaiting_ready", "action_active"} and float(self._now()) >= self._deadline:
+        if self._state in {"awaiting_ready", "action_active"} and self._sample_now() >= self._deadline:
             self._fail("participant phase deadline expired")
 
     def feed(self, data: bytes) -> tuple[str, ...]:
@@ -158,14 +169,18 @@ class ParticipantProtocol:
         self._ensure_active()
         if self._state != "ready":
             self._fail("supervisor begin out of phase")
+        if self._buffer:
+            self._fail("participant bytes buffered before supervisor begin")
         self._state = "action_active"
-        self._deadline = float(self._now()) + ACTION_TIMEOUT_SECONDS
+        self._deadline = self._sample_now() + ACTION_TIMEOUT_SECONDS
 
     def finalize(self):
         """Explicitly finalize after accepted action completion."""
         self._ensure_active()
         if self._state != "awaiting_finalize":
             self._fail("supervisor finalize out of phase")
+        if self._buffer:
+            self._fail("participant bytes buffered before supervisor finalize")
         self._state = "finalized"
 
     def eof(self):
@@ -175,4 +190,3 @@ class ParticipantProtocol:
             self._fail("participant EOF with unterminated line")
         if self._state != "finalized":
             self._fail("participant EOF before finalization")
-
