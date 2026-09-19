@@ -218,6 +218,7 @@ export async function runQualification({
       username: USERNAME,
       minecraftVersion: MINECRAFT_VERSION,
       movementMode: movement,
+      handshakeSent: false,
     };
   try {
     bot = await boundedAcquire(
@@ -244,6 +245,8 @@ export async function runQualification({
     bot.on?.("kicked", markTransportFailed);
     await waitSpawn(bot, readyTimeoutMs);
     await bounded(() => bot.waitForTicks(1), operationTimeoutMs, "initial physics tick");
+    bot._client.write("player_loaded", {});
+    report = { ...report, handshakeSent: true };
     const ready = await connectReady(connectRcon, {
       deadlineMs: now() + readyTimeoutMs,
       now,

@@ -8,12 +8,26 @@ import { runQualification, writePrivateEvidence } from "./qualification-client.m
 function fixture({ move = true, health = 20, dimension = "minecraft:overworld", bad = false } = {}) {
   const calls = [],
     controls = [],
+    events = [],
     bot = new EventEmitter();
   bot.entity = { position: { x: 0, y: 64, z: 0 } };
   bot.health = 20;
   bot.game = { dimension };
-  bot.waitForTicks = async (ticks) => assert.equal(ticks, 1);
-  bot.setControlState = (k, v) => controls.push([k, v]);
+  bot._client = {
+    write(name, payload) {
+      assert.equal(name, "player_loaded");
+      assert.deepEqual(payload, {});
+      events.push("player_loaded");
+    },
+  };
+  bot.waitForTicks = async (ticks) => {
+    assert.equal(ticks, 1);
+    events.push("physicsTick");
+  };
+  bot.setControlState = (k, v) => {
+    controls.push([k, v]);
+    events.push(`${k}:${v}`);
+  };
   bot.quit = async () => {
     bot.closed = true;
   };
@@ -28,7 +42,9 @@ function fixture({ move = true, health = 20, dimension = "minecraft:overworld", 
   const rcon = {
     send: async (command) => {
       calls.push(command);
-      return reply(command.split(" ").at(-1));
+      const field = command.split(" ").at(-1);
+      events.push(`rcon:${field}`);
+      return reply(field);
     },
     end: async () => {
       rcon.closed = true;
@@ -38,6 +54,7 @@ function fixture({ move = true, health = 20, dimension = "minecraft:overworld", 
   return {
     calls,
     controls,
+    events,
     bot,
     rcon,
     get evidence() {
@@ -75,6 +92,15 @@ test("fixed movement qualification passes only independent matching evidence", a
   assert.equal(r.claimsLiveBenchmarkResult, false);
   assert.equal(r.movementMode, "forward");
   assert.equal(r.minecraftVersion, "1.21.4");
+  assert.equal(r.handshakeSent, true);
+  assert.deepEqual(f.events.slice(0, 6), [
+    "physicsTick",
+    "player_loaded",
+    "rcon:Pos",
+    "rcon:Dimension",
+    "rcon:Health",
+    "forward:true",
+  ]);
   assert.equal(r.checks.displacement, 1);
   assert.deepEqual(f.calls, [
     "data get entity PilotProbe Pos",
@@ -379,4 +405,18 @@ test("retains initial evidence when the action later fails", async () => {
   assert.deepEqual(report.mineflayer.before, { x: 0, y: 64, z: 0 });
   assert.equal(report.checks.initialPositionsAgree, true);
   assert.equal("after" in report, false);
+});
+
+test("fails before readiness queries or action when the client-loaded handshake cannot be sent", async () => {
+  const f = fixture();
+  delete f.bot._client.write;
+  const report = await runQualification(f.args);
+  assert.equal(report.status, "failed");
+  assert.equal(report.handshakeSent, false);
+  assert.equal(f.calls.length, 0);
+  assert.equal(
+    f.controls.some(([key, value]) => key === "forward" && value === true),
+    false,
+  );
+  assert.deepEqual(f.events, ["physicsTick", "forward:false"]);
 });
