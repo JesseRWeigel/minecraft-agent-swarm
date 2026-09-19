@@ -1,4 +1,5 @@
-import io, tempfile, unittest, zipfile
+import io, os, tempfile, unittest, zipfile
+from unittest import mock
 from pathlib import Path
 from tools.pilot.bootstrap import BootstrapError, MAX_CENTRAL_DIRECTORY_BYTES, _BoundedReader, inspect_bootstrap
 
@@ -26,6 +27,26 @@ class Tests(unittest.TestCase):
   bad=[self.line()+'\tx',self.line().replace('a'*64,'A'*64),self.line().replace('https://','http://'),self.line().replace('piston-data.mojang.com','example.com'),self.line().replace('/server.jar','/server.jar?q=1'),self.line().replace('mojang_1.21.4.jar','../x.jar'),self.line().replace('mojang_1.21.4.jar','mojang_1.jar')]
   for x in bad:
    with self.assertRaises(BootstrapError):inspect_bootstrap(self.jar([('META-INF/download-context',x)]))
+ def test_rejects_archive_mutated_during_inspection(self):
+  path = self.jar([("META-INF/download-context", self.line())])
+  original = zipfile.ZipFile.infolist
+  def mutate(archive):
+   entries = original(archive)
+   with path.open("ab") as target: target.write(b"x")
+   return entries
+  with mock.patch.object(zipfile.ZipFile, "infolist", mutate):
+   with self.assertRaisesRegex(BootstrapError, "changed during inspection"):
+    inspect_bootstrap(path)
+ def test_rejects_excessive_compressed_metadata(self):
+  path = self.jar([("META-INF/download-context", self.line())])
+  original = zipfile.ZipFile.infolist
+  def enlarge(archive):
+   entries = original(archive)
+   next(x for x in entries if x.filename == "META-INF/download-context").compress_size = 65537
+   return entries
+  with mock.patch.object(zipfile.ZipFile, "infolist", enlarge):
+   with self.assertRaisesRegex(BootstrapError, "exceeds limit"):
+    inspect_bootstrap(path)
  def test_entry_limit(self):
   p=self.jar([(str(i),'') for i in range(10001)])
   with self.assertRaises(BootstrapError):inspect_bootstrap(p)

@@ -12,12 +12,17 @@ MAX_JAR_BYTES = 512 * 1024 * 1024
 MAX_CENTRAL_DIRECTORY_BYTES = 1024 * 1024
 MAX_ENTRIES = 10_000
 MAX_METADATA_BYTES = 4096
+MAX_METADATA_COMPRESSED_BYTES = 64 * 1024
 _METADATA = "META-INF/download-context"
 _NAME = re.compile(r"mojang_[0-9]+\.[0-9]+(?:\.[0-9]+)?\.jar\Z")
 _HASH = re.compile(r"[0-9a-f]{64}\Z")
 
 class BootstrapError(ValueError):
     pass
+
+def _archive_signature(info):
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
 
 class _BoundedReader:
     def __init__(self, source, size):
@@ -74,7 +79,8 @@ def inspect_bootstrap(jar_path: Path):
         fd, info = _open_regular(path, "bootstrap JAR", MAX_JAR_BYTES)
     except PreparationError as exc:
         raise BootstrapError(str(exc)) from exc
-    source = _BoundedReader(os.fdopen(fd, "rb", buffering=0), info.st_size)
+    initial_signature = _archive_signature(info)
+    source = _BoundedReader(os.fdopen(os.dup(fd), "rb", buffering=0), info.st_size)
     try:
         _eocd(source, info.st_size)
         source.seek(0)
@@ -85,7 +91,10 @@ def inspect_bootstrap(jar_path: Path):
             if len(matches) != 1:
                 raise BootstrapError("duplicate download-context entry")
             entry = matches[0]
-            if entry.file_size > MAX_METADATA_BYTES:
+            if (
+                entry.file_size > MAX_METADATA_BYTES
+                or entry.compress_size > MAX_METADATA_COMPRESSED_BYTES
+            ):
                 raise BootstrapError("download-context exceeds limit")
             with archive.open(entry) as metadata:
                 raw = metadata.read(MAX_METADATA_BYTES + 1)
@@ -97,6 +106,12 @@ def inspect_bootstrap(jar_path: Path):
         raise BootstrapError("invalid ZIP archive") from exc
     finally:
         source.close()
+        try:
+            final_signature = _archive_signature(os.fstat(fd))
+        finally:
+            os.close(fd)
+        if final_signature != initial_signature:
+            raise BootstrapError("bootstrap JAR changed during inspection")
     try:
         line = raw.decode("ascii")
     except UnicodeDecodeError as exc:
