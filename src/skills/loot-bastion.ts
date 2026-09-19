@@ -64,7 +64,7 @@ async function eatOnTheMarch(bot: Bot): Promise<void> {
  * a shorter hop and a slant to either side of the bearing before it counts
  * as dry; three dry legs end the march.
  */
-async function marchToward(
+export async function marchToward(
   bot: Bot,
   target: { x: number; z: number },
   budgetMs: number,
