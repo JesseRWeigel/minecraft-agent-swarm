@@ -202,3 +202,42 @@ raw evidence even when its JSON or identity is invalid. Separate
 `namespace_lifecycle_valid_for_requested_mode` booleans distinguish a captured
 file hash from acceptance. Unsafe or unstable captures remain unhashed. Original
 failed evidence is preserved rather than rewritten into a valid-looking form.
+
+## Implemented participant prerequisite
+
+`tools/pilot/protected-participant.mjs` exports `runParticipant` with injected
+bot and bounded message adapters. The fixed client uses `PilotProbe`, isolated
+loopback port 25585, offline authentication, Minecraft 1.21.4, and automatic
+respawn disabled. After spawn/physics readiness it sends `player_loaded`, emits
+`ready`, waits for the supervisor's `begin`, executes the one-second forward or
+stationary action, emits `action_finished`, and waits for `finalize` before
+quitting. Keeping the connection alive gives the observer a terminal sampling
+window. Zero health remains observable instead of being replaced automatically
+by a freshly respawned player.
+
+The participant neither imports RCON nor accepts an evidence writer, and its
+outgoing messages contain only the four protocol fields. Incoming supervisor
+commands must match the exact schema, phase, and IDs. The Python protocol's
+`begin()` and `finalize()` now return those exact command dictionaries for a
+future worker to serialize. A completed local handshake is labeled
+`protocol_completed`, never task success.
+
+Every asynchronous phase has a maximum 30-second budget inside the 90-second
+total budget, with monotonic checks before and after awaiting. An exhausted
+budget cannot start bot acquisition. Late acquired bots are disposed; transport
+error/end/kick is sticky until finalization; controls and sockets are cleaned
+up on failure. Timer races alone do not establish deadline compliance. A
+trusted outer process still must enforce hard process/resource limits and
+close IPC adapters, since JavaScript cannot preempt a blocking callback or
+cancel every underlying asynchronous operation.
+
+The existing isolated qualification client also now sets `respawn: false`.
+Inspection of the installed Mineflayer loader and health plugin established
+that omission defaults to automatic respawn. New tool snapshots must include
+and pin the changed client; the previously retained snapshots and actual
+qualification attempts have not been rewritten or rerun.
+
+Participant tests use fake bots and adapters. There is no CLI, actual protected
+process launch, or model invocation in this component. The next implementation
+is the outer worker and bounded pipe adapters connecting these prerequisites,
+followed by actual namespace and Minecraft qualification of that complete path.
