@@ -4,6 +4,7 @@ import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
 import { baseMoves, safeGoto } from "../bot/navigation.js";
 import fs from "node:fs";
+import { Vec3 } from "vec3";
 import { marchToward } from "./loot-bastion.js";
 
 // Run 711: the east sweep saw nether bricks at (535, 52, -17), Mason died on
@@ -55,6 +56,50 @@ const HEADINGS = [
 ] as const;
 // Module-level so refires rotate through headings within a session.
 let headingIndex = 0;
+
+/**
+ * Run 715: the approach reached thirty-nine blocks with four hundred bricks
+ * in view and ended with a twenty-two block fall into lava. Before guessing
+ * at the last stretch again, record what is actually between the bot and the
+ * bricks: the block under each step of the straight line, and the first drop
+ * or lava it crosses.
+ */
+function logApproachGap(bot: Bot, target: { x: number; y: number; z: number }): void {
+  try {
+    const p = bot.entity.position;
+    const dx = target.x - p.x;
+    const dz = target.z - p.z;
+    const flat = Math.hypot(dx, dz);
+    if (flat < 1) return;
+    const steps = Math.min(40, Math.round(flat));
+    const profile: string[] = [];
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const x = Math.round(p.x + dx * t);
+      const z = Math.round(p.z + dz * t);
+      let floorY: number | null = null;
+      let floorName = "void";
+      for (let y = Math.round(p.y) + 2; y >= Math.round(p.y) - 24; y--) {
+        const b = bot.blockAt(new Vec3(x, y, z));
+        if (!b) continue;
+        if (b.boundingBox === "block" || b.name === "lava") {
+          floorY = y;
+          floorName = b.name;
+          break;
+        }
+      }
+      profile.push(`${floorY === null ? "?" : floorY}${floorName === "lava" ? "L" : floorName === "void" ? "V" : ""}`);
+    }
+    const lavaAt = profile.findIndex((c) => c.endsWith("L"));
+    const voidAt = profile.findIndex((c) => c.endsWith("V") || c.startsWith("?"));
+    console.log(
+      `[FortressGap] ${bot.username}: from ${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)} to ${target.x},${target.y},${target.z} flat=${flat.toFixed(0)} ` +
+        `firstLavaStep=${lavaAt < 0 ? "none" : lavaAt + 1} firstVoidStep=${voidAt < 0 ? "none" : voidAt + 1} floors=${profile.join(",")}`,
+    );
+  } catch (e) {
+    console.log(`[FortressGap] ${bot.username}: profile failed: ${String(e).slice(0, 80)}`);
+  }
+}
 
 function inNether(bot: Bot): boolean {
   return String(bot.game.dimension).includes("nether");
@@ -110,6 +155,11 @@ export const findFortressSkill: Skill = {
         return { success: false, message: resumable("No portal within 64 blocks — walk to the village first.") };
       const { crossPortal } = await import("./nether-portal.js");
       const crossed = await crossPortal(bot, portal.position, 30_000, (d) => d.includes("nether"));
+      // Run 715: crossPortal sets its own movements and never restores them,
+      // so every leg after the crossing ran on the default three-block drop
+      // instead of the sweep's two. Mason walked off a lip at y=49 and fell
+      // twenty-two blocks into lava thirty-six blocks short of the bricks.
+      bot.pathfinder.setMovements(sweepMoves);
       if (!crossed) return { success: false, message: resumable("Couldn't cross the portal this trip.") };
     }
 
@@ -201,6 +251,7 @@ export const findFortressSkill: Skill = {
       }
       const nearBrick = bot.findBlock({ matching: (b) => b.name === "nether_bricks", maxDistance: 4 });
       entered = !!nearBrick;
+      if (!entered) logApproachGap(bot, seen);
       const p = bot.entity.position.floored();
       console.log(`[FortressDebug] ${bot.username}: bricks=${seen} stoodAt=${p.x},${p.y},${p.z} entered=${entered}`);
     }
