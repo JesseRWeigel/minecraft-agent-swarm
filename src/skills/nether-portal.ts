@@ -215,6 +215,49 @@ async function carveSite(bot: Bot, origin: Vec3Like, axis: "x" | "z"): Promise<v
 // the approach, so this is a time-budgeted loop in the walk-armor pattern:
 // re-approach after a hijack, walk the last step on manual controls, stand
 // still inside until the dimension flips.
+/**
+ * Run 712: twenty-three crossing attempts ended with inPortal=false at 1.2 to
+ * 2.1 blocks from the doorway centre, and three earlier fixes aimed at the
+ * walk itself. Before a fourth, record what the bot is actually standing in,
+ * which portal cells exist, which side of the plane it is on, and whether the
+ * four-second walk moved it at all.
+ */
+function logPortalGeometry(bot: Bot, doorway: Vec3, centre: Vec3, walkFrom: Vec3): void {
+  try {
+    const p = bot.entity.position;
+    const cells = bot.findBlocks({ matching: (b) => b.name === "nether_portal", maxDistance: 8, count: 40 });
+    const xs = cells.map((c) => c.x);
+    const zs = cells.map((c) => c.z);
+    const ys = cells.map((c) => c.y);
+    const span = (v: number[]) => (v.length ? `${Math.min(...v)}..${Math.max(...v)}` : "none");
+    const axis = cells.length > 1 && Math.max(...xs) - Math.min(...xs) > Math.max(...zs) - Math.min(...zs) ? "x" : "z";
+    let nearest: { x: number; y: number; z: number } | null = null;
+    let nd = Infinity;
+    for (const c of cells) {
+      const d = Math.hypot(c.x + 0.5 - p.x, c.y - p.y, c.z + 0.5 - p.z);
+      if (d < nd) {
+        nd = d;
+        nearest = c;
+      }
+    }
+    const nameAt = (dx: number, dy: number, dz: number) => bot.blockAt(p.offset(dx, dy, dz))?.name ?? "unloaded";
+    const yaw = bot.entity.yaw;
+    const fx = -Math.sin(yaw);
+    const fz = Math.cos(yaw);
+    const wantYaw = Math.atan2(-(centre.x - p.x), centre.z - p.z);
+    const moved = p.distanceTo(walkFrom);
+    console.log(
+      `[PortalDebug] ${bot.username}: at ${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)} feet=${nameAt(0, 0, 0)} head=${nameAt(0, 1, 0)} ` +
+        `ahead=${nameAt(Math.round(fx), 0, Math.round(fz))} aheadHead=${nameAt(Math.round(fx), 1, Math.round(fz))} ` +
+        `cells=${cells.length} axis=${axis} x[${span(xs)}] y[${span(ys)}] z[${span(zs)}] ` +
+        `doorway=${doorway.x},${doorway.y},${doorway.z} nearestCell=${nearest ? `${nearest.x},${nearest.y},${nearest.z}` : "none"} nearDist=${nd.toFixed(2)} ` +
+        `yaw=${yaw.toFixed(2)} wantYaw=${wantYaw.toFixed(2)} movedInWalk=${moved.toFixed(2)} onGround=${bot.entity.onGround}`,
+    );
+  } catch (e) {
+    console.log(`[PortalDebug] ${bot.username}: geometry read failed: ${String(e).slice(0, 80)}`);
+  }
+}
+
 export async function crossPortal(
   bot: Bot,
   doorway: Vec3,
@@ -232,6 +275,7 @@ export async function crossPortal(
     }
     bot.pathfinder.setGoal(null);
     await bot.lookAt(centre, true).catch(() => {});
+    const walkFrom = bot.entity.position.clone();
     bot.setControlState("forward", true);
     const walkStart = Date.now();
     while (Date.now() - walkStart < 4_000 && !inPortal()) {
@@ -247,6 +291,7 @@ export async function crossPortal(
     console.log(
       `[Portal] ${bot.username}: crossing attempt — inPortal=${inPortal()}, dist=${bot.entity.position.distanceTo(centre).toFixed(1)}, dim=${dimensionOf(bot)}`,
     );
+    logPortalGeometry(bot, doorway, centre, walkFrom);
     await new Promise((r) => setTimeout(r, 1000));
   }
   return arrived(dimensionOf(bot));
