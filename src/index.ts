@@ -2,7 +2,7 @@ import { createBot } from "./bot/index.js";
 import { createTwitchChat } from "./stream/twitch.js";
 import { startOverlay, addChatMessage } from "./stream/overlay.js";
 import { config } from "./config.js";
-import { loadDynamicSkills } from "./skills/dynamic-loader.js";
+import { getAuthoredSkillNames, loadDynamicSkills } from "./skills/dynamic-loader.js";
 import { BOT_ROSTER, BotRoleConfig } from "./bot/role.js";
 import { startUnifiedViewer } from "./stream/unified-viewer.js";
 import { abortActiveSkill, getActiveSkillName } from "./skills/executor.js";
@@ -12,6 +12,8 @@ import { startSkillHotReload } from "./skills/hot-reload.js";
 import { getGeneratedStoreRoot } from "./skills/generator.js";
 import { loadApprovedGeneratedSkills } from "./skills/generated-runtime.js";
 import { assertGeneratedSandboxAvailable, getSandboxPolicyHash } from "./skills/generated-sandbox.js";
+import { getBuiltInSkillNames, getGeneratedSkillNames } from "./skills/registry.js";
+import { recordRuntimeConfiguration } from "./data/runtime-configuration.js";
 
 /** Live bot handles, so the heap guard can abort a runaway skill. */
 const LIVE_BOTS = new Map<string, Bot>();
@@ -184,6 +186,19 @@ async function main() {
     });
     console.log(`[GeneratedSkill] Loaded ${loaded.length} approved isolated skill(s)`);
   }
+
+  recordRuntimeConfiguration({
+    provider: config.llm.provider,
+    strategicRequestedModel: config.llm.model,
+    fastRequestedModel: config.llm.fastModel,
+    endpoint: config.llm.provider === "openai" ? config.openai.baseUrl : config.ollama.host,
+    multiBotEnabled: config.multiBot.enabled,
+    requestedBotCount: config.multiBot.count,
+    roster: BOT_ROSTER,
+    builtInSkillNames: getBuiltInSkillNames(),
+    authoredSkillNames: getAuthoredSkillNames(),
+    generatedSkillNames: getGeneratedSkillNames(),
+  });
 
   // Start the unified viewer server before any bots — it needs to be ready
   // to accept registerBot() calls when bots spawn. This serves the viewer
