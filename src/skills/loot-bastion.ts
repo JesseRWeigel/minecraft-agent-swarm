@@ -74,6 +74,19 @@ export async function marchToward(
   const gap = () => Math.hypot(bot.entity.position.x - target.x, bot.entity.position.z - target.z);
   const until = Date.now() + budgetMs;
   let guard = 0;
+  // Run 716: Mason died "tried to swim in lava" after falling 47.5 blocks
+  // from y=77, and the fall tracker recorded him standing on cobblestone in
+  // mid-air with no controls and no path. He was on top of a one-by-one
+  // pillar of his own making: the height carried in the waypoint asks the
+  // planner for a specific y, and with towers enabled it builds a tower to
+  // get there. Over the Nether that tower is a diving board. The march digs
+  // and bridges, and it never pillars.
+  const marchMoves = baseMoves(bot);
+  (marchMoves as unknown as { canDig: boolean }).canDig = true;
+  (marchMoves as unknown as { allow1by1towers: boolean }).allow1by1towers = false;
+  (marchMoves as unknown as { maxDropDown: number }).maxDropDown = 2;
+  (marchMoves as unknown as { allowParkour: boolean }).allowParkour = false;
+  bot.pathfinder.setMovements(marchMoves);
   while (!o.stop() && !signal.aborted && Date.now() < until) {
     const g = gap();
     await eatOnTheMarch(bot);
@@ -103,6 +116,7 @@ export async function marchToward(
           ? undefined
           : Math.round(bot.entity.position.y + Math.max(-16, Math.min(16, target.y - bot.entity.position.y)));
       const goal = wy === undefined ? new goals.GoalNearXZ(wx, wz, 10) : new goals.GoalNear(wx, wy, wz, 12);
+      bot.pathfinder.setMovements(marchMoves);
       const ok = await safeGoto(bot, goal, budget, 12_000)
         .then(() => true)
         .catch(() => false);
