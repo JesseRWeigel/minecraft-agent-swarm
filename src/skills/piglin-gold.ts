@@ -45,6 +45,21 @@ export async function wearGoldForPiglins(bot: Bot, tag: string, onStep?: (msg: s
           .filter((i) => i.name === "gold_ingot")
           .reduce((n, i) => n + i.count, 0);
       if (ingots() < 4) await withdrawStash(bot, STASH_POS, "gold_ingot", 4 - ingots(), 60_000).catch(() => {});
+      // Run 711: both Nether trips stood down for sixteen hours with "only 0
+      // gold ingots reachable", while a gold_block from the bastion chest sat
+      // in the stash. One block is nine ingots at a crafting table.
+      if (ingots() < 4) {
+        const hasBlock = () => bot.inventory.items().some((i) => i.name === "gold_block");
+        if (!hasBlock()) await withdrawStash(bot, STASH_POS, "gold_block", 1, 60_000).catch(() => {});
+        if (hasBlock()) {
+          const { craftPiece } = await import("./craft-gear.js");
+          const mcd = (await import("minecraft-data")).default;
+          const ok = await craftPiece(bot, mcd(bot.version), "gold_ingot", []).catch(() => false);
+          console.log(
+            `[${tag}] ${bot.username}: broke a gold_block for ingots ${ok ? "ok" : "failed"} (now ${ingots()})`,
+          );
+        }
+      }
       if (ingots() >= 4) {
         onStep?.("Forging golden boots from stash gold...");
         const { craftPiece } = await import("./craft-gear.js");

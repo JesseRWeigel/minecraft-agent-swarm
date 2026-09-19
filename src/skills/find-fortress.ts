@@ -3,6 +3,33 @@ import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
 import { baseMoves, safeGoto } from "../bot/navigation.js";
+import fs from "node:fs";
+import { marchToward } from "./loot-bastion.js";
+
+// Run 711: the east sweep saw nether bricks at (535, 52, -17), Mason died on
+// the 100-block approach, and the skill forgot the sighting because it only
+// recorded a location on success; the next trip would have swept southeast.
+// A sighting is banked the moment it is made, and the next trip marches
+// straight to it before sweeping anything.
+const SIGHTING_FILE = new URL("../../logs/fortress-sighting.json", import.meta.url).pathname;
+type Sighting = { x: number; y: number; z: number; seenAt: string; by: string };
+function readSighting(): Sighting | null {
+  try {
+    const s = JSON.parse(fs.readFileSync(SIGHTING_FILE, "utf8")) as Sighting;
+    return typeof s?.x === "number" && typeof s?.z === "number" ? s : null;
+  } catch {
+    return null;
+  }
+}
+function writeSighting(s: Sighting | null): void {
+  // Study rule: nothing under logs/ is ever deleted. A dropped sighting is
+  // written as a tombstone so the audit trail keeps what was tried.
+  try {
+    fs.writeFileSync(SIGHTING_FILE, JSON.stringify(s ?? { droppedAt: new Date().toISOString() }, null, 2));
+  } catch {
+    /* best effort */
+  }
+}
 
 /**
  * find_fortress — A Terrible Fortress (nether/find_fortress), the gateway to
@@ -89,7 +116,32 @@ export const findFortressSkill: Skill = {
     const homePortal = bot.findBlock({ matching: (b) => b.name === "nether_portal", maxDistance: 32 });
 
     // --- Already visible? ---
-    let bricks = bot.findBlock({ matching: (b) => b.name === "nether_bricks", maxDistance: 128 });
+    const findBricks = () => bot.findBlock({ matching: (b) => b.name === "nether_bricks", maxDistance: 128 });
+    let bricks = findBricks();
+
+    // --- A banked sighting: march there first ---
+    const sighting = readSighting();
+    if (!bricks && sighting) {
+      const gapTo = () => Math.hypot(bot.entity.position.x - sighting.x, bot.entity.position.z - sighting.z);
+      step(`Bricks were seen at (${sighting.x}, ${sighting.y}, ${sighting.z}) — marching there...`, 0.3);
+      console.log(
+        `[Fortress] ${bot.username}: marching to the banked sighting at ${sighting.x},${sighting.y},${sighting.z} (${Math.round(gapTo())} away)`,
+      );
+      await marchToward(bot, sighting, 360_000, signal, {
+        label: "Marching to the sighted bricks",
+        progress: () => 0.4,
+        step,
+        stop: () => {
+          bricks = findBricks();
+          return !!bricks || gapTo() <= 40;
+        },
+      });
+      bricks = findBricks();
+      if (!bricks && gapTo() <= 40) {
+        console.log(`[Fortress] ${bot.username}: no bricks within 128 of the sighting; dropping it`);
+        writeSighting(null);
+      }
+    }
 
     // --- Sweep one heading, scanning as we go ---
     if (!bricks) {
@@ -112,24 +164,45 @@ export const findFortressSkill: Skill = {
 
     let entered = false;
     if (bricks) {
-      step(`NETHER BRICKS at ${bricks.position} — walking into the fortress...`, 0.7);
-      const approachDeadline = Date.now() + 120_000;
-      while (!signal.aborted && Date.now() < approachDeadline && bot.entity.position.distanceTo(bricks.position) > 3) {
-        await safeGoto(
-          bot,
-          new goals.GoalNear(bricks.position.x, bricks.position.y + 1, bricks.position.z, 2),
-          45_000,
-          12_000,
-        ).catch(() => {});
-        if (bot.entity.position.distanceTo(bricks.position) > 3) {
-          await new Promise((r) => setTimeout(r, 1500));
+      const seen = bricks.position;
+      writeSighting({ x: seen.x, y: seen.y, z: seen.z, seenAt: new Date().toISOString(), by: bot.username });
+      step(`NETHER BRICKS at ${seen} — walking into the fortress...`, 0.7);
+      // The approach was one 45-second walk repeated for two minutes; the
+      // bricks sit up to 128 blocks off. March in hops like the bastion raid.
+      const brickGap = () => Math.hypot(bot.entity.position.x - seen.x, bot.entity.position.z - seen.z);
+      await marchToward(bot, { x: seen.x, z: seen.z }, 240_000, signal, {
+        label: "Walking to the bricks",
+        progress: () => 0.75,
+        step,
+        stop: () => brickGap() <= 6,
+      });
+      await safeGoto(bot, new goals.GoalNear(seen.x, seen.y + 1, seen.z, 2), 45_000, 12_000).catch(() => {});
+      // A Terrible Fortress fires inside the structure's bounds, and the
+      // first brick seen is its outer edge. Walk on to the brick nearest the
+      // middle of the cluster in view.
+      const cluster = bot.findBlocks({ matching: (b) => b.name === "nether_bricks", maxDistance: 48, count: 400 });
+      if (cluster.length > 8 && !signal.aborted) {
+        const cx = cluster.reduce((n, v) => n + v.x, 0) / cluster.length;
+        const cz = cluster.reduce((n, v) => n + v.z, 0) / cluster.length;
+        const cy = cluster.reduce((n, v) => n + v.y, 0) / cluster.length;
+        let inner = cluster[0];
+        let best = Infinity;
+        for (const v of cluster) {
+          const d = Math.hypot(v.x - cx, v.y - cy, v.z - cz);
+          if (d < best) {
+            best = d;
+            inner = v;
+          }
         }
+        console.log(
+          `[Fortress] ${bot.username}: ${cluster.length} bricks in view, walking to the middle at ${inner.x},${inner.y},${inner.z}`,
+        );
+        await safeGoto(bot, new goals.GoalNear(inner.x, inner.y + 1, inner.z, 2), 90_000, 12_000).catch(() => {});
       }
-      entered = bot.entity.position.distanceTo(bricks.position) <= 4;
+      const nearBrick = bot.findBlock({ matching: (b) => b.name === "nether_bricks", maxDistance: 4 });
+      entered = !!nearBrick;
       const p = bot.entity.position.floored();
-      console.log(
-        `[FortressDebug] ${bot.username}: bricks=${bricks.position} stoodAt=${p.x},${p.y},${p.z} entered=${entered}`,
-      );
+      console.log(`[FortressDebug] ${bot.username}: bricks=${seen} stoodAt=${p.x},${p.y},${p.z} entered=${entered}`);
     }
 
     // --- Always walk home ---
