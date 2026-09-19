@@ -6,8 +6,10 @@ The participant may send exactly two messages, in order::
     {"schema_version": 1, "type": "ready", ...fixed IDs...}
     {"schema_version": 1, "type": "action_finished", ...fixed IDs...}
 
-After ``ready``, the trusted supervisor must call :meth:`begin`.  After
-``action_finished``, it must call :meth:`finalize`.  Participant messages cannot
+After ``ready``, the trusted supervisor must call :meth:`begin` and send its
+returned ``begin`` command to the participant.  After ``action_finished``, it
+must call :meth:`finalize` and send its returned ``finalize`` command.
+Participant messages cannot
 state success, provide observations, select IDs, advance supervisor phases, or
 set deadlines.  The supervisor supplies the IDs and an injectable monotonic
 clock.  Any protocol error is sticky: later input and supervisor calls fail
@@ -60,7 +62,9 @@ class ParticipantProtocol:
     """Incrementally validate one fixed participant coordination stream.
 
     ``feed`` returns a tuple containing each accepted participant message type.
-    ``begin`` and ``finalize`` are explicit trusted-supervisor transitions.
+    ``begin`` and ``finalize`` are explicit trusted-supervisor transitions that
+    return the exact command dictionary for the supervisor to serialize and
+    send to the participant.
     Call ``check_deadline`` while idle and ``eof`` when the participant pipe
     closes.  EOF is valid only after supervisor finalization and with no partial
     line buffered.
@@ -165,7 +169,7 @@ class ParticipantProtocol:
         return message_type
 
     def begin(self):
-        """Explicitly release the action phase after accepted readiness."""
+        """Enter the action phase and return its fixed supervisor command."""
         self._ensure_active()
         if self._state != "ready":
             self._fail("supervisor begin out of phase")
@@ -173,15 +177,27 @@ class ParticipantProtocol:
             self._fail("participant bytes buffered before supervisor begin")
         self._state = "action_active"
         self._deadline = self._sample_now() + ACTION_TIMEOUT_SECONDS
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "type": "begin",
+            "trial_id": self.trial_id,
+            "action_id": self.action_id,
+        }
 
     def finalize(self):
-        """Explicitly finalize after accepted action completion."""
+        """Enter final state and return its fixed supervisor command."""
         self._ensure_active()
         if self._state != "awaiting_finalize":
             self._fail("supervisor finalize out of phase")
         if self._buffer:
             self._fail("participant bytes buffered before supervisor finalize")
         self._state = "finalized"
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "type": "finalize",
+            "trial_id": self.trial_id,
+            "action_id": self.action_id,
+        }
 
     def eof(self):
         """Validate clean EOF after supervisor finalization."""

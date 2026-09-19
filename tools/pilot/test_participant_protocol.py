@@ -50,6 +50,32 @@ class ParticipantProtocolTests(unittest.TestCase):
         protocol.eof()
         self.assertEqual(protocol.state, "finalized")
 
+    def test_supervisor_transitions_return_exact_participant_commands(self):
+        protocol, _ = self.make()
+        protocol.feed(line("ready"))
+        begin = protocol.begin()
+        self.assertEqual(begin, {
+            "schema_version": 1,
+            "type": "begin",
+            "trial_id": "trial-01",
+            "action_id": "walk-01",
+        })
+        self.assertEqual(set(begin), {"schema_version", "type", "trial_id", "action_id"})
+        self.assertIs(type(begin["schema_version"]), int)
+        self.assertTrue(all(type(begin[key]) is str for key in ("type", "trial_id", "action_id")))
+
+        protocol.feed(line("action_finished"))
+        finalize = protocol.finalize()
+        self.assertEqual(finalize, {
+            "schema_version": 1,
+            "type": "finalize",
+            "trial_id": "trial-01",
+            "action_id": "walk-01",
+        })
+        self.assertEqual(set(finalize), {"schema_version", "type", "trial_id", "action_id"})
+        self.assertIs(type(finalize["schema_version"]), int)
+        self.assertTrue(all(type(finalize[key]) is str for key in ("type", "trial_id", "action_id")))
+
     def test_forged_result_and_terminal_claims_cannot_advance(self):
         for forged in (
             line("success"),
@@ -120,12 +146,14 @@ class ParticipantProtocolTests(unittest.TestCase):
         protocol, _ = self.make()
         with self.assertRaisesRegex(ParticipantProtocolError, "begin out of phase"):
             protocol.begin()
+        self.assertEqual(protocol.state, "failed")
 
         protocol, _ = self.make()
         protocol.feed(line("ready"))
         protocol.begin()
         with self.assertRaisesRegex(ParticipantProtocolError, "finalize out of phase"):
             protocol.finalize()
+        self.assertEqual(protocol.state, "failed")
 
         protocol, _ = self.make()
         protocol.feed(line("ready"))
