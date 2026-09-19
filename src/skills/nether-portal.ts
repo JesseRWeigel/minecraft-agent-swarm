@@ -258,18 +258,81 @@ function logPortalGeometry(bot: Bot, doorway: Vec3, centre: Vec3, walkFrom: Vec3
   }
 }
 
+/**
+ * Pick a portal cell the bot can actually walk into, and the spot to walk
+ * from. Run 713 instrumentation: Mason stood at (287.7, 58, -311.5) facing
+ * the right way with the portal one block ahead and moved 0.02 blocks in
+ * four seconds, because the cell ahead of him was the TOP row of a 3-high
+ * portal and his head was against the obsidian lintel. The only floor on
+ * that side sits one block too high; the same portal is walkable from the
+ * far side at y=57. So choose the cell whose head space is also portal, and
+ * a standing spot beside it with a floor, rather than whatever findBlock
+ * returned first.
+ */
+function findPortalEntry(bot: Bot, near: Vec3): { cell: Vec3; stand: Vec3 } | null {
+  const cells = bot.findBlocks({ matching: (b) => b.name === "nether_portal", maxDistance: 24, count: 80 });
+  if (cells.length === 0) return null;
+  const passable = (v: Vec3) => {
+    const n = bot.blockAt(v)?.name;
+    return n === "air" || n === "nether_portal" || n === "cave_air";
+  };
+  const solid = (v: Vec3) => {
+    const b = bot.blockAt(v);
+    return !!b && b.boundingBox === "block";
+  };
+  // Cells varying in z sit in a plane whose normal runs along x, and the
+  // other way round; step out along the normal to stand.
+  const xs = cells.map((c) => c.x);
+  const zs = cells.map((c) => c.z);
+  const spanX = Math.max(...xs) - Math.min(...xs);
+  const spanZ = Math.max(...zs) - Math.min(...zs);
+  const normals: Vec3[] =
+    spanZ >= spanX ? [new Vec3(1, 0, 0), new Vec3(-1, 0, 0)] : [new Vec3(0, 0, 1), new Vec3(0, 0, -1)];
+  let best: { cell: Vec3; stand: Vec3; score: number } | null = null;
+  for (const c of cells) {
+    const cell = new Vec3(c.x, c.y, c.z);
+    // Head room: the bot is two blocks tall, so the cell above must be open.
+    if (!passable(cell.offset(0, 1, 0))) continue;
+    for (const n of normals) {
+      const stand = cell.plus(n);
+      if (!passable(stand) || !passable(stand.offset(0, 1, 0))) continue;
+      if (!solid(stand.offset(0, -1, 0))) continue;
+      const score = bot.entity.position.distanceTo(stand) + (cell.y - Math.min(...cells.map((k) => k.y))) * 0.5;
+      if (!best || score < best.score) best = { cell, stand, score };
+    }
+  }
+  if (!best) return null;
+  console.log(
+    `[Portal] ${bot.username}: entry cell ${best.cell.x},${best.cell.y},${best.cell.z} from ${best.stand.x},${best.stand.y},${best.stand.z} (${cells.length} cells, doorway hint ${near.x},${near.y},${near.z})`,
+  );
+  return { cell: best.cell, stand: best.stand };
+}
+
 export async function crossPortal(
   bot: Bot,
   doorway: Vec3,
   budgetMs: number,
   arrived: (dim: string) => boolean = isNether,
 ): Promise<boolean> {
-  const centre = new Vec3(doorway.x + 0.5, doorway.y + 0.5, doorway.z + 0.5);
   const inPortal = () => bot.blockAt(bot.entity.position)?.name === "nether_portal";
   const deadline = Date.now() + Math.max(20_000, budgetMs);
+  let entry = findPortalEntry(bot, doorway);
+  let centre = entry
+    ? new Vec3(entry.cell.x + 0.5, entry.cell.y + 0.5, entry.cell.z + 0.5)
+    : new Vec3(doorway.x + 0.5, doorway.y + 0.5, doorway.z + 0.5);
   while (Date.now() < deadline) {
     if (arrived(dimensionOf(bot))) return true;
-    if (bot.entity.position.distanceTo(centre) > 2.5 && !inPortal()) {
+    if (!inPortal()) {
+      // Re-read the geometry each lap: a respawn or a rejoin can leave the
+      // bot on the other side of the frame, where a different cell works.
+      entry = findPortalEntry(bot, doorway) ?? entry;
+      if (entry) centre = new Vec3(entry.cell.x + 0.5, entry.cell.y + 0.5, entry.cell.z + 0.5);
+    }
+    const stand = entry?.stand;
+    if (stand && bot.entity.position.distanceTo(stand.offset(0.5, 0, 0.5)) > 1.2 && !inPortal()) {
+      bot.pathfinder.setMovements(baseMoves(bot));
+      await safeGoto(bot, new goals.GoalBlock(stand.x, stand.y, stand.z), 20_000).catch(() => {});
+    } else if (!stand && bot.entity.position.distanceTo(centre) > 2.5 && !inPortal()) {
       bot.pathfinder.setMovements(baseMoves(bot));
       await safeGoto(bot, new goals.GoalNear(doorway.x, doorway.y, doorway.z, 1), 20_000).catch(() => {});
     }
