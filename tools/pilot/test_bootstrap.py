@@ -1,6 +1,6 @@
-import tempfile, unittest, zipfile
+import io, tempfile, unittest, zipfile
 from pathlib import Path
-from tools.pilot.bootstrap import BootstrapError, inspect_bootstrap
+from tools.pilot.bootstrap import BootstrapError, MAX_CENTRAL_DIRECTORY_BYTES, _BoundedReader, inspect_bootstrap
 
 class Tests(unittest.TestCase):
  def setUp(self): self.t=tempfile.TemporaryDirectory(); self.r=Path(self.t.name)
@@ -29,4 +29,11 @@ class Tests(unittest.TestCase):
  def test_entry_limit(self):
   p=self.jar([(str(i),'') for i in range(10001)])
   with self.assertRaises(BootstrapError):inspect_bootstrap(p)
+ def test_bounded_reader_caps_reads_and_snapshot_seek(self):
+  reader = _BoundedReader(io.BytesIO(b'x' * (MAX_CENTRAL_DIRECTORY_BYTES + 1)), MAX_CENTRAL_DIRECTORY_BYTES + 1)
+  with self.assertRaises(BootstrapError): reader.read()
+  with self.assertRaises(BootstrapError): reader.seek(MAX_CENTRAL_DIRECTORY_BYTES + 2)
+ def test_malformed_port_is_normalized(self):
+  line = self.line().replace('piston-data.mojang.com', 'piston-data.mojang.com:bad')
+  with self.assertRaises(BootstrapError): inspect_bootstrap(self.jar([('META-INF/download-context', line)]))
 if __name__=='__main__':unittest.main()
