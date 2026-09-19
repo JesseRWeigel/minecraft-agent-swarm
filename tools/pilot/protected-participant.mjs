@@ -37,13 +37,16 @@ function destroySocket(bot) {
 
 async function disposeBot(bot, timeoutMs) {
   if (!bot) return;
-  bot.on?.("error", () => {});
   try {
-    bot.setControlState?.("forward", false);
-  } catch {}
-  try {
-    if (timeoutMs > 0) await bounded(() => bot.quit?.("participant protocol complete"), timeoutMs, "bot quit");
-  } catch {
+    try {
+      bot.on?.("error", () => {});
+    } catch {}
+    try {
+      bot.setControlState?.("forward", false);
+    } catch {}
+    try {
+      if (timeoutMs > 0) await bounded(() => bot.quit?.("participant protocol complete"), timeoutMs, "bot quit");
+    } catch {}
   } finally {
     destroySocket(bot);
   }
@@ -54,10 +57,12 @@ async function boundedAcquire(factory, timeoutMs, dispose) {
   try {
     return await bounded(() => pending, timeoutMs, "bot create");
   } catch (error) {
-    pending.then(
-      (lateBot) => dispose(lateBot),
-      () => {},
-    );
+    pending
+      .then(
+        (lateBot) => dispose(lateBot),
+        () => {},
+      )
+      .catch(() => {});
     throw error;
   }
 }
@@ -148,16 +153,22 @@ export async function runParticipant({
   let transportFailed = false;
   let protocolCompleted = false;
   const runPhase = async (factory, label) => {
-    const allowance = Math.min(phaseTimeoutMs, remaining());
+    const phaseStarted = now();
+    const phaseDeadline = Math.min(deadline, phaseStarted + phaseTimeoutMs);
+    const allowance = phaseDeadline - phaseStarted;
     if (allowance <= 0) throw new Error("participant total timeout");
     const value = await bounded(factory, allowance, label);
-    if (now() >= deadline) throw new Error("participant total timeout");
+    if (now() >= phaseDeadline) throw new Error("participant phase timeout");
     if (transportFailed) throw new Error("participant transport failed");
     return value;
   };
 
   let result = { schema_version: 1, status: "failed" };
   try {
+    const acquisitionStarted = now();
+    const acquisitionDeadline = Math.min(deadline, acquisitionStarted + phaseTimeoutMs);
+    const acquisitionAllowance = acquisitionDeadline - acquisitionStarted;
+    if (acquisitionAllowance <= 0) throw new Error("participant total timeout");
     bot = await boundedAcquire(
       () =>
         createBot({
@@ -168,9 +179,10 @@ export async function runParticipant({
           version: VERSION,
           respawn: false,
         }),
-      Math.min(phaseTimeoutMs, remaining()),
+      acquisitionAllowance,
       (lateBot) => disposeBot(lateBot, 1000),
     );
+    if (now() >= acquisitionDeadline) throw new Error("bot create timeout");
     const markTransportFailure = () => {
       if (!protocolCompleted) transportFailed = true;
     };

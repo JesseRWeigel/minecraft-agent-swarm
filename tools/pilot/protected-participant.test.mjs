@@ -256,3 +256,86 @@ test("invalid and backwards runtime clocks fail generically", async () => {
     assert.deepEqual(result, { schema_version: 1, status: "failed" });
   }
 });
+
+test("rejects a phase that resolves after its own deadline within the total budget", async () => {
+  const f = fixture();
+  let now = 0;
+  f.bot.waitForTicks = async () => {
+    now = 6;
+  };
+  const result = await runParticipant({
+    ...f.args,
+    nowMonotonic: () => now,
+    phaseTimeoutMs: 5,
+    totalTimeoutMs: 100,
+  });
+  assert.deepEqual(result, { schema_version: 1, status: "failed" });
+  assert.deepEqual(f.sent, []);
+  assert.equal(f.bot._client.socket.destroyed, true);
+});
+
+test("disposes a bot whose acquisition resolves after its phase deadline", async () => {
+  const f = fixture();
+  let now = 0;
+  const result = await runParticipant({
+    ...f.args,
+    nowMonotonic: () => now,
+    phaseTimeoutMs: 5,
+    totalTimeoutMs: 100,
+    createBot: async () => {
+      now = 6;
+      return f.bot;
+    },
+  });
+  assert.deepEqual(result, { schema_version: 1, status: "failed" });
+  assert.equal(f.events.includes("quit"), true);
+  assert.equal(f.bot._client.socket.destroyed, true);
+  assert.deepEqual(f.sent, []);
+});
+
+test("does not call bot factory when no acquisition budget remains", async () => {
+  const f = fixture();
+  let calls = 0;
+  let clockCalls = 0;
+  const result = await runParticipant({
+    ...f.args,
+    totalTimeoutMs: 10,
+    nowMonotonic: () => (clockCalls++ === 0 ? 0 : 10),
+    createBot: async () => {
+      calls += 1;
+      return f.bot;
+    },
+  });
+  assert.deepEqual(result, { schema_version: 1, status: "failed" });
+  assert.equal(calls, 0);
+});
+
+test("faulty late bot cleanup still destroys its socket without unhandled rejection", async () => {
+  const f = fixture();
+  let resolveBot;
+  const pending = new Promise((resolve) => {
+    resolveBot = resolve;
+  });
+  const unhandled = [];
+  const listener = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", listener);
+  try {
+    const resultPromise = runParticipant({
+      ...f.args,
+      createBot: () => pending,
+      phaseTimeoutMs: 5,
+      totalTimeoutMs: 30,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    f.bot.on = () => {
+      throw new Error("faulty listener adapter");
+    };
+    resolveBot(f.bot);
+    assert.equal((await resultPromise).status, "failed");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(f.bot._client.socket.destroyed, true);
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off("unhandledRejection", listener);
+  }
+});
