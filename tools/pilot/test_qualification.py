@@ -1,4 +1,4 @@
-import json, os, tempfile, unittest
+import hashlib, json, os, tempfile, unittest
 from pathlib import Path
 from unittest import mock
 from tools.pilot.qualification import run_qualification, QualificationError, QUAL_PROPERTIES
@@ -95,6 +95,8 @@ class Tests(unittest.TestCase):
         self.assertIn('--unshare-net', self.argv)
         self.assertNotIn('rcon.password', ' '.join(self.argv))
         self.assertEqual(len(report['evidence_sha256']), 64)
+        self.assertTrue(report['evidence_valid_for_requested_mode'])
+        self.assertTrue(report['namespace_lifecycle_valid_for_requested_mode'])
         self.assertFalse(report['independent_observer_process'])
         self.assertFalse((self.root / 'work/runtime/.qualification-rcon-password').exists())
         self.assertEqual((self.root / 'work').stat().st_mode & 511, 448)
@@ -104,13 +106,18 @@ class Tests(unittest.TestCase):
     def test_lifecycle_false_positive_never_completes(self):
         for i, patch in enumerate([{'java_returncode': 1}, {'term_sent': True}, {'stop_sent': False}, {'status': 'passed', 'readiness': 'timeout'}]):
             life = {**LIFE, **patch}
-            self.assertEqual(self.call(f'f{i}', runner=self.runner(life=life))['status'], 'failed')
+            report = self.call(f'f{i}', runner=self.runner(life=life))
+            self.assertEqual(report['status'], 'failed')
+            self.assertFalse(report['namespace_lifecycle_valid_for_requested_mode'])
+            self.assertTrue(report['evidence_valid_for_requested_mode'])
 
     def test_stationary_is_recorded_negative_control_and_flagged(self):
         life = {**LIFE, 'status': 'failed', 'client_returncode': 1}
         report = self.call('stationary', movement_mode='stationary', runner=self.runner(life=life, ev=evidence('stationary', False), code=1))
         self.assertEqual(report['status'], 'failed')
         self.assertTrue(report['negative_control_observed'])
+        self.assertTrue(report['evidence_valid_for_requested_mode'])
+        self.assertTrue(report['namespace_lifecycle_valid_for_requested_mode'])
         self.assertEqual(self.argv[-1], 'stationary')
 
     def test_stationary_large_motion_or_transport_failure_is_not_a_control(self):
@@ -200,7 +207,12 @@ class Tests(unittest.TestCase):
             run_qualification(workspace=existing, restore_kwargs={}, tool_snapshot=self.tools, tool_manifest_sha256='c' * 64)
 
     def test_malformed_or_symlink_evidence_never_completes(self):
-        self.assertEqual(self.call('malformed', runner=self.runner(ev={'status': 'passed'}))['status'], 'failed')
+        report = self.call('malformed', runner=self.runner(ev={'status': 'passed'}))
+        self.assertEqual(report['status'], 'failed')
+        expected = hashlib.sha256(json.dumps({'status': 'passed'}).encode()).hexdigest()
+        self.assertEqual(report['evidence_sha256'], expected)
+        self.assertFalse(report['evidence_valid_for_requested_mode'])
+        self.assertTrue(report['namespace_lifecycle_valid_for_requested_mode'])
 
         def symlink_runner(argv, **kw):
             target = kw['cwd'] / 'elsewhere.json'
@@ -211,7 +223,23 @@ class Tests(unittest.TestCase):
             life.write_text(json.dumps(LIFE))
             os.chmod(life, 384)
             return self.result()
-        self.assertEqual(self.call('symlink-evidence', runner=symlink_runner)['status'], 'failed')
+        report = self.call('symlink-evidence', runner=symlink_runner)
+        self.assertEqual(report['status'], 'failed')
+        self.assertIsNone(report['evidence_sha256'])
+        self.assertFalse(report['evidence_valid_for_requested_mode'])
+
+        def public_evidence_runner(argv, **kw):
+            path = kw['cwd'] / 'qualification-evidence.json'
+            path.write_text(json.dumps(evidence()))
+            os.chmod(path, 0o644)
+            life = kw['cwd'] / 'namespace-result.json'
+            life.write_text(json.dumps(LIFE))
+            os.chmod(life, 0o600)
+            return self.result()
+        report = self.call('public-evidence', runner=public_evidence_runner)
+        self.assertEqual(report['status'], 'failed')
+        self.assertIsNone(report['evidence_sha256'])
+        self.assertFalse(report['evidence_valid_for_requested_mode'])
 
     def test_malformed_json_numbers_and_structure_preserve_failed_summary(self):
         valid = json.dumps(evidence())
@@ -224,10 +252,9 @@ class Tests(unittest.TestCase):
             name = f"malformed-json-{index}"
             report = self.call(name, runner=self.raw_runner(raw))
             self.assertEqual(report["status"], "failed")
-            if index == 0:
-                self.assertEqual(len(report["evidence_sha256"]), 64)
-            else:
-                self.assertIsNone(report["evidence_sha256"])
+            self.assertEqual(report["evidence_sha256"], hashlib.sha256(raw).hexdigest())
+            self.assertFalse(report["evidence_valid_for_requested_mode"])
+            self.assertTrue(report["namespace_lifecycle_valid_for_requested_mode"])
             self.assertEqual(
                 (self.root / name / "runtime/qualification-evidence.json").read_bytes(),
                 raw,
@@ -245,7 +272,8 @@ class Tests(unittest.TestCase):
             name = f"ambiguous-json-{index}"
             report = self.call(name, runner=self.raw_runner(raw))
             self.assertEqual(report["status"], "failed")
-            self.assertIsNone(report["evidence_sha256"])
+            self.assertEqual(report["evidence_sha256"], hashlib.sha256(raw).hexdigest())
+            self.assertFalse(report["evidence_valid_for_requested_mode"])
             self.assertEqual(
                 (self.root / name / "runtime/qualification-evidence.json").read_bytes(),
                 raw,

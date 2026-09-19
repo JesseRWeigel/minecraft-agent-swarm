@@ -80,15 +80,16 @@ def _capture_json(path, maximum):
     finally:
         os.close(fd)
     raw = b''.join(chunks)
+    digest = hashlib.sha256(raw).hexdigest()
     try:
         value = json.loads(
             raw,
             object_pairs_hook=_reject_duplicate_keys,
             parse_constant=_reject_nonfinite_constant,
         )
-        return (value, hashlib.sha256(raw).hexdigest())
+        return (value, digest)
     except (UnicodeError, ValueError, RecursionError):
-        return (None, None)
+        return (None, digest)
 
 def _position(value):
     if not isinstance(value, dict):
@@ -125,7 +126,7 @@ def _evidence(path, mode):
         == {"host": "127.0.0.1", "gamePort": 25585, "rconPort": 25595}
     )
     if not identity_valid:
-        return None, None, False
+        return None, digest, False
     before = value.get("before")
     after = value.get("after")
     mineflayer = value.get("mineflayer")
@@ -275,6 +276,8 @@ def run_qualification(*, workspace, restore_kwargs, tool_snapshot, tool_manifest
             "tool_client_sha256": _sha(tools / "qualification-client.mjs"),
             "evidence_sha256": evidence_digest,
             "namespace_result_sha256": worker_digest,
+            "evidence_valid_for_requested_mode": evidence_valid,
+            "namespace_lifecycle_valid_for_requested_mode": worker_valid,
             "independent_observer_process": False,
             "claim_limit": (
                 "Same-process Mineflayer and RCON qualification only; "
