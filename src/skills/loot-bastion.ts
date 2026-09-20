@@ -198,14 +198,46 @@ export async function marchToward(
     // y=54. When every lateral leg fails, climb and try again from up
     // there; the march carries scaffolding and is allowed to tower.
     if (gap() > 40 && bot.entity.position.distanceTo(startOfLeg) < 5) {
-      const p = bot.entity.position;
-      const up = Math.round(p.y) + 14;
-      const climbed = await safeGoto(bot, new goals.GoalNear(Math.round(p.x), up, Math.round(p.z), 3), 25_000)
-        .then(() => true)
-        .catch(() => false);
-      console.log(
-        `[Bastion] ${bot.username}: blocked at y=${p.y.toFixed(0)} with lava ahead, climbing to y=${up} -> ${climbed ? `now y=${bot.entity.position.y.toFixed(0)}` : "failed"}`,
-      );
+      // Run 724: the first climb aimed fourteen blocks straight up and
+      // failed, because the cavern roof is at y=60 and that goal sat inside
+      // it. Look for a real perch instead: a block with two open cells above
+      // it, within twenty-four blocks up and six to the side, nearest first.
+      const p = bot.entity.position.floored();
+      const open = (v: Vec3) => {
+        const n = bot.blockAt(v)?.name;
+        return n === "air" || n === "cave_air" || n === "nether_portal";
+      };
+      const solid = (v: Vec3) => bot.blockAt(v)?.boundingBox === "block";
+      let perch: Vec3 | null = null;
+      for (let dy = 3; dy <= 24 && !perch; dy++) {
+        for (const [dx, dz] of [
+          [0, 0],
+          [3, 0],
+          [-3, 0],
+          [0, 3],
+          [0, -3],
+          [6, 0],
+          [-6, 0],
+          [0, 6],
+          [0, -6],
+        ]) {
+          const foot = new Vec3(p.x + dx, p.y + dy, p.z + dz);
+          if (open(foot) && open(foot.offset(0, 1, 0)) && solid(foot.offset(0, -1, 0))) {
+            perch = foot;
+            break;
+          }
+        }
+      }
+      if (perch) {
+        const climbed = await safeGoto(bot, new goals.GoalBlock(perch.x, perch.y, perch.z), 30_000)
+          .then(() => true)
+          .catch(() => false);
+        console.log(
+          `[Bastion] ${bot.username}: blocked at y=${p.y} with lava ahead, climbing to the perch at ${perch.x},${perch.y},${perch.z} -> ${climbed ? `now y=${bot.entity.position.y.toFixed(0)}` : "failed"}`,
+        );
+      } else {
+        console.log(`[Bastion] ${bot.username}: blocked at y=${p.y} with lava ahead and no perch within 24 up`);
+      }
     }
 
     // A shore walk gains nothing toward the target and is still progress,
