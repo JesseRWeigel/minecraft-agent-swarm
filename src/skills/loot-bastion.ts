@@ -137,6 +137,7 @@ export async function marchToward(
   const until = Date.now() + budgetMs;
   let bestGap = gap();
   let stalledLegs = 0;
+  let carvedOut = false;
   // The march's movement profile, settled by three measured runs against the
   // same 490-block route to the fortress sighting.
   //   715  towers on,  three-block drop : reached 39 blocks out
@@ -203,6 +204,21 @@ export async function marchToward(
         console.log(
           `[Bastion] ${bot.username}: blocked at y=${p.y} (${stalledLegs} stalled legs, lavaAhead=${lavaAhead(bot, target)}) and no perch within 24 up`,
         );
+        // Run 727 answered the open question: both climbs reported no perch,
+        // so the cavern really is sealed and there is nothing to walk to.
+        // Cut a way out instead. escape_to_surface carves a staircase up to
+        // y=62, which is through this roof at y=60 and onto the deck the two
+        // successful marches used. Once per march, and only from under it.
+        if (!carvedOut && p.y < 58) {
+          carvedOut = true;
+          const { escapeToSurfaceSkill } = await import("./escape-to-surface.js");
+          const r = await escapeToSurfaceSkill
+            .execute(bot, {}, signal, () => {})
+            .catch((e: Error) => ({ success: false, message: String(e).slice(0, 80) }));
+          console.log(
+            `[Bastion] ${bot.username}: carving a way out of the cavern -> ${String(r.message).slice(0, 90)} (now y=${bot.entity.position.y.toFixed(0)})`,
+          );
+        }
       }
     }
 
