@@ -189,6 +189,25 @@ export async function marchToward(
       }
       if (ok || before - gap() >= 8) break;
     }
+    // Run 723: with the death zones capped the march still stopped at the
+    // same lake edge, standing at Nether (144, 45, -45) on cobblestone it
+    // had placed itself, lava at y=31 ahead for forty blocks. An RCON scan
+    // of the next 260 blocks of the bearing is solid rock at y=60, so that
+    // ledge sits inside a cavern with a roof. The two marches that ever got
+    // through, in runs 714 and 715, walked the deck above it at y=64 and
+    // y=54. When every lateral leg fails, climb and try again from up
+    // there; the march carries scaffolding and is allowed to tower.
+    if (gap() > 40 && bot.entity.position.distanceTo(startOfLeg) < 5) {
+      const p = bot.entity.position;
+      const up = Math.round(p.y) + 14;
+      const climbed = await safeGoto(bot, new goals.GoalNear(Math.round(p.x), up, Math.round(p.z), 3), 25_000)
+        .then(() => true)
+        .catch(() => false);
+      console.log(
+        `[Bastion] ${bot.username}: blocked at y=${p.y.toFixed(0)} with lava ahead, climbing to y=${up} -> ${climbed ? `now y=${bot.entity.position.y.toFixed(0)}` : "failed"}`,
+      );
+    }
+
     // A shore walk gains nothing toward the target and is still progress,
     // so count movement, not distance closed. Six such legs end the march.
     const moved = bot.entity.position.distanceTo(startOfLeg);
