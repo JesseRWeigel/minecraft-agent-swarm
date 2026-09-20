@@ -145,11 +145,28 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
   // visits and never warns the next bot. A drowning anywhere on the team in
   // the last day is a zone for everyone. A broad water cost regressed walks
   // twice; these are 5-block spots around real deaths.
+  // Run 719: these zones carry no dimension, and the Nether and the
+  // Overworld share one coordinate space here, so overworld drownings priced
+  // Nether blocks and the reverse. Twenty-four of the eighty-five live zones
+  // sat on the one corridor to the fortress, and five marches in a row
+  // stalled 385 blocks out. Only same-dimension deaths price a route; older
+  // entries have no dimension recorded and age out within the day.
+  const hereDim = String(bot.game?.dimension ?? "").includes("nether")
+    ? "nether"
+    : String(bot.game?.dimension ?? "").includes("end")
+      ? "end"
+      : "overworld";
+  const sameDim = (d: { dim?: string }) => d.dim === hereDim;
   for (const store of getAllMemoryStores()) {
     if (store === getBotMemoryStore(bot)) continue;
     for (const d of store.getDeaths()) {
       const t = d.timestamp ? Date.parse(d.timestamp) : NaN;
-      if (Number.isFinite(t) && Date.now() - t < 86_400_000 && /drown|lava|fall origin/i.test(d.cause ?? ""))
+      if (
+        Number.isFinite(t) &&
+        Date.now() - t < 86_400_000 &&
+        sameDim(d) &&
+        /drown|lava|fall origin/i.test(d.cause ?? "")
+      )
         recentDeaths.push(d);
     }
   }
@@ -159,6 +176,7 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
       Number.isFinite(t) &&
       Date.now() - t >= 3_600_000 &&
       Date.now() - t < 86_400_000 &&
+      sameDim(d) &&
       /drown|lava|fall origin/i.test(d.cause ?? "")
     )
       recentDeaths.push(d);

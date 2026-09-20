@@ -20,6 +20,8 @@ export interface Death {
   z: number;
   cause: string;
   timestamp: string;
+  /** Which dimension the death happened in; routes only price same-dimension spots. */
+  dim?: string;
 }
 
 export interface OreDiscovery {
@@ -304,13 +306,18 @@ export class BotMemoryStore {
     return nearest;
   }
 
-  recordDeath(x: number, y: number, z: number, cause: string): void {
+  recordDeath(x: number, y: number, z: number, cause: string, dim?: string): void {
     this.memory.deaths.push({
       location: `${x}, ${y}, ${z}`,
       x: Math.round(x),
       y: Math.round(y),
       z: Math.round(z),
       cause,
+      // Run 719: the Nether and the Overworld share one coordinate space in
+      // this file, so a lava death at Nether (143, 30, -46) also priced the
+      // Overworld block of the same name, and every overworld drowning
+      // priced the Nether. Routes are filtered on this.
+      dim: dim ? (dim.includes("nether") ? "nether" : dim.includes("end") ? "end" : "overworld") : undefined,
       timestamp: new Date().toISOString(),
     });
     if (this.memory.deaths.length > 50) {
@@ -589,7 +596,7 @@ export class BotMemoryStore {
   /** Recent death records, for the death-trap guard in brain.ts.
    *  shouldAvoidLocation below has existed with zero callers the whole time,
    *  which is why Forge walked back into the same tunnel thirteen times. */
-  getDeaths(): { x: number; y: number; z: number; cause?: string; timestamp?: string }[] {
+  getDeaths(): { x: number; y: number; z: number; cause?: string; timestamp?: string; dim?: string }[] {
     return this.memory.deaths;
   }
 

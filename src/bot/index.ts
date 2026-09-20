@@ -678,7 +678,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
   bot.on("death", () => {
     const pos = bot.entity.position;
     const cause = lastDeathMessage || "unknown";
-    memStore.recordDeath(pos.x, pos.y, pos.z, cause);
+    memStore.recordDeath(pos.x, pos.y, pos.z, cause, String(bot.game?.dimension ?? ""));
     // Runs 699-700: Mason fell 28 blocks from the same Nether ledge lip at
     // y=57 into lava twice in an hour. The death spot sits at the bottom, so
     // the route cost around it never touched the lip. Record the fall's
@@ -692,6 +692,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
           originY,
           pos.z,
           `${cause} (fall origin, ${dropNow.toFixed(0)} blocks above the death)`,
+          String(bot.game?.dimension ?? ""),
         );
       }
     }
