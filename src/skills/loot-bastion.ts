@@ -193,10 +193,12 @@ export async function marchToward(
           }
         }
       }
+      let stillStuck = true;
       if (perch) {
         const climbed = await safeGoto(bot, new goals.GoalBlock(perch.x, perch.y, perch.z), 30_000)
           .then(() => true)
           .catch(() => false);
+        stillStuck = !climbed;
         console.log(
           `[Bastion] ${bot.username}: blocked at y=${p.y} (${stalledLegs} stalled legs, lavaAhead=${lavaAhead(bot, target)}), climbing to the perch at ${perch.x},${perch.y},${perch.z} -> ${climbed ? `now y=${bot.entity.position.y.toFixed(0)}` : "failed"}`,
         );
@@ -204,21 +206,22 @@ export async function marchToward(
         console.log(
           `[Bastion] ${bot.username}: blocked at y=${p.y} (${stalledLegs} stalled legs, lavaAhead=${lavaAhead(bot, target)}) and no perch within 24 up`,
         );
-        // Run 727 answered the open question: both climbs reported no perch,
-        // so the cavern really is sealed and there is nothing to walk to.
-        // Cut a way out instead. escape_to_surface carves a staircase up to
-        // y=62, which is through this roof at y=60 and onto the deck the two
-        // successful marches used. Once per march, and only from under it.
-        if (!carvedOut && p.y < 58) {
-          carvedOut = true;
-          const { escapeToSurfaceSkill } = await import("./escape-to-surface.js");
-          const r = await escapeToSurfaceSkill
-            .execute(bot, {}, signal, () => {})
-            .catch((e: Error) => ({ success: false, message: String(e).slice(0, 80) }));
-          console.log(
-            `[Bastion] ${bot.username}: carving a way out of the cavern -> ${String(r.message).slice(0, 90)} (now y=${bot.entity.position.y.toFixed(0)})`,
-          );
-        }
+      }
+      // Run 730: the march stalled at the portal exit (51, 42, -56) with
+      // walkable netherrack two, five and ten blocks ahead and every one of
+      // the nine hops refused, so a perch existing says nothing about being
+      // able to reach it. Carve whenever the bot is still stuck: the
+      // staircase skill cuts to y=62 with its own guards, and that is out of
+      // both the portal chamber and the cavern beyond it.
+      if (!carvedOut && p.y < 58 && stillStuck) {
+        carvedOut = true;
+        const { escapeToSurfaceSkill } = await import("./escape-to-surface.js");
+        const r = await escapeToSurfaceSkill
+          .execute(bot, {}, signal, () => {})
+          .catch((e: Error) => ({ success: false, message: String(e).slice(0, 80) }));
+        console.log(
+          `[Bastion] ${bot.username}: carving a way out -> ${String(r.message).slice(0, 90)} (now y=${bot.entity.position.y.toFixed(0)})`,
+        );
       }
     }
 
