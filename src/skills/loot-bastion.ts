@@ -138,6 +138,7 @@ export async function marchToward(
     await eatOnTheMarch(bot);
     o.step(`${o.label} — ${Math.round(g)} blocks out...`, o.progress(g));
     const before = gap();
+    const startOfLeg = bot.entity.position.clone();
     const px = bot.entity.position.x;
     const pz = bot.entity.position.z;
     const bearing = Math.atan2(target.z - pz, target.x - px);
@@ -145,6 +146,12 @@ export async function marchToward(
     // answering "No path to the goal!" instantly, the fifty-block fallbacks
     // included. A twenty-block hop is the shortest step that still makes
     // progress, and it is the one a walker would take along broken ground.
+    // Run 721: the diagnostic named the obstacle. Mason stood at Nether
+    // (143, 43, -46) on a dirt ledge with lava at y=31 two, five, ten,
+    // twenty and forty blocks ahead: a lava sea across the bearing. Every
+    // forward hop is correctly refused, and the slanted ones still head
+    // into it. The last two legs run along the shore instead, ninety
+    // degrees to either side, which is how a walker finds the way round.
     const tries: Array<[number, number, number]> = [
       [100, 0, 45_000],
       [50, 0, 30_000],
@@ -153,6 +160,8 @@ export async function marchToward(
       [20, 0, 20_000],
       [20, 0.9, 20_000],
       [20, -0.9, 20_000],
+      [60, Math.PI / 2, 30_000],
+      [60, -Math.PI / 2, 30_000],
     ];
     for (const [len, slant, budget] of tries) {
       if (signal.aborted || Date.now() >= until) break;
@@ -180,9 +189,12 @@ export async function marchToward(
       }
       if (ok || before - gap() >= 8) break;
     }
-    if (before - gap() < 8) {
+    // A shore walk gains nothing toward the target and is still progress,
+    // so count movement, not distance closed. Six such legs end the march.
+    const moved = bot.entity.position.distanceTo(startOfLeg);
+    if (before - gap() < 8 && moved < 5) {
       logMarchStall(bot, target);
-      if (++guard >= 3) break;
+      if (++guard >= 6) break;
     } else guard = 0;
   }
   return gap();
