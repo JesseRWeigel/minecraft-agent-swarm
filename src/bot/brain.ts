@@ -2472,10 +2472,19 @@ export class BotBrain {
         this.lastFortressGateLogMs = Date.now();
         this.log.info(
           "Brain",
-          `[FortressGate] cooled=${cooledFort} day=${todFort < 11000}(${todFort}) nearStash=${nearStashFort} armour=${this.wornArmorCount()}/2 food=${this.bot.food}/8 health=${this.bot.health.toFixed(0)}/14`,
+          `[FortressGate] cooled=${cooledFort} day=${todFort < 11000}(${todFort}) nearStash=${nearStashFort} armour=${this.wornArmorCount()}/2 gold=${[5, 6, 7, 8].some((i) => this.bot.inventory.slots[i]?.name.startsWith("golden_"))} food=${this.bot.food}/8 health=${this.bot.health.toFixed(0)}/14`,
         );
       }
-      if (!fortDone && cooledFort && todFort < 11000 && nearStashFort && this.wornArmorCount() >= 2 && fitForNether) {
+      // The two-piece rule was written when a naked bot walked into piglins.
+      // Gold is what answers piglins now, and the preflight wears a piece
+      // before it crosses. What actually kills Mason out there is the
+      // ground: of his eleven Nether deaths in the last day, ten are lava
+      // and one is a mob, and armour does nothing about lava. So a worn gold
+      // piece counts, and the bar is two pieces or gold plus one.
+      const armourFort = this.wornArmorCount();
+      const goldWorn = [5, 6, 7, 8].some((i) => this.bot.inventory.slots[i]?.name.startsWith("golden_"));
+      const armouredEnough = armourFort >= 2 || (goldWorn && armourFort >= 1);
+      if (!fortDone && cooledFort && todFort < 11000 && nearStashFort && armouredEnough && fitForNether) {
         this.lastFortressMs = Date.now();
         this.log.info("Brain", "OVERRIDE: the brewing branch waits on a fortress — running find_fortress");
         this.events.onThought("Somewhere out in that red haze stands a fortress. Today I go look.");
