@@ -488,9 +488,28 @@ export const escapeToSurfaceSkill: Skill = {
       // turn instead. Four wet turns in a row means boxed in by water.
       if (wouldFlood(bot, f.x, f.y, f.z, dx, dz)) {
         wetTurns++;
+        // Run 737: the guard counts lava now, and this message still said
+        // "water", which made a molten pocket read as a wet one in the log.
+        // Name what is actually there, and where.
+        const lavaHere = !!bot.findBlock({
+          matching: (b) => b.name === "lava" || b.name === "flowing_lava",
+          maxDistance: 4,
+        });
         console.log(
-          `[Escape] ${bot.username}: water beside the stair toward (${dx}, ${dz}) at y=${f.y}; turning (${wetTurns}/4)`,
+          `[Escape] ${bot.username}: ${lavaHere ? "LAVA" : "water"} beside the stair toward (${dx}, ${dz}) at ${f.x},${f.y},${f.z}; turning (${wetTurns}/4)`,
         );
+        // A wet pocket is survivable and a molten one is not: run 737 killed
+        // Mason four times carving out of the portal chamber, every death
+        // "tried to swim in lava". Tunnelling three blocks level to find
+        // drier ground is what a bot should do beside water; beside lava it
+        // is how the lake gets opened. Stop and let the march walk instead.
+        if (lavaHere && wetTurns >= 2) {
+          bot.removeListener("death", onDeath);
+          return {
+            success: false,
+            message: `Lava pocket beside the stair at ${f.x},${f.y},${f.z}; stopped carving rather than opening it.`,
+          };
+        }
         dirIdx = (dirIdx + 1) % dirs.length;
         stallCount = 0;
         if (wetTurns >= 4) {
