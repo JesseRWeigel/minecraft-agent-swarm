@@ -140,7 +140,10 @@ export const findFortressSkill: Skill = {
       // Piglins leave a player alone who wears any one gold piece, and the
       // stash holds a pair of golden boots from the bastion trip. Wear gold
       // before crossing, fetching the boots from the stash when needed.
-      const { wearGoldForPiglins } = await import("./piglin-gold.js");
+      const { wearGoldForPiglins, armourUpForNether } = await import("./piglin-gold.js");
+      // Hoglins ignore gold, and three of them killed Mason in one hour
+      // while he crossed in boots and nothing else. Put a set on first.
+      await armourUpForNether(bot, "Fortress", (m) => step(m, 0.04)).catch(() => 0);
       if (!(await wearGoldForPiglins(bot, "Fortress", (m) => step(m, 0.05)))) {
         return {
           success: false,

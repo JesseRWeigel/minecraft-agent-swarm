@@ -129,3 +129,62 @@ export async function wearGoldForPiglins(bot: Bot, tag: string, onStep?: (msg: s
   }
   return wornGold(bot);
 }
+
+/**
+ * Run 733: hoglins killed Mason three times in one hour on the Nether route,
+ * and his armour line read "-,-,-,golden_boots" every time. Gold answers
+ * piglins and nothing else, so a trip past the portal needs real armour.
+ * The stash holds raw iron the miner brought home, which is a furnace and a
+ * crafting table away from a set. Best effort, before the crossing.
+ */
+export async function armourUpForNether(bot: Bot, tag: string, onStep?: (msg: string) => void): Promise<number> {
+  const worn = () => [5, 6, 7, 8].filter((i) => !!bot.inventory.slots[i]).length;
+  if (worn() >= 3) return worn();
+  const { withdrawStash } = await import("./stash.js");
+  const { STASH_POS } = await import("../bot/role.js");
+  const { craftPiece } = await import("./craft-gear.js");
+  const mcDataLoader = (await import("minecraft-data")).default;
+  const mcData = mcDataLoader(bot.version);
+  const count = (n: string) =>
+    bot.inventory
+      .items()
+      .filter((i) => i.name === n)
+      .reduce((a, i) => a + i.count, 0);
+
+  // helmet 5, chestplate 8, leggings 7, boots 4; feet are usually the gold.
+  const wanted: Array<[string, number, "head" | "torso" | "legs"]> = [
+    ["iron_chestplate", 8, "torso"],
+    ["iron_helmet", 5, "head"],
+    ["iron_leggings", 7, "legs"],
+  ];
+  for (const [piece, cost, dest] of wanted) {
+    if (worn() >= 3) break;
+    let have = bot.inventory.items().find((i) => i.name === piece);
+    if (!have) {
+      if (count("iron_ingot") < cost) {
+        const short = cost - count("iron_ingot");
+        await withdrawStash(bot, STASH_POS, "iron_ingot", short, 45_000).catch(() => {});
+      }
+      if (count("iron_ingot") < cost && count("raw_iron") + count("iron_ingot") < cost) {
+        await withdrawStash(bot, STASH_POS, "raw_iron", cost - count("iron_ingot"), 45_000).catch(() => {});
+      }
+      if (count("iron_ingot") < cost && count("raw_iron") > 0) {
+        onStep?.(`Smelting raw iron for ${piece}...`);
+        const { smeltOresSkill } = await import("./smelt-ores.js");
+        await smeltOresSkill
+          .execute(bot, { stashPos: STASH_POS }, new AbortController().signal, () => {})
+          .catch(() => ({}));
+      }
+      if (count("iron_ingot") >= cost) {
+        onStep?.(`Forging ${piece}...`);
+        await craftPiece(bot, mcData, piece, []).catch(() => false);
+        have = bot.inventory.items().find((i) => i.name === piece);
+      }
+    }
+    if (have) await bot.equip(have, dest).catch(() => {});
+  }
+  console.log(
+    `[${tag}] ${bot.username}: armour before the crossing -> ${worn()} pieces worn (iron ingots ${count("iron_ingot")}, raw ${count("raw_iron")})`,
+  );
+  return worn();
+}
