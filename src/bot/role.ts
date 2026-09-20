@@ -259,7 +259,24 @@ export const MASON_CONFIG: BotRoleConfig = {
   // mine_block + the mining skills arrived with the ore-hauler trade: the
   // first specialist hour handed Mason a mission the action gate would not
   // let him execute — no strip_mine, no craft_gear, not even mine_block.
-  allowedActions: ["go_to", "place_block", "craft", "gather_wood", "mine_block", "eat", "sleep", "chat", "flee"],
+  // Run 735: Mason is the one bot sent into the Nether, and he could not
+  // swing at anything there. Four deaths an hour to hoglins and zombified
+  // piglins, every one ending in lava because fleeing was his only answer,
+  // and 0 attacks in the run because the action is not his to use. The
+  // miner got "attack" on 2026-09-17 for exactly this and his deaths fell
+  // from six an hour to two. The builder gets it for the same reason.
+  allowedActions: [
+    "go_to",
+    "place_block",
+    "craft",
+    "gather_wood",
+    "mine_block",
+    "eat",
+    "sleep",
+    "chat",
+    "flee",
+    "attack",
+  ],
   allowedSkills: [
     "build_house",
     "build_bridge",

@@ -183,8 +183,16 @@ export async function armourUpForNether(bot: Bot, tag: string, onStep?: (msg: st
     }
     if (have) await bot.equip(have, dest).catch(() => {});
   }
+  // Armour without a weapon still loses the fight: he had none all run.
+  if (!bot.inventory.items().some((i) => i.name.endsWith("_sword"))) {
+    onStep?.("Forging a sword for the crossing...");
+    for (const blade of ["iron_sword", "stone_sword"]) {
+      const made = await craftPiece(bot, mcData, blade, []).catch(() => false);
+      if (made) break;
+    }
+  }
   console.log(
-    `[${tag}] ${bot.username}: armour before the crossing -> ${worn()} pieces worn (iron ingots ${count("iron_ingot")}, raw ${count("raw_iron")})`,
+    `[${tag}] ${bot.username}: armour before the crossing -> ${worn()} pieces worn (iron ingots ${count("iron_ingot")}, raw ${count("raw_iron")}), sword=${bot.inventory.items().some((i) => i.name.endsWith("_sword"))}`,
   );
   return worn();
 }
