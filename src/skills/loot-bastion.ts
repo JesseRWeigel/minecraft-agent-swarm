@@ -3,6 +3,7 @@ import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
 import { baseMoves, safeGoto } from "../bot/navigation.js";
+import { Vec3 } from "vec3";
 
 /**
  * loot_bastion — Those Were the Days (nether/loot_bastion), which fires the
@@ -64,6 +65,46 @@ async function eatOnTheMarch(bot: Bot): Promise<void> {
  * a shorter hop and a slant to either side of the bearing before it counts
  * as dry; three dry legs end the march.
  */
+/**
+ * Run 720: every leg of four separate marches failed instantly at the same
+ * spot, 394 blocks from the target, and the logs carried no position, so
+ * there was nothing to reason from. Record where the bot stands, what is
+ * under and around it, and the shape of the ground toward the target.
+ */
+function logMarchStall(bot: Bot, target: { x: number; z: number; y?: number }): void {
+  try {
+    const p = bot.entity.position;
+    const name = (dx: number, dy: number, dz: number) => bot.blockAt(p.offset(dx, dy, dz))?.name ?? "unloaded";
+    const bearing = Math.atan2(target.z - p.z, target.x - p.x);
+    const fx = Math.cos(bearing);
+    const fz = Math.sin(bearing);
+    const ahead: string[] = [];
+    for (const d of [2, 5, 10, 20, 40]) {
+      const x = Math.round(p.x + fx * d);
+      const z = Math.round(p.z + fz * d);
+      let floorY: number | null = null;
+      let floorName = "void";
+      for (let y = Math.round(p.y) + 4; y >= Math.round(p.y) - 20; y--) {
+        const b = bot.blockAt(new Vec3(x, y, z));
+        if (!b) continue;
+        if (b.boundingBox === "block" || b.name === "lava") {
+          floorY = y;
+          floorName = b.name;
+          break;
+        }
+      }
+      ahead.push(`${d}:${floorY === null ? "?" : floorY}/${floorName}`);
+    }
+    console.log(
+      `[MarchStall] ${bot.username}: at ${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)} gap=${Math.hypot(p.x - target.x, p.z - target.z).toFixed(0)} ` +
+        `feet=${name(0, 0, 0)} head=${name(0, 1, 0)} floor=${name(0, -1, 0)} ahead=${ahead.join(" ")} picks=${bot.inventory.items().filter((i) => /_pickaxe$/.test(i.name)).length} ` +
+        `canDig=${(bot.pathfinder.movements as unknown as { canDig: boolean }).canDig} scaffold=${(bot.pathfinder.movements as unknown as { scafoldingBlocks: number[] }).scafoldingBlocks.length}`,
+    );
+  } catch (e) {
+    console.log(`[MarchStall] ${bot.username}: read failed: ${String(e).slice(0, 80)}`);
+  }
+}
+
 export async function marchToward(
   bot: Bot,
   target: { x: number; z: number; y?: number },
@@ -100,11 +141,18 @@ export async function marchToward(
     const px = bot.entity.position.x;
     const pz = bot.entity.position.z;
     const bearing = Math.atan2(target.z - pz, target.x - px);
+    // Run 720: four marches stalled at exactly 394 blocks out, every leg
+    // answering "No path to the goal!" instantly, the fifty-block fallbacks
+    // included. A twenty-block hop is the shortest step that still makes
+    // progress, and it is the one a walker would take along broken ground.
     const tries: Array<[number, number, number]> = [
       [100, 0, 45_000],
       [50, 0, 30_000],
       [50, 0.7, 30_000],
       [50, -0.7, 30_000],
+      [20, 0, 20_000],
+      [20, 0.9, 20_000],
+      [20, -0.9, 20_000],
     ];
     for (const [len, slant, budget] of tries) {
       if (signal.aborted || Date.now() >= until) break;
@@ -132,8 +180,10 @@ export async function marchToward(
       }
       if (ok || before - gap() >= 8) break;
     }
-    if (before - gap() < 8 && ++guard >= 3) break;
-    else if (before - gap() >= 8) guard = 0;
+    if (before - gap() < 8) {
+      logMarchStall(bot, target);
+      if (++guard >= 3) break;
+    } else guard = 0;
   }
   return gap();
 }
