@@ -114,7 +114,8 @@ export async function marchToward(
 ): Promise<number> {
   const gap = () => Math.hypot(bot.entity.position.x - target.x, bot.entity.position.z - target.z);
   const until = Date.now() + budgetMs;
-  let guard = 0;
+  let bestGap = gap();
+  let stalledLegs = 0;
   // The march's movement profile, settled by three measured runs against the
   // same 490-block route to the fortress sighting.
   //   715  towers on,  three-block drop : reached 39 blocks out
@@ -197,7 +198,7 @@ export async function marchToward(
     // through, in runs 714 and 715, walked the deck above it at y=64 and
     // y=54. When every lateral leg fails, climb and try again from up
     // there; the march carries scaffolding and is allowed to tower.
-    if (gap() > 40 && bot.entity.position.distanceTo(startOfLeg) < 5) {
+    if (gap() > 40 && stalledLegs >= 2) {
       // Run 724: the first climb aimed fourteen blocks straight up and
       // failed, because the cavern roof is at y=60 and that goal sat inside
       // it. Look for a real perch instead: a block with two open cells above
@@ -240,13 +241,23 @@ export async function marchToward(
       }
     }
 
-    // A shore walk gains nothing toward the target and is still progress,
-    // so count movement, not distance closed. Six such legs end the march.
-    const moved = bot.entity.position.distanceTo(startOfLeg);
-    if (before - gap() < 8 && moved < 5) {
-      logMarchStall(bot, target);
-      if (++guard >= 6) break;
-    } else guard = 0;
+    // Run 725: counting movement instead of distance closed hid the stall
+    // completely. The shore hops move the bot more than five blocks every
+    // leg, so neither the climb nor the diagnostic ever fired while the
+    // march wandered the same lake edge for its whole budget. What counts
+    // is the closest the march has ever been: a leg that fails to beat it
+    // by eight blocks is a stalled leg, however far the bot walked.
+    void before;
+    void startOfLeg;
+    const now = gap();
+    if (now <= bestGap - 8) {
+      bestGap = now;
+      stalledLegs = 0;
+    } else {
+      stalledLegs++;
+      if (stalledLegs === 2 || stalledLegs === 5) logMarchStall(bot, target);
+      if (stalledLegs >= 6) break;
+    }
   }
   return gap();
 }
