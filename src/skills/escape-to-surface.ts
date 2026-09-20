@@ -237,7 +237,16 @@ export function isBuried(
  */
 function inWater(bot: Bot): boolean {
   const b = bot.blockAt(bot.entity.position);
-  return !!b && (b.name === "water" || b.name === "flowing_water" || b.name === "bubble_column");
+  // Lava counts too: the Nether has no water and the same shaft logic must
+  // back away from a molten pocket (run 736).
+  return (
+    !!b &&
+    (b.name === "water" ||
+      b.name === "flowing_water" ||
+      b.name === "bubble_column" ||
+      b.name === "lava" ||
+      b.name === "flowing_lava")
+  );
 }
 
 /** True when carving the next stair step toward (dx, dz) from feet (x, y, z)
@@ -251,10 +260,22 @@ function wouldFlood(bot: Bot, x: number, y: number, z: number, dx: number, dz: n
     [x, y + 2, z],
     [x + dx, y, z + dz],
   ];
-  const isWater = (bx: number, by: number, bz: number) => {
+  // Run 736: this guard knew only water, and Mason carved three staircases
+  // in the Nether that ended "tried to swim in lava" at y=70. Up there the
+  // pocket the stair opens is lava, and it pours down the shaft it just
+  // cut. A fluid is a fluid; treat lava the same and turn away from it.
+  const isFluid = (bx: number, by: number, bz: number) => {
     const b = bot.blockAt(new Vec3(bx, by, bz));
-    return !!b && (b.name === "water" || b.name === "flowing_water" || b.name === "bubble_column");
+    return (
+      !!b &&
+      (b.name === "water" ||
+        b.name === "flowing_water" ||
+        b.name === "bubble_column" ||
+        b.name === "lava" ||
+        b.name === "flowing_lava")
+    );
   };
+  const isWater = isFluid;
   const sides: [number, number, number][] = [
     [1, 0, 0],
     [-1, 0, 0],
@@ -269,8 +290,8 @@ function wouldFlood(bot: Bot, x: number, y: number, z: number, dx: number, dz: n
   return false;
 }
 
-/** The horizontal direction with the fewest water blocks within three of
- *  the cell it leads to, for backing away from a flooded pocket. */
+/** The horizontal direction with the fewest fluid blocks within three of
+ *  the cell it leads to, for backing away from a flooded or molten pocket. */
 function driestDirection(bot: Bot, x: number, y: number, z: number, dirs: [number, number][]): [number, number] {
   let best: [number, number] = dirs[0];
   let bestWet = Infinity;
