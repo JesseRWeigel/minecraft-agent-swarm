@@ -307,6 +307,7 @@ export class BotBrain {
   private lastSleepRefusedMs = 0;
   private lastGoldBankMs = 0;
   private lastFortressMs = 0;
+  private lastFortressGateLogMs = 0;
   private lastPortalRelightMs = 0;
   private lastNetherReturnMs = 0;
   private lastBiomeRoamMs = 0;
@@ -2449,7 +2450,14 @@ export class BotBrain {
       // lottery ticket (accidental explore advancements, a stray fortress
       // edge) is worth keeping; a fast cadence is not. The real fortress fix
       // is a second portal in fresh territory, a deliberate future build.
-      const cooledFort = Date.now() - this.lastFortressMs > 2_700_000;
+      // 45 min -> 15. That cooldown was set when a trip was pure death tax
+      // with nothing learned. A trip now supplies its own gold, carries a
+      // pickaxe and meals, marches in waypoints and reports where it stops,
+      // and the death spots it leaves are capped. Over the last eight hours
+      // the gates allowed one attempt an hour at best and several hours had
+      // none, so the rate of learning is what limits this, and the deaths it
+      // costs are bounded.
+      const cooledFort = Date.now() - this.lastFortressMs > 900_000;
       const todFort = this.bot.time?.timeOfDay ?? 0;
       const spFort = this.roleConfig.stashPos;
       const nearStashFort =
@@ -2457,6 +2465,16 @@ export class BotBrain {
       // Run 661: Mason went to the Nether at 0 hunger four times today and
       // died there each time. A fortress trip needs a fed, healthy bot.
       const fitForNether = this.bot.food >= 8 && this.bot.health >= 14;
+      // Run 731 made no attempt at all and reading why took an RCON dig
+      // through armour slots, hunger and the clock. Say it in the log, once
+      // every five minutes, so a refused trip explains itself.
+      if (!fortDone && Date.now() - this.lastFortressGateLogMs > 300_000) {
+        this.lastFortressGateLogMs = Date.now();
+        this.log.info(
+          "Brain",
+          `[FortressGate] cooled=${cooledFort} day=${todFort < 11000}(${todFort}) nearStash=${nearStashFort} armour=${this.wornArmorCount()}/2 food=${this.bot.food}/8 health=${this.bot.health.toFixed(0)}/14`,
+        );
+      }
       if (!fortDone && cooledFort && todFort < 11000 && nearStashFort && this.wornArmorCount() >= 2 && fitForNether) {
         this.lastFortressMs = Date.now();
         this.log.info("Brain", "OVERRIDE: the brewing branch waits on a fortress — running find_fortress");
