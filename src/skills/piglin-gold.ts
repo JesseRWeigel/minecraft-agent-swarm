@@ -67,8 +67,38 @@ export async function wearGoldForPiglins(bot: Bot, tag: string, onStep?: (msg: s
         const ok = await craftPiece(bot, mcDataLoader(bot.version), "golden_boots", []).catch(() => false);
         console.log(`[${tag}] ${bot.username}: golden boots forge ${ok ? "done" : "failed"} (ingots left ${ingots()})`);
         gold = bot.inventory.items().find((i) => GOLD_PIECE.test(i.name));
-      } else {
-        console.log(`[${tag}] ${bot.username}: no golden boots and only ${ingots()} gold ingots reachable`);
+      }
+      if (ingots() < 4) {
+        // Run 728: four trips in a row ended here with "only 2 gold ingots
+        // reachable" while six raw gold sat in the stash. Gold armour wears
+        // out in the Nether, so every trip spends a pair of boots and the
+        // ingot pile runs down. Raw gold becomes ingots in a furnace, and
+        // smelt_ores already withdraws ore from the stash and smelts it.
+        const { stashCount } = await import("./stash-ledger.js");
+        const { STASH_POS: SP } = await import("../bot/role.js");
+        const rawBanked = stashCount("raw_gold", SP.y);
+        if (rawBanked > 0) {
+          onStep?.("Smelting raw gold for boots...");
+          const { smeltOresSkill } = await import("./smelt-ores.js");
+          const r = await smeltOresSkill
+            .execute(bot, {}, new AbortController().signal, () => {})
+            .catch((e: Error) => ({ message: String(e).slice(0, 70) }));
+          console.log(
+            `[${tag}] ${bot.username}: smelting ${rawBanked} raw_gold -> ${String(r.message).slice(0, 70)} (ingots now ${ingots()})`,
+          );
+        }
+      }
+      if (ingots() >= 4) {
+        onStep?.("Forging golden boots from smelted gold...");
+        const { craftPiece: craftAgain } = await import("./craft-gear.js");
+        const mcd2 = (await import("minecraft-data")).default;
+        await craftAgain(bot, mcd2(bot.version), "golden_boots", []).catch(() => false);
+        gold = bot.inventory.items().find((i) => GOLD_PIECE.test(i.name));
+      }
+      if (!gold) {
+        console.log(
+          `[${tag}] ${bot.username}: no golden boots and only ${ingots()} gold ingots reachable (raw gold in the stash is the next source)`,
+        );
       }
     }
   }
