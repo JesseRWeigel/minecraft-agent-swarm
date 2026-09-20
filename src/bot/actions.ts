@@ -1826,6 +1826,26 @@ async function flee(bot: Bot): Promise<string> {
       if (!ground || ground.boundingBox !== "block") continue;
       if (ground.name === "lava" || feet?.name === "lava") continue;
       if (!feet || feet.name !== "air" || !head || head.name !== "air") continue;
+      // Run 734: Mason died "tried to swim in lava to escape Hoglin" three
+      // times in one hour. The landing spot was checked for lava and the
+      // ground between was not, and in the Nether the ground between is
+      // often a lake. Sample the straight line and refuse a run across it.
+      let crossesLava = false;
+      const stepsTo = Math.max(2, Math.round(bot.entity.position.distanceTo(base) / 3));
+      for (let k = 1; k <= stepsTo && !crossesLava; k++) {
+        const t = k / stepsTo;
+        const px = Math.round(bot.entity.position.x + (base.x - bot.entity.position.x) * t);
+        const pz = Math.round(bot.entity.position.z + (base.z - bot.entity.position.z) * t);
+        for (let dy = 1; dy >= -3; dy--) {
+          const b = bot.blockAt(new Vec3(px, Math.round(base.y) + dy, pz));
+          if (b?.name === "lava") {
+            crossesLava = true;
+            break;
+          }
+          if (b?.boundingBox === "block") break;
+        }
+      }
+      if (crossesLava) continue;
       spot = base;
       break;
     }
@@ -1849,6 +1869,15 @@ async function flee(bot: Bot): Promise<string> {
   // Tunnel out instead. The bots carry pickaxes, this is what a player does
   // when cornered underground, and it needs no action the roles do not already
   // have — which matters for Forge, whose role has no attack at all.
+  // In the Nether that tunnel is its own hazard: netherrack hides lava, and
+  // a bot digging blind beside a lake opens it onto itself. Stand and fight
+  // there instead of cutting into the wall.
+  if (String(bot.game?.dimension ?? "").includes("nether")) {
+    const lavaNear = bot.findBlock({ matching: (b) => b.name === "lava", maxDistance: 8 });
+    if (lavaNear) {
+      return `Cornered by ${hostile.name || "danger"} with lava ${Math.round(bot.entity.position.distanceTo(lavaNear.position))} blocks away — holding ground instead of digging into it.`;
+    }
+  }
   try {
     const digAway = baseMoves(bot);
     digAway.canDig = true;
