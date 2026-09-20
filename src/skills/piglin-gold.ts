@@ -79,12 +79,24 @@ export async function wearGoldForPiglins(bot: Bot, tag: string, onStep?: (msg: s
         const rawBanked = stashCount("raw_gold", SP.y);
         if (rawBanked > 0) {
           onStep?.("Smelting raw gold for boots...");
+          // Run 729: the smelting skill answered "Nothing to smelt" with six
+          // raw gold banked, because its whole stash-withdrawal step is
+          // skipped unless a stash position is passed in, and the call gave
+          // it none. Take the gold out first, so the skill smelts THAT
+          // rather than whichever ore its own loop reaches first, and hand
+          // it the stash so it can fetch its own fuel.
+          const rawHeld = () =>
+            bot.inventory
+              .items()
+              .filter((i) => i.name === "raw_gold")
+              .reduce((n, i) => n + i.count, 0);
+          if (rawHeld() < 4) await withdrawStash(bot, STASH_POS, "raw_gold", 4 - rawHeld(), 60_000).catch(() => {});
           const { smeltOresSkill } = await import("./smelt-ores.js");
           const r = await smeltOresSkill
-            .execute(bot, {}, new AbortController().signal, () => {})
+            .execute(bot, { stashPos: SP }, new AbortController().signal, () => {})
             .catch((e: Error) => ({ message: String(e).slice(0, 70) }));
           console.log(
-            `[${tag}] ${bot.username}: smelting ${rawBanked} raw_gold -> ${String(r.message).slice(0, 70)} (ingots now ${ingots()})`,
+            `[${tag}] ${bot.username}: smelting raw_gold (banked ${rawBanked}, aboard ${rawHeld()}) -> ${String(r.message).slice(0, 70)} (ingots now ${ingots()})`,
           );
         }
       }
