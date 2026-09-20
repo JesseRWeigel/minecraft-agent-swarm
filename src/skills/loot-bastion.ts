@@ -162,7 +162,14 @@ export async function marchToward(
     o.step(`${o.label} — ${Math.round(g)} blocks out...`, o.progress(g));
     const before = gap();
     const startOfLeg = bot.entity.position.clone();
-    if (gap() > 40 && (stalledLegs >= 2 || lavaAhead(bot, target))) {
+    // Run 738: the carve now stops safely beside lava instead of opening it,
+    // and it leaves the bot where it stopped: Mason sat at y=27, four blocks
+    // under the surface of the lake and twenty-five below the bricks. A
+    // march that starts that far down spends its budget in caverns. Climbing
+    // back to route height is the same problem the perch search already
+    // solves, so run it when the bot is well below the target as well.
+    const tooLow = target.y !== undefined && bot.entity.position.y < target.y - 8;
+    if (gap() > 40 && (stalledLegs >= 2 || lavaAhead(bot, target) || tooLow)) {
       // Run 724: the first climb aimed fourteen blocks straight up and
       // failed, because the cavern roof is at y=60 and that goal sat inside
       // it. Look for a real perch instead: a block with two open cells above
@@ -200,11 +207,11 @@ export async function marchToward(
           .catch(() => false);
         stillStuck = !climbed;
         console.log(
-          `[Bastion] ${bot.username}: blocked at y=${p.y} (${stalledLegs} stalled legs, lavaAhead=${lavaAhead(bot, target)}), climbing to the perch at ${perch.x},${perch.y},${perch.z} -> ${climbed ? `now y=${bot.entity.position.y.toFixed(0)}` : "failed"}`,
+          `[Bastion] ${bot.username}: at y=${p.y} (${stalledLegs} stalled legs, lavaAhead=${lavaAhead(bot, target)}, tooLow=${tooLow}), climbing to the perch at ${perch.x},${perch.y},${perch.z} -> ${climbed ? `now y=${bot.entity.position.y.toFixed(0)}` : "failed"}`,
         );
       } else {
         console.log(
-          `[Bastion] ${bot.username}: blocked at y=${p.y} (${stalledLegs} stalled legs, lavaAhead=${lavaAhead(bot, target)}) and no perch within 24 up`,
+          `[Bastion] ${bot.username}: at y=${p.y} (${stalledLegs} stalled legs, lavaAhead=${lavaAhead(bot, target)}, tooLow=${tooLow}) and no perch within 24 up`,
         );
       }
       // Run 730: the march stalled at the portal exit (51, 42, -56) with
