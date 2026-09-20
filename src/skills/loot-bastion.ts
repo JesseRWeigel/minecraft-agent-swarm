@@ -105,6 +105,27 @@ function logMarchStall(bot: Bot, target: { x: number; z: number; y?: number }): 
   }
 }
 
+/** Floor material a few steps along the bearing: the reason to climb. */
+function lavaAhead(bot: Bot, target: { x: number; z: number }): boolean {
+  try {
+    const p = bot.entity.position;
+    const bearing = Math.atan2(target.z - p.z, target.x - p.x);
+    for (const d of [3, 6, 10]) {
+      const x = Math.round(p.x + Math.cos(bearing) * d);
+      const z = Math.round(p.z + Math.sin(bearing) * d);
+      for (let y = Math.round(p.y) + 2; y >= Math.round(p.y) - 16; y--) {
+        const b = bot.blockAt(new Vec3(x, y, z));
+        if (!b) continue;
+        if (b.name === "lava") return true;
+        if (b.boundingBox === "block") break;
+      }
+    }
+  } catch {
+    /* no opinion */
+  }
+  return false;
+}
+
 export async function marchToward(
   bot: Bot,
   target: { x: number; z: number; y?: number },
@@ -140,6 +161,51 @@ export async function marchToward(
     o.step(`${o.label} — ${Math.round(g)} blocks out...`, o.progress(g));
     const before = gap();
     const startOfLeg = bot.entity.position.clone();
+    if (gap() > 40 && (stalledLegs >= 2 || lavaAhead(bot, target))) {
+      // Run 724: the first climb aimed fourteen blocks straight up and
+      // failed, because the cavern roof is at y=60 and that goal sat inside
+      // it. Look for a real perch instead: a block with two open cells above
+      // it, within twenty-four blocks up and six to the side, nearest first.
+      const p = bot.entity.position.floored();
+      const open = (v: Vec3) => {
+        const n = bot.blockAt(v)?.name;
+        return n === "air" || n === "cave_air" || n === "nether_portal";
+      };
+      const solid = (v: Vec3) => bot.blockAt(v)?.boundingBox === "block";
+      let perch: Vec3 | null = null;
+      for (let dy = 3; dy <= 24 && !perch; dy++) {
+        for (const [dx, dz] of [
+          [0, 0],
+          [3, 0],
+          [-3, 0],
+          [0, 3],
+          [0, -3],
+          [6, 0],
+          [-6, 0],
+          [0, 6],
+          [0, -6],
+        ]) {
+          const foot = new Vec3(p.x + dx, p.y + dy, p.z + dz);
+          if (open(foot) && open(foot.offset(0, 1, 0)) && solid(foot.offset(0, -1, 0))) {
+            perch = foot;
+            break;
+          }
+        }
+      }
+      if (perch) {
+        const climbed = await safeGoto(bot, new goals.GoalBlock(perch.x, perch.y, perch.z), 30_000)
+          .then(() => true)
+          .catch(() => false);
+        console.log(
+          `[Bastion] ${bot.username}: blocked at y=${p.y} (${stalledLegs} stalled legs, lavaAhead=${lavaAhead(bot, target)}), climbing to the perch at ${perch.x},${perch.y},${perch.z} -> ${climbed ? `now y=${bot.entity.position.y.toFixed(0)}` : "failed"}`,
+        );
+      } else {
+        console.log(
+          `[Bastion] ${bot.username}: blocked at y=${p.y} (${stalledLegs} stalled legs, lavaAhead=${lavaAhead(bot, target)}) and no perch within 24 up`,
+        );
+      }
+    }
+
     const px = bot.entity.position.x;
     const pz = bot.entity.position.z;
     const bearing = Math.atan2(target.z - pz, target.x - px);
@@ -198,49 +264,6 @@ export async function marchToward(
     // through, in runs 714 and 715, walked the deck above it at y=64 and
     // y=54. When every lateral leg fails, climb and try again from up
     // there; the march carries scaffolding and is allowed to tower.
-    if (gap() > 40 && stalledLegs >= 2) {
-      // Run 724: the first climb aimed fourteen blocks straight up and
-      // failed, because the cavern roof is at y=60 and that goal sat inside
-      // it. Look for a real perch instead: a block with two open cells above
-      // it, within twenty-four blocks up and six to the side, nearest first.
-      const p = bot.entity.position.floored();
-      const open = (v: Vec3) => {
-        const n = bot.blockAt(v)?.name;
-        return n === "air" || n === "cave_air" || n === "nether_portal";
-      };
-      const solid = (v: Vec3) => bot.blockAt(v)?.boundingBox === "block";
-      let perch: Vec3 | null = null;
-      for (let dy = 3; dy <= 24 && !perch; dy++) {
-        for (const [dx, dz] of [
-          [0, 0],
-          [3, 0],
-          [-3, 0],
-          [0, 3],
-          [0, -3],
-          [6, 0],
-          [-6, 0],
-          [0, 6],
-          [0, -6],
-        ]) {
-          const foot = new Vec3(p.x + dx, p.y + dy, p.z + dz);
-          if (open(foot) && open(foot.offset(0, 1, 0)) && solid(foot.offset(0, -1, 0))) {
-            perch = foot;
-            break;
-          }
-        }
-      }
-      if (perch) {
-        const climbed = await safeGoto(bot, new goals.GoalBlock(perch.x, perch.y, perch.z), 30_000)
-          .then(() => true)
-          .catch(() => false);
-        console.log(
-          `[Bastion] ${bot.username}: blocked at y=${p.y} with lava ahead, climbing to the perch at ${perch.x},${perch.y},${perch.z} -> ${climbed ? `now y=${bot.entity.position.y.toFixed(0)}` : "failed"}`,
-        );
-      } else {
-        console.log(`[Bastion] ${bot.username}: blocked at y=${p.y} with lava ahead and no perch within 24 up`);
-      }
-    }
-
     // Run 725: counting movement instead of distance closed hid the stall
     // completely. The shore hops move the bot more than five blocks every
     // leg, so neither the climb nor the diagnostic ever fired while the
