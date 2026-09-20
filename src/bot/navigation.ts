@@ -181,6 +181,23 @@ export function baseMoves(bot: Bot): InstanceType<typeof Movements> {
     )
       recentDeaths.push(d);
   }
+  // Run 722: a zone costs 80 a step, and Mason died fifteen times inside one
+  // Nether corridor, so sixteen of the twenty-three live zones landed in a
+  // single twenty-block bucket at x=140 and walled off the one ledge route
+  // that runs 714 and 715 had marched to the fortress. Dying once priced the
+  // route, the next route was worse, and that killed him again. Keep the
+  // signal and bound it: merge spots that sit within eight blocks of one
+  // already kept, newest first, and carry at most ten.
+  recentDeaths.sort((a, b) => Date.parse(b.timestamp ?? "") - Date.parse(a.timestamp ?? ""));
+  const kept: typeof recentDeaths = [];
+  for (const d of recentDeaths) {
+    if (kept.length >= 10) break;
+    if (kept.some((k) => Math.abs(k.y - d.y) <= 8 && Math.hypot(k.x - d.x, k.z - d.z) <= 8)) continue;
+    kept.push(d);
+  }
+  recentDeaths.length = 0;
+  recentDeaths.push(...kept);
+
   const deathZone = (b: { position?: Vec3 }) => {
     const p = b.position;
     if (!p || recentDeaths.length === 0) return 0;
