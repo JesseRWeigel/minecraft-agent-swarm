@@ -343,6 +343,42 @@ export function driestDirection(
   return best;
 }
 
+/** Is the bot standing in the cell it just dug? Centres, so half a block is home. */
+export function arrivedInCell(px: number, pz: number, cx: number, cz: number, tolerance = 0.4): boolean {
+  return Math.hypot(px - (cx + 0.5), pz - (cz + 0.5)) <= tolerance;
+}
+
+/**
+ * Walk into one dug cell and stop there.
+ *
+ * Holding forward for a fixed 700ms covers about three blocks at walking
+ * speed, so a one-block step ran the bot straight through the cell it had
+ * cleared and into the rock beyond it. Run 755 suffocated four bots in a wall,
+ * against none in the three runs before, when the hand tunnel went from six
+ * blocks a climb to eight at a time. Watch the position and release the key on
+ * arrival, so the corridor is walked one cell per dig.
+ */
+async function stepIntoCell(bot: Bot, cx: number, cy: number, cz: number, maxMs = 900): Promise<boolean> {
+  try {
+    await bot.lookAt(new Vec3(cx + 0.5, cy + 1, cz + 0.5), true);
+  } catch {
+    /* look best-effort */
+  }
+  const until = Date.now() + maxMs;
+  bot.setControlState("forward", true);
+  try {
+    while (Date.now() < until) {
+      const p = bot.entity.position;
+      if (arrivedInCell(p.x, p.z, cx, cz)) return true;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  } finally {
+    bot.setControlState("forward", false);
+  }
+  const p = bot.entity.position;
+  return arrivedInCell(p.x, p.z, cx, cz, 0.8);
+}
+
 /**
  * Dig a level corridor by hand, one block at a time, and walk into it.
  *
@@ -385,14 +421,10 @@ async function handTunnel(
       );
       break;
     }
-    try {
-      await bot.lookAt(new Vec3(cx + 0.5, f.y + 1, cz + 0.5), true);
-    } catch {
-      /* look best-effort */
+    if (!(await stepIntoCell(bot, cx, f.y, cz))) {
+      console.log(`[Escape] ${bot.username}: ${label} could not step into (${cx}, ${f.y}, ${cz}); stopping`);
+      break;
     }
-    bot.setControlState("forward", true);
-    await new Promise((r) => setTimeout(r, 700));
-    bot.setControlState("forward", false);
     advanced = k;
   }
   return advanced;

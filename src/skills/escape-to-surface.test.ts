@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { digBudgetMs } from "./escape-to-surface.js";
+import { digBudgetMs, arrivedInCell } from "./escape-to-surface.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -73,4 +73,22 @@ test("walk-out falls back to digging by hand when the walk cannot move", () => {
     body.indexOf("safeGoto(") < body.indexOf("handTunnel("),
     "the hand tunnel is the fallback, so the walk has to come first",
   );
+});
+
+test("arrived in cell: the centre of the dug block is home", () => {
+  assert.strictEqual(arrivedInCell(344.5, -351.5, 344, -352), true);
+  assert.strictEqual(arrivedInCell(344.6, -351.4, 344, -352), true, "a little off centre still counts");
+});
+
+test("arrived in cell: the next block along is not", () => {
+  // The bug this exists to stop: holding forward for 700ms covers about three
+  // blocks, so the bot walked through the cell it cleared into solid rock and
+  // suffocated. One cell over must read as not arrived.
+  assert.strictEqual(arrivedInCell(345.5, -351.5, 344, -352), false);
+  assert.strictEqual(arrivedInCell(344.5, -353.5, 344, -352), false);
+});
+
+test("arrived in cell: the tolerance can be widened for the final check", () => {
+  assert.strictEqual(arrivedInCell(345.1, -351.5, 344, -352), false);
+  assert.strictEqual(arrivedInCell(345.1, -351.5, 344, -352, 0.8), true);
 });
