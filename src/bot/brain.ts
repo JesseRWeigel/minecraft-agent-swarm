@@ -308,6 +308,7 @@ export class BotBrain {
   private lastGoldBankMs = 0;
   private lastFortressMs = 0;
   private lastFortressGateLogMs = 0;
+  private lastNetherGoldBankMs = 0;
   private lastPortalRelightMs = 0;
   private lastNetherReturnMs = 0;
   private lastBiomeRoamMs = 0;
@@ -2973,6 +2974,44 @@ export class BotBrain {
           const e = this.bot.players[n]?.entity;
           return e && this.bot.entity.position.distanceTo(e.position) < 24;
         });
+        // Run 739: twelve fortress trips in a row ended "no golden boots and
+        // only 0 gold ingots reachable" while Blade walked around with nine gold
+        // ingots and Forge with one. Gold reaches the Nether traveller through
+        // the stash, and nothing was putting it there: the rule below triggers
+        // on picks, iron, diamonds and leather, never on gold. A bot that does
+        // not go to the Nether banks the gold it is carrying.
+        if (
+          config.bot.allowStrategyOverrides &&
+          !isSkillRunning(this.bot) &&
+          this.bot.username !== "Mason" &&
+          this.roleConfig.stashPos &&
+          Date.now() - this.lastNetherGoldBankMs > 600_000
+        ) {
+          const goldHeld = this.bot.inventory
+            .items()
+            .filter((i) => i.name === "gold_ingot" || i.name === "raw_gold" || i.name === "gold_block")
+            .reduce((n, i) => n + i.count, 0);
+          const sp = this.roleConfig.stashPos;
+          const atStash =
+            Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 40 &&
+            this.bot.entity.position.y >= sp.y - 8;
+          if (goldHeld >= 2 && atStash) {
+            this.lastNetherGoldBankMs = Date.now();
+            this.log.info("Brain", `OVERRIDE: banking ${goldHeld} gold for the Nether trip`);
+            this.events.onThought("Gold is no use to me. Mason needs it for the piglins.");
+            const result = await this.executeActionUnlessPaused("deposit_stash", {
+              stashPos: sp,
+              keepItems: this.roleConfig.keepItems,
+              materialReserve: 0,
+              canMine: true,
+            });
+            this.events.onAction("deposit_stash", result);
+            this.lastAction = "deposit_stash";
+            this.lastResult = result;
+            return;
+          }
+        }
+
         if (nearbyMiner) {
           const itemToGive = holdsDiamond
             ? "diamond"
