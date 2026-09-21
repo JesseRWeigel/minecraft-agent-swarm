@@ -4,6 +4,7 @@ import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
 import { baseMoves, safeGoto } from "../bot/navigation.js";
 import { belowRouteCost, routeFloor } from "../bot/route-floor.js";
+import { brakeToStop } from "../bot/brake.js";
 import { Vec3 } from "vec3";
 
 /**
@@ -217,6 +218,7 @@ export async function marchToward(
         const climbed = await safeGoto(bot, new goals.GoalBlock(perch.x, perch.y, perch.z), 30_000)
           .then(() => true)
           .catch(() => false);
+        await brakeToStop(bot);
         stillStuck = !climbed;
         console.log(
           `[Bastion] ${bot.username}: at y=${p.y} (${stalledLegs} stalled legs, lavaAhead=${lavaAhead(bot, target)}, tooLow=${tooLow}), climbing to the perch at ${perch.x},${perch.y},${perch.z} -> ${climbed ? `now y=${bot.entity.position.y.toFixed(0)}` : "failed"}`,
@@ -297,6 +299,14 @@ export async function marchToward(
       const ok = await safeGoto(bot, goal, budget, 12_000)
         .then(() => true)
         .catch(() => false);
+      // Run 750: both lava deaths began here, on the tick a leg let go. The
+      // fall records read "controls=none pathing=false" with a block of drift
+      // in 193ms, which is sprint speed: leftover momentum, not a planned
+      // drop. Sneak until it is spent, and the ledge holds.
+      const braked = await brakeToStop(bot);
+      if (braked >= 3) {
+        console.log(`[Bastion] ${bot.username}: braked ${braked} ticks after a leg ended at speed`);
+      }
       if (slant !== 0 || len !== 100) {
         console.log(
           `[Bastion] ${bot.username}: fallback hop ${len} at ${slant > 0 ? "+" : ""}${slant.toFixed(1)} rad -> ${ok ? "reached" : "failed"}, gap ${Math.round(gap())}`,
