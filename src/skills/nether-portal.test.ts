@@ -1,6 +1,11 @@
 // src/skills/nether-portal.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import { readinessOf, recordPortal, lastPortal, readyToStepIn } from "./nether-portal.js";
 
@@ -98,4 +103,17 @@ test("ready to step in: refuses the walk that failed all of run 756", () => {
   assert.strictEqual(readyToStepIn(7.2, -6), false);
   assert.strictEqual(readyToStepIn(1.0, -6), false, "close in plan view is not close under the frame");
   assert.strictEqual(readyToStepIn(9.8, 0), false);
+});
+
+test("portal walk: the aim is refreshed inside the walk loop", () => {
+  // Run 761: "at 288.0,56.0,-311.5 ... nearestCell=288,56,-312 nearDist=0.50
+  // yaw=2.44 wantYaw=-1.56". Half a block from the doorway, level with it,
+  // and facing away, so four seconds of forward walked him out of it. Guard
+  // the fix by shape: the look has to happen inside the loop, not only above.
+  const source = fs.readFileSync(path.join(__dirname, "nether-portal.ts"), "utf8");
+  const start = source.indexOf("const walkStart = Date.now();");
+  assert.notStrictEqual(start, -1, "the timed walk must still exist");
+  const end = source.indexOf('bot.setControlState("forward", false);', start);
+  const loop = source.slice(start, end);
+  assert.match(loop, /lookAt\(centre/, "the walk loop must re-aim at the cell every tick");
 });

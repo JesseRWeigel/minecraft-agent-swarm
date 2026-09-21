@@ -396,6 +396,13 @@ export async function crossPortal(
     bot.setControlState("forward", true);
     const walkStart = Date.now();
     while (Date.now() - walkStart < 4_000 && !inPortal()) {
+      // Re-aim every tick of the walk. Run 761: Mason stood half a block from
+      // the cell, at the right height, and still missed it, because the
+      // geometry line read "yaw=2.44 wantYaw=-1.56". He had turned away
+      // between the look and the walk, so four seconds of forward carried him
+      // out of the doorway. One look before the walk is a hope; a look each
+      // tick is an aim.
+      await bot.lookAt(centre, true).catch(() => {});
       await new Promise((r) => setTimeout(r, 250));
     }
     bot.setControlState("forward", false);
