@@ -15,7 +15,7 @@ export interface FallTracker {
   /** `context` describes what was moving the bot at this instant. It is only
    *  retained if this tick is the moment the bot leaves the ground, which is the
    *  one sample that says what walked it off the edge. */
-  update(y: number, onGround: boolean, now: number, context?: string, onSolid?: boolean): void;
+  update(y: number, onGround: boolean, now: number, context?: string, onSolid?: boolean, pos?: FootingPos | null): void;
   /** Blocks fallen from the last ground the bot left, given where it ended up. */
   dropFrom(currentY: number): number;
   /** Height the fall started from — the ground the bot walked off. */
@@ -40,6 +40,25 @@ export interface FallTracker {
    * over air, which is the lag this exists to expose. 0 means they agreed.
    */
   footingAgeMs(now: number): number;
+  /**
+   * Where the bot stood for that footing sample.
+   *
+   * The footing string says what it was standing ON; this says where, so the
+   * same spot can be read back after the fall. Run 752: two of Mason's lava
+   * deaths were short drops, 2.0 and 3.5 blocks, off gravel and into lava,
+   * while the planner was walking. Gravel falls when its support goes, so
+   * "was gravel, is now air, with lava under it" and "the planner stepped off
+   * a ledge onto lava" are different bugs with different fixes, and only the
+   * block that is there afterwards tells them apart.
+   */
+  originFootingPos(): FootingPos | null;
+}
+
+/** A block position, kept plain so the tracker stays free of vec3. */
+export interface FootingPos {
+  x: number;
+  y: number;
+  z: number;
 }
 
 export function createFallTracker(initialY: number): FallTracker {
@@ -58,6 +77,9 @@ export function createFallTracker(initialY: number): FallTracker {
   // both read air. Track the last tick the block below was genuinely SOLID,
   // whatever the flag said, and how stale that sample is.
   let lastSolidContext = "";
+  let lastSolidPos: FootingPos | null = null;
+  let footingPos: FootingPos | null = null;
+  let lastGroundPos: FootingPos | null = null;
   let lastSolidAt = 0;
   let footingAt = 0;
   let sawSolid = false;
@@ -67,12 +89,13 @@ export function createFallTracker(initialY: number): FallTracker {
   let footingReported = false;
 
   return {
-    update(y, onGround, now, context = "", onSolid) {
+    update(y, onGround, now, context = "", onSolid, pos = null) {
       // Solid ground beneath is a fact about the world; onGround is a claim
       // about the client's last server sync. Prefer the fact when given one.
       if (onSolid !== undefined) footingReported = true;
       if (onSolid) {
         lastSolidContext = context;
+        lastSolidPos = pos;
         lastSolidAt = now;
         sawSolid = true;
       }
@@ -80,6 +103,7 @@ export function createFallTracker(initialY: number): FallTracker {
         // Whatever is true while standing is the last honest description of the
         // ground. Held here, frozen below, for the same reason as lastGroundY.
         lastGroundContext = context;
+        lastGroundPos = pos;
         if (onGroundPrev) {
           // Continuous ground contact — no fall is pending, so the origin tracks
           // the feet. Without this a bot walking down a 10-block slope reported a
@@ -98,6 +122,7 @@ export function createFallTracker(initialY: number): FallTracker {
         // A caller that reports footing and never saw solid ground means the bot
         // was never on any: say so, rather than handing back the lagging sample.
         footingContext = footingReported ? (sawSolid ? lastSolidContext : "") : lastGroundContext;
+        footingPos = footingReported ? (sawSolid ? lastSolidPos : null) : lastGroundPos;
         footingAt = sawSolid ? lastSolidAt : now;
         leftGroundAt = now;
       }
@@ -120,6 +145,9 @@ export function createFallTracker(initialY: number): FallTracker {
     },
     footingAgeMs() {
       return footingAt === 0 || leftGroundAt === 0 ? 0 : leftGroundAt - footingAt;
+    },
+    originFootingPos() {
+      return footingPos;
     },
   };
 }

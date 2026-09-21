@@ -228,3 +228,23 @@ test("every spelling Minecraft uses for fall damage is covered", () => {
   assert.equal(isFallDeath("hit the ground too hard"), true);
   assert.equal(isFallDeath("fell from a high place"), true);
 });
+
+test("fall tracker: freezes where the bot last stood, not where it ended up", () => {
+  const t = createFallTracker(64);
+  // Walking along a gravel crust, then one step over the edge.
+  t.update(64, true, 1000, "on=gravel", true, { x: 172, y: 64, z: -18 });
+  t.update(64, true, 1050, "on=gravel", true, { x: 172, y: 64, z: -18 });
+  t.update(64, false, 1100, "on=air", false, { x: 171, y: 64, z: -19 });
+  assert.deepStrictEqual(
+    t.originFootingPos(),
+    { x: 172, y: 64, z: -18 },
+    "the footing position must be the last SOLID sample, so the spot can be read back after the fall",
+  );
+});
+
+test("fall tracker: reports no footing position when the bot was never on solid ground", () => {
+  const t = createFallTracker(64);
+  t.update(64, true, 1000, "on=air", false, { x: 1, y: 64, z: 1 });
+  t.update(64, false, 1050, "on=air", false, { x: 1, y: 64, z: 1 });
+  assert.strictEqual(t.originFootingPos(), null);
+});

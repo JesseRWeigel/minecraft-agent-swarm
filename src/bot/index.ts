@@ -1,6 +1,6 @@
 import mineflayer from "mineflayer";
 import { installPhysicsEpsilon } from "./physics-epsilon.js";
-import type { Vec3 } from "vec3";
+import { Vec3 } from "vec3";
 import pathfinderPkg from "mineflayer-pathfinder";
 const { pathfinder, goals } = pathfinderPkg;
 import customPvpPkg from "@nxg-org/mineflayer-custom-pvp";
@@ -625,7 +625,12 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
     // world is the more reliable witness.
     const belowBlock = bot.blockAt(p.offset(0, -1, 0));
     const onSolid = belowBlock?.boundingBox === "block";
-    fallTracker.update(bot.entity.position.y, bot.entity.onGround, Date.now(), ctx, onSolid);
+    const feet = p.floored();
+    fallTracker.update(bot.entity.position.y, bot.entity.onGround, Date.now(), ctx, onSolid, {
+      x: feet.x,
+      y: feet.y,
+      z: feet.z,
+    });
   });
 
   // Run before resuming, if something lethal is standing where you woke up.
@@ -726,6 +731,22 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
           ` ${fallTracker.footingAgeMs(Date.now())}ms before leaving]`
         : "";
     console.log(`[Bot] I died! Cause: ${cause}. Armor: ${worn}.${fallInfo} Respawning...`);
+    // Read the spot the bot left, as it is NOW. Run 752: two of Mason's lava
+    // deaths were 2.0 and 3.5 block drops off gravel into lava while the
+    // planner was walking. Gravel falls when its support goes, so the support
+    // reading "air" here, with lava under it, says the ground collapsed, while
+    // the support still standing says the planner walked off a safe block onto
+    // a lava landing. Those want opposite fixes.
+    if (fallInfo) {
+      const fp = fallTracker.originFootingPos();
+      if (fp) {
+        const nameAt = (dy: number) => bot.blockAt(new Vec3(fp.x, fp.y + dy, fp.z))?.name ?? "?";
+        console.log(
+          `[FallColumn] ${roleConfig.name} footing ${fp.x},${fp.y},${fp.z} ` +
+            `feet=${nameAt(0)} support=${nameAt(-1)} under=${nameAt(-2)}/${nameAt(-3)}/${nameAt(-4)}`,
+        );
+      }
+    }
     lastDeathMessage = "";
     brain.markDeathInterruption();
     abortActiveSkill(bot);
