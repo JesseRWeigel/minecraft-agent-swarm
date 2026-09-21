@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { keepsPiglinPassport, isGoldPiece } from "./gold-passport.js";
+import {
+  keepsPiglinPassport,
+  isGoldPiece,
+  markPiglinPassport,
+  hasPiglinPassport,
+  clearPiglinPassport,
+  PASSPORT_TTL_MS,
+} from "./gold-passport.js";
 
 const NETHER = "minecraft:the_nether";
 
@@ -27,4 +34,30 @@ test("gold passport: non-gold pieces are never protected", () => {
 test("gold passport: a golden apple is not armour", () => {
   assert.strictEqual(isGoldPiece("golden_apple"), false);
   assert.strictEqual(isGoldPiece("golden_chestplate"), true);
+});
+
+test("gold passport: the mark protects the gold before the crossing", () => {
+  // Run 758's order: the preflight dresses the bot in the overworld, and the
+  // armour pass runs twenty seconds later, still in the overworld.
+  clearPiglinPassport("Mason");
+  assert.strictEqual(keepsPiglinPassport("minecraft:overworld", "golden_boots", false, "Mason"), false);
+  markPiglinPassport("Mason");
+  assert.strictEqual(keepsPiglinPassport("minecraft:overworld", "golden_boots", false, "Mason"), true);
+});
+
+test("gold passport: the mark expires so the bot is not stuck in bad boots", () => {
+  const t0 = 1_000_000;
+  markPiglinPassport("Blade", t0);
+  assert.strictEqual(hasPiglinPassport("Blade", t0 + PASSPORT_TTL_MS - 1), true);
+  assert.strictEqual(hasPiglinPassport("Blade", t0 + PASSPORT_TTL_MS + 1), false);
+  assert.strictEqual(
+    keepsPiglinPassport("minecraft:overworld", "golden_boots", false, "Blade", t0 + PASSPORT_TTL_MS + 1),
+    false,
+  );
+});
+
+test("gold passport: one bot's mark does not dress another", () => {
+  clearPiglinPassport("Flora");
+  markPiglinPassport("Mason");
+  assert.strictEqual(hasPiglinPassport("Flora"), false);
 });

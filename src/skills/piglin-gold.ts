@@ -1,4 +1,5 @@
 import type { Bot } from "mineflayer";
+import { markPiglinPassport } from "../bot/gold-passport.js";
 
 /**
  * Piglins leave a player alone who wears any one gold armour piece. Every
@@ -123,6 +124,10 @@ export async function wearGoldForPiglins(bot: Bot, tag: string, onStep?: (msg: s
           ? "legs"
           : "torso";
     await bot.equip(gold, dest).catch(() => {});
+    // Tell the armour pass why this piece is on, or it upgrades the bot out of
+    // it before the crossing (run 758: iron boots went back on twenty seconds
+    // later, in the overworld, and piglins shot him twice past the portal).
+    if (wornGold(bot)) markPiglinPassport(bot.username);
     console.log(
       `[${tag}] ${bot.username}: wearing ${gold.name} for the piglins (${wornGold(bot) ? "on" : "equip failed"})`,
     );

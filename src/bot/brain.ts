@@ -479,7 +479,7 @@ export class BotBrain {
       // iron twenty seconds later; he died "slain by Piglin" wearing
       // "-,-,iron_leggings,iron_boots".
       const otherWornGold = [5, 6, 7, 8].some((i) => i !== slotIdx && isGoldPiece(this.bot.inventory.slots[i]?.name));
-      if (keepsPiglinPassport(this.bot.game?.dimension, worn?.name, otherWornGold)) {
+      if (keepsPiglinPassport(this.bot.game?.dimension, worn?.name, otherWornGold, this.bot.username)) {
         if (Date.now() - this.lastGoldKeepLogMs > 60_000) {
           this.lastGoldKeepLogMs = Date.now();
           this.log.info("Armor", `keeping ${worn!.name} on for the piglins instead of ${best.name}`);
