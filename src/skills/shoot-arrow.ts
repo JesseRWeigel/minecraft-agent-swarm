@@ -43,12 +43,23 @@ export const shootArrowSkill: Skill = {
     const { STASH_POS } = await import("../bot/role.js");
     const nearStash = () => Math.hypot(bot.entity.position.x - STASH_POS.x, bot.entity.position.z - STASH_POS.z) < 60;
 
+    // --- Crossbow first ---
+    // Run 748: the armoury holds crossbows and no string, and this skill
+    // returned "Bow needs 3 string (have 1)" before it ever reached the
+    // crossbow code further down. A crossbow does everything a bow does
+    // here, so fetch one before spending string the swarm does not have.
+    if (count(bot, "crossbow") < 1 && nearStash()) {
+      step("Checking the armoury for a crossbow...", 0.1);
+      await withdrawStash(bot, STASH_POS, "crossbow", 1, 30_000).catch(() => {});
+    }
+    const haveCrossbowEarly = count(bot, "crossbow") > 0;
+
     // --- Bow ---
-    if (count(bot, "bow") < 1) {
+    if (!haveCrossbowEarly && count(bot, "bow") < 1) {
       step("No bow yet — checking the stash...", 0.1);
       if (nearStash()) await withdrawStash(bot, STASH_POS, "bow", 1, 30_000).catch(() => {});
     }
-    if (count(bot, "bow") < 1) {
+    if (!haveCrossbowEarly && count(bot, "bow") < 1) {
       if (count(bot, "string") < 3 && nearStash()) {
         await withdrawStash(bot, STASH_POS, "string", 3 - count(bot, "string"), 30_000).catch(() => {});
       }
@@ -101,10 +112,6 @@ export const shootArrowSkill: Skill = {
     // crossbow also satisfies everything a bow does here, so prefer one when
     // it is reachable; a crossbow is loaded first and fired second, where a
     // bow draws and looses in a single hold.
-    if (count(bot, "crossbow") < 1 && nearStash()) {
-      step("Fetching a crossbow from the armoury...", 0.6);
-      await withdrawStash(bot, STASH_POS, "crossbow", 1, 30_000).catch(() => {});
-    }
     const crossbow = bot.inventory.items().find((i) => i.name === "crossbow");
     const bow = crossbow ?? bot.inventory.items().find((i) => i.name === "bow");
     if (!bow) return { success: false, message: resumable("Bow vanished before the shot.") };
