@@ -27,3 +27,13 @@ test("route floor: the price is capped, so a dip stays possible", () => {
   assert.strictEqual(cost, MAX_BELOW_ROUTE_COST);
   assert.ok(Number.isFinite(cost), "a wall would strand a bot that is already below the floor");
 });
+
+test("route floor: a climb that starts at y=45 prices the basin at y=31", () => {
+  // Run 760: the perch search found a ledge at y=68, the walk to it failed,
+  // and Mason came out of the attempt at y=31 in a lava basin. The climb now
+  // uses the same floor, set two blocks under where the climb began.
+  const climbFloor = 45 - 2;
+  assert.strictEqual(belowRouteCost(climbFloor, 45), 0, "staying at the start height is free");
+  assert.strictEqual(belowRouteCost(climbFloor, 68), 0, "climbing to the perch is free");
+  assert.strictEqual(belowRouteCost(climbFloor, 31), MAX_BELOW_ROUTE_COST, "diving to the basin is priced");
+});

@@ -215,13 +215,30 @@ export async function marchToward(
       }
       let stillStuck = true;
       if (perch) {
+        // A climb that goes DOWN first is how run 760 ended. The perch search
+        // found a ledge at y=68, the walk to it failed, and Mason came out of
+        // it at y=31 in a lava basin, where the carve refused to open the
+        // pocket and he burned. The floor cost the march already uses answers
+        // this exactly: price every step below the height the climb starts
+        // from, so a route that dives to get there is the expensive one.
+        const climbFloor = Math.floor(p.y) - 2;
+        const climbMoves = baseMoves(bot);
+        (climbMoves as unknown as { canDig: boolean }).canDig = true;
+        (climbMoves as unknown as { allow1by1towers: boolean }).allow1by1towers = true;
+        (climbMoves as unknown as { maxDropDown: number }).maxDropDown = 3;
+        (climbMoves as unknown as { exclusionAreasStep: ((b: never) => number)[] }).exclusionAreasStep.push(((b: {
+          position?: Vec3;
+        }) => (b?.position ? belowRouteCost(climbFloor, b.position.y) : 0)) as unknown as (b: never) => number);
+        bot.pathfinder.setMovements(climbMoves);
         const climbed = await safeGoto(bot, new goals.GoalBlock(perch.x, perch.y, perch.z), 30_000)
           .then(() => true)
           .catch(() => false);
         await brakeToStop(bot);
+        bot.pathfinder.setMovements(marchMoves);
         stillStuck = !climbed;
+        const afterY = bot.entity.position.y;
         console.log(
-          `[Bastion] ${bot.username}: at y=${p.y} (${stalledLegs} stalled legs, lavaAhead=${lavaAhead(bot, target)}, tooLow=${tooLow}), climbing to the perch at ${perch.x},${perch.y},${perch.z} -> ${climbed ? `now y=${bot.entity.position.y.toFixed(0)}` : "failed"}`,
+          `[Bastion] ${bot.username}: at y=${p.y} (${stalledLegs} stalled legs, lavaAhead=${lavaAhead(bot, target)}, tooLow=${tooLow}), climbing to the perch at ${perch.x},${perch.y},${perch.z} -> ${climbed ? "arrived" : "failed"}, now y=${afterY.toFixed(0)} (${(afterY - p.y).toFixed(0)} from the start)`,
         );
       } else {
         console.log(
