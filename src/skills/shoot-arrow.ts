@@ -95,10 +95,29 @@ export const shootArrowSkill: Skill = {
       return { success: false, message: resumable(`The ${target.name} slipped away before the shot.`) };
     }
 
-    // --- Shoot, with a server-echoed verdict ---
-    const bow = bot.inventory.items().find((i) => i.name === "bow");
+    // --- Pick the weapon ---
+    // Ol' Betsy wants a crossbow fired, and the armoury already holds five of
+    // them next to 119 arrows while the ledger has never counted it. A
+    // crossbow also satisfies everything a bow does here, so prefer one when
+    // it is reachable; a crossbow is loaded first and fired second, where a
+    // bow draws and looses in a single hold.
+    if (count(bot, "crossbow") < 1 && nearStash()) {
+      step("Fetching a crossbow from the armoury...", 0.6);
+      await withdrawStash(bot, STASH_POS, "crossbow", 1, 30_000).catch(() => {});
+    }
+    const crossbow = bot.inventory.items().find((i) => i.name === "crossbow");
+    const bow = crossbow ?? bot.inventory.items().find((i) => i.name === "bow");
     if (!bow) return { success: false, message: resumable("Bow vanished before the shot.") };
     await bot.equip(bow, "hand");
+    const usingCrossbow = !!crossbow;
+    if (usingCrossbow) {
+      // Load it: hold, then release. The arrow stays on the string.
+      bot.activateItem();
+      await new Promise((r) => setTimeout(r, 1_500));
+      bot.deactivateItem();
+      await new Promise((r) => setTimeout(r, 300));
+      console.log(`[AimDebug] ${bot.username}: crossbow loaded, firing at ${target.name}`);
+    }
 
     let shots = 0;
     let hit = false;
@@ -121,16 +140,27 @@ export const shootArrowSkill: Skill = {
       });
       await bot.lookAt(target.position.offset(0, (target.height ?? 1.4) * 0.85, 0), true);
       bot.activateItem();
-      await new Promise((r) => setTimeout(r, 1_400));
+      // A loaded crossbow fires on the click; a bow needs the draw held.
+      await new Promise((r) => setTimeout(r, usingCrossbow ? 250 : 1_400));
       await bot.lookAt(target.position.offset(0, (target.height ?? 1.4) * 0.85, 0), true);
       bot.deactivateItem();
+      if (usingCrossbow && !hit) {
+        // Reload for the next shot.
+        bot.activateItem();
+        await new Promise((r) => setTimeout(r, 1_500));
+        bot.deactivateItem();
+      }
       hit = (await hurtPromise) || !target.isValid;
       if (!hit) await new Promise((r) => setTimeout(r, 800));
     }
 
     console.log(`[AimDebug] ${bot.username} vs ${target.name}: shots=${shots} hit=${hit} valid=${target.isValid}`);
     if (hit) {
-      return { success: true, message: `Arrow struck the ${target.name} — Take Aim earned!`, stats: { shots } };
+      return {
+        success: true,
+        message: `Arrow struck the ${target.name} from a ${usingCrossbow ? "crossbow" : "bow"}${usingCrossbow ? " — Ol' Betsy too" : ""}!`,
+        stats: { shots },
+      };
     }
     return { success: false, message: resumable(`${shots} arrows missed the ${target.name} — will retry.`) };
   },

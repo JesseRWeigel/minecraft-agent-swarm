@@ -2801,7 +2801,12 @@ export class BotBrain {
       const earnedAim2 = readTeamEarned(BOT_ROSTER.map((b) => b.name));
       const aimDone2 = earnedAim2.has("adventure/shoot_arrow") || earnedAim2.has("minecraft:adventure/shoot_arrow");
       const cooledAim = Date.now() - this.lastAimMs > 600_000;
-      if (!aimDone2 && cooledAim) {
+      // Ol' Betsy wants a crossbow fired and the armoury holds five, but this
+      // rule stood down the moment Take Aim was earned, so the skill that
+      // does the shooting has had no reason to run since. Keep it running
+      // while either point is open; the skill now prefers the crossbow.
+      const betsyDone = earnedAim2.has("adventure/ol_betsy") || earnedAim2.has("minecraft:adventure/ol_betsy");
+      if ((!aimDone2 || !betsyDone) && cooledAim) {
         const hasBow = this.bot.inventory.items().some((i) => i.name === "bow");
         const stringHeld = this.bot.inventory
           .items()
@@ -2814,9 +2819,16 @@ export class BotBrain {
           const { chestsWithItem } = await import("../skills/stash-ledger.js");
           stringBanked = chestsWithItem("string").length;
         }
-        if (hasBow || (nearStash && (stringHeld >= 3 || stringBanked > 0))) {
+        // The crossbow path needs no string at all: five sit in the armoury
+        // beside 119 arrows, and the skill fetches one itself.
+        const crossbowBanked = ledgerKnown() ? stashCount("crossbow", this.roleConfig.stashPos?.y) : 0;
+        const hasCrossbow = this.bot.inventory.items().some((i) => i.name === "crossbow");
+        if (hasBow || hasCrossbow || (nearStash && (stringHeld >= 3 || stringBanked > 0 || crossbowBanked > 0))) {
           this.lastAimMs = Date.now();
-          this.log.info("Brain", "OVERRIDE: archery kit within reach and Take Aim unearned — shoot_arrow");
+          this.log.info(
+            "Brain",
+            `OVERRIDE: archery kit within reach (${aimDone2 ? "Ol' Betsy" : "Take Aim"} unearned) — shoot_arrow`,
+          );
           this.events.onThought("String, sticks, arrows, table. Time to loose one for the record books.");
           const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "shoot_arrow" });
           this.events.onAction("shoot_arrow", result);
