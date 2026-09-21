@@ -137,7 +137,7 @@ export async function marchToward(
   const until = Date.now() + budgetMs;
   let bestGap = gap();
   let stalledLegs = 0;
-  let carvedOut = false;
+  let carveAttempts = 0;
   // The march's movement profile, settled by three measured runs against the
   // same 490-block route to the fortress sighting.
   //   715  towers on,  three-block drop : reached 39 blocks out
@@ -220,15 +220,25 @@ export async function marchToward(
       // able to reach it. Carve whenever the bot is still stuck: the
       // staircase skill cuts to y=62 with its own guards, and that is out of
       // both the portal chamber and the cavern beyond it.
-      if (!carvedOut && p.y < 58 && stillStuck) {
-        carvedOut = true;
+      // Run 745: the carve finally gained height, 42 to 47, and stopped with
+      // "Ran out of time ... invoke_skill escape_to_surface again to
+      // continue". Twenty blocks of staircase does not fit in one budget, and
+      // the skill is built to resume. Let it, up to three times a march,
+      // while it keeps making ground.
+      if (carveAttempts < 3 && p.y < 58 && stillStuck) {
+        carveAttempts++;
+        const yBefore = bot.entity.position.y;
         const { escapeToSurfaceSkill } = await import("./escape-to-surface.js");
         const r = await escapeToSurfaceSkill
           .execute(bot, {}, signal, () => {})
           .catch((e: Error) => ({ success: false, message: String(e).slice(0, 80) }));
+        const gained = bot.entity.position.y - yBefore;
         console.log(
-          `[Bastion] ${bot.username}: carving a way out -> ${String(r.message).slice(0, 90)} (now y=${bot.entity.position.y.toFixed(0)})`,
+          `[Bastion] ${bot.username}: carving a way out (${carveAttempts}/3) -> ${String(r.message).slice(0, 80)} (now y=${bot.entity.position.y.toFixed(0)}, gained ${gained.toFixed(0)})`,
         );
+        // A carve that gains nothing is not going to gain anything on a
+        // retry either; stop spending the march on it.
+        if (gained < 2) carveAttempts = 3;
       }
     }
 
