@@ -216,6 +216,22 @@ async function carveSite(bot: Bot, origin: Vec3Like, axis: "x" | "z"): Promise<v
 // re-approach after a hijack, walk the last step on manual controls, stand
 // still inside until the dimension flips.
 /**
+ * Is the bot close enough to the standing spot for a four second walk to carry
+ * it into the portal?
+ *
+ * Run 756: every trip that hour ended "Couldn't cross the portal this trip",
+ * and the geometry line says why. The cells sit at y=56 and 57, and Mason was
+ * at "290.7,50.0,-309.3", six blocks below and seven away, with dirt ahead of
+ * him. The approach walk had failed, its error was swallowed, and the code
+ * pressed forward anyway, which from down there is walking into the hillside
+ * under the frame. Holding the key for longer cannot fix a bot that is not
+ * beside the door.
+ */
+export function readyToStepIn(distance: number, dy: number): boolean {
+  return distance <= 2.5 && Math.abs(dy) <= 1;
+}
+
+/**
  * Run 712: twenty-three crossing attempts ended with inPortal=false at 1.2 to
  * 2.1 blocks from the doorway centre, and three earlier fixes aimed at the
  * walk itself. Before a fourth, record what the bot is actually standing in,
@@ -354,6 +370,25 @@ export async function crossPortal(
         new goals.GoalNear(doorway.x, doorway.y, doorway.z, far ? 3 : 1),
         far ? 45_000 : 20_000,
       ).catch(() => {});
+    }
+    // A second try at a looser goal. GoalBlock demands that exact block, and
+    // the one beside a portal is often taken by the frame, a slab or another
+    // bot; GoalNear lets the planner stand anywhere adjacent, which is all the
+    // step needs.
+    if (stand && !inPortal()) {
+      const gap = () => bot.entity.position.distanceTo(stand.offset(0.5, 0, 0.5));
+      if (!readyToStepIn(gap(), bot.entity.position.y - stand.y)) {
+        await safeGoto(bot, new goals.GoalNear(stand.x, stand.y, stand.z, 2), 30_000).catch(() => {});
+      }
+      const dy = bot.entity.position.y - stand.y;
+      if (!readyToStepIn(gap(), dy)) {
+        console.log(
+          `[Portal] ${bot.username}: approach ended ${gap().toFixed(1)} blocks from the stand at ${stand.x},${stand.y},${stand.z} (dy=${dy.toFixed(1)}); not walking blind`,
+        );
+        logPortalGeometry(bot, doorway, centre, bot.entity.position.clone());
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
     }
     bot.pathfinder.setGoal(null);
     await bot.lookAt(centre, true).catch(() => {});

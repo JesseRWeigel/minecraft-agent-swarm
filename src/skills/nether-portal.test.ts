@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { readinessOf, recordPortal, lastPortal } from "./nether-portal.js";
+import { readinessOf, recordPortal, lastPortal, readyToStepIn } from "./nether-portal.js";
 
 // WHAT THIS FILE PINS DOWN.
 //
@@ -85,4 +85,17 @@ test("a lava_bucket counts as the bucket the portal needs", () => {
   // Forge is holding a lava_bucket after earning story/lava_bucket; the portal
   // must not report it as missing a bucket.
   assert.equal(readinessOf(["lava_bucket", "flint_and_steel"]).ready, true);
+});
+
+test("ready to step in: beside the door, level with it", () => {
+  assert.strictEqual(readyToStepIn(0.8, 0), true);
+  assert.strictEqual(readyToStepIn(2.5, 1), true, "one block of height is a step, not a climb");
+});
+
+test("ready to step in: refuses the walk that failed all of run 756", () => {
+  // Mason at 290.7,50.0,-309.3 with the cells at y=56: seven blocks away and
+  // six below. Pressing forward from there walks into the hillside.
+  assert.strictEqual(readyToStepIn(7.2, -6), false);
+  assert.strictEqual(readyToStepIn(1.0, -6), false, "close in plan view is not close under the frame");
+  assert.strictEqual(readyToStepIn(9.8, 0), false);
 });
