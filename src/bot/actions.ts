@@ -17,6 +17,7 @@ import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
 import { Vec3 } from "vec3";
 import { isHostile } from "./perception.js";
+import { bedExplodesHere, BED_EXPLODES_MESSAGE } from "./bed-safety.js";
 import { travelBudgetMs } from "./mine-budget.js";
 import { canHarvest, harvestAdvice } from "./tool-tier.js";
 import { tooHighForFurniture, furnitureRefusal } from "./place-guard.js";
@@ -2081,6 +2082,11 @@ function findOpenSkySpot(bot: Bot, radius: number): Vec3 | null {
 async function sleepInBed(bot: Bot): Promise<string> {
   // Already in bed — just wait for morning (counts as success so no blacklisting)
   if ((bot as any).isSleeping) return "Sleeping... zzz (waiting for morning)";
+
+  // Run 751: Mason set a bed off at the Nether portal exit and lost his kit
+  // with it. Every guard below this point is written "if in the overworld",
+  // so outside it they all stood down and the bed went ahead.
+  if (bedExplodesHere(bot.game?.dimension)) return BED_EXPLODES_MESSAGE;
 
   // 64, up from 32: the village's one surviving bed sits at 314,67,-336,
   // ~35 blocks from the stash where bots idle at night. Every one of the 68
