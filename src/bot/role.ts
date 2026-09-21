@@ -362,12 +362,13 @@ export const BLADE_CONFIG: BotRoleConfig = {
     { name: "shield", minCount: 1 },
     { name: "food", minCount: 8 },
     { name: "armor", minCount: 4 },
-    // Piglin-fund pocket: hand-delivered gold must survive Blade's own
-    // deposits or the smith's delivery boomerangs into the messy chests.
-    { name: "gold_ingot", minCount: 9 },
-    // Mined nuggets are the same fund: run 557 banked 31 of them as
-    // "mining assets this role can't use" minutes after the haul.
-    { name: "gold_nugget", minCount: 27 },
+    // The piglin fund used to live in this pocket, from when Blade was the
+    // bot who crossed. Mason makes the Nether trips now, and he reaches
+    // gold only through the stash, so this pocket starved every crossing:
+    // run 740 logged twelve trips ending "0 gold ingots reachable" while
+    // exactly nine ingots, two pairs of boots, sat here untouchable. A
+    // deposit of 122 items walked straight past them. Gold goes to the
+    // bank; the preflight there smelts, forges and wears it.
   ],
   priorities: `BLADE PRIORITIES:
 1. If hostile mob within 16 blocks: neural_combat
