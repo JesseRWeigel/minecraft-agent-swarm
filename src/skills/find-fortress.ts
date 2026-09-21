@@ -6,6 +6,7 @@ import { baseMoves, safeGoto } from "../bot/navigation.js";
 import fs from "node:fs";
 import { Vec3 } from "vec3";
 import { marchToward } from "./loot-bastion.js";
+import { type Sighting, parseBank, pickSighting, addSighting, recordApproach, dropSighting } from "./fortress-bank.js";
 
 // Run 711: the east sweep saw nether bricks at (535, 52, -17), Mason died on
 // the 100-block approach, and the skill forgot the sighting because it only
@@ -13,20 +14,20 @@ import { marchToward } from "./loot-bastion.js";
 // A sighting is banked the moment it is made, and the next trip marches
 // straight to it before sweeping anything.
 const SIGHTING_FILE = new URL("../../logs/fortress-sighting.json", import.meta.url).pathname;
-type Sighting = { x: number; y: number; z: number; seenAt: string; by: string };
-function readSighting(): Sighting | null {
+
+function readBank(): Sighting[] {
   try {
-    const s = JSON.parse(fs.readFileSync(SIGHTING_FILE, "utf8")) as Sighting;
-    return typeof s?.x === "number" && typeof s?.z === "number" ? s : null;
+    return parseBank(JSON.parse(fs.readFileSync(SIGHTING_FILE, "utf8")));
   } catch {
-    return null;
+    return [];
   }
 }
-function writeSighting(s: Sighting | null): void {
-  // Study rule: nothing under logs/ is ever deleted. A dropped sighting is
-  // written as a tombstone so the audit trail keeps what was tried.
+function writeBank(all: Sighting[]): void {
+  // Study rule: nothing under logs/ is ever deleted. Dropped sightings keep
+  // their entry with a droppedAt stamp, so the audit trail holds what was
+  // tried as well as what worked.
   try {
-    fs.writeFileSync(SIGHTING_FILE, JSON.stringify(s ?? { droppedAt: new Date().toISOString() }, null, 2));
+    fs.writeFileSync(SIGHTING_FILE, JSON.stringify({ sightings: all }, null, 2));
   } catch {
     /* best effort */
   }
@@ -173,14 +174,15 @@ export const findFortressSkill: Skill = {
     let bricks = findBricks();
 
     // --- A banked sighting: march there first ---
-    const sighting = readSighting();
+    const bank = readBank();
+    const sighting = pickSighting(bank, bot.entity.position);
     if (!bricks && sighting) {
       const gapTo = () => Math.hypot(bot.entity.position.x - sighting.x, bot.entity.position.z - sighting.z);
       step(`Bricks were seen at (${sighting.x}, ${sighting.y}, ${sighting.z}) — marching there...`, 0.3);
       console.log(
         `[Fortress] ${bot.username}: marching to the banked sighting at ${sighting.x},${sighting.y},${sighting.z} (${Math.round(gapTo())} away)`,
       );
-      await marchToward(bot, sighting, 360_000, signal, {
+      const reached = await marchToward(bot, sighting, 360_000, signal, {
         label: "Marching to the sighted bricks",
         progress: () => 0.4,
         step,
@@ -190,10 +192,15 @@ export const findFortressSkill: Skill = {
         },
       });
       bricks = findBricks();
+      // Remember how close this march came. A sighting that has been reached
+      // to 84 blocks outranks one that has never beaten 464, and that ranking
+      // is the whole point of keeping more than one.
+      let updated = recordApproach(bank, sighting, Math.min(reached, gapTo()));
       if (!bricks && gapTo() <= 40) {
         console.log(`[Fortress] ${bot.username}: no bricks within 128 of the sighting; dropping it`);
-        writeSighting(null);
+        updated = dropSighting(updated, sighting);
       }
+      writeBank(updated);
     }
 
     // --- Sweep one heading, scanning as we go ---
@@ -218,7 +225,15 @@ export const findFortressSkill: Skill = {
     let entered = false;
     if (bricks) {
       const seen = bricks.position;
-      writeSighting({ x: seen.x, y: seen.y, z: seen.z, seenAt: new Date().toISOString(), by: bot.username });
+      writeBank(
+        addSighting(readBank(), {
+          x: seen.x,
+          y: seen.y,
+          z: seen.z,
+          seenAt: new Date().toISOString(),
+          by: bot.username,
+        }),
+      );
       step(`NETHER BRICKS at ${seen} — walking into the fortress...`, 0.7);
       // The approach was one 45-second walk repeated for two minutes; the
       // bricks sit up to 128 blocks off. March in hops like the bastion raid.
