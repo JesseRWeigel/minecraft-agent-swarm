@@ -190,7 +190,20 @@ async function pillarUp(bot: Bot): Promise<boolean> {
   moves.allowParkour = false;
   bot.pathfinder.setMovements(moves);
   await safeGoto(bot, new goals.GoalY(f.y + 3), 15_000, 6_000).catch(() => {});
-  return feet(bot).y > startY;
+  const rose = feet(bot).y > startY;
+  // Run 746: this reported "no scaffold block to pillar with" while Mason
+  // carried sixty-five cobblestone, so the block list was never the problem
+  // and there was nothing in the log to say what was. Report what the push
+  // actually had to work with.
+  if (!rose) {
+    const nameAt = (dy: number) => bot.blockAt(new Vec3(f.x, f.y + dy, f.z))?.name ?? "unloaded";
+    const scaffoldIds = (moves as unknown as { scafoldingBlocks: number[] }).scafoldingBlocks ?? [];
+    console.log(
+      `[EscapeDebug] ${bot.username}: pillar gained nothing at ${f.x},${f.y},${f.z} — holding=${bot.heldItem?.name ?? "nothing"} scaffold=${scaffold.name}x${scaffold.count} ` +
+        `above=${nameAt(1)}/${nameAt(2)}/${nameAt(3)}/${nameAt(4)} movesScaffoldIds=${scaffoldIds.length} towers=${(moves as unknown as { allow1by1towers: boolean }).allow1by1towers}`,
+    );
+  }
+  return rose;
 }
 
 /** How far up the buried check looks for a ceiling. A pocket or cavern can
