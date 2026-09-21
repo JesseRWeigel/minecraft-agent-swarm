@@ -183,6 +183,24 @@ export async function armourUpForNether(bot: Bot, tag: string, onStep?: (msg: st
     }
     if (have) await bot.equip(have, dest).catch(() => {});
   }
+  // Run 742: the climb out of the cavern finally fired and failed twice,
+  // once for a perch four blocks overhead. Mason was carrying no building
+  // blocks at all, so there was nothing to tower with, while the stash held
+  // fifteen thousand cobblestone. A Nether trip carries stone for towering
+  // and bridging the same way it carries gold and armour.
+  const blocksHeld = () =>
+    bot.inventory
+      .items()
+      .filter((i) => i.name === "cobblestone" || i.name === "netherrack" || i.name === "dirt")
+      .reduce((a, i) => a + i.count, 0);
+  if (blocksHeld() < 32) {
+    onStep?.("Packing stone for the climb...");
+    for (const block of ["cobblestone", "netherrack", "dirt"]) {
+      if (blocksHeld() >= 32) break;
+      await withdrawStash(bot, STASH_POS, block, 64 - blocksHeld(), 45_000).catch(() => {});
+    }
+  }
+
   // Armour without a weapon still loses the fight: he had none all run.
   if (!bot.inventory.items().some((i) => i.name.endsWith("_sword"))) {
     onStep?.("Forging a sword for the crossing...");
@@ -192,7 +210,7 @@ export async function armourUpForNether(bot: Bot, tag: string, onStep?: (msg: st
     }
   }
   console.log(
-    `[${tag}] ${bot.username}: armour before the crossing -> ${worn()} pieces worn (iron ingots ${count("iron_ingot")}, raw ${count("raw_iron")}), sword=${bot.inventory.items().some((i) => i.name.endsWith("_sword"))}`,
+    `[${tag}] ${bot.username}: armour before the crossing -> ${worn()} pieces worn (iron ingots ${count("iron_ingot")}, raw ${count("raw_iron")}), sword=${bot.inventory.items().some((i) => i.name.endsWith("_sword"))}, blocks=${blocksHeld()}`,
   );
   return worn();
 }
