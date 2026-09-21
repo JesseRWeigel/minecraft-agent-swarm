@@ -270,7 +270,11 @@ function logPortalGeometry(bot: Bot, doorway: Vec3, centre: Vec3, walkFrom: Vec3
  * returned first.
  */
 function findPortalEntry(bot: Bot, near: Vec3): { cell: Vec3; stand: Vec3 } | null {
-  const cells = bot.findBlocks({ matching: (b) => b.name === "nether_portal", maxDistance: 24, count: 80 });
+  // Run 744: four crossings failed with "cells=0 ... nearDist=Infinity" while
+  // Mason stood at (290, 42, -322), nineteen blocks below the doorway and in
+  // a flooded cave. Twenty-four blocks is not far enough to see the portal
+  // he arrived by.
+  const cells = bot.findBlocks({ matching: (b) => b.name === "nether_portal", maxDistance: 48, count: 80 });
   if (cells.length === 0) return null;
   const passable = (v: Vec3) => {
     const n = bot.blockAt(v)?.name;
@@ -333,8 +337,23 @@ export async function crossPortal(
       bot.pathfinder.setMovements(baseMoves(bot));
       await safeGoto(bot, new goals.GoalBlock(stand.x, stand.y, stand.z), 20_000).catch(() => {});
     } else if (!stand && bot.entity.position.distanceTo(centre) > 2.5 && !inPortal()) {
+      // With no cell in sight the bot has wandered off the doorway, often
+      // down a cave. Walking back needs a real budget and a little slack,
+      // not the twenty seconds and one-block goal that was here: run 744
+      // spent twenty-three attempts pressing forward from nineteen blocks
+      // below the frame.
+      const far = bot.entity.position.distanceTo(centre) > 8;
       bot.pathfinder.setMovements(baseMoves(bot));
-      await safeGoto(bot, new goals.GoalNear(doorway.x, doorway.y, doorway.z, 1), 20_000).catch(() => {});
+      if (far) {
+        console.log(
+          `[Portal] ${bot.username}: no portal cell in sight, walking back to the doorway at ${doorway.x},${doorway.y},${doorway.z} from ${bot.entity.position.distanceTo(centre).toFixed(0)} away`,
+        );
+      }
+      await safeGoto(
+        bot,
+        new goals.GoalNear(doorway.x, doorway.y, doorway.z, far ? 3 : 1),
+        far ? 45_000 : 20_000,
+      ).catch(() => {});
     }
     bot.pathfinder.setGoal(null);
     await bot.lookAt(centre, true).catch(() => {});
