@@ -75,3 +75,28 @@ the world archive.
 Next priorities are a separately protected observer, fixed actor/task fixtures,
 and resolved run-level model/team provenance before any model-consuming trial.
 See [the proposed study protocol](pilot-study-protocol.md).
+
+## Current-client requalification — 21 September 2026
+
+The current client, with automatic respawn explicitly disabled, was copied to
+**a new immutable tool snapshot** and run twice on new copies of the same
+preserved archive. All older snapshots and attempts remain unchanged.
+
+| New attempt | Mode | Server displacement | Result |
+| --- | --- | ---: | --- |
+| 001 | Forward | 0.200 blocks | Below movement threshold; correctly rejected |
+| 002 | Stationary | 0 blocks | Expected movement rejection; negative control observed |
+
+Both runs had agreeing client/server positions, positive health, unchanged
+dimension, and normal Java shutdown without TERM/KILL or uncertain cleanup.
+The source world archive still matches its original SHA-256. No model was
+invoked. The [derived results and pins](research/client-requalification-2026-09-21.json)
+include both attempts; private raw evidence is retained locally.
+
+The forward actor started at a different position again. We have not diagnosed
+why this particular action stopped at 0.20 blocks, and do not attribute it to
+the no-respawn change. This is a failed positive qualification, not an excuse to
+exclude the trial or retry until a favorable spawn passes. The next game gate
+is a reviewed fixed actor/task fixture followed by a complete protected-runner
+qualification. The old successful movement result does not qualify the new
+runner, and this follow-up still uses the historical same-process observer.

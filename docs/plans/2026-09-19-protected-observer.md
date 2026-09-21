@@ -1,6 +1,6 @@
 # Protected observer boundary: next implementation design
 
-Status: proposed architecture and synthetic containment qualification. This is
+Status: component implementation and synthetic containment qualification. This is
 not an implemented model-trial runner. The existing deterministic qualification
 still queries RCON in its participant process.
 
@@ -146,7 +146,7 @@ buffered future-phase bytes fail permanently. Readiness and action deadlines
 use a finite, nondecreasing supervisor clock. Accepted participant completion
 still supplies no success predicate or authoritative observation.
 
-This module is not yet wired to a process reader. The future worker must keep
+The process adapter added on September 21 now wires this parser to pipes (see below). The future worker must keep
 draining bounded stdout/stderr, poll deadlines while idle, own overall and
 observer deadlines, and check protocol EOF before accepting a completed
 lifecycle. Parser byte barriers concern bytes already delivered to `feed()`;
@@ -237,7 +237,52 @@ that omission defaults to automatic respawn. New tool snapshots must include
 and pin the changed client; the previously retained snapshots and actual
 qualification attempts have not been rewritten or rerun.
 
-Participant tests use fake bots and adapters. There is no CLI, actual protected
-process launch, or model invocation in this component. The next implementation
-is the outer worker and bounded pipe adapters connecting these prerequisites,
-followed by actual namespace and Minecraft qualification of that complete path.
+Participant library tests use fake bots and adapters. The September 21 CLI and
+pipe adapters connect this component to a process interface (see below). Actual
+protected process launch and model invocation remain unimplemented. The next
+implementation is the outer worker, followed by actual namespace and Minecraft
+qualification of that complete path.
+
+## Process interface integration (21 September 2026)
+
+`participant_transport.py` now connects an already-launched process's binary
+pipes to `ParticipantProtocol`. It polls idle deadlines, bounds stdout and
+retained stderr at 4 KiB each, enforces an at-most-90-second overall budget,
+writes fixed commands, validates EOF, and requires a zero process exit. Its
+`close()` only closes the adapter's pipes; the outer worker must own termination,
+descendant cleanup, containment, and deadlines during observer work. It cannot
+preempt a caller that blocks between methods.
+
+`participant-pipes.mjs` and `protected-participant-cli.mjs` provide the matching
+Node process entry point. The CLI validates its fixed IDs and movement option
+before loading Mineflayer, reserves stdout for protocol messages, and emits only
+a generic failure diagnostic. The adapter limits command bytes, rejects invalid
+UTF-8, duplicate keys and wrong-phase commands, and handles write completion and
+stream failures. A direct CLI watchdog bounds asynchronous stalls; JavaScript
+cannot preempt a blocked event loop, so an outer process deadline is required.
+
+`test_participant_process_integration.py` now runs the Python transport and the
+actual Node CLI harness together through real subprocess pipes in forward and
+stationary modes. It uses a fake bot with the actual participant state machine,
+checks fixed bot configuration and readiness/control/quit behavior, and verifies
+clean protocol output and process exit. It performs no Minecraft connection,
+model call, observation, or namespace launch. Node must be available on PATH;
+otherwise this test is explicitly skipped.
+
+Run the interface checks without a game server or inference:
+
+```sh
+python3 -m unittest tools.pilot.test_participant_protocol \
+  tools.pilot.test_participant_transport \
+  tools.pilot.test_participant_process_integration
+node --test tools/pilot/participant-pipes.test.mjs \
+  tools/pilot/protected-participant-cli.test.mjs
+```
+
+These checks connect the language/process interfaces, not the complete protected
+experiment. The next integration must launch this client inside the qualified
+nested namespace, keep observer credentials/evidence in the outer namespace,
+perform before/terminal samples through the trusted observer, and enforce all
+resource and lifecycle budgets. The fresh game requalification also demonstrated
+that fixed actor/task starting conditions must be implemented before a repeatable
+positive qualification; see [both September 21 attempts](../research/client-requalification-2026-09-21.json).

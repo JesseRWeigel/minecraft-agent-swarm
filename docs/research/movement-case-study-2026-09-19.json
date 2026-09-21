@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "kind": "engineering_case_study",
+  "id": "minecraft-1.21.4-client-loaded-20260919",
+  "evidence_class": "deterministic_isolated_development_qualification",
+  "question": "Can local predicted movement be treated as completed server movement?",
+  "before": {
+    "attempt": "attempt-002",
+    "evidence_sha256": "653ddb701112a708e12c39e777add57e89a95d3eeba284cbc42f5684a8756d04",
+    "client_status": "failed",
+    "server_horizontal_displacement": 0,
+    "client_predicted_horizontal_displacement": 3.3729077995545538,
+    "final_client_server_distance": 3.4046954268561187,
+    "health_positive": true,
+    "dimension_unchanged": true
+  },
+  "after": {
+    "attempt": "attempt-003",
+    "evidence_sha256": "5c8afb4fa777c66ff40b193fd721fcdac5b0db6395da60992fdf29c906a27118",
+    "client_status": "passed",
+    "server_horizontal_displacement": 3.9006102877299043,
+    "client_predicted_horizontal_displacement": 3.9006102877299043,
+    "final_client_server_distance": 0,
+    "health_positive": true,
+    "dimension_unchanged": true
+  },
+  "negative_control": {
+    "attempt": "attempt-004",
+    "evidence_sha256": "8472361ada91f5515d8717ed334887eff9a250b998a21f4258beb56db4c23aeb",
+    "client_status": "failed",
+    "server_horizontal_displacement": 0,
+    "client_predicted_horizontal_displacement": 0.0,
+    "final_client_server_distance": 0,
+    "health_positive": true,
+    "dimension_unchanged": true
+  },
+  "diagnosis": {
+    "mechanism": "Server handleMovePlayer rejects movement while hasClientLoaded is false. Player initializes the flag false with a 60-tick timeout; player_loaded sets it true. Installed client did not send that packet.",
+    "inspected_server_jar_sha256": "49e7c73997e40dbabf6ae253b81f7214dfffddcdbe26aad9b9ca04641bf20c77",
+    "basis": "Read-only bytecode inspection of the exact privately bootstrapped Paper server, RCON observations, and saved player NBT.",
+    "before_saved_player_nbt_corroborates_stationary_server": true
+  },
+  "changes": [
+    "Explicit client-loaded packet after first physics tick",
+    "Initial authoritative/client position agreement check",
+    "Bounded terminal convergence observations"
+  ],
+  "claims": {
+    "local_prediction_alone_insufficient_in_before_attempt": true,
+    "after_server_observed_movement": true,
+    "stationary_control_rejected_completion": true,
+    "model_learning": false,
+    "model_cost_savings": false,
+    "robotics_transfer": false,
+    "matched_randomized_comparison": false
+  },
+  "limitations": [
+    "New-player spawn positions differed between attempts.",
+    "Multiple readiness/observation changes were introduced together.",
+    "No protected observer process; client performs the RCON queries.",
+    "No model participated; this is an infrastructure diagnosis, not a coaching result.",
+    "Historical swarm stalls were not diagnosed by this case."
+  ],
+  "release_status": "public_derived_summary_private_raw_evidence",
+  "source_archive_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+  "raw_evidence_public": false,
+  "reproduction_status": "maintainer_observed_not_independently_reproduced",
+  "documentation": "../pilot-client-qualification-results.md"
+}

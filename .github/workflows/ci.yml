@@ -67,6 +67,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # The pilot suite includes a real Python-to-Node pipe handshake with a
+      # fake bot. No npm dependencies, Minecraft server, or model are needed.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
       - name: Test dataset, study safeguards, and offline benchmark
         run: |
           python3 -m unittest discover -s tools/dataset

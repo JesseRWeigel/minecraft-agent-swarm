@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "recorded_date": "2026-09-21",
+  "evidence_class": "deterministic_isolated_development_qualification",
+  "source_archive_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+  "source_archive_unchanged": true,
+  "tool_snapshot": {
+    "manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+    "file_count": 47415,
+    "total_bytes": 1069449918,
+    "excluded_paths": [
+      "node_modules/.bin",
+      "node_modules/tsx/node_modules/.bin",
+      "node_modules/yggdrasil/node_modules/.bin"
+    ],
+    "source_commit": "d1cd646f143d17f7f1daba76475a67e3cad01930",
+    "source_package_lock_sha256": "ebd456b3e5ef540e047a8b2c1971cfac4aea84d10f0a2aae27e7df465285d7a5"
+  },
+  "respawn_disabled_in_pinned_client": true,
+  "attempts": [
+    {
+      "attempt": "attempt-001",
+      "movement_mode": "forward",
+      "qualification_status": "failed",
+      "negative_control_observed": false,
+      "evidence_sha256": "1ab3c070ecb48b63b67f2adc6fba8cc975b760926a24531db350c5dda70169b6",
+      "before": {
+        "position": {
+          "x": 23.5,
+          "y": 69,
+          "z": -230.5
+        },
+        "dimension": "minecraft:overworld",
+        "health": 20
+      },
+      "after": {
+        "position": {
+          "x": 23.5,
+          "y": 69,
+          "z": -230.3
+        },
+        "dimension": "minecraft:overworld",
+        "health": 20
+      },
+      "checks": {
+        "initialRconMineflayerDistance": 0,
+        "initialPositionsAgree": true,
+        "terminalSettled": true,
+        "terminalPollCount": 1,
+        "terminalElapsedMs": 3,
+        "displacement": 0.19999999999998863,
+        "displacement3d": 0.19999999999998863,
+        "transportIntact": true,
+        "rconMineflayerDistance": 0,
+        "healthPositive": true,
+        "dimensionUnchanged": true,
+        "displacementInBounds": false,
+        "positionsAgree": true
+      },
+      "namespace_lifecycle": {
+        "client": "exited",
+        "client_returncode": 1,
+        "java_returncode": 0,
+        "kill_sent": false,
+        "readiness": "ready",
+        "schema_version": 1,
+        "status": "failed",
+        "stop_sent": true,
+        "term_sent": false
+      },
+      "process": {
+        "returncode": 1,
+        "timed_out": false,
+        "cleanup_uncertain": false,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "elapsed_seconds": 13.166424662806094
+      }
+    },
+    {
+      "attempt": "attempt-002",
+      "movement_mode": "stationary",
+      "qualification_status": "failed",
+      "negative_control_observed": true,
+      "evidence_sha256": "33f62484e01ebeacbe3e8d997556fc14fa494d037e28f13b4c6df4753fd7ad9a",
+      "before": {
+        "position": {
+          "x": 9.5,
+          "y": 67,
+          "z": -214.5
+        },
+        "dimension": "minecraft:overworld",
+        "health": 20
+      },
+      "after": {
+        "position": {
+          "x": 9.5,
+          "y": 67,
+          "z": -214.5
+        },
+        "dimension": "minecraft:overworld",
+        "health": 20
+      },
+      "checks": {
+        "initialRconMineflayerDistance": 0,
+        "initialPositionsAgree": true,
+        "terminalSettled": true,
+        "terminalPollCount": 1,
+        "terminalElapsedMs": 3,
+        "displacement": 0,
+        "displacement3d": 0,
+        "transportIntact": true,
+        "rconMineflayerDistance": 0,
+        "healthPositive": true,
+        "dimensionUnchanged": true,
+        "displacementInBounds": false,
+        "positionsAgree": true
+      },
+      "namespace_lifecycle": {
+        "client": "exited",
+        "client_returncode": 1,
+        "java_returncode": 0,
+        "kill_sent": false,
+        "readiness": "ready",
+        "schema_version": 1,
+        "status": "failed",
+        "stop_sent": true,
+        "term_sent": false
+      },
+      "process": {
+        "returncode": 1,
+        "timed_out": false,
+        "cleanup_uncertain": false,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "elapsed_seconds": 11.96768020093441
+      }
+    }
+  ],
+  "independent_observer_process": false,
+  "model_invocations": 0,
+  "claim_limit": "Forward movement failed the threshold with agreeing observations; stationary negative control was observed. Starting states are not matched. This does not establish a completed protected benchmark or model performance."
+}
