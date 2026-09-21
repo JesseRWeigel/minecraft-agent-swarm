@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { belowRouteCost, routeFloor, ROUTE_FLOOR_SLACK, MAX_BELOW_ROUTE_COST } from "./route-floor.js";
+import { belowRouteCost, routeFloor, ROUTE_FLOOR_SLACK, MAX_BELOW_ROUTE_COST, DIVE_COST } from "./route-floor.js";
 
 test("route floor: sits a fixed slack under the target", () => {
   assert.strictEqual(routeFloor(51), 51 - ROUTE_FLOOR_SLACK);
@@ -21,10 +21,19 @@ test("route floor: deeper costs more, so climbing back is the cheap direction", 
   assert.ok(deep > shallow, "five blocks under must cost more than one, or there is no gradient out");
 });
 
-test("route floor: the price is capped, so a dip stays possible", () => {
-  // Mason's run-749 grave: bricks at y=51, dead at y=31 in the lava basin.
+test("route floor: a shallow dip is priced gently and capped", () => {
+  const floor = routeFloor(51);
+  assert.strictEqual(belowRouteCost(floor, floor - 1), 10);
+  assert.strictEqual(belowRouteCost(floor, floor - 8), MAX_BELOW_ROUTE_COST, "the band ends at the cap");
+});
+
+test("route floor: a dive costs far more than any detour", () => {
+  // Mason's grave, three runs running: bricks at y=51, dead at y=31 in the
+  // lava basin. At 80 the fourteen-block dive was still cheaper than walking
+  // round, so the planner kept taking it.
   const cost = belowRouteCost(routeFloor(51), 31);
-  assert.strictEqual(cost, MAX_BELOW_ROUTE_COST);
+  assert.strictEqual(cost, DIVE_COST);
+  assert.ok(cost > MAX_BELOW_ROUTE_COST * 4, "a dive has to outprice a long way round");
   assert.ok(Number.isFinite(cost), "a wall would strand a bot that is already below the floor");
 });
 
@@ -35,5 +44,5 @@ test("route floor: a climb that starts at y=45 prices the basin at y=31", () => 
   const climbFloor = 45 - 2;
   assert.strictEqual(belowRouteCost(climbFloor, 45), 0, "staying at the start height is free");
   assert.strictEqual(belowRouteCost(climbFloor, 68), 0, "climbing to the perch is free");
-  assert.strictEqual(belowRouteCost(climbFloor, 31), MAX_BELOW_ROUTE_COST, "diving to the basin is priced");
+  assert.strictEqual(belowRouteCost(climbFloor, 31), DIVE_COST, "diving to the basin is priced as a dive");
 });

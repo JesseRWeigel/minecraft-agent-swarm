@@ -17,10 +17,23 @@
 
 /** How far below the target a march may drift before steps start costing. */
 export const ROUTE_FLOOR_SLACK = 8;
-/** Ceiling on the price, near the death-zone cost so neither drowns the other. */
+/** Ceiling on the shallow price, near the death-zone cost so neither drowns the other. */
 export const MAX_BELOW_ROUTE_COST = 80;
-/** Price per block of depth under the floor. */
-const COST_PER_BLOCK = 8;
+/** Price per block of depth under the floor, for the first few blocks. Ten,
+ * so the shallow band runs from 10 up to the cap exactly at the dive line. */
+const COST_PER_BLOCK = 10;
+/**
+ * How far under the floor still counts as a dip rather than a dive.
+ *
+ * Runs 760 to 762 all ended in the same lava basin around (310, 30, -12),
+ * which is where the 224-block wall on the route to (535, 52, -17) actually
+ * is. The graded price stopped the planner strolling down a slope, and 80 is
+ * still cheap next to a long detour, so a fourteen-block dive remained the
+ * bargain. Past this depth the price stops being a nudge.
+ */
+const DIVE_BLOCKS = 8;
+/** The price of a dive: finite, so a route that must descend still exists. */
+export const DIVE_COST = 400;
 
 /** The altitude a march toward `targetY` should try to stay above. */
 export function routeFloor(targetY: number): number {
@@ -31,5 +44,6 @@ export function routeFloor(targetY: number): number {
 export function belowRouteCost(floorY: number, y: number): number {
   const below = floorY - y;
   if (below <= 0) return 0;
+  if (below > DIVE_BLOCKS) return DIVE_COST;
   return Math.min(MAX_BELOW_ROUTE_COST, below * COST_PER_BLOCK);
 }
