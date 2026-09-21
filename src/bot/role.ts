@@ -318,6 +318,13 @@ export const MASON_CONFIG: BotRoleConfig = {
     { name: "pickaxe", minCount: 1 },
     { name: "food", minCount: 4 },
     { name: "torch", minCount: 16 },
+    // Mason is the bot who crosses to the Nether, and one gold piece is what
+    // keeps piglins neutral. Run 759 banked his golden boots and then read
+    // "[FortressGate] ... gold=false" five times in a row: the deposit rule
+    // put the passport in the chest, and the gate that would have sent him to
+    // fetch it needs the passport to fire. The [Kit] lines show the boots
+    // arriving in his slots and leaving again four times over.
+    { name: "golden_boots", minCount: 1 },
   ],
   priorities: `MASON PRIORITIES — you are the BUILDER. Your value is visible STRUCTURES, not ore. Leave mining/smelting to Forge.
 1. If health < 6: flee, then eat. If food < 10: eat (you stay fed now — don't obsess over it).
