@@ -309,6 +309,7 @@ export class BotBrain {
   private lastFortressMs = 0;
   private lastFortressGateLogMs = 0;
   private lastNetherGoldBankMs = 0;
+  private lastGoldGateLogMs = 0;
   private lastPortalRelightMs = 0;
   private lastNetherReturnMs = 0;
   private lastBiomeRoamMs = 0;
@@ -2995,6 +2996,16 @@ export class BotBrain {
           const atStash =
             Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 40 &&
             this.bot.entity.position.y >= sp.y - 8;
+          // Run 741: this rule did not fire at all and its conditions were not
+          // visible anywhere, so the next cycle had nothing to reason from. Say
+          // them once every five minutes while gold is being carried.
+          if (goldHeld >= 2 && Date.now() - this.lastGoldGateLogMs > 300_000) {
+            this.lastGoldGateLogMs = Date.now();
+            this.log.info(
+              "Brain",
+              `[GoldGate] holding=${goldHeld} atStash=${atStash} dist=${Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z).toFixed(0)} cooledMs=${Date.now() - this.lastNetherGoldBankMs}`,
+            );
+          }
           if (goldHeld >= 2 && atStash) {
             this.lastNetherGoldBankMs = Date.now();
             this.log.info("Brain", `OVERRIDE: banking ${goldHeld} gold for the Nether trip`);
