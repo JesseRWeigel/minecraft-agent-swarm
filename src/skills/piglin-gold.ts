@@ -139,7 +139,11 @@ export async function wearGoldForPiglins(bot: Bot, tag: string, onStep?: (msg: s
  */
 export async function armourUpForNether(bot: Bot, tag: string, onStep?: (msg: string) => void): Promise<number> {
   const worn = () => [5, 6, 7, 8].filter((i) => !!bot.inventory.slots[i]).length;
-  if (worn() >= 3) return worn();
+  // Run 743: this returned here the moment the armour was full, which skipped
+  // the stone and the sword below it, so the carve reported "no scaffold
+  // block to pillar with" on a bot wearing four pieces. Armour is one part of
+  // the kit; the rest is packed whichever way this test goes.
+  const armourDone = worn() >= 3;
   const { withdrawStash } = await import("./stash.js");
   const { STASH_POS } = await import("../bot/role.js");
   const { craftPiece } = await import("./craft-gear.js");
@@ -158,7 +162,7 @@ export async function armourUpForNether(bot: Bot, tag: string, onStep?: (msg: st
     ["iron_leggings", 7, "legs"],
   ];
   for (const [piece, cost, dest] of wanted) {
-    if (worn() >= 3) break;
+    if (armourDone || worn() >= 3) break;
     let have = bot.inventory.items().find((i) => i.name === piece);
     if (!have) {
       if (count("iron_ingot") < cost) {
