@@ -305,12 +305,29 @@ function wouldFlood(bot: Bot, x: number, y: number, z: number, dx: number, dz: n
 
 /** The horizontal direction with the fewest fluid blocks within three of
  *  the cell it leads to, for backing away from a flooded or molten pocket. */
-function driestDirection(bot: Bot, x: number, y: number, z: number, dirs: [number, number][]): [number, number] {
+/**
+ * Which way is the water thinnest?
+ *
+ * `reach` is how far out the sample is taken, which decides what question is
+ * being asked. At three blocks it finds a drier cell to step into. At sixteen
+ * it finds the way out from under a lake, which is a different answer: run 753
+ * left Flora at (345, 41, -346) under a lake for the whole hour, the buried
+ * override re-invoking this climb sixty times, because six blocks of retreat
+ * never reached the shore.
+ */
+export function driestDirection(
+  bot: Bot,
+  x: number,
+  y: number,
+  z: number,
+  dirs: [number, number][],
+  reach = 3,
+): [number, number] {
   let best: [number, number] = dirs[0];
   let bestWet = Infinity;
   for (const [dx, dz] of dirs) {
-    const cx = x + dx * 3;
-    const cz = z + dz * 3;
+    const cx = x + dx * reach;
+    const cz = z + dz * reach;
     let wet = 0;
     for (let ox = -3; ox <= 3; ox++)
       for (let oy = -1; oy <= 2; oy++)
@@ -324,6 +341,44 @@ function driestDirection(bot: Bot, x: number, y: number, z: number, dirs: [numbe
     }
   }
   return best;
+}
+
+/** How far the relocation walks, and how much of it has to happen to count. */
+const RELOCATE_BLOCKS = 20;
+const RELOCATE_MIN_PROGRESS = 6;
+
+/**
+ * Walk out from under the water, then climb from there.
+ *
+ * The three-block retreats answer a wet cell. They cannot answer a lake, and a
+ * lake is what run 753 found: every stair direction opened into water, both
+ * retreats were spent, the skill gave up in place, and the buried override
+ * called it straight back to the same block. Sixty times in one hour, with the
+ * bot never moving and no other rule getting a turn.
+ *
+ * Walking is the capability that was missing. Twenty blocks along the driest
+ * heading, with digging allowed, puts the bot beyond a small lake's footprint;
+ * arriving is not required, since any real ground gained is a different column
+ * to climb.
+ */
+async function walkOutFromWater(bot: Bot, f: Vec3, dirs: [number, number][]): Promise<boolean> {
+  const [dx, dz] = driestDirection(bot, f.x, f.y, f.z, dirs, 16);
+  console.log(
+    `[Escape] ${bot.username}: boxed under water at y=${f.y}; walking ${RELOCATE_BLOCKS} blocks toward (${dx}, ${dz}) to climb from drier ground`,
+  );
+  const moves = baseMoves(bot);
+  (moves as unknown as { canDig: boolean }).canDig = true;
+  bot.pathfinder.setMovements(moves);
+  const before = bot.entity.position.clone();
+  await safeGoto(bot, new goals.GoalNearXZ(f.x + dx * RELOCATE_BLOCKS, f.z + dz * RELOCATE_BLOCKS, 4), 45_000).catch(
+    () => {},
+  );
+  const p = bot.entity.position;
+  const moved = Math.hypot(p.x - before.x, p.z - before.z);
+  console.log(
+    `[Escape] ${bot.username}: relocation moved ${moved.toFixed(0)} blocks to ${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}`,
+  );
+  return moved >= RELOCATE_MIN_PROGRESS;
 }
 
 /** True when the bot's head is already above the water: nothing more to gain by swimming. */
@@ -466,6 +521,7 @@ export const escapeToSurfaceSkill: Skill = {
     let stallCount = 0;
     let wetTurns = 0;
     let retreats = 0;
+    let relocations = 0;
 
     while (!signal.aborted && Date.now() < deadline) {
       if (died) return diedResult();
@@ -568,10 +624,20 @@ export const escapeToSurfaceSkill: Skill = {
             wetTurns = 0;
             continue;
           }
+          // Both retreats spent. Walk out from under the water once before
+          // giving up, because giving up here is what looped sixty times.
+          if (relocations < 1) {
+            relocations++;
+            if (await walkOutFromWater(bot, f, dirs)) {
+              wetTurns = 0;
+              retreats = 0;
+              continue;
+            }
+          }
           bot.removeListener("death", onDeath);
           return {
             success: false,
-            message: `Boxed in by water at y=${f.y}: every stair direction opens into a water pocket. Move a few blocks along the cave and invoke_skill {"skill":"escape_to_surface"} again.`,
+            message: `Boxed in by water at y=${f.y} and the walk out gained nothing: this cave sits under water on every side.`,
             stats: { fromY: startY, toY: f.y },
           };
         }
