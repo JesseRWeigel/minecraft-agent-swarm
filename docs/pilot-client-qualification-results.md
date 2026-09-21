@@ -1,5 +1,10 @@
 # Actual deterministic client qualification — 2026-09-19
 
+Follow-up: the [protected fixed-fixture qualification](research/protected-movement-qualification.md)
+now measures movement through separate observer processes. This page preserves
+the earlier same-process case study and its limitations.
+
+
 A deterministic Mineflayer client and a Paper 1.21.4 server ran inside the same
 private network/PID namespace, using fresh copies of the preserved world
 archive. No model, paid inference, or GPU experiment was started. The live

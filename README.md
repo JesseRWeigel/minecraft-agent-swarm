@@ -1,6 +1,6 @@
 # Minecraft Agent Swarm
 
-A swarm of local-LLM agents that play Minecraft together, with persistent memory, shared coordination, and a hybrid skill system: hand-crafted TypeScript skills, Voyager-style JavaScript skills, and dynamic skill generation. The research goal is to measure whether frontier-model guidance helps a smaller local team improve and retain useful skills at lower total cost.
+A swarm of local-LLM agents that play Minecraft together, with persistent memory, shared coordination, and a hybrid skill system: hand-crafted TypeScript skills, Voyager-style JavaScript skills, and dynamic skill generation.
 
 Each of the 5 bots specializes in a different area — exploring, farming, mining, building, or combat — and they coordinate through shared context and a central resource stash.
 
@@ -15,46 +15,19 @@ This is the project's main scoreboard and the clearest proof of progress: each o
 
 📖 **Project page, devlogs, and live scoreboard stats:** [jesseweigel.com/workshop/minecraft-agent-swarm](https://jesseweigel.com/workshop/minecraft-agent-swarm)
 
-## Research and benchmark status
+## Experimental evaluation
 
-**We are building a reproducible benchmark; we have not published a model leaderboard or demonstrated learning or cost savings yet.** The live advancement ledger tracks gameplay progress in an evolving, supervised system. Changes by human and AI maintainers are interventions, and are recorded separately from bot-earned achievements.
+Alongside the live swarm, we are building a reproducible evaluation track using
+preserved world copies, action/observation provenance, and server-checked outcomes.
+It runs separately from normal gameplay. We have measured a client/server movement
+disagreement and retained both successful and failed qualification attempts; we
+have not demonstrated model learning, cost savings, or robotics transfer.
 
-### A measured result: predicted movement is not completed movement
-
-On 19 September 2026, a deterministic client on an isolated copy of a Paper 1.21.4 world reported movement that the server had not accepted:
-
-| Preserved attempt | Client-predicted horizontal movement | Server-observed horizontal movement | Evaluator outcome |
-| --- | ---: | ---: | --- |
-| Before readiness fix | 3.373 blocks | 0 blocks | Movement rejected |
-| After readiness and observation fixes | 3.901 blocks | 3.901 blocks | Movement accepted |
-| Stationary negative control | 0 blocks | 0 blocks | Movement rejected, as expected |
-
-The diagnosis identified the server's client-loaded readiness gate. The corrected client sends the normal readiness packet and checks position agreement before and after its action. All four development attempts, including an earlier login timeout, were preserved. This case shows why an agent's own report needs verification against the environment.
-
-These were infrastructure checks with no model involved. Spawn positions differed and several fixes were introduced together. The historical client queried the server itself; a separately protected observer is still being integrated. See the [complete case study and limitations](docs/pilot-client-qualification-results.md), [machine-readable summary](docs/research/movement-case-study-2026-09-19.json), and [qualification setup](docs/pilot-client-qualification.md). The JSON is a derived summary of private evidence, not a public raw-data release or an independently reproduced result.
-
-**Latest requalification (21 September):** the current no-respawn client moved only **0.20 blocks** in a fresh forward attempt and correctly failed the movement threshold; its stationary control again recorded zero. Positions agreed in both runs and shutdown was clean. These retained results reinforce the need for fixed actor starting states before repeatable comparisons. [Both follow-up attempts and pins](docs/research/client-requalification-2026-09-21.json).
-
-### What exists and what comes next
-
-- **Available:** preserved world/log archives, run and action provenance, before/terminal observation links, an intervention ledger, offline dataset tooling, and isolated deterministic client qualification.
-- **In progress:** the protected participant/observer runner and bounded process communication. Component and namespace tests do not yet qualify the complete game experiment.
-- **Next experimental milestone:** publish an audited pilot with fixed actor/task/world conditions, positive and negative controls, and all failed or interrupted attempts accounted for.
-- **Research comparison:** local-only agents, frontier-assisted agents, and agents retaining improvements with frontier help removed. Measure server-confirmed success, elapsed time, inference use/cost, and interventions, with held-out tasks for retention/generalization.
-
-The long-running swarm archive is useful material for failure analysis, but it is not automatically a training-ready dataset. Simulation performance alone does not establish transfer to robotics. See the [first-release checklist](docs/research/benchmark-release-checklist.md), [study protocol](docs/pilot-study-protocol.md), and [protected observer design and remaining gates](docs/plans/2026-09-19-protected-observer.md).
-
-### Contribute to the benchmark
-
-The highest-value contributions now are small survival tasks with explicit starting conditions and server-checkable success criteria, negative controls that catch false success, and independent reproduction of the qualification. Please include expected evidence, failure conditions, and reset requirements in an issue. Start with [the benchmark tracking issue](https://github.com/JesseRWeigel/minecraft-agent-swarm/issues/32).
-
-You can run the dependency-free Python pilot checks without starting Minecraft or loading a model:
-
-```sh
-python3 -m unittest discover -s tools/pilot
-```
-
-Real namespace checks require a supported Linux host and an explicitly configured Bubblewrap executable; they are skipped by ordinary discovery. See the [explicit qualification commands](docs/plans/2026-09-19-protected-observer.md#qualified-synthetic-boundary-19-september-2026). Game qualification uses disposable copies and requires its own pinned local assets; the private world, raw logs, credentials, and model files are not bundled.
+See the [research status and evidence](docs/research/README.md),
+[first benchmark release checklist](docs/research/benchmark-release-checklist.md),
+and [study protocol](docs/pilot-study-protocol.md). Jev-inspired decision models
+are an [optional comparison under investigation](docs/research/typed-decision-models.md),
+not a requirement for running the swarm.
 
 ---
 

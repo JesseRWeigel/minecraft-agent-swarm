@@ -1,0 +1,2162 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-21",
+  "scope": "Fixed deterministic client infrastructure qualification, not a model benchmark. Derived summary of preserved private evidence; no public world or raw-log release.",
+  "original_archive_rehashed_unchanged": true,
+  "live_swarm_modified": false,
+  "model_calls": 0,
+  "fixture_interventions": "Trusted setup builds an arena and normalizes the actor before measurement; none is bot-earned gameplay.",
+  "limits": [
+    "Two forward and two stationary successes follow one failed setup attempt; too few for statistical performance claims.",
+    "Actor baseline is checked; entire world/tick state is not deterministic.",
+    "Actual death, disconnect and observer-timeout game qualification remains pending.",
+    "Participant shares private RCON-reachable network but receives no credential; arbitrary model code requires additional network and resource gates."
+  ],
+  "attempts": [
+    {
+      "status": "failed",
+      "movement_mode": "forward",
+      "error": null,
+      "stage": "validate",
+      "evidence_valid": false,
+      "source_manifest_sha256": "92a959f4f10c72ca3afcd22a8287d1de1ec202b291e88913e269e695673e08f6",
+      "controller_sha256": "cb90416a00e9bd4feabf8396e30c6117ebb976c7f1e40eef5f41971fa2651cd3",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "profile_sha256": "df5e2af8e2f245ab49b8ee9908b4226238290216decb41d0bd3c71deeeff3669",
+      "runtime_manifest_sha256": "3c41a1cb0b260c1f86db14faa19607026c9da0f6a5fb0091c25ce3276aee65a1",
+      "evidence_sha256": "49277bcd0b8013c43ef9e29e0892514608b94f176e6748a09787fad9ab7a49d7",
+      "process": {
+        "status": "exited",
+        "returncode": 1,
+        "signal": null,
+        "timed_out": false,
+        "stop_sent": false,
+        "term_sent": false,
+        "kill_sent": false,
+        "descendant_cleanup": false,
+        "cleanup_uncertain": false,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "elapsed_seconds": 9.010849536862224,
+        "ready": false
+      },
+      "attempt": "attempt-001",
+      "private_result_sha256": "49277bcd0b8013c43ef9e29e0892514608b94f176e6748a09787fad9ab7a49d7",
+      "observations": {
+        "before": null,
+        "terminal": null
+      },
+      "score": null,
+      "lifecycle": {
+        "status": "failed",
+        "error": "protected_qualification_failed",
+        "independent_observer_process": false,
+        "participant_returncode": -9,
+        "participant_forced_cleanup": true,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false
+      },
+      "fixture": {
+        "baseline": null,
+        "baselineVerification": null,
+        "setup": null
+      }
+    },
+    {
+      "status": "qualified",
+      "movement_mode": "forward",
+      "error": null,
+      "stage": "validate",
+      "evidence_valid": true,
+      "source_manifest_sha256": "bea45538e272a0f28f453651b598150c0a8a62e3440c9930535b77f14b6cdfcb",
+      "controller_sha256": "cb90416a00e9bd4feabf8396e30c6117ebb976c7f1e40eef5f41971fa2651cd3",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "profile_sha256": "d610179376bd80386dbe178d265e0f2ce17c848a789942abb600caf69721ae83",
+      "runtime_manifest_sha256": "3c41a1cb0b260c1f86db14faa19607026c9da0f6a5fb0091c25ce3276aee65a1",
+      "evidence_sha256": "0a65bd77269532b0d4b8a4b93a693cd7dc3c4827a3ba0cfe5ca9f73482e066f6",
+      "process": {
+        "status": "exited",
+        "returncode": 0,
+        "signal": null,
+        "timed_out": false,
+        "stop_sent": false,
+        "term_sent": false,
+        "kill_sent": false,
+        "descendant_cleanup": false,
+        "cleanup_uncertain": false,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "elapsed_seconds": 12.890246561728418,
+        "ready": false
+      },
+      "attempt": "attempt-002",
+      "private_result_sha256": "0a65bd77269532b0d4b8a4b93a693cd7dc3c4827a3ba0cfe5ca9f73482e066f6",
+      "observations": {
+        "before": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            }
+          },
+          "phase": "before",
+          "sample": {
+            "durationMs": 5.974221,
+            "finishedAtUtc": "2026-09-21T20:49:44.638Z",
+            "finishedMonotonicMs": 29.612674,
+            "queryWindows": [
+              {
+                "durationMs": 2.09309,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T20:49:44.637Z",
+                "finishedMonotonicMs": 28.014852,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:49:44.635Z",
+                "startedMonotonicMs": 25.921762
+              },
+              {
+                "durationMs": 0.5662669999999999,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T20:49:44.637Z",
+                "finishedMonotonicMs": 28.805248,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:49:44.637Z",
+                "startedMonotonicMs": 28.238981
+              },
+              {
+                "durationMs": 0.7196539999999985,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T20:49:44.638Z",
+                "finishedMonotonicMs": 29.562178,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:49:44.637Z",
+                "startedMonotonicMs": 28.842524
+              }
+            ],
+            "startedAtUtc": "2026-09-21T20:49:44.632Z",
+            "startedMonotonicMs": 23.638453
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "terminal": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 4.297922578814884
+            }
+          },
+          "phase": "terminal",
+          "sample": {
+            "durationMs": 6.556355999999994,
+            "finishedAtUtc": "2026-09-21T20:49:46.024Z",
+            "finishedMonotonicMs": 71.853432,
+            "queryWindows": [
+              {
+                "durationMs": 1.595745000000008,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T20:49:46.021Z",
+                "finishedMonotonicMs": 68.773908,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:49:46.020Z",
+                "startedMonotonicMs": 67.178163
+              },
+              {
+                "durationMs": 0.8594259999999991,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T20:49:46.023Z",
+                "finishedMonotonicMs": 70.826636,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:49:46.023Z",
+                "startedMonotonicMs": 69.96721
+              },
+              {
+                "durationMs": 0.7381189999999975,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T20:49:46.024Z",
+                "finishedMonotonicMs": 71.60455,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:49:46.023Z",
+                "startedMonotonicMs": 70.866431
+              }
+            ],
+            "startedAtUtc": "2026-09-21T20:49:46.018Z",
+            "startedMonotonicMs": 65.297076
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        }
+      },
+      "score": {
+        "delta": {
+          "x": 0.0,
+          "y": 0,
+          "z": 3.797922578814884
+        },
+        "horizontal_displacement": 3.797922578814884,
+        "movement_succeeded": true,
+        "negative_control_observed": false,
+        "observations_valid": true
+      },
+      "lifecycle": {
+        "status": "qualified",
+        "error": null,
+        "independent_observer_process": true,
+        "participant_returncode": 0,
+        "participant_forced_cleanup": false,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false
+      },
+      "fixture": {
+        "baseline": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            }
+          },
+          "phase": "before",
+          "sample": {
+            "durationMs": 6.114789999999971,
+            "finishedAtUtc": "2026-09-21T20:49:44.602Z",
+            "finishedMonotonicMs": 382.673632,
+            "queryWindows": [
+              {
+                "durationMs": 2.1950560000000223,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T20:49:44.600Z",
+                "finishedMonotonicMs": 381.017154,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:49:44.598Z",
+                "startedMonotonicMs": 378.822098
+              },
+              {
+                "durationMs": 0.5732920000000377,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T20:49:44.601Z",
+                "finishedMonotonicMs": 381.986303,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:49:44.601Z",
+                "startedMonotonicMs": 381.413011
+              },
+              {
+                "durationMs": 0.5902340000000095,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T20:49:44.602Z",
+                "finishedMonotonicMs": 382.617079,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:49:44.601Z",
+                "startedMonotonicMs": 382.026845
+              }
+            ],
+            "startedAtUtc": "2026-09-21T20:49:44.596Z",
+            "startedMonotonicMs": 376.558842
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "baselineVerification": {
+          "status": "verified"
+        },
+        "setup": {
+          "baselineChecks": [
+            {
+              "durationMs": 10.088662,
+              "finishedMonotonicMs": 367.703135,
+              "name": "orientation",
+              "startedMonotonicMs": 357.614473,
+              "status": "verified"
+            },
+            {
+              "durationMs": 0.9801140000000146,
+              "finishedMonotonicMs": 368.688782,
+              "name": "inventory",
+              "startedMonotonicMs": 367.708668,
+              "status": "verified"
+            },
+            {
+              "durationMs": 4.508492999999987,
+              "finishedMonotonicMs": 373.19928,
+              "name": "game_mode",
+              "startedMonotonicMs": 368.690787,
+              "status": "verified"
+            },
+            {
+              "durationMs": 1.5422750000000178,
+              "finishedMonotonicMs": 374.745747,
+              "name": "food",
+              "startedMonotonicMs": 373.203472,
+              "status": "verified"
+            },
+            {
+              "durationMs": 1.0942989999999782,
+              "finishedMonotonicMs": 375.842558,
+              "name": "effects",
+              "startedMonotonicMs": 374.748259,
+              "status": "verified"
+            }
+          ],
+          "commandWindows": [
+            {
+              "durationMs": 8.300400999999994,
+              "finishedMonotonicMs": 100.228023,
+              "name": "peaceful_difficulty",
+              "outcome": "issued",
+              "responseBytes": 39,
+              "responseType": "string",
+              "startedMonotonicMs": 91.927622,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 2.8500609999999966,
+              "finishedMonotonicMs": 103.083805,
+              "name": "disable_mob_spawning",
+              "outcome": "issued",
+              "responseBytes": 43,
+              "responseType": "string",
+              "startedMonotonicMs": 100.233744,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.9486299999999943,
+              "finishedMonotonicMs": 104.035051,
+              "name": "disable_daylight_cycle",
+              "outcome": "issued",
+              "responseBytes": 45,
+              "responseType": "string",
+              "startedMonotonicMs": 103.086421,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.996783999999991,
+              "finishedMonotonicMs": 105.033639,
+              "name": "disable_weather_cycle",
+              "outcome": "issued",
+              "responseBytes": 44,
+              "responseType": "string",
+              "startedMonotonicMs": 104.036855,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.4098319999999944,
+              "finishedMonotonicMs": 106.446379,
+              "name": "fixed_day",
+              "outcome": "issued",
+              "responseBytes": 20,
+              "responseType": "string",
+              "startedMonotonicMs": 105.036547,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.128101000000001,
+              "finishedMonotonicMs": 107.576475,
+              "name": "clear_weather",
+              "outcome": "issued",
+              "responseBytes": 24,
+              "responseType": "string",
+              "startedMonotonicMs": 106.448374,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 14.270657999999997,
+              "finishedMonotonicMs": 121.848981,
+              "name": "forceload_fixture",
+              "outcome": "issued",
+              "responseBytes": 81,
+              "responseType": "string",
+              "startedMonotonicMs": 107.578323,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 7.192036999999985,
+              "finishedMonotonicMs": 129.04527,
+              "name": "clear_fixture_volume",
+              "outcome": "issued",
+              "responseBytes": 21,
+              "responseType": "string",
+              "startedMonotonicMs": 121.853233,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 99.337558,
+              "finishedMonotonicMs": 228.388294,
+              "name": "build_stone_floor",
+              "outcome": "issued",
+              "responseBytes": 32,
+              "responseType": "string",
+              "startedMonotonicMs": 129.050736,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 12.875864000000007,
+              "finishedMonotonicMs": 241.269135,
+              "name": "clear_inventory",
+              "outcome": "issued",
+              "responseBytes": 40,
+              "responseType": "string",
+              "startedMonotonicMs": 228.393271,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.231066999999996,
+              "finishedMonotonicMs": 242.504028,
+              "name": "survival_mode",
+              "outcome": "issued",
+              "responseBytes": 0,
+              "responseType": "string",
+              "startedMonotonicMs": 241.272961,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 6.781101000000007,
+              "finishedMonotonicMs": 249.286787,
+              "name": "fixed_spawn",
+              "outcome": "issued",
+              "responseBytes": 55,
+              "responseType": "string",
+              "startedMonotonicMs": 242.505686,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 5.708219000000014,
+              "finishedMonotonicMs": 254.999467,
+              "name": "restore_health",
+              "outcome": "issued",
+              "responseBytes": 43,
+              "responseType": "string",
+              "startedMonotonicMs": 249.291248,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.3277929999999856,
+              "finishedMonotonicMs": 256.332454,
+              "name": "restore_food",
+              "outcome": "issued",
+              "responseBytes": 39,
+              "responseType": "string",
+              "startedMonotonicMs": 255.004661,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.9931310000000053,
+              "finishedMonotonicMs": 257.328043,
+              "name": "clear_effects",
+              "outcome": "issued",
+              "responseBytes": 36,
+              "responseType": "string",
+              "startedMonotonicMs": 256.334912,
+              "verification": "unverified"
+            }
+          ],
+          "durationMs": 283.92774099999997,
+          "fixture": {
+            "actor": "PilotProbe",
+            "baselineQueries": [
+              {
+                "command": "data get entity PilotProbe Rotation",
+                "name": "orientation"
+              },
+              {
+                "command": "data get entity PilotProbe Inventory",
+                "name": "inventory"
+              },
+              {
+                "command": "data get entity PilotProbe playerGameType",
+                "name": "game_mode"
+              },
+              {
+                "command": "data get entity PilotProbe foodLevel",
+                "name": "food"
+              },
+              {
+                "command": "data get entity PilotProbe active_effects",
+                "name": "effects"
+              }
+            ],
+            "commands": [
+              {
+                "command": "difficulty peaceful",
+                "name": "peaceful_difficulty"
+              },
+              {
+                "command": "gamerule doMobSpawning false",
+                "name": "disable_mob_spawning"
+              },
+              {
+                "command": "gamerule doDaylightCycle false",
+                "name": "disable_daylight_cycle"
+              },
+              {
+                "command": "gamerule doWeatherCycle false",
+                "name": "disable_weather_cycle"
+              },
+              {
+                "command": "time set day",
+                "name": "fixed_day"
+              },
+              {
+                "command": "weather clear",
+                "name": "clear_weather"
+              },
+              {
+                "command": "execute in minecraft:overworld run forceload add -4 -4 4 12",
+                "name": "forceload_fixture"
+              },
+              {
+                "command": "execute in minecraft:overworld run fill -4 199 -4 4 204 12 minecraft:air",
+                "name": "clear_fixture_volume"
+              },
+              {
+                "command": "execute in minecraft:overworld run fill -4 199 -4 4 199 12 minecraft:stone",
+                "name": "build_stone_floor"
+              },
+              {
+                "command": "clear PilotProbe",
+                "name": "clear_inventory"
+              },
+              {
+                "command": "gamemode survival PilotProbe",
+                "name": "survival_mode"
+              },
+              {
+                "command": "execute in minecraft:overworld run teleport PilotProbe 0.5 200 0.5 0 0",
+                "name": "fixed_spawn"
+              },
+              {
+                "command": "effect give PilotProbe minecraft:instant_health 1 255 true",
+                "name": "restore_health"
+              },
+              {
+                "command": "effect give PilotProbe minecraft:saturation 1 255 true",
+                "name": "restore_food"
+              },
+              {
+                "command": "effect clear PilotProbe",
+                "name": "clear_effects"
+              }
+            ],
+            "position": {
+              "pitch": 0,
+              "x": 0.5,
+              "y": 200,
+              "yaw": 0,
+              "z": 0.5
+            },
+            "schemaVersion": 1,
+            "settleMs": 100,
+            "sha256": "3a696ca577186c8d2f308fd07fa31d72a3c2a4d98018beb2e64afacd5b358ac7"
+          },
+          "schemaVersion": 1,
+          "status": "configured"
+        }
+      }
+    },
+    {
+      "status": "qualified",
+      "movement_mode": "stationary",
+      "error": null,
+      "stage": "validate",
+      "evidence_valid": true,
+      "source_manifest_sha256": "bea45538e272a0f28f453651b598150c0a8a62e3440c9930535b77f14b6cdfcb",
+      "controller_sha256": "cb90416a00e9bd4feabf8396e30c6117ebb976c7f1e40eef5f41971fa2651cd3",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "profile_sha256": "c2ac8da3625d321630e3c904fc57b487475199257f486083c9ac70214d105a91",
+      "runtime_manifest_sha256": "3c41a1cb0b260c1f86db14faa19607026c9da0f6a5fb0091c25ce3276aee65a1",
+      "evidence_sha256": "71044d4882f19d8983fa41b198a999ed78779bd33f78adf249ae06c763b8e9c0",
+      "process": {
+        "status": "exited",
+        "returncode": 0,
+        "signal": null,
+        "timed_out": false,
+        "stop_sent": false,
+        "term_sent": false,
+        "kill_sent": false,
+        "descendant_cleanup": false,
+        "cleanup_uncertain": false,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "elapsed_seconds": 11.940803379751742,
+        "ready": false
+      },
+      "attempt": "attempt-003",
+      "private_result_sha256": "71044d4882f19d8983fa41b198a999ed78779bd33f78adf249ae06c763b8e9c0",
+      "observations": {
+        "before": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            }
+          },
+          "phase": "before",
+          "sample": {
+            "durationMs": 4.805067000000001,
+            "finishedAtUtc": "2026-09-21T20:50:34.748Z",
+            "finishedMonotonicMs": 39.838786,
+            "queryWindows": [
+              {
+                "durationMs": 1.1959170000000015,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T20:50:34.747Z",
+                "finishedMonotonicMs": 38.229569,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:50:34.746Z",
+                "startedMonotonicMs": 37.033652
+              },
+              {
+                "durationMs": 0.6420439999999985,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T20:50:34.748Z",
+                "finishedMonotonicMs": 39.064901,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:50:34.747Z",
+                "startedMonotonicMs": 38.422857
+              },
+              {
+                "durationMs": 0.650264,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T20:50:34.748Z",
+                "finishedMonotonicMs": 39.766179,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:50:34.748Z",
+                "startedMonotonicMs": 39.115915
+              }
+            ],
+            "startedAtUtc": "2026-09-21T20:50:34.744Z",
+            "startedMonotonicMs": 35.033719
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "terminal": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            }
+          },
+          "phase": "terminal",
+          "sample": {
+            "durationMs": 8.413046999999999,
+            "finishedAtUtc": "2026-09-21T20:50:36.128Z",
+            "finishedMonotonicMs": 49.901744,
+            "queryWindows": [
+              {
+                "durationMs": 4.459882999999998,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T20:50:36.126Z",
+                "finishedMonotonicMs": 47.830202,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:50:36.121Z",
+                "startedMonotonicMs": 43.370319
+              },
+              {
+                "durationMs": 0.7382849999999976,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T20:50:36.127Z",
+                "finishedMonotonicMs": 49.043341,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:50:36.126Z",
+                "startedMonotonicMs": 48.305056
+              },
+              {
+                "durationMs": 0.7410660000000036,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T20:50:36.128Z",
+                "finishedMonotonicMs": 49.826157,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:50:36.127Z",
+                "startedMonotonicMs": 49.085091
+              }
+            ],
+            "startedAtUtc": "2026-09-21T20:50:36.120Z",
+            "startedMonotonicMs": 41.488697
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        }
+      },
+      "score": {
+        "delta": {
+          "x": 0.0,
+          "y": 0,
+          "z": 0.0
+        },
+        "horizontal_displacement": 0.0,
+        "movement_succeeded": false,
+        "negative_control_observed": true,
+        "observations_valid": true
+      },
+      "lifecycle": {
+        "status": "qualified",
+        "error": null,
+        "independent_observer_process": true,
+        "participant_returncode": 0,
+        "participant_forced_cleanup": false,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false
+      },
+      "fixture": {
+        "baseline": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            }
+          },
+          "phase": "before",
+          "sample": {
+            "durationMs": 4.219617000000028,
+            "finishedAtUtc": "2026-09-21T20:50:34.702Z",
+            "finishedMonotonicMs": 360.187652,
+            "queryWindows": [
+              {
+                "durationMs": 0.6004260000000272,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T20:50:34.700Z",
+                "finishedMonotonicMs": 358.490538,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:50:34.700Z",
+                "startedMonotonicMs": 357.890112
+              },
+              {
+                "durationMs": 0.8663610000000403,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T20:50:34.702Z",
+                "finishedMonotonicMs": 359.723716,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:50:34.701Z",
+                "startedMonotonicMs": 358.857355
+              },
+              {
+                "durationMs": 0.37175999999999476,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T20:50:34.702Z",
+                "finishedMonotonicMs": 360.139307,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:50:34.702Z",
+                "startedMonotonicMs": 359.767547
+              }
+            ],
+            "startedAtUtc": "2026-09-21T20:50:34.698Z",
+            "startedMonotonicMs": 355.968035
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "baselineVerification": {
+          "status": "verified"
+        },
+        "setup": {
+          "baselineChecks": [
+            {
+              "durationMs": 9.147843000000023,
+              "finishedMonotonicMs": 351.658132,
+              "name": "orientation",
+              "startedMonotonicMs": 342.510289,
+              "status": "verified"
+            },
+            {
+              "durationMs": 0.9149409999999989,
+              "finishedMonotonicMs": 352.580921,
+              "name": "inventory",
+              "startedMonotonicMs": 351.66598,
+              "status": "verified"
+            },
+            {
+              "durationMs": 1.639661999999987,
+              "finishedMonotonicMs": 354.222741,
+              "name": "game_mode",
+              "startedMonotonicMs": 352.583079,
+              "status": "verified"
+            },
+            {
+              "durationMs": 0.7002200000000016,
+              "finishedMonotonicMs": 354.924606,
+              "name": "food",
+              "startedMonotonicMs": 354.224386,
+              "status": "verified"
+            },
+            {
+              "durationMs": 0.6900440000000003,
+              "finishedMonotonicMs": 355.617532,
+              "name": "effects",
+              "startedMonotonicMs": 354.927488,
+              "status": "verified"
+            }
+          ],
+          "commandWindows": [
+            {
+              "durationMs": 9.732197,
+              "finishedMonotonicMs": 81.750339,
+              "name": "peaceful_difficulty",
+              "outcome": "issued",
+              "responseBytes": 39,
+              "responseType": "string",
+              "startedMonotonicMs": 72.018142,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 12.988812999999993,
+              "finishedMonotonicMs": 94.744513,
+              "name": "disable_mob_spawning",
+              "outcome": "issued",
+              "responseBytes": 43,
+              "responseType": "string",
+              "startedMonotonicMs": 81.7557,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.1644909999999982,
+              "finishedMonotonicMs": 95.912611,
+              "name": "disable_daylight_cycle",
+              "outcome": "issued",
+              "responseBytes": 45,
+              "responseType": "string",
+              "startedMonotonicMs": 94.74812,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.7196070000000105,
+              "finishedMonotonicMs": 96.633813,
+              "name": "disable_weather_cycle",
+              "outcome": "issued",
+              "responseBytes": 44,
+              "responseType": "string",
+              "startedMonotonicMs": 95.914206,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.346547000000001,
+              "finishedMonotonicMs": 97.98308,
+              "name": "fixed_day",
+              "outcome": "issued",
+              "responseBytes": 20,
+              "responseType": "string",
+              "startedMonotonicMs": 96.636533,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.8808400000000063,
+              "finishedMonotonicMs": 98.865553,
+              "name": "clear_weather",
+              "outcome": "issued",
+              "responseBytes": 24,
+              "responseType": "string",
+              "startedMonotonicMs": 97.984713,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 11.749557999999993,
+              "finishedMonotonicMs": 110.619981,
+              "name": "forceload_fixture",
+              "outcome": "issued",
+              "responseBytes": 81,
+              "responseType": "string",
+              "startedMonotonicMs": 98.870423,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 5.39512400000001,
+              "finishedMonotonicMs": 116.021038,
+              "name": "clear_fixture_volume",
+              "outcome": "issued",
+              "responseBytes": 21,
+              "responseType": "string",
+              "startedMonotonicMs": 110.625914,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 94.73606899999999,
+              "finishedMonotonicMs": 210.762039,
+              "name": "build_stone_floor",
+              "outcome": "issued",
+              "responseBytes": 32,
+              "responseType": "string",
+              "startedMonotonicMs": 116.02597,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 18.44395399999999,
+              "finishedMonotonicMs": 229.211075,
+              "name": "clear_inventory",
+              "outcome": "issued",
+              "responseBytes": 40,
+              "responseType": "string",
+              "startedMonotonicMs": 210.767121,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.9546420000000069,
+              "finishedMonotonicMs": 231.170165,
+              "name": "survival_mode",
+              "outcome": "issued",
+              "responseBytes": 0,
+              "responseType": "string",
+              "startedMonotonicMs": 229.215523,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 4.882503000000014,
+              "finishedMonotonicMs": 236.056002,
+              "name": "fixed_spawn",
+              "outcome": "issued",
+              "responseBytes": 55,
+              "responseType": "string",
+              "startedMonotonicMs": 231.173499,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 4.116870999999975,
+              "finishedMonotonicMs": 240.175809,
+              "name": "restore_health",
+              "outcome": "issued",
+              "responseBytes": 43,
+              "responseType": "string",
+              "startedMonotonicMs": 236.058938,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.9740819999999815,
+              "finishedMonotonicMs": 241.152866,
+              "name": "restore_food",
+              "outcome": "issued",
+              "responseBytes": 39,
+              "responseType": "string",
+              "startedMonotonicMs": 240.178784,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.954006000000021,
+              "finishedMonotonicMs": 242.108639,
+              "name": "clear_effects",
+              "outcome": "issued",
+              "responseBytes": 36,
+              "responseType": "string",
+              "startedMonotonicMs": 241.154633,
+              "verification": "unverified"
+            }
+          ],
+          "durationMs": 283.61123999999995,
+          "fixture": {
+            "actor": "PilotProbe",
+            "baselineQueries": [
+              {
+                "command": "data get entity PilotProbe Rotation",
+                "name": "orientation"
+              },
+              {
+                "command": "data get entity PilotProbe Inventory",
+                "name": "inventory"
+              },
+              {
+                "command": "data get entity PilotProbe playerGameType",
+                "name": "game_mode"
+              },
+              {
+                "command": "data get entity PilotProbe foodLevel",
+                "name": "food"
+              },
+              {
+                "command": "data get entity PilotProbe active_effects",
+                "name": "effects"
+              }
+            ],
+            "commands": [
+              {
+                "command": "difficulty peaceful",
+                "name": "peaceful_difficulty"
+              },
+              {
+                "command": "gamerule doMobSpawning false",
+                "name": "disable_mob_spawning"
+              },
+              {
+                "command": "gamerule doDaylightCycle false",
+                "name": "disable_daylight_cycle"
+              },
+              {
+                "command": "gamerule doWeatherCycle false",
+                "name": "disable_weather_cycle"
+              },
+              {
+                "command": "time set day",
+                "name": "fixed_day"
+              },
+              {
+                "command": "weather clear",
+                "name": "clear_weather"
+              },
+              {
+                "command": "execute in minecraft:overworld run forceload add -4 -4 4 12",
+                "name": "forceload_fixture"
+              },
+              {
+                "command": "execute in minecraft:overworld run fill -4 199 -4 4 204 12 minecraft:air",
+                "name": "clear_fixture_volume"
+              },
+              {
+                "command": "execute in minecraft:overworld run fill -4 199 -4 4 199 12 minecraft:stone",
+                "name": "build_stone_floor"
+              },
+              {
+                "command": "clear PilotProbe",
+                "name": "clear_inventory"
+              },
+              {
+                "command": "gamemode survival PilotProbe",
+                "name": "survival_mode"
+              },
+              {
+                "command": "execute in minecraft:overworld run teleport PilotProbe 0.5 200 0.5 0 0",
+                "name": "fixed_spawn"
+              },
+              {
+                "command": "effect give PilotProbe minecraft:instant_health 1 255 true",
+                "name": "restore_health"
+              },
+              {
+                "command": "effect give PilotProbe minecraft:saturation 1 255 true",
+                "name": "restore_food"
+              },
+              {
+                "command": "effect clear PilotProbe",
+                "name": "clear_effects"
+              }
+            ],
+            "position": {
+              "pitch": 0,
+              "x": 0.5,
+              "y": 200,
+              "yaw": 0,
+              "z": 0.5
+            },
+            "schemaVersion": 1,
+            "settleMs": 100,
+            "sha256": "3a696ca577186c8d2f308fd07fa31d72a3c2a4d98018beb2e64afacd5b358ac7"
+          },
+          "schemaVersion": 1,
+          "status": "configured"
+        }
+      }
+    },
+    {
+      "status": "qualified",
+      "movement_mode": "forward",
+      "error": null,
+      "stage": "validate",
+      "evidence_valid": true,
+      "source_manifest_sha256": "ef4de27780ce57d9b7efab393f0626f287ab20abd04e7e50631eb70d3ecaaf58",
+      "controller_sha256": "cb90416a00e9bd4feabf8396e30c6117ebb976c7f1e40eef5f41971fa2651cd3",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "profile_sha256": "d40bea214229bb64946b6a683c1b78bd3e103f7ecda2762cc455ea442526ba1f",
+      "runtime_manifest_sha256": "3c41a1cb0b260c1f86db14faa19607026c9da0f6a5fb0091c25ce3276aee65a1",
+      "evidence_sha256": "d6b46448e0f90850071eaeedcd37cb22312b27580662540b9695cce9515ff1eb",
+      "process": {
+        "status": "exited",
+        "returncode": 0,
+        "signal": null,
+        "timed_out": false,
+        "stop_sent": false,
+        "term_sent": false,
+        "kill_sent": false,
+        "descendant_cleanup": false,
+        "cleanup_uncertain": false,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "elapsed_seconds": 11.354623097926378,
+        "ready": false
+      },
+      "attempt": "attempt-004",
+      "private_result_sha256": "d6b46448e0f90850071eaeedcd37cb22312b27580662540b9695cce9515ff1eb",
+      "observations": {
+        "before": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            }
+          },
+          "phase": "before",
+          "sample": {
+            "durationMs": 4.798657000000002,
+            "finishedAtUtc": "2026-09-21T20:52:22.924Z",
+            "finishedMonotonicMs": 30.052813,
+            "queryWindows": [
+              {
+                "durationMs": 1.3833739999999999,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T20:52:22.922Z",
+                "finishedMonotonicMs": 28.547473,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:52:22.921Z",
+                "startedMonotonicMs": 27.164099
+              },
+              {
+                "durationMs": 0.6390269999999987,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T20:52:22.923Z",
+                "finishedMonotonicMs": 29.416691,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:52:22.923Z",
+                "startedMonotonicMs": 28.777664
+              },
+              {
+                "durationMs": 0.5335350000000005,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T20:52:22.924Z",
+                "finishedMonotonicMs": 29.992161,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:52:22.923Z",
+                "startedMonotonicMs": 29.458626
+              }
+            ],
+            "startedAtUtc": "2026-09-21T20:52:22.919Z",
+            "startedMonotonicMs": 25.254156
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "terminal": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 4.513781653237059
+            }
+          },
+          "phase": "terminal",
+          "sample": {
+            "durationMs": 9.147457000000003,
+            "finishedAtUtc": "2026-09-21T20:52:24.360Z",
+            "finishedMonotonicMs": 119.02265,
+            "queryWindows": [
+              {
+                "durationMs": 1.0978840000000076,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T20:52:24.354Z",
+                "finishedMonotonicMs": 112.858838,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:52:24.353Z",
+                "startedMonotonicMs": 111.760954
+              },
+              {
+                "durationMs": 0.5540510000000012,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T20:52:24.355Z",
+                "finishedMonotonicMs": 113.605357,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:52:24.354Z",
+                "startedMonotonicMs": 113.051306
+              },
+              {
+                "durationMs": 5.28033099999999,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T20:52:24.360Z",
+                "finishedMonotonicMs": 118.923222,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:52:24.355Z",
+                "startedMonotonicMs": 113.642891
+              }
+            ],
+            "startedAtUtc": "2026-09-21T20:52:24.351Z",
+            "startedMonotonicMs": 109.875193
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        }
+      },
+      "score": {
+        "delta": {
+          "x": 0.0,
+          "y": 0,
+          "z": 4.013781653237059
+        },
+        "horizontal_displacement": 4.013781653237059,
+        "movement_succeeded": true,
+        "negative_control_observed": false,
+        "observations_valid": true
+      },
+      "lifecycle": {
+        "status": "qualified",
+        "error": null,
+        "independent_observer_process": true,
+        "participant_returncode": 0,
+        "participant_forced_cleanup": false,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false
+      },
+      "fixture": {
+        "baseline": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            }
+          },
+          "phase": "before",
+          "sample": {
+            "durationMs": 3.9822940000000244,
+            "finishedAtUtc": "2026-09-21T20:52:22.888Z",
+            "finishedMonotonicMs": 327.656654,
+            "queryWindows": [
+              {
+                "durationMs": 0.6562809999999786,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T20:52:22.887Z",
+                "finishedMonotonicMs": 326.267029,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:52:22.886Z",
+                "startedMonotonicMs": 325.610748
+              },
+              {
+                "durationMs": 0.49862699999999904,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T20:52:22.887Z",
+                "finishedMonotonicMs": 327.040626,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:52:22.887Z",
+                "startedMonotonicMs": 326.541999
+              },
+              {
+                "durationMs": 0.5035739999999578,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T20:52:22.888Z",
+                "finishedMonotonicMs": 327.5841,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:52:22.887Z",
+                "startedMonotonicMs": 327.080526
+              }
+            ],
+            "startedAtUtc": "2026-09-21T20:52:22.884Z",
+            "startedMonotonicMs": 323.67436
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "baselineVerification": {
+          "status": "verified"
+        },
+        "setup": {
+          "baselineChecks": [
+            {
+              "durationMs": 10.501033000000007,
+              "finishedMonotonicMs": 319.6734,
+              "name": "orientation",
+              "startedMonotonicMs": 309.172367,
+              "status": "verified"
+            },
+            {
+              "durationMs": 0.9166009999999574,
+              "finishedMonotonicMs": 320.597811,
+              "name": "inventory",
+              "startedMonotonicMs": 319.68121,
+              "status": "verified"
+            },
+            {
+              "durationMs": 0.48962099999999964,
+              "finishedMonotonicMs": 321.089196,
+              "name": "game_mode",
+              "startedMonotonicMs": 320.599575,
+              "status": "verified"
+            },
+            {
+              "durationMs": 0.5618640000000141,
+              "finishedMonotonicMs": 321.652645,
+              "name": "food",
+              "startedMonotonicMs": 321.090781,
+              "status": "verified"
+            },
+            {
+              "durationMs": 1.6875329999999735,
+              "finishedMonotonicMs": 323.342406,
+              "name": "effects",
+              "startedMonotonicMs": 321.654873,
+              "status": "verified"
+            }
+          ],
+          "commandWindows": [
+            {
+              "durationMs": 15.180496999999995,
+              "finishedMonotonicMs": 59.613811,
+              "name": "peaceful_difficulty",
+              "outcome": "issued",
+              "responseBytes": 39,
+              "responseType": "string",
+              "startedMonotonicMs": 44.433314,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 4.294076000000004,
+              "finishedMonotonicMs": 63.912548,
+              "name": "disable_mob_spawning",
+              "outcome": "issued",
+              "responseBytes": 43,
+              "responseType": "string",
+              "startedMonotonicMs": 59.618472,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.0118530000000021,
+              "finishedMonotonicMs": 64.928331,
+              "name": "disable_daylight_cycle",
+              "outcome": "issued",
+              "responseBytes": 45,
+              "responseType": "string",
+              "startedMonotonicMs": 63.916478,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.669193000000007,
+              "finishedMonotonicMs": 65.599462,
+              "name": "disable_weather_cycle",
+              "outcome": "issued",
+              "responseBytes": 44,
+              "responseType": "string",
+              "startedMonotonicMs": 64.930269,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.4595270000000085,
+              "finishedMonotonicMs": 67.062064,
+              "name": "fixed_day",
+              "outcome": "issued",
+              "responseBytes": 20,
+              "responseType": "string",
+              "startedMonotonicMs": 65.602537,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.7343060000000037,
+              "finishedMonotonicMs": 67.798142,
+              "name": "clear_weather",
+              "outcome": "issued",
+              "responseBytes": 24,
+              "responseType": "string",
+              "startedMonotonicMs": 67.063836,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 13.332009999999997,
+              "finishedMonotonicMs": 81.131588,
+              "name": "forceload_fixture",
+              "outcome": "issued",
+              "responseBytes": 81,
+              "responseType": "string",
+              "startedMonotonicMs": 67.799578,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 5.164963999999998,
+              "finishedMonotonicMs": 86.301479,
+              "name": "clear_fixture_volume",
+              "outcome": "issued",
+              "responseBytes": 21,
+              "responseType": "string",
+              "startedMonotonicMs": 81.136515,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 90.00099699999998,
+              "finishedMonotonicMs": 176.306594,
+              "name": "build_stone_floor",
+              "outcome": "issued",
+              "responseBytes": 32,
+              "responseType": "string",
+              "startedMonotonicMs": 86.305597,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 20.554817999999983,
+              "finishedMonotonicMs": 196.866235,
+              "name": "clear_inventory",
+              "outcome": "issued",
+              "responseBytes": 40,
+              "responseType": "string",
+              "startedMonotonicMs": 176.311417,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.9474409999999978,
+              "finishedMonotonicMs": 197.81771,
+              "name": "survival_mode",
+              "outcome": "issued",
+              "responseBytes": 0,
+              "responseType": "string",
+              "startedMonotonicMs": 196.870269,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 4.655237999999997,
+              "finishedMonotonicMs": 202.475943,
+              "name": "fixed_spawn",
+              "outcome": "issued",
+              "responseBytes": 55,
+              "responseType": "string",
+              "startedMonotonicMs": 197.820705,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 3.4656009999999924,
+              "finishedMonotonicMs": 205.967776,
+              "name": "restore_health",
+              "outcome": "issued",
+              "responseBytes": 43,
+              "responseType": "string",
+              "startedMonotonicMs": 202.502175,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.6887589999999761,
+              "finishedMonotonicMs": 207.659767,
+              "name": "restore_food",
+              "outcome": "issued",
+              "responseBytes": 39,
+              "responseType": "string",
+              "startedMonotonicMs": 205.971008,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.2584410000000048,
+              "finishedMonotonicMs": 208.920502,
+              "name": "clear_effects",
+              "outcome": "issued",
+              "responseBytes": 36,
+              "responseType": "string",
+              "startedMonotonicMs": 207.662061,
+              "verification": "unverified"
+            }
+          ],
+          "durationMs": 278.921018,
+          "fixture": {
+            "actor": "PilotProbe",
+            "baselineQueries": [
+              {
+                "command": "data get entity PilotProbe Rotation",
+                "name": "orientation"
+              },
+              {
+                "command": "data get entity PilotProbe Inventory",
+                "name": "inventory"
+              },
+              {
+                "command": "data get entity PilotProbe playerGameType",
+                "name": "game_mode"
+              },
+              {
+                "command": "data get entity PilotProbe foodLevel",
+                "name": "food"
+              },
+              {
+                "command": "data get entity PilotProbe active_effects",
+                "name": "effects"
+              }
+            ],
+            "commands": [
+              {
+                "command": "difficulty peaceful",
+                "name": "peaceful_difficulty"
+              },
+              {
+                "command": "gamerule doMobSpawning false",
+                "name": "disable_mob_spawning"
+              },
+              {
+                "command": "gamerule doDaylightCycle false",
+                "name": "disable_daylight_cycle"
+              },
+              {
+                "command": "gamerule doWeatherCycle false",
+                "name": "disable_weather_cycle"
+              },
+              {
+                "command": "time set day",
+                "name": "fixed_day"
+              },
+              {
+                "command": "weather clear",
+                "name": "clear_weather"
+              },
+              {
+                "command": "execute in minecraft:overworld run forceload add -4 -4 4 12",
+                "name": "forceload_fixture"
+              },
+              {
+                "command": "execute in minecraft:overworld run fill -4 199 -4 4 204 12 minecraft:air",
+                "name": "clear_fixture_volume"
+              },
+              {
+                "command": "execute in minecraft:overworld run fill -4 199 -4 4 199 12 minecraft:stone",
+                "name": "build_stone_floor"
+              },
+              {
+                "command": "clear PilotProbe",
+                "name": "clear_inventory"
+              },
+              {
+                "command": "gamemode survival PilotProbe",
+                "name": "survival_mode"
+              },
+              {
+                "command": "execute in minecraft:overworld run teleport PilotProbe 0.5 200 0.5 0 0",
+                "name": "fixed_spawn"
+              },
+              {
+                "command": "effect give PilotProbe minecraft:instant_health 1 255 true",
+                "name": "restore_health"
+              },
+              {
+                "command": "effect give PilotProbe minecraft:saturation 1 255 true",
+                "name": "restore_food"
+              },
+              {
+                "command": "effect clear PilotProbe",
+                "name": "clear_effects"
+              }
+            ],
+            "position": {
+              "pitch": 0,
+              "x": 0.5,
+              "y": 200,
+              "yaw": 0,
+              "z": 0.5
+            },
+            "schemaVersion": 1,
+            "settleMs": 100,
+            "sha256": "3a696ca577186c8d2f308fd07fa31d72a3c2a4d98018beb2e64afacd5b358ac7"
+          },
+          "schemaVersion": 1,
+          "status": "configured"
+        }
+      }
+    },
+    {
+      "status": "qualified",
+      "movement_mode": "stationary",
+      "error": null,
+      "stage": "validate",
+      "evidence_valid": true,
+      "source_manifest_sha256": "ef4de27780ce57d9b7efab393f0626f287ab20abd04e7e50631eb70d3ecaaf58",
+      "controller_sha256": "cb90416a00e9bd4feabf8396e30c6117ebb976c7f1e40eef5f41971fa2651cd3",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "profile_sha256": "04429a564cda077f4bdb27b5e9f79e2ecd36c034ef8b05a763d6456ce76bbc10",
+      "runtime_manifest_sha256": "3c41a1cb0b260c1f86db14faa19607026c9da0f6a5fb0091c25ce3276aee65a1",
+      "evidence_sha256": "42e091b6369179d0ee6bd57a139280f9202645d688361351f3ff922187e2fb03",
+      "process": {
+        "status": "exited",
+        "returncode": 0,
+        "signal": null,
+        "timed_out": false,
+        "stop_sent": false,
+        "term_sent": false,
+        "kill_sent": false,
+        "descendant_cleanup": false,
+        "cleanup_uncertain": false,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "elapsed_seconds": 11.728083807975054,
+        "ready": false
+      },
+      "attempt": "attempt-005",
+      "private_result_sha256": "42e091b6369179d0ee6bd57a139280f9202645d688361351f3ff922187e2fb03",
+      "observations": {
+        "before": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            }
+          },
+          "phase": "before",
+          "sample": {
+            "durationMs": 7.280007000000001,
+            "finishedAtUtc": "2026-09-21T20:53:14.908Z",
+            "finishedMonotonicMs": 30.347707,
+            "queryWindows": [
+              {
+                "durationMs": 1.1679999999999993,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T20:53:14.904Z",
+                "finishedMonotonicMs": 26.037671,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:53:14.903Z",
+                "startedMonotonicMs": 24.869671
+              },
+              {
+                "durationMs": 3.037770000000002,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T20:53:14.907Z",
+                "finishedMonotonicMs": 29.362476,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:53:14.904Z",
+                "startedMonotonicMs": 26.324706
+              },
+              {
+                "durationMs": 0.8310700000000004,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T20:53:14.908Z",
+                "finishedMonotonicMs": 30.264504,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:53:14.908Z",
+                "startedMonotonicMs": 29.433434
+              }
+            ],
+            "startedAtUtc": "2026-09-21T20:53:14.901Z",
+            "startedMonotonicMs": 23.0677
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "terminal": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            }
+          },
+          "phase": "terminal",
+          "sample": {
+            "durationMs": 5.3824029999999965,
+            "finishedAtUtc": "2026-09-21T20:53:16.275Z",
+            "finishedMonotonicMs": 49.690152,
+            "queryWindows": [
+              {
+                "durationMs": 1.8040650000000014,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T20:53:16.274Z",
+                "finishedMonotonicMs": 47.982493,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:53:16.272Z",
+                "startedMonotonicMs": 46.178428
+              },
+              {
+                "durationMs": 0.6480730000000037,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T20:53:16.275Z",
+                "finishedMonotonicMs": 48.995749,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:53:16.274Z",
+                "startedMonotonicMs": 48.347676
+              },
+              {
+                "durationMs": 0.5458399999999983,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T20:53:16.275Z",
+                "finishedMonotonicMs": 49.583658,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:53:16.275Z",
+                "startedMonotonicMs": 49.037818
+              }
+            ],
+            "startedAtUtc": "2026-09-21T20:53:16.270Z",
+            "startedMonotonicMs": 44.307749
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        }
+      },
+      "score": {
+        "delta": {
+          "x": 0.0,
+          "y": 0,
+          "z": 0.0
+        },
+        "horizontal_displacement": 0.0,
+        "movement_succeeded": false,
+        "negative_control_observed": true,
+        "observations_valid": true
+      },
+      "lifecycle": {
+        "status": "qualified",
+        "error": null,
+        "independent_observer_process": true,
+        "participant_returncode": 0,
+        "participant_forced_cleanup": false,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false
+      },
+      "fixture": {
+        "baseline": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            }
+          },
+          "phase": "before",
+          "sample": {
+            "durationMs": 4.367653999999959,
+            "finishedAtUtc": "2026-09-21T20:53:14.872Z",
+            "finishedMonotonicMs": 343.411302,
+            "queryWindows": [
+              {
+                "durationMs": 0.9467480000000137,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T20:53:14.871Z",
+                "finishedMonotonicMs": 342.01968,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:53:14.870Z",
+                "startedMonotonicMs": 341.072932
+              },
+              {
+                "durationMs": 0.6086109999999962,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T20:53:14.872Z",
+                "finishedMonotonicMs": 342.863401,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:53:14.871Z",
+                "startedMonotonicMs": 342.25479
+              },
+              {
+                "durationMs": 0.4221279999999865,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T20:53:14.872Z",
+                "finishedMonotonicMs": 343.340201,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T20:53:14.872Z",
+                "startedMonotonicMs": 342.918073
+              }
+            ],
+            "startedAtUtc": "2026-09-21T20:53:14.868Z",
+            "startedMonotonicMs": 339.043648
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "baselineVerification": {
+          "status": "verified"
+        },
+        "setup": {
+          "baselineChecks": [
+            {
+              "durationMs": 7.773500000000013,
+              "finishedMonotonicMs": 336.547507,
+              "name": "orientation",
+              "startedMonotonicMs": 328.774007,
+              "status": "verified"
+            },
+            {
+              "durationMs": 0.7362139999999613,
+              "finishedMonotonicMs": 337.289183,
+              "name": "inventory",
+              "startedMonotonicMs": 336.552969,
+              "status": "verified"
+            },
+            {
+              "durationMs": 0.39270900000002484,
+              "finishedMonotonicMs": 337.684101,
+              "name": "game_mode",
+              "startedMonotonicMs": 337.291392,
+              "status": "verified"
+            },
+            {
+              "durationMs": 0.28746399999999994,
+              "finishedMonotonicMs": 337.972583,
+              "name": "food",
+              "startedMonotonicMs": 337.685119,
+              "status": "verified"
+            },
+            {
+              "durationMs": 0.7781390000000101,
+              "finishedMonotonicMs": 338.751649,
+              "name": "effects",
+              "startedMonotonicMs": 337.97351,
+              "status": "verified"
+            }
+          ],
+          "commandWindows": [
+            {
+              "durationMs": 8.400869,
+              "finishedMonotonicMs": 76.813871,
+              "name": "peaceful_difficulty",
+              "outcome": "issued",
+              "responseBytes": 39,
+              "responseType": "string",
+              "startedMonotonicMs": 68.413002,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 6.201537000000002,
+              "finishedMonotonicMs": 83.02083,
+              "name": "disable_mob_spawning",
+              "outcome": "issued",
+              "responseBytes": 43,
+              "responseType": "string",
+              "startedMonotonicMs": 76.819293,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.5459729999999894,
+              "finishedMonotonicMs": 84.571637,
+              "name": "disable_daylight_cycle",
+              "outcome": "issued",
+              "responseBytes": 45,
+              "responseType": "string",
+              "startedMonotonicMs": 83.025664,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 2.189485999999988,
+              "finishedMonotonicMs": 86.764535,
+              "name": "disable_weather_cycle",
+              "outcome": "issued",
+              "responseBytes": 44,
+              "responseType": "string",
+              "startedMonotonicMs": 84.575049,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.5745890000000031,
+              "finishedMonotonicMs": 88.343124,
+              "name": "fixed_day",
+              "outcome": "issued",
+              "responseBytes": 20,
+              "responseType": "string",
+              "startedMonotonicMs": 86.768535,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.867100999999991,
+              "finishedMonotonicMs": 89.211901,
+              "name": "clear_weather",
+              "outcome": "issued",
+              "responseBytes": 24,
+              "responseType": "string",
+              "startedMonotonicMs": 88.3448,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 11.855744000000001,
+              "finishedMonotonicMs": 101.069417,
+              "name": "forceload_fixture",
+              "outcome": "issued",
+              "responseBytes": 81,
+              "responseType": "string",
+              "startedMonotonicMs": 89.213673,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 5.283524,
+              "finishedMonotonicMs": 106.358504,
+              "name": "clear_fixture_volume",
+              "outcome": "issued",
+              "responseBytes": 21,
+              "responseType": "string",
+              "startedMonotonicMs": 101.07498,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 96.023426,
+              "finishedMonotonicMs": 202.386426,
+              "name": "build_stone_floor",
+              "outcome": "issued",
+              "responseBytes": 32,
+              "responseType": "string",
+              "startedMonotonicMs": 106.363,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 11.303847999999988,
+              "finishedMonotonicMs": 213.694907,
+              "name": "clear_inventory",
+              "outcome": "issued",
+              "responseBytes": 40,
+              "responseType": "string",
+              "startedMonotonicMs": 202.391059,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.9416070000000047,
+              "finishedMonotonicMs": 214.640773,
+              "name": "survival_mode",
+              "outcome": "issued",
+              "responseBytes": 0,
+              "responseType": "string",
+              "startedMonotonicMs": 213.699166,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 5.8977020000000095,
+              "finishedMonotonicMs": 220.540571,
+              "name": "fixed_spawn",
+              "outcome": "issued",
+              "responseBytes": 55,
+              "responseType": "string",
+              "startedMonotonicMs": 214.642869,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 5.686851999999988,
+              "finishedMonotonicMs": 226.232372,
+              "name": "restore_health",
+              "outcome": "issued",
+              "responseBytes": 43,
+              "responseType": "string",
+              "startedMonotonicMs": 220.54552,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 1.3364060000000109,
+              "finishedMonotonicMs": 227.572745,
+              "name": "restore_food",
+              "outcome": "issued",
+              "responseBytes": 39,
+              "responseType": "string",
+              "startedMonotonicMs": 226.236339,
+              "verification": "unverified"
+            },
+            {
+              "durationMs": 0.9123589999999808,
+              "finishedMonotonicMs": 228.487891,
+              "name": "clear_effects",
+              "outcome": "issued",
+              "responseBytes": 36,
+              "responseType": "string",
+              "startedMonotonicMs": 227.575532,
+              "verification": "unverified"
+            }
+          ],
+          "durationMs": 270.351239,
+          "fixture": {
+            "actor": "PilotProbe",
+            "baselineQueries": [
+              {
+                "command": "data get entity PilotProbe Rotation",
+                "name": "orientation"
+              },
+              {
+                "command": "data get entity PilotProbe Inventory",
+                "name": "inventory"
+              },
+              {
+                "command": "data get entity PilotProbe playerGameType",
+                "name": "game_mode"
+              },
+              {
+                "command": "data get entity PilotProbe foodLevel",
+                "name": "food"
+              },
+              {
+                "command": "data get entity PilotProbe active_effects",
+                "name": "effects"
+              }
+            ],
+            "commands": [
+              {
+                "command": "difficulty peaceful",
+                "name": "peaceful_difficulty"
+              },
+              {
+                "command": "gamerule doMobSpawning false",
+                "name": "disable_mob_spawning"
+              },
+              {
+                "command": "gamerule doDaylightCycle false",
+                "name": "disable_daylight_cycle"
+              },
+              {
+                "command": "gamerule doWeatherCycle false",
+                "name": "disable_weather_cycle"
+              },
+              {
+                "command": "time set day",
+                "name": "fixed_day"
+              },
+              {
+                "command": "weather clear",
+                "name": "clear_weather"
+              },
+              {
+                "command": "execute in minecraft:overworld run forceload add -4 -4 4 12",
+                "name": "forceload_fixture"
+              },
+              {
+                "command": "execute in minecraft:overworld run fill -4 199 -4 4 204 12 minecraft:air",
+                "name": "clear_fixture_volume"
+              },
+              {
+                "command": "execute in minecraft:overworld run fill -4 199 -4 4 199 12 minecraft:stone",
+                "name": "build_stone_floor"
+              },
+              {
+                "command": "clear PilotProbe",
+                "name": "clear_inventory"
+              },
+              {
+                "command": "gamemode survival PilotProbe",
+                "name": "survival_mode"
+              },
+              {
+                "command": "execute in minecraft:overworld run teleport PilotProbe 0.5 200 0.5 0 0",
+                "name": "fixed_spawn"
+              },
+              {
+                "command": "effect give PilotProbe minecraft:instant_health 1 255 true",
+                "name": "restore_health"
+              },
+              {
+                "command": "effect give PilotProbe minecraft:saturation 1 255 true",
+                "name": "restore_food"
+              },
+              {
+                "command": "effect clear PilotProbe",
+                "name": "clear_effects"
+              }
+            ],
+            "position": {
+              "pitch": 0,
+              "x": 0.5,
+              "y": 200,
+              "yaw": 0,
+              "z": 0.5
+            },
+            "schemaVersion": 1,
+            "settleMs": 100,
+            "sha256": "3a696ca577186c8d2f308fd07fa31d72a3c2a4d98018beb2e64afacd5b358ac7"
+          },
+          "schemaVersion": 1,
+          "status": "configured"
+        }
+      }
+    }
+  ]
+}

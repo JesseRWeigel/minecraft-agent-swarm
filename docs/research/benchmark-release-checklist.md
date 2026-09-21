@@ -4,12 +4,20 @@ Updated 21 September 2026. This is a release gate, not a list of achieved result
 The first release should be a small audited experiment, not a claim that every
 Minecraft advancement is a comparable benchmark task.
 
+Current checkpoint: the [complete fixed-client path](protected-movement-qualification.md)
+has passed two real forward checks and two stationary controls from a checked
+actor baseline. A failed setup attempt is preserved too. Component/namespace
+checks are green, but the remaining combined gates below are deliberately open:
+actual game failure cases, arbitrary-code resource/network boundaries, actor
+identity, redistributable reproduction inputs, and model comparison design.
+
 ## 1. Finish the deterministic path
 
-- [ ] Connect the protected participant, bounded pipes, observer process, and
-  outer namespace worker. Keep credentials/world/evidence inaccessible to the
-  participant. Bound logs, process lifetime, scratch, and server resources.
-- [ ] Rebuild and pin the current no-respawn client and all executed sources.
+- [ ] Complete resource/network gates around the connected protected participant,
+  bounded pipes, observer process and outer worker. Fixed-client namespaces hide
+  credentials/world/evidence and bound pipes, lifetime and scratch; aggregate
+  resource limits and game-port-only networking remain for arbitrary code.
+- [x] Capture and pin the current no-respawn client and executed qualification sources.
   Never overwrite the snapshots used for the historical movement case study.
 - [ ] Run forward movement and stationary controls through the complete path,
   plus death, disconnect, malformed-message, stalled-process, and observer-timeout

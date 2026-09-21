@@ -1,8 +1,11 @@
 # Protected observer boundary: next implementation design
 
-Status: component implementation and synthetic containment qualification. This is
-not an implemented model-trial runner. The existing deterministic qualification
-still queries RCON in its participant process.
+Status update, 21 September 2026: the complete fixed-client participant/observer
+path now passes real forward and stationary qualification with a declared actor
+fixture. See [results, architecture and remaining limits](../research/protected-movement-qualification.md).
+This is not a qualified model-trial runner. The historical qualification below
+queried RCON in its participant; the new path uses separate trusted observers.
+The original design and intermediate checkpoints below are retained as history.
 
 ## Required separation
 
