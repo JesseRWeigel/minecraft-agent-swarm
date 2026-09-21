@@ -21,6 +21,7 @@ import { Vec3 } from "vec3";
 import type { Entity } from "prismarine-entity";
 import { config } from "../config.js";
 import { BotRoleConfig, FARM_SITE, BOT_ROSTER } from "./role.js";
+import { keepsPiglinPassport, isGoldPiece } from "./gold-passport.js";
 import { queryStrategic, queryReactive, queryCritic, chatWithLLM, type LLMMessage } from "../llm/index.js";
 import type { RoleContext } from "../llm/prompts.js";
 import { getWorldContext, isHostile } from "./perception.js";
@@ -431,6 +432,9 @@ export class BotBrain {
    * WEAR armor, so bootstrapped/crafted iron armor sat unworn in inventory
    * while they fought unprotected and died. Runs periodically; idempotent.
    */
+  /** Rate limit for the "keeping gold on" line: the pass runs every 20s. */
+  private lastGoldKeepLogMs = 0;
+
   private async equipBestArmor(): Promise<void> {
     // NOT skill-gated: the old isSkillRunning guard meant a bot in a
     // near-continuous skill chain (Atlas in find_fortress) could never run
@@ -470,6 +474,18 @@ export class BotBrain {
         return t < 0 ? 99 : t;
       };
       if (worn && tierOf(worn.name) <= tierOf(best.name)) continue; // worn is same or better
+      // Gold in the Nether is a passport, not protection. Run 757 dressed
+      // Mason in golden boots for the piglins and this pass swapped them for
+      // iron twenty seconds later; he died "slain by Piglin" wearing
+      // "-,-,iron_leggings,iron_boots".
+      const otherWornGold = [5, 6, 7, 8].some((i) => i !== slotIdx && isGoldPiece(this.bot.inventory.slots[i]?.name));
+      if (keepsPiglinPassport(this.bot.game?.dimension, worn?.name, otherWornGold)) {
+        if (Date.now() - this.lastGoldKeepLogMs > 60_000) {
+          this.lastGoldKeepLogMs = Date.now();
+          this.log.info("Armor", `keeping ${worn!.name} on for the piglins instead of ${best.name}`);
+        }
+        continue;
+      }
       try {
         await this.bot.equip(best, dest as any);
         this.log.info("Armor", `equipped ${best.name}`);
