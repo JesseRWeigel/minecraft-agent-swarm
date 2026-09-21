@@ -8,8 +8,13 @@ Current checkpoint: the [complete fixed-client path](protected-movement-qualific
 has passed two real forward checks and two stationary controls from a checked
 actor baseline. A failed setup attempt is preserved too. Component/namespace
 checks are green, but the remaining combined gates below are deliberately open:
-actual game failure cases, arbitrary-code resource/network boundaries, actor
+remaining game failure timings/RCON stalls, arbitrary-code resource/network boundaries, actor
 identity, redistributable reproduction inputs, and model comparison design.
+
+The [post-action failure checks](protected-movement-qualification.md#post-action-failure-checks-21-september-follow-up)
+now cover death, disconnect and a suspended-observer parent timeout in real
+isolated game runs. All were rejected; no missing sample became a negative
+control. Mid-action failures and internal RCON stalls remain unqualified.
 
 ## 1. Finish the deterministic path
 

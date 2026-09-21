@@ -1,0 +1,1010 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-21",
+  "scope": "Fixed-client post-action injected failures plus unchanged-source controls; infrastructure qualification only.",
+  "original_archive_rehashed_unchanged": true,
+  "live_swarm_modified": false,
+  "model_calls": 0,
+  "limits": [
+    "Faults injected after action_finished, not a complete timing/fault matrix.",
+    "Observer timeout suspends the real helper process and uses a two-second parent deadline; it does not emulate an RCON network stall or prove the internal RCON timeout.",
+    "Disconnect and timeout required forced participant cleanup; Java stopped normally in all five cases.",
+    "Derived private-evidence projection, not raw dataset or independent reproduction.",
+    "Arbitrary model-code identity, network and resource gates remain open."
+  ],
+  "attempts": [
+    {
+      "status": "failed",
+      "failure_case": "death",
+      "movement_mode": "forward",
+      "evidence_valid": false,
+      "source_manifest_sha256": "15e7adedcfacf22148dfe158b0ea7db260b06b914f7bf44238e677d37be6b9c8",
+      "controller_sha256": "a4ce5081472a080e276e239d95146d83a51c21aed73406fc9924926988df82a1",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "runtime_manifest_sha256": "3c41a1cb0b260c1f86db14faa19607026c9da0f6a5fb0091c25ce3276aee65a1",
+      "evidence_sha256": "34c6e14e335f06eef40996ceae040fd9510f6147d9cbcb40e41a94530b60a9ae",
+      "attempt": "attempt-001",
+      "before": {
+        "actionId": "walk-01",
+        "actor": "PilotProbe",
+        "observations": {
+          "dimension": "minecraft:overworld",
+          "health": 20,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 0.5
+          }
+        },
+        "phase": "before",
+        "sample": {
+          "durationMs": 4.725815000000001,
+          "finishedAtUtc": "2026-09-21T22:19:42.928Z",
+          "finishedMonotonicMs": 29.828278,
+          "queryWindows": [
+            {
+              "durationMs": 1.2788450000000005,
+              "field": "Pos",
+              "finishedAtUtc": "2026-09-21T22:19:42.927Z",
+              "finishedMonotonicMs": 28.216297,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:19:42.925Z",
+              "startedMonotonicMs": 26.937452
+            },
+            {
+              "durationMs": 0.7442190000000011,
+              "field": "Dimension",
+              "finishedAtUtc": "2026-09-21T22:19:42.928Z",
+              "finishedMonotonicMs": 29.179388,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:19:42.927Z",
+              "startedMonotonicMs": 28.435169
+            },
+            {
+              "durationMs": 0.5458349999999967,
+              "field": "Health",
+              "finishedAtUtc": "2026-09-21T22:19:42.928Z",
+              "finishedMonotonicMs": 29.766985,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:19:42.928Z",
+              "startedMonotonicMs": 29.22115
+            }
+          ],
+          "startedAtUtc": "2026-09-21T22:19:42.923Z",
+          "startedMonotonicMs": 25.102463
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "trialId": "movement-fixture-v1"
+      },
+      "terminal": {
+        "actionId": "walk-01",
+        "actor": "PilotProbe",
+        "observations": {
+          "dimension": "minecraft:overworld",
+          "health": 0,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 4.29480003619226
+          }
+        },
+        "phase": "terminal",
+        "sample": {
+          "durationMs": 7.830411000000002,
+          "finishedAtUtc": "2026-09-21T22:19:44.571Z",
+          "finishedMonotonicMs": 33.30138,
+          "queryWindows": [
+            {
+              "durationMs": 2.9653460000000003,
+              "field": "Pos",
+              "finishedAtUtc": "2026-09-21T22:19:44.568Z",
+              "finishedMonotonicMs": 30.497684,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:19:44.565Z",
+              "startedMonotonicMs": 27.532338
+            },
+            {
+              "durationMs": 1.0379159999999992,
+              "field": "Dimension",
+              "finishedAtUtc": "2026-09-21T22:19:44.570Z",
+              "finishedMonotonicMs": 32.658614,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:19:44.569Z",
+              "startedMonotonicMs": 31.620698
+            },
+            {
+              "durationMs": 0.5434229999999971,
+              "field": "Health",
+              "finishedAtUtc": "2026-09-21T22:19:44.571Z",
+              "finishedMonotonicMs": 33.241187,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:19:44.570Z",
+              "startedMonotonicMs": 32.697764
+            }
+          ],
+          "startedAtUtc": "2026-09-21T22:19:44.563Z",
+          "startedMonotonicMs": 25.470969
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "trialId": "movement-fixture-v1"
+      },
+      "score": {
+        "movement_succeeded": false,
+        "negative_control_observed": false,
+        "observations_valid": false
+      },
+      "injection": {
+        "after": "action_finished",
+        "case": "death",
+        "requested_monotonic": 2870114.003212593,
+        "status": "console_command_sent"
+      },
+      "terminal_observer": {
+        "error": null,
+        "finished_monotonic": 2870114.378092532,
+        "pid": 125,
+        "result": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 0,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 4.29480003619226
+            }
+          },
+          "phase": "terminal",
+          "sample": {
+            "durationMs": 7.830411000000002,
+            "finishedAtUtc": "2026-09-21T22:19:44.571Z",
+            "finishedMonotonicMs": 33.30138,
+            "queryWindows": [
+              {
+                "durationMs": 2.9653460000000003,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T22:19:44.568Z",
+                "finishedMonotonicMs": 30.497684,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T22:19:44.565Z",
+                "startedMonotonicMs": 27.532338
+              },
+              {
+                "durationMs": 1.0379159999999992,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T22:19:44.570Z",
+                "finishedMonotonicMs": 32.658614,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T22:19:44.569Z",
+                "startedMonotonicMs": 31.620698
+              },
+              {
+                "durationMs": 0.5434229999999971,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T22:19:44.571Z",
+                "finishedMonotonicMs": 33.241187,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T22:19:44.570Z",
+                "startedMonotonicMs": 32.697764
+              }
+            ],
+            "startedAtUtc": "2026-09-21T22:19:44.563Z",
+            "startedMonotonicMs": 25.470969
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "returncode": 0,
+        "started_monotonic": 2870114.30371757,
+        "suspended_for_test": false
+      },
+      "lifecycle": {
+        "stage": "finalize",
+        "error": null,
+        "participant_returncode": 0,
+        "participant_forced_cleanup": false,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false
+      },
+      "outer_process": {
+        "returncode": 1,
+        "timed_out": false,
+        "cleanup_uncertain": false,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "elapsed_seconds": 12.047293148934841
+      },
+      "source_manifest": {
+        "files": {
+          "participant-code/protected-participant-cli.mjs": "24c0ff903c1e3368348d840c12aaf1c2712549fe2c85496ea41027ac2f72e23c",
+          "participant-code/protected-participant.mjs": "93270369581ebab934b7096845784661781b538d67f949700dcb0a429034f30c",
+          "participant-code/participant-pipes.mjs": "30288c3284b0c4f7d252a99dd123398a31c9900cb8d4b5979765179eec2b16bd",
+          "observer-code/protected-observer-cli.mjs": "73f14167dcde8af9d542ae1ce3dbcf48b53916c4992da93fb98ad17342896204",
+          "observer-code/protected-observer.mjs": "7ffb29160c112be679a52e12b89bf10ee03299d2e0f2c00bc623df2fda6f02bf",
+          "observer-code/movement-fixture.mjs": "9f8b51a461cbf4ce0376966750aecc0be96e33e7d406301ab43f491c73588414",
+          "observer-code/tools/pilot/protected_worker.py": "0179615740636c263074feaae1bd870b70b9d0a83cdaf599ad64aecee0354fde",
+          "observer-code/tools/pilot/participant_protocol.py": "9c6a95482609c8b08f921598c000341c64c8fd0a2dcd81d369e426a3e51062c9",
+          "observer-code/tools/pilot/participant_transport.py": "219c8a58066f8e7514e38ffd1d8c19d1d40beaf775e94a1930a8207ac0423761"
+        },
+        "sha256": "15e7adedcfacf22148dfe158b0ea7db260b06b914f7bf44238e677d37be6b9c8"
+      },
+      "private_summary_sha256": "3b8a4f59333ee0abc0c37ae9fd28e819a44edfe83f77f4b00171a5d60a776712",
+      "terminal_observer_sha256": "fcaba0a85f638d348d39dbe6bb4913b0bec072cfa7c85876d2b235e9c42a63dd",
+      "checked_failure": "Server terminal health zero; invalid for both success and negative-control scoring."
+    },
+    {
+      "status": "failed",
+      "failure_case": "disconnect",
+      "movement_mode": "forward",
+      "evidence_valid": false,
+      "source_manifest_sha256": "15e7adedcfacf22148dfe158b0ea7db260b06b914f7bf44238e677d37be6b9c8",
+      "controller_sha256": "a4ce5081472a080e276e239d95146d83a51c21aed73406fc9924926988df82a1",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "runtime_manifest_sha256": "3c41a1cb0b260c1f86db14faa19607026c9da0f6a5fb0091c25ce3276aee65a1",
+      "evidence_sha256": "9ab73c6dfc78115fb64509c9473c9ef8bbaa2976fac31b4da15d4266b5aac817",
+      "attempt": "attempt-002",
+      "before": {
+        "actionId": "walk-01",
+        "actor": "PilotProbe",
+        "observations": {
+          "dimension": "minecraft:overworld",
+          "health": 20,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 0.5
+          }
+        },
+        "phase": "before",
+        "sample": {
+          "durationMs": 5.045301999999996,
+          "finishedAtUtc": "2026-09-21T22:20:09.001Z",
+          "finishedMonotonicMs": 33.577003,
+          "queryWindows": [
+            {
+              "durationMs": 1.269682999999997,
+              "field": "Pos",
+              "finishedAtUtc": "2026-09-21T22:20:08.999Z",
+              "finishedMonotonicMs": 31.687008,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:20:08.998Z",
+              "startedMonotonicMs": 30.417325
+            },
+            {
+              "durationMs": 0.8080280000000002,
+              "field": "Dimension",
+              "finishedAtUtc": "2026-09-21T22:20:09.000Z",
+              "finishedMonotonicMs": 32.863329,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:20:08.999Z",
+              "startedMonotonicMs": 32.055301
+            },
+            {
+              "durationMs": 0.5735540000000015,
+              "field": "Health",
+              "finishedAtUtc": "2026-09-21T22:20:09.001Z",
+              "finishedMonotonicMs": 33.497397,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:20:09.000Z",
+              "startedMonotonicMs": 32.923843
+            }
+          ],
+          "startedAtUtc": "2026-09-21T22:20:08.996Z",
+          "startedMonotonicMs": 28.531701
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "trialId": "movement-fixture-v1"
+      },
+      "terminal": null,
+      "score": null,
+      "injection": {
+        "after": "action_finished",
+        "case": "disconnect",
+        "requested_monotonic": 2870136.499980188,
+        "status": "console_command_sent"
+      },
+      "terminal_observer": {
+        "error": null,
+        "finished_monotonic": 2870136.894987133,
+        "pid": 126,
+        "result": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "errorCode": "invalid_response",
+          "observations": {},
+          "phase": "terminal",
+          "sample": {
+            "durationMs": 5.114915000000003,
+            "finishedAtUtc": "2026-09-21T22:20:10.676Z",
+            "finishedMonotonicMs": 59.813405,
+            "queryWindows": [
+              {
+                "durationMs": 3.0466989999999967,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T22:20:10.675Z",
+                "finishedMonotonicMs": 59.652676,
+                "outcome": "invalid",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T22:20:10.672Z",
+                "startedMonotonicMs": 56.605977
+              }
+            ],
+            "startedAtUtc": "2026-09-21T22:20:10.670Z",
+            "startedMonotonicMs": 54.69849
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "failed",
+          "trialId": "movement-fixture-v1"
+        },
+        "returncode": 1,
+        "started_monotonic": 2870136.800481475,
+        "suspended_for_test": false
+      },
+      "lifecycle": {
+        "stage": "terminal_observation",
+        "error": "protected_qualification_failed",
+        "participant_returncode": -9,
+        "participant_forced_cleanup": true,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false
+      },
+      "outer_process": {
+        "returncode": 1,
+        "timed_out": false,
+        "cleanup_uncertain": false,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "elapsed_seconds": 12.309273791033775
+      },
+      "source_manifest": {
+        "files": {
+          "participant-code/protected-participant-cli.mjs": "24c0ff903c1e3368348d840c12aaf1c2712549fe2c85496ea41027ac2f72e23c",
+          "participant-code/protected-participant.mjs": "93270369581ebab934b7096845784661781b538d67f949700dcb0a429034f30c",
+          "participant-code/participant-pipes.mjs": "30288c3284b0c4f7d252a99dd123398a31c9900cb8d4b5979765179eec2b16bd",
+          "observer-code/protected-observer-cli.mjs": "73f14167dcde8af9d542ae1ce3dbcf48b53916c4992da93fb98ad17342896204",
+          "observer-code/protected-observer.mjs": "7ffb29160c112be679a52e12b89bf10ee03299d2e0f2c00bc623df2fda6f02bf",
+          "observer-code/movement-fixture.mjs": "9f8b51a461cbf4ce0376966750aecc0be96e33e7d406301ab43f491c73588414",
+          "observer-code/tools/pilot/protected_worker.py": "0179615740636c263074feaae1bd870b70b9d0a83cdaf599ad64aecee0354fde",
+          "observer-code/tools/pilot/participant_protocol.py": "9c6a95482609c8b08f921598c000341c64c8fd0a2dcd81d369e426a3e51062c9",
+          "observer-code/tools/pilot/participant_transport.py": "219c8a58066f8e7514e38ffd1d8c19d1d40beaf775e94a1930a8207ac0423761"
+        },
+        "sha256": "15e7adedcfacf22148dfe158b0ea7db260b06b914f7bf44238e677d37be6b9c8"
+      },
+      "private_summary_sha256": "ab4b58a59d977f16537e3f6f0a169f8c978871dc5fd5fdd01d2b15418927ecf7",
+      "terminal_observer_sha256": "065e0c5c36979b9b93fc8e7e777136fc474fa95b2cc36f0f22462d07a5dc30ba",
+      "server_confirmation_excerpt": "[22:20:10 INFO]: PilotProbe lost connection: Qualification disconnect",
+      "checked_failure": "Server confirmed disconnect; observer failed; no valid terminal sample."
+    },
+    {
+      "status": "failed",
+      "failure_case": "observer_timeout",
+      "movement_mode": "forward",
+      "evidence_valid": false,
+      "source_manifest_sha256": "15e7adedcfacf22148dfe158b0ea7db260b06b914f7bf44238e677d37be6b9c8",
+      "controller_sha256": "a4ce5081472a080e276e239d95146d83a51c21aed73406fc9924926988df82a1",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "runtime_manifest_sha256": "3c41a1cb0b260c1f86db14faa19607026c9da0f6a5fb0091c25ce3276aee65a1",
+      "evidence_sha256": "08ad67ed50dbf3b7f9bf31b0dee42f2e98802f1d052a5defa09426d6325f5962",
+      "attempt": "attempt-003",
+      "before": {
+        "actionId": "walk-01",
+        "actor": "PilotProbe",
+        "observations": {
+          "dimension": "minecraft:overworld",
+          "health": 20,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 0.5
+          }
+        },
+        "phase": "before",
+        "sample": {
+          "durationMs": 5.4753279999999975,
+          "finishedAtUtc": "2026-09-21T22:20:31.725Z",
+          "finishedMonotonicMs": 27.860079,
+          "queryWindows": [
+            {
+              "durationMs": 1.762943,
+              "field": "Pos",
+              "finishedAtUtc": "2026-09-21T22:20:31.723Z",
+              "finishedMonotonicMs": 25.902929,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:20:31.721Z",
+              "startedMonotonicMs": 24.139986
+            },
+            {
+              "durationMs": 0.9299600000000012,
+              "field": "Dimension",
+              "finishedAtUtc": "2026-09-21T22:20:31.724Z",
+              "finishedMonotonicMs": 27.126926,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:20:31.723Z",
+              "startedMonotonicMs": 26.196966
+            },
+            {
+              "durationMs": 0.6472890000000007,
+              "field": "Health",
+              "finishedAtUtc": "2026-09-21T22:20:31.725Z",
+              "finishedMonotonicMs": 27.808415,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:20:31.724Z",
+              "startedMonotonicMs": 27.161126
+            }
+          ],
+          "startedAtUtc": "2026-09-21T22:20:31.719Z",
+          "startedMonotonicMs": 22.384751
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "trialId": "movement-fixture-v1"
+      },
+      "terminal": null,
+      "score": null,
+      "injection": {
+        "after": "action_finished",
+        "case": "observer_timeout",
+        "requested_monotonic": 2870159.226393333,
+        "status": "requested"
+      },
+      "terminal_observer": {
+        "error": "observer_deadline",
+        "finished_monotonic": 2870161.228657342,
+        "pid": 124,
+        "result": null,
+        "returncode": -9,
+        "started_monotonic": 2870159.226714565,
+        "suspended_for_test": true
+      },
+      "lifecycle": {
+        "stage": "terminal_observation",
+        "error": "protected_qualification_failed",
+        "participant_returncode": -9,
+        "participant_forced_cleanup": true,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false
+      },
+      "outer_process": {
+        "returncode": 1,
+        "timed_out": false,
+        "cleanup_uncertain": false,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "elapsed_seconds": 13.217404131777585
+      },
+      "source_manifest": {
+        "files": {
+          "participant-code/protected-participant-cli.mjs": "24c0ff903c1e3368348d840c12aaf1c2712549fe2c85496ea41027ac2f72e23c",
+          "participant-code/protected-participant.mjs": "93270369581ebab934b7096845784661781b538d67f949700dcb0a429034f30c",
+          "participant-code/participant-pipes.mjs": "30288c3284b0c4f7d252a99dd123398a31c9900cb8d4b5979765179eec2b16bd",
+          "observer-code/protected-observer-cli.mjs": "73f14167dcde8af9d542ae1ce3dbcf48b53916c4992da93fb98ad17342896204",
+          "observer-code/protected-observer.mjs": "7ffb29160c112be679a52e12b89bf10ee03299d2e0f2c00bc623df2fda6f02bf",
+          "observer-code/movement-fixture.mjs": "9f8b51a461cbf4ce0376966750aecc0be96e33e7d406301ab43f491c73588414",
+          "observer-code/tools/pilot/protected_worker.py": "0179615740636c263074feaae1bd870b70b9d0a83cdaf599ad64aecee0354fde",
+          "observer-code/tools/pilot/participant_protocol.py": "9c6a95482609c8b08f921598c000341c64c8fd0a2dcd81d369e426a3e51062c9",
+          "observer-code/tools/pilot/participant_transport.py": "219c8a58066f8e7514e38ffd1d8c19d1d40beaf775e94a1930a8207ac0423761"
+        },
+        "sha256": "15e7adedcfacf22148dfe158b0ea7db260b06b914f7bf44238e677d37be6b9c8"
+      },
+      "private_summary_sha256": "7a2bc910ab09af4beecdbd3ac7347769cbc065cb4dc8ca175bf96d9bfcea2867",
+      "terminal_observer_sha256": "a03e3c33abd2f61c626a231ed86a2a13b95a4c024f850886f8023be96d21a37d",
+      "checked_failure": "Suspended terminal observer reached shortened two-second supervisor deadline and was reaped."
+    },
+    {
+      "status": "qualified",
+      "failure_case": "none",
+      "movement_mode": "forward",
+      "evidence_valid": true,
+      "source_manifest_sha256": "15e7adedcfacf22148dfe158b0ea7db260b06b914f7bf44238e677d37be6b9c8",
+      "controller_sha256": "a4ce5081472a080e276e239d95146d83a51c21aed73406fc9924926988df82a1",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "runtime_manifest_sha256": "3c41a1cb0b260c1f86db14faa19607026c9da0f6a5fb0091c25ce3276aee65a1",
+      "evidence_sha256": "ed2afc22b8e059ba6330cca41f3a54c5ea3571fffac1ba5a96fd26bf1c3ea247",
+      "attempt": "attempt-004",
+      "before": {
+        "actionId": "walk-01",
+        "actor": "PilotProbe",
+        "observations": {
+          "dimension": "minecraft:overworld",
+          "health": 20,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 0.5
+          }
+        },
+        "phase": "before",
+        "sample": {
+          "durationMs": 6.663211999999998,
+          "finishedAtUtc": "2026-09-21T22:21:12.399Z",
+          "finishedMonotonicMs": 31.060829,
+          "queryWindows": [
+            {
+              "durationMs": 1.857610000000001,
+              "field": "Pos",
+              "finishedAtUtc": "2026-09-21T22:21:12.396Z",
+              "finishedMonotonicMs": 28.25427,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:21:12.395Z",
+              "startedMonotonicMs": 26.39666
+            },
+            {
+              "durationMs": 1.0907819999999973,
+              "field": "Dimension",
+              "finishedAtUtc": "2026-09-21T22:21:12.398Z",
+              "finishedMonotonicMs": 29.766809,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:21:12.397Z",
+              "startedMonotonicMs": 28.676027
+            },
+            {
+              "durationMs": 1.172416000000002,
+              "field": "Health",
+              "finishedAtUtc": "2026-09-21T22:21:12.399Z",
+              "finishedMonotonicMs": 30.981625,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:21:12.398Z",
+              "startedMonotonicMs": 29.809209
+            }
+          ],
+          "startedAtUtc": "2026-09-21T22:21:12.393Z",
+          "startedMonotonicMs": 24.397617
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "trialId": "movement-fixture-v1"
+      },
+      "terminal": {
+        "actionId": "walk-01",
+        "actor": "PilotProbe",
+        "observations": {
+          "dimension": "minecraft:overworld",
+          "health": 20,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 4.29480003619226
+          }
+        },
+        "phase": "terminal",
+        "sample": {
+          "durationMs": 5.653462999999999,
+          "finishedAtUtc": "2026-09-21T22:21:13.746Z",
+          "finishedMonotonicMs": 29.408538,
+          "queryWindows": [
+            {
+              "durationMs": 1.1607350000000025,
+              "field": "Pos",
+              "finishedAtUtc": "2026-09-21T22:21:13.743Z",
+              "finishedMonotonicMs": 26.887799,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:21:13.742Z",
+              "startedMonotonicMs": 25.727064
+            },
+            {
+              "durationMs": 0.8295339999999989,
+              "field": "Dimension",
+              "finishedAtUtc": "2026-09-21T22:21:13.745Z",
+              "finishedMonotonicMs": 28.352949,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:21:13.744Z",
+              "startedMonotonicMs": 27.523415
+            },
+            {
+              "durationMs": 0.9629879999999993,
+              "field": "Health",
+              "finishedAtUtc": "2026-09-21T22:21:13.746Z",
+              "finishedMonotonicMs": 29.35598,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:21:13.745Z",
+              "startedMonotonicMs": 28.392992
+            }
+          ],
+          "startedAtUtc": "2026-09-21T22:21:13.740Z",
+          "startedMonotonicMs": 23.755075
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "trialId": "movement-fixture-v1"
+      },
+      "score": {
+        "delta": {
+          "x": 0.0,
+          "y": 0,
+          "z": 3.7948000361922603
+        },
+        "horizontal_displacement": 3.7948000361922603,
+        "movement_succeeded": true,
+        "negative_control_observed": false,
+        "observations_valid": true
+      },
+      "injection": null,
+      "terminal_observer": {
+        "error": null,
+        "finished_monotonic": 2870192.786070169,
+        "pid": 125,
+        "result": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 4.29480003619226
+            }
+          },
+          "phase": "terminal",
+          "sample": {
+            "durationMs": 5.653462999999999,
+            "finishedAtUtc": "2026-09-21T22:21:13.746Z",
+            "finishedMonotonicMs": 29.408538,
+            "queryWindows": [
+              {
+                "durationMs": 1.1607350000000025,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T22:21:13.743Z",
+                "finishedMonotonicMs": 26.887799,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T22:21:13.742Z",
+                "startedMonotonicMs": 25.727064
+              },
+              {
+                "durationMs": 0.8295339999999989,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T22:21:13.745Z",
+                "finishedMonotonicMs": 28.352949,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T22:21:13.744Z",
+                "startedMonotonicMs": 27.523415
+              },
+              {
+                "durationMs": 0.9629879999999993,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T22:21:13.746Z",
+                "finishedMonotonicMs": 29.35598,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T22:21:13.745Z",
+                "startedMonotonicMs": 28.392992
+              }
+            ],
+            "startedAtUtc": "2026-09-21T22:21:13.740Z",
+            "startedMonotonicMs": 23.755075
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "returncode": 0,
+        "started_monotonic": 2870192.727418635,
+        "suspended_for_test": false
+      },
+      "lifecycle": {
+        "stage": "finalize",
+        "error": null,
+        "participant_returncode": 0,
+        "participant_forced_cleanup": false,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false
+      },
+      "outer_process": {
+        "returncode": 0,
+        "timed_out": false,
+        "cleanup_uncertain": false,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "elapsed_seconds": 11.437242672778666
+      },
+      "source_manifest": {
+        "files": {
+          "participant-code/protected-participant-cli.mjs": "24c0ff903c1e3368348d840c12aaf1c2712549fe2c85496ea41027ac2f72e23c",
+          "participant-code/protected-participant.mjs": "93270369581ebab934b7096845784661781b538d67f949700dcb0a429034f30c",
+          "participant-code/participant-pipes.mjs": "30288c3284b0c4f7d252a99dd123398a31c9900cb8d4b5979765179eec2b16bd",
+          "observer-code/protected-observer-cli.mjs": "73f14167dcde8af9d542ae1ce3dbcf48b53916c4992da93fb98ad17342896204",
+          "observer-code/protected-observer.mjs": "7ffb29160c112be679a52e12b89bf10ee03299d2e0f2c00bc623df2fda6f02bf",
+          "observer-code/movement-fixture.mjs": "9f8b51a461cbf4ce0376966750aecc0be96e33e7d406301ab43f491c73588414",
+          "observer-code/tools/pilot/protected_worker.py": "0179615740636c263074feaae1bd870b70b9d0a83cdaf599ad64aecee0354fde",
+          "observer-code/tools/pilot/participant_protocol.py": "9c6a95482609c8b08f921598c000341c64c8fd0a2dcd81d369e426a3e51062c9",
+          "observer-code/tools/pilot/participant_transport.py": "219c8a58066f8e7514e38ffd1d8c19d1d40beaf775e94a1930a8207ac0423761"
+        },
+        "sha256": "15e7adedcfacf22148dfe158b0ea7db260b06b914f7bf44238e677d37be6b9c8"
+      },
+      "private_summary_sha256": "cc339fad6b85a54da0c06d6b6d3763905cea9be8f8cf59dbe6ba48af54aad75e",
+      "terminal_observer_sha256": "0394e6e7f793c636f33d85150cb3bede5b6bf8cb2131379f8d08a7f97b9d90b1"
+    },
+    {
+      "status": "qualified",
+      "failure_case": "none",
+      "movement_mode": "stationary",
+      "evidence_valid": true,
+      "source_manifest_sha256": "15e7adedcfacf22148dfe158b0ea7db260b06b914f7bf44238e677d37be6b9c8",
+      "controller_sha256": "a4ce5081472a080e276e239d95146d83a51c21aed73406fc9924926988df82a1",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "runtime_manifest_sha256": "3c41a1cb0b260c1f86db14faa19607026c9da0f6a5fb0091c25ce3276aee65a1",
+      "evidence_sha256": "1b8bcc872bb90b39d9fe874c3503784bffc74467da3150592d59c92ecd71f603",
+      "attempt": "attempt-005",
+      "before": {
+        "actionId": "walk-01",
+        "actor": "PilotProbe",
+        "observations": {
+          "dimension": "minecraft:overworld",
+          "health": 20,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 0.5
+          }
+        },
+        "phase": "before",
+        "sample": {
+          "durationMs": 4.867930999999999,
+          "finishedAtUtc": "2026-09-21T22:21:39.332Z",
+          "finishedMonotonicMs": 54.434472,
+          "queryWindows": [
+            {
+              "durationMs": 1.2655889999999985,
+              "field": "Pos",
+              "finishedAtUtc": "2026-09-21T22:21:39.331Z",
+              "finishedMonotonicMs": 52.780806,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:21:39.329Z",
+              "startedMonotonicMs": 51.515217
+            },
+            {
+              "durationMs": 0.655147999999997,
+              "field": "Dimension",
+              "finishedAtUtc": "2026-09-21T22:21:39.332Z",
+              "finishedMonotonicMs": 53.804002,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:21:39.331Z",
+              "startedMonotonicMs": 53.148854
+            },
+            {
+              "durationMs": 0.5353859999999955,
+              "field": "Health",
+              "finishedAtUtc": "2026-09-21T22:21:39.332Z",
+              "finishedMonotonicMs": 54.37974,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:21:39.332Z",
+              "startedMonotonicMs": 53.844354
+            }
+          ],
+          "startedAtUtc": "2026-09-21T22:21:39.327Z",
+          "startedMonotonicMs": 49.566541
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "trialId": "movement-fixture-v1"
+      },
+      "terminal": {
+        "actionId": "walk-01",
+        "actor": "PilotProbe",
+        "observations": {
+          "dimension": "minecraft:overworld",
+          "health": 20,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 0.5
+          }
+        },
+        "phase": "terminal",
+        "sample": {
+          "durationMs": 4.550103,
+          "finishedAtUtc": "2026-09-21T22:21:40.703Z",
+          "finishedMonotonicMs": 42.008465,
+          "queryWindows": [
+            {
+              "durationMs": 1.1059310000000053,
+              "field": "Pos",
+              "finishedAtUtc": "2026-09-21T22:21:40.701Z",
+              "finishedMonotonicMs": 40.481346,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:21:40.700Z",
+              "startedMonotonicMs": 39.375415
+            },
+            {
+              "durationMs": 0.48235300000000336,
+              "field": "Dimension",
+              "finishedAtUtc": "2026-09-21T22:21:40.702Z",
+              "finishedMonotonicMs": 41.165219,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:21:40.701Z",
+              "startedMonotonicMs": 40.682866
+            },
+            {
+              "durationMs": 0.7405660000000012,
+              "field": "Health",
+              "finishedAtUtc": "2026-09-21T22:21:40.702Z",
+              "finishedMonotonicMs": 41.938587,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-21T22:21:40.702Z",
+              "startedMonotonicMs": 41.198021
+            }
+          ],
+          "startedAtUtc": "2026-09-21T22:21:40.698Z",
+          "startedMonotonicMs": 37.458362
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "trialId": "movement-fixture-v1"
+      },
+      "score": {
+        "delta": {
+          "x": 0.0,
+          "y": 0,
+          "z": 0.0
+        },
+        "horizontal_displacement": 0.0,
+        "movement_succeeded": false,
+        "negative_control_observed": true,
+        "observations_valid": true
+      },
+      "injection": null,
+      "terminal_observer": {
+        "error": null,
+        "finished_monotonic": 2870219.730315452,
+        "pid": 125,
+        "result": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            }
+          },
+          "phase": "terminal",
+          "sample": {
+            "durationMs": 4.550103,
+            "finishedAtUtc": "2026-09-21T22:21:40.703Z",
+            "finishedMonotonicMs": 42.008465,
+            "queryWindows": [
+              {
+                "durationMs": 1.1059310000000053,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-21T22:21:40.701Z",
+                "finishedMonotonicMs": 40.481346,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T22:21:40.700Z",
+                "startedMonotonicMs": 39.375415
+              },
+              {
+                "durationMs": 0.48235300000000336,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-21T22:21:40.702Z",
+                "finishedMonotonicMs": 41.165219,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T22:21:40.701Z",
+                "startedMonotonicMs": 40.682866
+              },
+              {
+                "durationMs": 0.7405660000000012,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-21T22:21:40.702Z",
+                "finishedMonotonicMs": 41.938587,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-21T22:21:40.702Z",
+                "startedMonotonicMs": 41.198021
+              }
+            ],
+            "startedAtUtc": "2026-09-21T22:21:40.698Z",
+            "startedMonotonicMs": 37.458362
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "returncode": 0,
+        "started_monotonic": 2870219.668687389,
+        "suspended_for_test": false
+      },
+      "lifecycle": {
+        "stage": "finalize",
+        "error": null,
+        "participant_returncode": 0,
+        "participant_forced_cleanup": false,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false
+      },
+      "outer_process": {
+        "returncode": 0,
+        "timed_out": false,
+        "cleanup_uncertain": false,
+        "stdout_truncated": false,
+        "stderr_truncated": false,
+        "elapsed_seconds": 12.720327088143677
+      },
+      "source_manifest": {
+        "files": {
+          "participant-code/protected-participant-cli.mjs": "24c0ff903c1e3368348d840c12aaf1c2712549fe2c85496ea41027ac2f72e23c",
+          "participant-code/protected-participant.mjs": "93270369581ebab934b7096845784661781b538d67f949700dcb0a429034f30c",
+          "participant-code/participant-pipes.mjs": "30288c3284b0c4f7d252a99dd123398a31c9900cb8d4b5979765179eec2b16bd",
+          "observer-code/protected-observer-cli.mjs": "73f14167dcde8af9d542ae1ce3dbcf48b53916c4992da93fb98ad17342896204",
+          "observer-code/protected-observer.mjs": "7ffb29160c112be679a52e12b89bf10ee03299d2e0f2c00bc623df2fda6f02bf",
+          "observer-code/movement-fixture.mjs": "9f8b51a461cbf4ce0376966750aecc0be96e33e7d406301ab43f491c73588414",
+          "observer-code/tools/pilot/protected_worker.py": "0179615740636c263074feaae1bd870b70b9d0a83cdaf599ad64aecee0354fde",
+          "observer-code/tools/pilot/participant_protocol.py": "9c6a95482609c8b08f921598c000341c64c8fd0a2dcd81d369e426a3e51062c9",
+          "observer-code/tools/pilot/participant_transport.py": "219c8a58066f8e7514e38ffd1d8c19d1d40beaf775e94a1930a8207ac0423761"
+        },
+        "sha256": "15e7adedcfacf22148dfe158b0ea7db260b06b914f7bf44238e677d37be6b9c8"
+      },
+      "private_summary_sha256": "7aaa8f1d8a4ba8c27b8b752e00533b149510d7b968a8e1adf76a5ce4b0cf7201",
+      "terminal_observer_sha256": "d5b28f66a34c9694b6ec47f5621965dc2d8c5b23ec1b258f98159494bc27ac8a"
+    }
+  ]
+}

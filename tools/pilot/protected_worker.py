@@ -18,6 +18,7 @@ from tools.pilot.participant_transport import ParticipantTransport
 
 TRIAL = "movement-fixture-v1"
 ACTION = "walk-01"
+FAILURE_CASES = ("none", "death", "disconnect", "observer_timeout")
 FIXTURE_SHA256 = "3a696ca577186c8d2f308fd07fa31d72a3c2a4d98018beb2e64afacd5b358ac7"
 
 
@@ -55,7 +56,7 @@ def participant_argv(mode):
     return args
 
 
-def capture_process(argv, request, *, timeout=30, stdout_limit=65536, stderr_limit=4096):
+def capture_process(argv, request, *, timeout=30, stdout_limit=65536, stderr_limit=4096, suspend_for_test=False):
     """Bound a trusted helper's pipes and lifetime; retain bounded failed output.
 
     stdin contains a small supervisor request, never participant-controlled data.
@@ -71,10 +72,14 @@ def capture_process(argv, request, *, timeout=30, stdout_limit=65536, stderr_lim
     captured = {"stdout": bytearray(), "stderr": bytearray()}
     limits = {"stdout": stdout_limit, "stderr": stderr_limit}
     error = None
+    suspended = False
     started = time.monotonic()
     deadline = started + timeout
     pending = memoryview(payload)
     try:
+        if suspend_for_test:
+            os.kill(process.pid, signal.SIGSTOP)
+            suspended = True
         for stream, label, event in ((process.stdin, "stdin", selectors.EVENT_WRITE),
                                     (process.stdout, "stdout", selectors.EVENT_READ),
                                     (process.stderr, "stderr", selectors.EVENT_READ)):
@@ -133,14 +138,18 @@ def capture_process(argv, request, *, timeout=30, stdout_limit=65536, stderr_lim
                 stream.close()
     return {"returncode": process.returncode, "error": error,
             "stdout": bytes(captured["stdout"]), "stderr": bytes(captured["stderr"]),
+            "suspended_for_test": suspended,
             "pid": process.pid, "started_monotonic": started, "finished_monotonic": time.monotonic()}
 
 
-def observe(phase, password):
+def observe(phase, password, *, suspend_for_test=False):
+    if suspend_for_test and phase != "terminal":
+        raise ValueError("only the terminal observer may be suspended")
     captured = capture_process(
         ["/pilot-tools/bin/node", "--max-old-space-size=256", "/observer-code/protected-observer-cli.mjs"],
         {"schema_version": 1, "phase": phase, "trial_id": TRIAL, "action_id": ACTION,
-         "password": password})
+         "password": password}, timeout=2 if suspend_for_test else 30,
+        suspend_for_test=suspend_for_test)
     # Preserve even malformed/truncated output privately; no caller's raw text is logged.
     name = Path.cwd() / ("observer-" + phase)
     for channel in ("stdout", "stderr"):
@@ -157,6 +166,7 @@ def observe(phase, password):
     except (ValueError, UnicodeError, RecursionError):
         pass
     result = {"returncode": captured["returncode"], "error": captured["error"], "result": value,
+              "suspended_for_test": captured["suspended_for_test"],
               "pid": captured["pid"], "started_monotonic": captured["started_monotonic"],
               "finished_monotonic": captured["finished_monotonic"]}
     write_result(str(name) + ".json", result)
@@ -272,7 +282,10 @@ def wait_port(port, deadline, server):
 
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in {"forward", "stationary"}:
+    if len(sys.argv) not in {2, 3} or sys.argv[1] not in {"forward", "stationary"}:
+        return 2
+    failure_case = sys.argv[2] if len(sys.argv) == 3 else "none"
+    if failure_case not in FAILURE_CASES:
         return 2
     # A host invocation cannot mistake this module for an unrestricted launcher.
     host_netns = Path("/observer-code/host-network-namespace").read_text().strip()
@@ -282,6 +295,7 @@ def main():
     password = Path(".qualification-rcon-password").read_text().strip()
     result = {"schema_version": 1, "status": "failed", "movement_mode": mode,
               "trial_id": TRIAL, "action_id": ACTION, "independent_observer_process": False,
+              "failure_case": failure_case, "injection": None, "stage": "server_start",
               "participant_returncode": None, "java_returncode": None,
               "stop_sent": False, "term_sent": False, "kill_sent": False,
               "before": None, "terminal": None, "fixture": None, "score": None,
@@ -298,6 +312,7 @@ def main():
             stderr=subprocess.PIPE, close_fds=True, bufsize=0, env={"PATH": "/usr/bin:/bin"})
         transport = ParticipantTransport(participant, trial_id=TRIAL, action_id=ACTION)
         transport.wait_ready()
+        result["stage"] = "fixture"
         result["fixture"] = observe("fixture", password)
         if not fixture_valid(result["fixture"]):
             raise RuntimeError("fixture verification failed")
@@ -306,12 +321,26 @@ def main():
         result["participant_pid"] = participant.pid
         if not valid_sample(result["before"], "before") or not score(result["before"], {**result["before"], "phase": "terminal"}, "stationary")["negative_control_observed"]:
             raise RuntimeError("fixed actor baseline failed")
+        result["stage"] = "action"
         transport.send_begin()
         transport.wait_action_finished()
         # Allow residual ordinary physics to settle while client remains connected.
         time.sleep(0.3)
-        result["terminal"] = observe("terminal", password)
+        # Fixed trusted fault injection on the disposable copy, after the action.
+        # A request/console write is not proof of its effect; retain actual samples.
+        if failure_case != "none":
+            result["injection"] = {"case": failure_case, "after": "action_finished",
+                                   "requested_monotonic": time.monotonic(), "status": "requested"}
+        command = {"death": b"kill PilotProbe\n",
+                   "disconnect": b"kick PilotProbe Qualification disconnect\n"}.get(failure_case)
+        if command is not None:
+            server.stdin.write(command); server.stdin.flush()
+            result["injection"]["status"] = "console_command_sent"
+            time.sleep(0.3)
+        result["stage"] = "terminal_observation"
+        result["terminal"] = observe("terminal", password, suspend_for_test=failure_case == "observer_timeout")
         result["score"] = score(result["before"], result["terminal"], mode)
+        result["stage"] = "finalize"
         transport.send_finalize()
         transport.wait_exit()
     except Exception:
@@ -337,7 +366,7 @@ def main():
             result["error"] = "server_cleanup_uncertain"
         clean = result["error"] is None and result["participant_returncode"] == 0 and result["java_returncode"] == 0 and result["stop_sent"] and not any(result[k] for k in ("term_sent", "kill_sent", "participant_forced_cleanup"))
         accepted = result["score"] and (result["score"]["movement_succeeded"] if mode == "forward" else result["score"]["negative_control_observed"])
-        result["status"] = "qualified" if clean and accepted else "failed"
+        result["status"] = "qualified" if failure_case == "none" and clean and accepted else "failed"
         write_result("protected-result.json", result)
     return 0 if result["status"] == "qualified" else 1
 

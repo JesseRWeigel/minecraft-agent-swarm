@@ -100,6 +100,26 @@ class ProtectedWorkerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "launch=True"):
             run_protected_qualification(workspace=Path('/not-created'), restore_kwargs={}, tool_snapshot=Path('/none'), tool_manifest_sha256='a'*64)
 
+    def test_fault_injection_cannot_be_accepted_even_with_successful_samples(self):
+        for case in ("death", "disconnect", "observer_timeout", "unknown"):
+            row = outcome(); row["failure_case"] = case
+            self.assertFalse(validate_result(row, "forward"))
+
+    def test_unknown_failure_case_rejected_before_workspace_mutation(self):
+        with self.assertRaisesRegex(ValueError, "failure case"):
+            run_protected_qualification(launch=True, failure_case="arbitrary-command",
+                workspace=Path('/not-created'), restore_kwargs={}, tool_snapshot=Path('/none'),
+                tool_manifest_sha256='a'*64)
+
+    def test_suspended_real_helper_times_out_and_is_reaped(self):
+        result = capture_process([sys.executable, "-c", "import time; time.sleep(1); print('unexpected')"], {},
+                                 timeout=0.15, suspend_for_test=True)
+        self.assertEqual(result["error"], "observer_deadline")
+        self.assertEqual(result["returncode"], -9)
+        self.assertEqual(result["stdout"], b"")
+        self.assertTrue(result["suspended_for_test"])
+        with self.assertRaises(ProcessLookupError): os.kill(result["pid"], 0)
+
     def test_helper_uses_private_stdin_and_bounded_capture(self):
         result = capture_process([sys.executable, "-c", "import sys,json; v=json.load(sys.stdin); print(json.dumps({'received':v['phase']}))"], {"phase": "before", "password": "synthetic-secret"}, timeout=2)
         self.assertEqual(result["returncode"], 0)

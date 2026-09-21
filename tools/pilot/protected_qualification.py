@@ -12,7 +12,7 @@ import secrets
 from tools.pilot import prepare, restore
 from tools.pilot.client_tools import verify_tools
 from tools.pilot.qualification import _private_new, _write, _sha, _capture_json, QUAL_PROPERTIES
-from tools.pilot.protected_worker import score, fixture_valid
+from tools.pilot.protected_worker import score, fixture_valid, FAILURE_CASES
 from tools.pilot.server import _build_sandbox_argv, _validate_executable, run_owned
 
 PARTICIPANT_FILES = ("protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs")
@@ -53,6 +53,8 @@ def capture_sources(workspace):
 def validate_result(value, mode):
     if not isinstance(value, dict) or type(value.get("schema_version")) is not int or value["schema_version"] != 1:
         return False
+    if value.get("failure_case", "none") != "none":
+        return False
     if value.get("movement_mode") != mode or value.get("trial_id") != "movement-fixture-v1" or value.get("action_id") != "walk-01":
         return False
     if value.get("independent_observer_process") is not True or value.get("status") != "qualified" or value.get("error") is not None:
@@ -69,10 +71,12 @@ def validate_result(value, mode):
 
 
 def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool_snapshot,
-                                 tool_manifest_sha256, movement_mode="forward",
+                                 tool_manifest_sha256, movement_mode="forward", failure_case="none",
                                  bwrap_path=Path("/usr/bin/bwrap"), runner=run_owned):
     if launch is not True:
         raise ValueError("explicit launch=True required")
+    if failure_case not in FAILURE_CASES:
+        raise ValueError("invalid fixed failure case")
     if movement_mode not in {"forward", "stationary"}:
         raise ValueError("invalid fixed movement mode")
     bwrap = _validate_executable(Path(bwrap_path), "bwrap", expected_name="bwrap")
@@ -82,7 +86,7 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
     verify_tools(Path(tool_snapshot), tool_manifest_sha256)
     tools = Path(tool_snapshot).resolve(strict=True)
     workspace = _private_new(workspace)
-    summary = {"schema_version": 1, "status": "failed", "movement_mode": movement_mode,
+    summary = {"schema_version": 1, "status": "failed", "movement_mode": movement_mode, "failure_case": failure_case,
                "tool_manifest_sha256": tool_manifest_sha256, "error": None,
                "independent_observer_process": False,
                "claim_limit": "Fixed deterministic client in nested namespace; no model performance or arbitrary-code resource-containment claim."}
@@ -103,7 +107,7 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
         os.chmod(runtime / "server.properties", 0o600)
         summary["profile_sha256"] = _sha(runtime / "server.properties")
         _write(secret_path, (secret + "\n").encode())
-        command = [str(python), "-m", "tools.pilot.protected_worker", movement_mode]
+        command = [str(python), "-m", "tools.pilot.protected_worker", movement_mode, failure_case]
         args = _build_sandbox_argv(runtime, bwrap_path=bwrap, command=command)
         index = args.index("--proc")
         args[index:index] = ["--ro-bind", str(tools), "/pilot-tools",

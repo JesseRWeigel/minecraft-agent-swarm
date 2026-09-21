@@ -75,8 +75,41 @@ this is not an independently reproduced or public raw-data release.
 
 Real nested-namespace checks exercise the production participant argument builder.
 Unit/process tests cover invalid observations, forged scores, timeout/output
-bounds and cleanup. Actual game death, disconnect and observer-timeout cases are
-still required; the positive/control checks do not substitute for them.
+bounds and cleanup. The post-action failure cases below now have real game evidence; they do not
+cover every failure timing, network stall or generated participant behavior.
+
+## Post-action failure checks: 21 September follow-up
+
+The host API accepts `failure_case="none"` (default), `"death"`, `"disconnect"`
+or `"observer_timeout"` alongside the existing explicit launch and pinned inputs.
+Unknown cases are rejected before creating a workspace. There is no arbitrary
+command argument. All fault runs are excluded from successful qualification,
+even if their serialized samples or score would otherwise pass.
+
+Each case starts a fresh disposable world and verified actor baseline, completes
+the fixed movement action, then injects a trusted fault before terminal sampling:
+
+| Case | Observed evidence | Evaluator and cleanup |
+| --- | --- | --- |
+| Death | Server terminal health 0, despite approximately 3.79 blocks of movement | Invalid observation for scoring; participant and Java exit normally |
+| Disconnect | Server confirms the fixed kick reason; terminal observer returns failed/invalid response | No valid terminal sample; participant forcibly cleaned up, Java stops normally |
+| Observer timeout | Real terminal helper is suspended; parent records `observer_deadline` after approximately 2 seconds and reaps it with return code -9 | No terminal sample; participant forcibly cleaned up, Java stops normally |
+| Fresh forward control | 3.794800 blocks, health 20 | Qualified; normal participant and Java exit |
+| Fresh stationary control | 0 blocks, health 20 | Negative control observed; normal participant and Java exit |
+
+[All five attempts and evidence pins](protected-failure-results-2026-09-21.json)
+use the same captured current sources. The original archive was rehashed unchanged.
+Raw private evidence remains preserved. The timeout is a **suspended-process
+supervisor deadline check**, using a shortened two-second test deadline; it does
+not exercise the observer's internal RCON timeout or simulate a network stall.
+The console command being sent is not itself proof of death or disconnection:
+those conclusions use the retained server observation or server confirmation.
+
+These faults occur after `action_finished`. Mid-action death/disconnect, malformed
+participant traffic in a real game, a stalled participant, and RCON stalls are
+not covered by these five attempts. Unit/process tests cover several such failure
+mechanisms, but must not be described as that complete game matrix. A missing
+terminal observation is an invalid attempt, never a valid negative control.
 
 ## Limits
 

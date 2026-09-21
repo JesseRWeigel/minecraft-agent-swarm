@@ -23,7 +23,10 @@ infrastructure results from a deterministic client; no model was involved.
 See the [qualification and limitations](protected-movement-qualification.md) and
 [all five attempts with source pins and observations](protected-movement-results-2026-09-21.json).
 The actor baseline is fixed; whole-world state and tick timing are not claimed
-identical. Failure-path game checks and model-trial resource/identity gates remain.
+identical. A [post-action failure follow-up](protected-movement-qualification.md#post-action-failure-checks-21-september-follow-up)
+now also rejects death, disconnect and a suspended terminal observer, with fresh
+positive/stationary controls. Mid-action/RCON failure cases and model-trial
+resource/identity gates remain.
 
 ### Historical case: predicted movement is not completed movement
 
