@@ -343,9 +343,66 @@ export function driestDirection(
   return best;
 }
 
+/**
+ * Dig a level corridor by hand, one block at a time, and walk into it.
+ *
+ * This is the only way out for a bot with no pickaxe. The pathfinder refuses
+ * to break anything it cannot harvest, so a pickless bot in stone is told
+ * "no route" whichever way it faces, while a bare hand breaks stone perfectly
+ * well given the time. Run 754: Flora sat at (345, 41, -346) inside a lake,
+ * "[Stuck] sides=water/water/water/stone", and the relocation walk returned
+ * "moved 1 blocks" forty-three times because her one dry heading was rock.
+ *
+ * Returns how many blocks it advanced. It stops at the first cell it cannot
+ * open, at the deadline, or where opening the next one would let the water in.
+ */
+async function handTunnel(
+  bot: Bot,
+  f: Vec3,
+  dir: [number, number],
+  blocks: number,
+  signal: AbortSignal,
+  deadline: number,
+  label: string,
+): Promise<number> {
+  let advanced = 0;
+  for (let k = 1; k <= blocks && !signal.aborted && Date.now() < deadline; k++) {
+    const cx = f.x + dir[0] * k;
+    const cz = f.z + dir[1] * k;
+    if (wouldFlood(bot, cx - dir[0], f.y, cz - dir[1], dir[0], dir[1]) && k > 1) break;
+    await handDig(bot, cx, f.y, cz);
+    await handDig(bot, cx, f.y + 1, cz);
+    // Run 694: two bots "suffocated in a wall" right after this retreat. A dig
+    // the server has not confirmed comes back on the client 1.5 s later, and
+    // the walk had already pushed the bot into it. Wait for the cells to read
+    // as air before stepping.
+    await new Promise((r) => setTimeout(r, 800));
+    const feetCell = bot.blockAt(new Vec3(cx, f.y, cz));
+    const headCell = bot.blockAt(new Vec3(cx, f.y + 1, cz));
+    if (!feetCell || !headCell || feetCell.boundingBox === "block" || headCell.boundingBox === "block") {
+      console.log(
+        `[Escape] ${bot.username}: ${label} cell at (${cx}, ${f.y}, ${cz}) still ${feetCell?.name ?? "?"}/${headCell?.name ?? "?"}; stopping`,
+      );
+      break;
+    }
+    try {
+      await bot.lookAt(new Vec3(cx + 0.5, f.y + 1, cz + 0.5), true);
+    } catch {
+      /* look best-effort */
+    }
+    bot.setControlState("forward", true);
+    await new Promise((r) => setTimeout(r, 700));
+    bot.setControlState("forward", false);
+    advanced = k;
+  }
+  return advanced;
+}
+
 /** How far the relocation walks, and how much of it has to happen to count. */
 const RELOCATE_BLOCKS = 20;
 const RELOCATE_MIN_PROGRESS = 6;
+/** How far the bare-handed fallback cuts when the walk cannot move at all. */
+const RELOCATE_HAND_BLOCKS = 8;
 
 /**
  * Walk out from under the water, then climb from there.
@@ -361,7 +418,13 @@ const RELOCATE_MIN_PROGRESS = 6;
  * arriving is not required, since any real ground gained is a different column
  * to climb.
  */
-async function walkOutFromWater(bot: Bot, f: Vec3, dirs: [number, number][]): Promise<boolean> {
+async function walkOutFromWater(
+  bot: Bot,
+  f: Vec3,
+  dirs: [number, number][],
+  signal: AbortSignal,
+  deadline: number,
+): Promise<boolean> {
   const [dx, dz] = driestDirection(bot, f.x, f.y, f.z, dirs, 16);
   console.log(
     `[Escape] ${bot.username}: boxed under water at y=${f.y}; walking ${RELOCATE_BLOCKS} blocks toward (${dx}, ${dz}) to climb from drier ground`,
@@ -378,7 +441,14 @@ async function walkOutFromWater(bot: Bot, f: Vec3, dirs: [number, number][]): Pr
   console.log(
     `[Escape] ${bot.username}: relocation moved ${moved.toFixed(0)} blocks to ${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}`,
   );
-  return moved >= RELOCATE_MIN_PROGRESS;
+  if (moved >= RELOCATE_MIN_PROGRESS) return true;
+  // The walk got nowhere, which for a pickless bot is the normal answer: the
+  // pathfinder will not break rock it cannot harvest. Cut the corridor by hand
+  // along the same heading instead. Eight blocks is what fits in the time this
+  // climb has left, and the tunnel keeps whatever it gains for the next call.
+  const dug = await handTunnel(bot, feet(bot), [dx, dz], RELOCATE_HAND_BLOCKS, signal, deadline, "walk-out");
+  console.log(`[Escape] ${bot.username}: hand tunnel advanced ${dug} blocks toward (${dx}, ${dz})`);
+  return dug >= 2;
 }
 
 /** True when the bot's head is already above the water: nothing more to gain by swimming. */
@@ -593,34 +663,7 @@ export const escapeToSurfaceSkill: Skill = {
             console.log(
               `[Escape] ${bot.username}: boxed by water at y=${f.y}; tunnelling 3 blocks toward (${dry[0]}, ${dry[1]}) to dry ground (retreat ${retreats}/2)`,
             );
-            for (let k = 1; k <= 3 && !signal.aborted; k++) {
-              const cx = f.x + dry[0] * k;
-              const cz = f.z + dry[1] * k;
-              if (wouldFlood(bot, cx - dry[0], f.y, cz - dry[1], dry[0], dry[1]) && k > 1) break;
-              await handDig(bot, cx, f.y, cz);
-              await handDig(bot, cx, f.y + 1, cz);
-              // Run 694: two bots "suffocated in a wall" right after this
-              // retreat. A dig the server has not confirmed comes back on the
-              // client 1.5 s later, and the walk had already pushed the bot
-              // into it. Wait for the cells to read as air before stepping.
-              await new Promise((r) => setTimeout(r, 800));
-              const feetCell = bot.blockAt(new Vec3(cx, f.y, cz));
-              const headCell = bot.blockAt(new Vec3(cx, f.y + 1, cz));
-              if (!feetCell || !headCell || feetCell.boundingBox === "block" || headCell.boundingBox === "block") {
-                console.log(
-                  `[Escape] ${bot.username}: retreat cell at (${cx}, ${f.y}, ${cz}) still ${feetCell?.name ?? "?"}/${headCell?.name ?? "?"}; stopping the retreat`,
-                );
-                break;
-              }
-              try {
-                await bot.lookAt(new Vec3(cx + 0.5, f.y + 1, cz + 0.5), true);
-              } catch {
-                /* look best-effort */
-              }
-              bot.setControlState("forward", true);
-              await new Promise((r) => setTimeout(r, 700));
-              bot.setControlState("forward", false);
-            }
+            await handTunnel(bot, f, dry, 3, signal, deadline, "retreat");
             wetTurns = 0;
             continue;
           }
@@ -628,7 +671,7 @@ export const escapeToSurfaceSkill: Skill = {
           // giving up, because giving up here is what looped sixty times.
           if (relocations < 1) {
             relocations++;
-            if (await walkOutFromWater(bot, f, dirs)) {
+            if (await walkOutFromWater(bot, f, dirs, signal, deadline)) {
               wetTurns = 0;
               retreats = 0;
               continue;

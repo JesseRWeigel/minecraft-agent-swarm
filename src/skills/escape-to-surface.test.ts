@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { digBudgetMs } from "./escape-to-surface.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 test("dig budget covers bare-hand deepslate (15s) with margin", () => {
   // The old fixed 12s timeout aborted every deepslate dig at y<0 — the block
@@ -49,4 +54,23 @@ test("a bot in the surface band is never buried", () => {
 
 test("rock beyond the scan range does not count", () => {
   assert.equal(isBuried(column(new Set([10 + BURIED_CEILING_SCAN + 1])), 0, 10, 0), false);
+});
+
+test("walk-out falls back to digging by hand when the walk cannot move", () => {
+  // Run 754: Flora, pickless inside a lake at (345, 41, -346), got
+  // "relocation moved 1 blocks" forty-three times. The pathfinder refuses to
+  // break rock it cannot harvest, so for a pickless bot the walk is never the
+  // way out and the hand tunnel is the whole capability. Guard it by shape:
+  // the fallback must stay below the walk, in the same function.
+  const source = fs.readFileSync(path.join(__dirname, "escape-to-surface.ts"), "utf8");
+  const walkStart = source.indexOf("async function walkOutFromWater");
+  assert.notStrictEqual(walkStart, -1, "the walk-out function must still exist");
+  const walkEnd = source.indexOf("\n}", source.indexOf("hand tunnel advanced", walkStart));
+  const body = source.slice(walkStart, walkEnd);
+  assert.match(body, /safeGoto\(/, "it should still try walking first");
+  assert.match(body, /handTunnel\(/, "it must dig by hand when the walk gains nothing");
+  assert.ok(
+    body.indexOf("safeGoto(") < body.indexOf("handTunnel("),
+    "the hand tunnel is the fallback, so the walk has to come first",
+  );
 });
