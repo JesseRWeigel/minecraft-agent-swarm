@@ -3,6 +3,7 @@ import type { Skill, SkillResult } from "./types.js";
 import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
 import { baseMoves, safeGoto } from "../bot/navigation.js";
+import { belowRouteCost, routeFloor } from "../bot/route-floor.js";
 import { Vec3 } from "vec3";
 
 /**
@@ -155,6 +156,17 @@ export async function marchToward(
   (marchMoves as unknown as { allow1by1towers: boolean }).allow1by1towers = true;
   (marchMoves as unknown as { maxDropDown: number }).maxDropDown = 3;
   (marchMoves as unknown as { allowParkour: boolean }).allowParkour = false;
+  // Run 749: all three of Mason's deaths were "tried to swim in lava" at
+  // y=27-31, under bricks at y=51, after the march walked him down into a
+  // lava basin three blocks at a time. Price depth below route height so the
+  // planner prefers the ridge, and so a bot that is already down there finds
+  // climbing out cheaper than carrying on.
+  if (target.y !== undefined) {
+    const floorY = routeFloor(target.y);
+    (marchMoves as unknown as { exclusionAreasStep: ((b: never) => number)[] }).exclusionAreasStep.push(((b: {
+      position?: Vec3;
+    }) => (b?.position ? belowRouteCost(floorY, b.position.y) : 0)) as unknown as (b: never) => number);
+  }
   bot.pathfinder.setMovements(marchMoves);
   while (!o.stop() && !signal.aborted && Date.now() < until) {
     const g = gap();
