@@ -1,5 +1,11 @@
 # Protected observer boundary: next implementation design
 
+Network update: the current runner uses a [separate participant network with a
+game-only bridge](../research/game-only-network.md). It supersedes the shared
+network portion of the original design below; historical evidence keeps its
+original topology.
+
+
 Status update, 21 September 2026: the complete fixed-client participant/observer
 path now passes real forward and stationary qualification with a declared actor
 fixture. See [results, architecture and remaining limits](../research/protected-movement-qualification.md).

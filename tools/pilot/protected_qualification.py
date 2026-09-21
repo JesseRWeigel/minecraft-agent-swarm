@@ -15,9 +15,9 @@ from tools.pilot.qualification import _private_new, _write, _sha, _capture_json,
 from tools.pilot.protected_worker import score, fixture_valid, FAILURE_CASES
 from tools.pilot.server import _build_sandbox_argv, _validate_executable, run_owned
 
-PARTICIPANT_FILES = ("protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs")
+PARTICIPANT_FILES = ("protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs", "game_bridge.py", "game_bridge_client.py")
 OBSERVER_FILES = ("protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
-PYTHON_FILES = ("protected_worker.py", "participant_protocol.py", "participant_transport.py")
+PYTHON_FILES = ("protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py")
 
 
 def capture_sources(workspace):
@@ -62,6 +62,11 @@ def validate_result(value, mode):
     if any(type(value.get(k)) is not int or value[k] != 0 for k in ("participant_returncode", "java_returncode")):
         return False
     if value.get("stop_sent") is not True or any(value.get(k) is not False for k in ("term_sent", "kill_sent", "participant_forced_cleanup")):
+        return False
+    bridge = value.get("game_bridge")
+    if (value.get("network_policy") != "game_only_unix_v1" or not isinstance(bridge, dict)
+            or type(bridge.get("connections")) is not int or bridge["connections"] != 1
+            or bridge.get("status") != "completed"):
         return False
     if not fixture_valid(value.get("fixture")):
         return False

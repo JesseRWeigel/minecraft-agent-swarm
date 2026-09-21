@@ -15,6 +15,7 @@ import sys
 import time
 
 from tools.pilot.participant_transport import ParticipantTransport
+from tools.pilot.game_bridge import GameBridge
 
 TRIAL = "movement-fixture-v1"
 ACTION = "walk-01"
@@ -37,7 +38,7 @@ def participant_argv(mode):
     if mode not in {"forward", "stationary"}:
         raise ValueError("invalid fixed movement mode")
     args = ["/pilot-bwrap", "--die-with-parent", "--new-session",
-            "--unshare-user", "--unshare-pid", "--unshare-ipc", "--unshare-uts",
+            "--unshare-user", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--unshare-net",
             "--cap-drop", "ALL", "--clearenv",
             "--setenv", "HOME", "/participant-state", "--setenv", "LANG", "C.UTF-8",
             "--ro-bind", "/usr", "/usr"]
@@ -49,10 +50,9 @@ def participant_argv(mode):
                  "--size", "16777216", "--tmpfs", "/participant-state",
                  "--ro-bind", "/pilot-tools", "/pilot-tools",
                  "--ro-bind", "/participant-code", "/participant-code",
+                 "--ro-bind", str(Path.cwd() / "game-bridge"), "/game-bridge",
                  "--chdir", "/participant-state", "--",
-                 "/pilot-tools/bin/node", "--max-old-space-size=256",
-                 "/participant-code/protected-participant-cli.mjs",
-                 "--trial-id", TRIAL, "--action-id", ACTION, "--movement", mode])
+                 "/usr/bin/python3", "/participant-code/game_bridge_client.py", mode])
     return args
 
 
@@ -296,11 +296,12 @@ def main():
     result = {"schema_version": 1, "status": "failed", "movement_mode": mode,
               "trial_id": TRIAL, "action_id": ACTION, "independent_observer_process": False,
               "failure_case": failure_case, "injection": None, "stage": "server_start",
+              "network_policy": "game_only_unix_v1", "game_bridge": None,
               "participant_returncode": None, "java_returncode": None,
               "stop_sent": False, "term_sent": False, "kill_sent": False,
               "before": None, "terminal": None, "fixture": None, "score": None,
               "participant_forced_cleanup": False, "error": None}
-    server = participant = transport = None
+    server = participant = transport = bridge = None
     try:
         server = subprocess.Popen(["/usr/bin/java", "-Xms512M", "-Xmx2G", "-Djava.awt.headless=true",
             "-jar", "server.jar", "--nogui"], stdin=subprocess.PIPE, close_fds=True,
@@ -308,6 +309,7 @@ def main():
         deadline = time.monotonic() + 60
         if not (wait_port(25585, deadline, server) and wait_port(25595, deadline, server)):
             raise RuntimeError("server readiness failed")
+        bridge = GameBridge(Path.cwd() / "game-bridge")
         participant = subprocess.Popen(participant_argv(mode), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, close_fds=True, bufsize=0, env={"PATH": "/usr/bin:/bin"})
         transport = ParticipantTransport(participant, trial_id=TRIAL, action_id=ACTION)
@@ -360,6 +362,10 @@ def main():
                 transport.close()
             except Exception:
                 result["error"] = "participant_pipe_cleanup_failed"
+        if bridge is not None:
+            result["game_bridge"] = bridge.close()
+            if result["game_bridge"]["status"] != "completed":
+                result["error"] = result["error"] or "game_bridge_failed"
         try:
             stop_server(server, result)
         except Exception:

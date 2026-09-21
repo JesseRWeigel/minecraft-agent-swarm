@@ -26,7 +26,9 @@ The actor baseline is fixed; whole-world state and tick timing are not claimed
 identical. A [post-action failure follow-up](protected-movement-qualification.md#post-action-failure-checks-21-september-follow-up)
 now also rejects death, disconnect and a suspended terminal observer, with fresh
 positive/stationary controls. Mid-action/RCON failure cases and model-trial
-resource/identity gates remain.
+resource/identity gates remain. The current participant uses a
+[separate network with a game-only bridge](game-only-network.md); historical runs
+retain their original shared-network provenance.
 
 ### Historical case: predicted movement is not completed movement
 

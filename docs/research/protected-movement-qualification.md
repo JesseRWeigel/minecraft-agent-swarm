@@ -19,8 +19,8 @@ networking, a copied world, Java, the trusted supervisor and observer code.
 
 The participant runs in a nested mount/PID/user namespace with only pinned
 participant code, read-only dependencies, fresh environment/proc, and bounded
-temporary mounts. It inherits the outer private network so it can reach the
-game server. It cannot see the observer source, credential, world, or evidence
+temporary mounts. It uses a separate private network and a
+[single-use game-only bridge](game-only-network.md) to reach the game server. It cannot see the observer source, credential, world, or evidence
 mounts. The observer receives its credential only through a trusted stdin pipe;
 it writes samples through the outer supervisor, not a participant-writable file.
 
@@ -117,9 +117,9 @@ terminal observation is an invalid attempt, never a valid negative control.
   or model-driven agent is allowed by this experiment's contract.
 - Node heap limits and temporary mount sizes are not comprehensive native-memory,
   CPU, process, world-growth or disk quotas. Model trials still need resource gates.
-- The participant shares the outer network, including reachability of the RCON
-  port. Its fixed code receives no credential. Before arbitrary participant code,
-  enforce a game-port-only network boundary as well as aggregate resource limits.
+- The original results below used shared private networking. The current runner
+  uses the [game-only bridge](game-only-network.md), with separately recorded
+  qualification. Aggregate resource limits and actor identity remain open.
 - RCON field samples are sequential, not atomic; sample and supervisor timings
   are preserved. Process-separation claims are tied to captured source and the
   qualified namespace launch path, not remote attestation.

@@ -41,7 +41,22 @@ for entry in Path("/proc/self/fd").iterdir():
         pass
 Path("/participant-state/scratch-ok").write_text("scratch")
 Path("/tmp/tmp-ok").write_text("tmp")
+def reachable(address, family=socket.AF_INET):
+    try:
+        with socket.socket(family, socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.2)
+            probe.connect(address)
+            return True
+    except OSError:
+        return False
+
 result = {
+    "network_namespace": os.readlink("/proc/self/ns/net"),
+    "rcon_reachable": reachable(("127.0.0.1", 25595)),
+    "other_outer_port_reachable": reachable(("127.0.0.1", 25601)),
+    "ipv6_rcon_reachable": reachable(("::1", 25595), socket.AF_INET6),
+    "abstract_socket_reachable": reachable("\0outer-private-control", socket.AF_UNIX),
+    "bridge_directory_write_blocked": write_blocked("/game-bridge/new-file"),
     "observer_secret_visible": Path("/observer-code/secret").exists(),
     "runtime_canary_visible": Path("/runtime/runtime-canary").exists(),
     "test_source_visible": Path("/test-source").exists(),
@@ -59,6 +74,8 @@ result = {
 with socket.create_connection(("127.0.0.1", 25585), timeout=2) as client:
     client.sendall(b"namespace-probe")
     result["echo"] = client.recv(128).decode("utf8")
+result["second_game_connection_reachable"] = reachable(("127.0.0.1", 25585))
+result["second_bridge_connection_reachable"] = reachable("/game-bridge/game.sock", socket.AF_UNIX)
 print(json.dumps(result, sort_keys=True), flush=True)
 '''
 
@@ -67,7 +84,20 @@ OUTER = r'''
 import json, os, socket, subprocess, threading
 from pathlib import Path
 from tools.pilot.protected_worker import participant_argv
+from tools.pilot.game_bridge import GameBridge
 
+canaries = []
+for port in [25595, 25601]:
+    canary = socket.socket()
+    canary.bind(("127.0.0.1", port)); canary.listen(1)
+    canaries.append(canary)
+ipv6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+ipv6.bind(("::1", 25595)); ipv6.listen(1)
+canaries.append(ipv6)
+abstract = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+abstract.bind("\0outer-private-control"); abstract.listen(1)
+canaries.append(abstract)
+bridge = GameBridge(Path("/runtime/game-bridge"))
 listener = socket.socket()
 listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 listener.bind(("127.0.0.1", 25585))
@@ -95,6 +125,8 @@ finally:
     os.close(secret_fd)
 thread.join(timeout=3)
 listener.close()
+bridge_result = bridge.close()
+for canary in canaries: canary.close()
 participant = None
 try:
     lines = stdout.decode("utf8").splitlines()
@@ -103,6 +135,8 @@ try:
 except (UnicodeError, ValueError):
     pass
 trusted = {
+    "bridge": bridge_result,
+    "network_namespace": os.readlink("/proc/self/ns/net"),
     "nested_returncode": process.returncode,
     "nested_stderr": stderr[-4096:].decode("utf8", errors="replace"),
     "echo_observed": seen,
@@ -145,6 +179,8 @@ class ProtectedNamespaceTests(unittest.TestCase):
                 pilot_tools / "bin" / "node": textwrap.dedent(FAKE_NODE),
                 root / "outer.py": textwrap.dedent(OUTER),
             }
+            for name in ("game_bridge.py", "game_bridge_client.py"):
+                files[participant_code / name] = (repository / "tools/pilot" / name).read_text()
             for path, content in files.items():
                 path.write_text(content)
                 path.chmod(0o700 if path.name in {"node", "outer.py"} else 0o600)
@@ -171,12 +207,18 @@ class ProtectedNamespaceTests(unittest.TestCase):
             self.assertFalse(outcome.stderr_truncated)
             trusted = json.loads((runtime / "trusted-result.json").read_text())
             participant = trusted["participant"]
+            self.assertNotEqual(trusted["network_namespace"], participant["network_namespace"])
+            self.assertEqual(trusted["bridge"]["connections"], 1)
+            self.assertNotIn(trusted["bridge"]["status"], ("failed", "cleanup_uncertain"))
+            self.assertTrue(participant["bridge_directory_write_blocked"])
             self.assertEqual(trusted["nested_returncode"], 0, trusted["nested_stderr"])
             self.assertTrue(trusted["echo_thread_finished"])
             self.assertEqual(trusted["echo_observed"], {"request": "namespace-probe"})
             self.assertEqual(participant["echo"], "private-outer:namespace-probe")
             for key in ("observer_secret_visible", "runtime_canary_visible", "test_source_visible",
                         "host_secret_in_environment", "outer_process_visible",
+                        "rcon_reachable", "other_outer_port_reachable", "ipv6_rcon_reachable", "abstract_socket_reachable",
+                        "second_game_connection_reachable", "second_bridge_connection_reachable",
                         "pid1_root_observer_secret_visible", "pid1_root_runtime_canary_visible",
                         "pid1_root_test_source_visible", "host_secret_in_regular_fd"):
                 self.assertFalse(participant[key], key)

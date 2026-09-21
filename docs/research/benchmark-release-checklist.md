@@ -21,7 +21,9 @@ control. Mid-action failures and internal RCON stalls remain unqualified.
 - [ ] Complete resource/network gates around the connected protected participant,
   bounded pipes, observer process and outer worker. Fixed-client namespaces hide
   credentials/world/evidence and bound pipes, lifetime and scratch; aggregate
-  resource limits and game-port-only networking remain for arbitrary code.
+  resource limits remain for arbitrary code. The current
+  [game-only network bridge](game-only-network.md) has its own qualification; it
+  does not constrain game-protocol actions or actor identity.
 - [x] Capture and pin the current no-respawn client and executed qualification sources.
   Never overwrite the snapshots used for the historical movement case study.
 - [ ] Run forward movement and stationary controls through the complete path,

@@ -20,6 +20,7 @@ def outcome(mode="forward"):
             "trial_id": TRIAL, "action_id": ACTION, "independent_observer_process": True,
             "error": None, "participant_returncode": 0, "java_returncode": 0,
             "stop_sent": True, "term_sent": False, "kill_sent": False, "participant_forced_cleanup": False,
+            "network_policy": "game_only_unix_v1", "game_bridge": {"connections":1,"status":"completed"},
             "fixture": {"schema_version": 1, "phase": "fixture", "baselineVerification": {"status": "verified"},
                 "setup": {"status": "configured", "fixture": {"sha256": FIXTURE_SHA256}, "baselineChecks": [{"name": n, "status": "verified"} for n in ["orientation", "inventory", "game_mode", "food", "effects"]]},
                 "baseline": sample("before")},
@@ -58,6 +59,14 @@ class ProtectedWorkerTests(unittest.TestCase):
             row = outcome(); row[key] = value
             self.assertFalse(validate_result(row, "forward"))
 
+    def test_host_requires_game_only_network_policy_and_bridge_cleanup(self):
+        for field, value in [("network_policy", "shared"), ("game_bridge", None),
+                             ("game_bridge", {"connections":2,"status":"completed"}),
+                             ("game_bridge", {"connections":1,"status":"cleanup_uncertain"}),
+                             ("game_bridge", {"connections":1,"status":"stopped"})]:
+            row = outcome(); row[field] = value
+            self.assertFalse(validate_result(row, "forward"))
+
     def test_failed_or_wrong_fixture_cannot_be_rescued_by_movement(self):
         for mutation in [lambda f: f.update(baselineVerification={"status":"failed"}),
                          lambda f: f["setup"].update(status="failed"),
@@ -88,7 +97,7 @@ class ProtectedWorkerTests(unittest.TestCase):
     def test_nested_argv_has_no_observer_mount_or_credentials(self):
         args = participant_argv("forward")
         self.assertIn("--unshare-pid", args)
-        self.assertNotIn("--unshare-net", args)  # inherits only outer isolated networking
+        self.assertIn("--unshare-net", args)  # game-only Unix bridge across private networks
         self.assertNotIn("--share-net", args)
         self.assertNotIn("/observer-code", args)
         self.assertNotIn("/trial-runtime", args)
