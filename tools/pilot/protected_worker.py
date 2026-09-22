@@ -17,10 +17,11 @@ import time
 from tools.pilot.participant_transport import ParticipantTransport
 from tools.pilot.game_bridge import GameBridge
 from tools.pilot.storage_fault import inject_disk_full
+from tools.pilot.rcon_stall import RconStall
 
 TRIAL = "movement-fixture-v1"
 ACTION = "walk-01"
-FAILURE_CASES = ("none", "death", "disconnect", "observer_timeout", "disk_full", "creative_mode", "command_denied", "command_authorized")
+FAILURE_CASES = ("none", "death", "disconnect", "observer_timeout", "disk_full", "creative_mode", "command_denied", "command_authorized", "rcon_stall")
 FIXTURE_SHA256 = "3a696ca577186c8d2f308fd07fa31d72a3c2a4d98018beb2e64afacd5b358ac7"
 
 
@@ -147,12 +148,12 @@ def capture_process(argv, request, *, timeout=30, stdout_limit=65536, stderr_lim
             "pid": process.pid, "started_monotonic": started, "finished_monotonic": time.monotonic()}
 
 
-def observe(phase, password, *, suspend_for_test=False):
-    if suspend_for_test and phase != "terminal":
+def observe(phase, password, *, suspend_for_test=False, rcon_stall=False):
+    if (suspend_for_test or rcon_stall) and phase != "terminal":
         raise ValueError("only the terminal observer may be suspended")
     captured = capture_process(
         ["/pilot-tools/bin/node", "--max-old-space-size=256", "/observer-code/protected-observer-cli.mjs"],
-        {"schema_version": 1, "phase": phase, "trial_id": TRIAL, "action_id": ACTION,
+        {"schema_version": 1, "phase": "terminal_rcon_stall" if rcon_stall else phase, "trial_id": TRIAL, "action_id": ACTION,
          "password": password}, timeout=2 if suspend_for_test else 30,
         suspend_for_test=suspend_for_test)
     # Preserve even malformed/truncated output privately; no caller's raw text is logged.
@@ -310,7 +311,7 @@ def main():
               "stop_sent": False, "term_sent": False, "kill_sent": False,
               "before": None, "terminal": None, "fixture": None, "score": None,
               "participant_forced_cleanup": False, "error": None}
-    server = participant = transport = bridge = None
+    server = participant = transport = bridge = stall = None
     try:
         server = subprocess.Popen(["/usr/bin/java", "-Xms512M", "-Xmx2G", "-Djava.awt.headless=true",
             "-jar", "server.jar", "--nogui"], stdin=subprocess.PIPE, close_fds=True,
@@ -362,8 +363,10 @@ def main():
             server.stdin.write(command); server.stdin.flush()
             result["injection"]["status"] = "console_command_sent"
             time.sleep(0.3)
+        if failure_case == "rcon_stall":
+            stall = RconStall()
         result["stage"] = "terminal_observation"
-        result["terminal"] = observe("terminal", password, suspend_for_test=failure_case == "observer_timeout")
+        result["terminal"] = observe("terminal", password, suspend_for_test=failure_case == "observer_timeout", rcon_stall=failure_case == "rcon_stall")
         result["score"] = score(result["before"], result["terminal"], mode)
         result["stage"] = "finalize"
         transport.send_finalize()
@@ -371,6 +374,8 @@ def main():
     except Exception:
         result["error"] = "protected_qualification_failed"
     finally:
+        if stall is not None:
+            result["rcon_stall"] = stall.close()
         if participant is not None:
             try:
                 if participant.poll() is None:

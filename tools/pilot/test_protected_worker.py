@@ -139,7 +139,7 @@ class ProtectedWorkerTests(unittest.TestCase):
             run_protected_qualification(workspace=Path('/not-created'), restore_kwargs={}, tool_snapshot=Path('/none'), tool_manifest_sha256='a'*64)
 
     def test_fault_injection_cannot_be_accepted_even_with_successful_samples(self):
-        for case in ("death", "disconnect", "observer_timeout", "disk_full", "creative_mode", "command_denied", "command_authorized", "unknown"):
+        for case in ("death", "disconnect", "observer_timeout", "disk_full", "creative_mode", "command_denied", "command_authorized", "rcon_stall", "unknown"):
             row = outcome(); row["failure_case"] = case
             self.assertFalse(validate_result(row, "forward"))
 

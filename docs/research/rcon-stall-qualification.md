@@ -50,3 +50,7 @@ process, model or GPU workload was changed. Previous game controls retain their
 original captured sources. A combined isolated-game RCON stall and remaining
 mid-action faults are still release gates, followed by redistributable inputs
 and the prespecified model comparison.
+
+[Real-game follow-up](rcon-game-qualification.md): Paper reply withholding now
+has a retained fault case and forward control. Storage headroom blocked the
+stationary control; the combined check remains incomplete.

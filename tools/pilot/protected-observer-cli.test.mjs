@@ -278,3 +278,16 @@ test("watchdog bounds a stalled connection and never exposes raw errors or passw
   assert.equal(error.text(), "observer failed\n");
   assert.doesNotMatch(error.text(), /rcon-secret/);
 });
+
+test("trusted terminal stall phase selects only the fixed fault endpoint", async () => {
+  let port, phase;
+  const output = sink();
+  const code = await runObserverProcess({ input: Readable.from([request({phase: "terminal_rcon_stall"})]),
+    output: output.stream, error: sink().stream,
+    connect: async options => { port = options.port; return {end() {}, socket: {destroy() {}}}; },
+    sample: async options => {phase = options.phase; return sampled({phase: "terminal"});}
+  });
+  assert.equal(code, 0);
+  assert.equal(port, 25596);
+  assert.equal(phase, "terminal");
+});

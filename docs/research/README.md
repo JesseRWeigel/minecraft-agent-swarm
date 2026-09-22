@@ -110,3 +110,8 @@ A [real TCP query-stall regression](rcon-stall-qualification.md) exposed and fix
 a timeout race that discarded partial observations. The sampler now retains its
 completed position before reporting the stalled query. This uses a synthetic
 RCON endpoint; combined Paper/game fault qualification remains open.
+
+The [isolated Paper follow-up](rcon-game-qualification.md) now retains partial
+evidence for a deliberately withheld RCON reply and passes its forward control.
+The same-source stationary control was blocked before launch by the host storage
+reserve and remains outstanding.

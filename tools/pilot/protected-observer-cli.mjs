@@ -72,7 +72,7 @@ async function readRequest(input) {
   }
   if (!value || Array.isArray(value) || typeof value !== "object") throw new Error("invalid request");
   if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(REQUEST_KEYS)) throw new Error("invalid request");
-  if (value.schema_version !== 1 || !["fixture", "before", "terminal"].includes(value.phase))
+  if (value.schema_version !== 1 || !["fixture", "before", "terminal", "terminal_rcon_stall"].includes(value.phase))
     throw new Error("invalid request");
   if (
     typeof value.trial_id !== "string" ||
@@ -143,7 +143,7 @@ export async function runObserverProcess({
         const { Rcon } = await import("rcon-client");
         const options = {
           host: "127.0.0.1",
-          port: 25595,
+          port: request.phase === "terminal_rcon_stall" ? 25596 : 25595,
           password: request.password,
           timeout: CONNECT_TIMEOUT_MS,
           maxPending: 1,
@@ -160,7 +160,7 @@ export async function runObserverProcess({
       } else {
         const options = {
           host: "127.0.0.1",
-          port: 25595,
+          port: request.phase === "terminal_rcon_stall" ? 25596 : 25595,
           password: request.password,
           timeout: CONNECT_TIMEOUT_MS,
           maxPending: 1,
@@ -217,7 +217,7 @@ export async function runObserverProcess({
         () =>
           sample({
             rcon,
-            phase: request.phase,
+            phase: request.phase === "terminal_rcon_stall" ? "terminal" : request.phase,
             trialId: request.trial_id,
             actionId: request.action_id,
             operationTimeoutMs: SAMPLE_TIMEOUT_MS,
