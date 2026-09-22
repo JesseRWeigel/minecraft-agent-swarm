@@ -25,6 +25,8 @@ function fixture(overrides = {}) {
     Pos: "PilotProbe has the following entity data: [1.5d, 64d, -2.25d]",
     Dimension: 'PilotProbe has the following entity data: "minecraft:overworld"',
     Health: "PilotProbe has the following entity data: 20f",
+    UUID: "PilotProbe has the following entity data: [I; -246738247, 1303722752, -1416835668, -1046535363]",
+    Roster: "There are 1 of a max of 1 players online: PilotProbe",
     ...overrides,
   };
   return {
@@ -32,7 +34,7 @@ function fixture(overrides = {}) {
     rcon: {
       async send(command) {
         calls.push(command);
-        return replies[command.split(" ").at(-1)];
+        return replies[command === "list" ? "Roster" : command.split(" ").at(-1)];
       },
     },
   };
@@ -58,11 +60,15 @@ test("samples only the fixed actor and query whitelist with explicit skew window
     "data get entity PilotProbe Pos",
     "data get entity PilotProbe Dimension",
     "data get entity PilotProbe Health",
+    "data get entity PilotProbe UUID",
+    "list",
   ]);
   assert.deepEqual(result.observations, {
     position: { x: 1.5, y: 64, z: -2.25 },
     dimension: "minecraft:overworld",
     health: 20,
+    uuid: "f14b12b9-4db5-3b00-ab8c-cdacc19f233d",
+    roster: ["PilotProbe"],
   });
   assert.deepEqual(
     result.sample.queryWindows.map(({ field, outcome }) => ({ field, outcome })),
@@ -70,6 +76,8 @@ test("samples only the fixed actor and query whitelist with explicit skew window
       { field: "Pos", outcome: "completed" },
       { field: "Dimension", outcome: "completed" },
       { field: "Health", outcome: "completed" },
+      { field: "UUID", outcome: "completed" },
+      { field: "Roster", outcome: "completed" },
     ],
   );
   for (const window of result.sample.queryWindows) {
@@ -122,6 +130,9 @@ test("rejects malformed positions, dimensions, health, prefixes, and oversized r
     { Health: "PilotProbe has the following entity data: 999999f" },
     { Health: "another actor: 20f" },
     { Pos: "x".repeat(65537) },
+    { UUID: "PilotProbe has the following entity data: [I; 0, 0, 0, 0]" },
+    { Roster: "There are 2 of a max of 1 players online: PilotProbe, Other" },
+    { Roster: "There are 1 of a max of 1 players online: Other" },
   ];
   for (const override of bad) {
     const result = await sampleActor({
@@ -191,12 +202,12 @@ test("fails at the exact query deadline and when final timestamp consumes the bu
     phase: "terminal",
     trialId: "trial-01",
     actionId: "walk-01",
-    operationTimeoutMs: 10,
-    nowMonotonic: monotonicSequence([0, 1, 2, 3, 4, 5, 6, 10]),
+    operationTimeoutMs: 20,
+    nowMonotonic: monotonicSequence([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20]),
   });
   assert.equal(finalAtDeadline.status, "failed");
   assert.equal(finalAtDeadline.errorCode, "timeout");
-  assert.equal(finalAtDeadline.sample.durationMs, 10);
+  assert.equal(finalAtDeadline.sample.durationMs, 20);
   assert.equal(
     finalAtDeadline.sample.queryWindows.every(({ outcome }) => outcome === "completed"),
     true,

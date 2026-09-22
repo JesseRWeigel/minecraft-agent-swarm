@@ -64,7 +64,9 @@ normal game controls and an OOM rejection case preserved.
 [Bounded persistent trial storage](bounded-storage.md) adds a fixed-capacity image
 for the copied world and evidence. A [real post-action disk-full check](disk-full-qualification.md)
 now rejects a missing terminal record while retaining earlier evidence and a
-bounded external receipt. Actor identity, remaining combined fault cases
+bounded external receipt. [Fixed actor admission and server identity checks](actor-identity.md)
+now bind the connection to the expected UUID and one-player roster, with fresh
+forward/stationary game controls. Permissions, remaining combined fault cases
 and an earlier unresolved shutdown failure remain open.
 
 ### Repository boundary

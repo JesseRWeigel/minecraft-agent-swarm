@@ -7,7 +7,7 @@ import { performance } from "node:perf_hooks";
 // records state and does not decide whether the actor is alive or successful.
 
 const ACTOR = "PilotProbe";
-const FIELDS = ["Pos", "Dimension", "Health"];
+const FIELDS = ["Pos", "Dimension", "Health", "UUID", "Roster"];
 const ID_PATTERN = /[A-Za-z0-9][A-Za-z0-9._-]{0,63}/;
 const MAX_RESPONSE_BYTES = 65536;
 const MAX_COORDINATE = 30_000_000;
@@ -37,10 +37,22 @@ function validateOptions({ rcon, phase, trialId, actionId, nowMonotonic, nowUtc,
 }
 
 function parseReply(field, text) {
+  if (field === "Roster") {
+    if (text !== "There are 1 of a max of 1 players online: PilotProbe")
+      throw new SampleFailure("invalid_response");
+    return [ACTOR];
+  }
   const prefix = `${ACTOR} has the following entity data: `;
   if (typeof text !== "string" || Buffer.byteLength(text) > MAX_RESPONSE_BYTES || !text.startsWith(prefix))
     throw new SampleFailure("invalid_response");
   const value = text.slice(prefix.length);
+  if (field === "UUID") {
+    const match = value.match(/^\[I;\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\]$/);
+    const expected = [-246738247, 1303722752, -1416835668, -1046535363];
+    if (!match || !expected.every((n, i) => Number(match[i + 1]) === n))
+      throw new SampleFailure("invalid_response");
+    return "f14b12b9-4db5-3b00-ab8c-cdacc19f233d";
+  }
   const number = "[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?";
   if (field === "Pos") {
     const match = value.match(new RegExp(`^\\[(${number})d?,\\s*(${number})d?,\\s*(${number})d?\\]$`));
@@ -158,7 +170,7 @@ export async function sampleActor({
       let sendFailure;
       try {
         window.sent = true;
-        reply = await boundedSend(rcon, `data get entity ${ACTOR} ${field}`, remaining);
+        reply = await boundedSend(rcon, field === "Roster" ? "list" : `data get entity ${ACTOR} ${field}`, remaining);
       } catch (error) {
         sendFailure = error instanceof SampleFailure ? error : new SampleFailure("query_failed");
         window.outcome = sendFailure.code;
@@ -182,7 +194,9 @@ export async function sampleActor({
         const parsed = parseReply(field, reply);
         if (field === "Pos") result.observations.position = parsed;
         else if (field === "Dimension") result.observations.dimension = parsed;
-        else result.observations.health = parsed;
+        else if (field === "Health") result.observations.health = parsed;
+        else if (field === "UUID") result.observations.uuid = parsed;
+        else result.observations.roster = parsed;
       } catch (error) {
         window.outcome = "invalid";
         throw error;

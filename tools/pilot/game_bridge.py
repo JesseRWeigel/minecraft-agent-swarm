@@ -92,8 +92,14 @@ class GameBridge:
                 return
             self.listener.close()  # no second connection or reconnect
             self.result["connections"] = 1
-            with client, socket.create_connection(GAME_ENDPOINT, timeout=2) as game:
-                self.result.update(pump(client, game, self.stop))
+            from tools.pilot.login_identity import admit_login
+            with client:
+                prefix, identity = admit_login(client, self.stop)
+                self.result["identity"] = identity
+                with socket.create_connection(GAME_ENDPOINT, timeout=2) as game:
+                    game.sendall(prefix)
+                    self.result.update(pump(client, game, self.stop))
+                    self.result["left_to_right"] += len(prefix)
         except Exception:
             self.result["status"] = "failed"
         finally:

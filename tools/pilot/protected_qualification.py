@@ -20,7 +20,7 @@ from tools.pilot.scoped_trial import run_scoped, PROFILES
 
 PARTICIPANT_FILES = ("protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs", "game_bridge.py", "game_bridge_client.py")
 OBSERVER_FILES = ("protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
-PYTHON_FILES = ("protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py")
+PYTHON_FILES = ("protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py", "login_identity.py")
 
 
 def capture_sources(workspace):
@@ -70,6 +70,10 @@ def validate_result(value, mode):
     if (value.get("network_policy") != "game_only_unix_v1" or not isinstance(bridge, dict)
             or type(bridge.get("connections")) is not int or bridge["connections"] != 1
             or bridge.get("status") != "completed"):
+        return False
+    identity = bridge.get("identity")
+    if identity != {"policy": "fixed_offline_login_v1", "username": "PilotProbe",
+                    "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d", "protocol": 769, "status": "admitted"}:
         return False
     if not fixture_valid(value.get("fixture")):
         return False

@@ -12,7 +12,7 @@ from tools.pilot.protected_qualification import run_protected_qualification, val
 def sample(phase, z=0.5):
     return {"schemaVersion": 1, "status": "sampled", "source": "server_rcon", "actor": "PilotProbe", "phase": phase,
             "trialId": TRIAL, "actionId": ACTION,
-            "observations": {"position": {"x": 0.5, "y": 200, "z": z}, "dimension": "minecraft:overworld", "health": 20}}
+            "observations": {"position": {"x": 0.5, "y": 200, "z": z}, "dimension": "minecraft:overworld", "health": 20, "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d", "roster": ["PilotProbe"]}}
 
 
 def outcome(mode="forward"):
@@ -20,7 +20,7 @@ def outcome(mode="forward"):
             "trial_id": TRIAL, "action_id": ACTION, "independent_observer_process": True,
             "error": None, "participant_returncode": 0, "java_returncode": 0,
             "stop_sent": True, "term_sent": False, "kill_sent": False, "participant_forced_cleanup": False,
-            "network_policy": "game_only_unix_v1", "game_bridge": {"connections":1,"status":"completed"},
+            "network_policy": "game_only_unix_v1", "game_bridge": {"connections":1,"status":"completed","identity":{"policy":"fixed_offline_login_v1","username":"PilotProbe","uuid":"f14b12b9-4db5-3b00-ab8c-cdacc19f233d","protocol":769,"status":"admitted"}},
             "fixture": {"schema_version": 1, "phase": "fixture", "baselineVerification": {"status": "verified"},
                 "setup": {"status": "configured", "fixture": {"sha256": FIXTURE_SHA256}, "baselineChecks": [{"name": n, "status": "verified"} for n in ["orientation", "inventory", "game_mode", "food", "effects"]]},
                 "baseline": sample("before")},
@@ -75,6 +75,16 @@ class ProtectedWorkerTests(unittest.TestCase):
                          lambda f: f.update(baseline=sample("before", 10))]:
             row = outcome(); mutation(row["fixture"])
             self.assertFalse(validate_result(row, "forward"))
+
+    def test_identity_and_roster_mismatch_cannot_be_scored(self):
+        for field, value in [("uuid", None), ("uuid", "00000000-0000-0000-0000-000000000000"),
+                             ("roster", []), ("roster", ["PilotProbe", "Other"])]:
+            row = sample("terminal", 4)
+            row["observations"][field] = value
+            self.assertFalse(score(sample("before"), row, "forward")["movement_succeeded"])
+        row = outcome()
+        row["game_bridge"].pop("identity")
+        self.assertFalse(validate_result(row, "forward"))
 
     def test_cleanup_continues_after_broken_java_stdin_and_timeout(self):
         class Stream:

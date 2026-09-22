@@ -9,7 +9,7 @@ has passed two real forward checks and two stationary controls from a checked
 actor baseline. A failed setup attempt is preserved too. Component/namespace
 checks are green, but the remaining combined gates below are deliberately open:
 remaining game failure timings/RCON stalls, arbitrary-code resource/network boundaries, actor
-identity, redistributable reproduction inputs, and model comparison design.
+permissions, redistributable reproduction inputs, and model comparison design.
 
 The [post-action failure checks](protected-movement-qualification.md#post-action-failure-checks-21-september-follow-up)
 now cover death, disconnect and a suspended-observer parent timeout in real
@@ -20,8 +20,9 @@ control. Mid-action failures and internal RCON stalls remain unqualified.
 CPU enforcement on WSL. [Whole-trial integration](scoped-trials.md) now has
 fixed-client controls and an OOM rejection case. [Bounded persistent storage](bounded-storage.md)
 now caps the runtime image. [Post-action disk exhaustion](disk-full-qualification.md)
-now rejects missing terminal evidence with preserved partial records. Actor
-identity and other failure timings remain pending; the combined box stays open.
+now rejects missing terminal evidence with preserved partial records.
+[Fixed actor admission](actor-identity.md) now checks the login UUID and server
+roster. Permissions and other failure timings remain pending; the combined box stays open.
 
 ## 1. Finish the deterministic path
 
@@ -30,16 +31,18 @@ identity and other failure timings remain pending; the combined box stays open.
   credentials/world/evidence and bound pipes, lifetime and scratch; aggregate
   memory/PID/CPU limits cover the launched fixed-client tree and a fixed-capacity
   image bounds runtime writes. Post-action disk exhaustion is qualified at one
-  timing; broader storage failures and actor identity remain. The current
+  timing; broader storage failures and actor permissions remain. The current
   [game-only network bridge](game-only-network.md) has its own qualification; it
-  does not constrain game-protocol actions or actor identity.
+  now admits only the fixed actor, but does not constrain later game-protocol actions.
 - [x] Capture and pin the current no-respawn client and executed qualification sources.
   Never overwrite the snapshots used for the historical movement case study.
 - [ ] Run forward movement and stationary controls through the complete path,
   plus death, disconnect, malformed-message, stalled-process, and observer-timeout
   cases. Preserve partial evidence and every failed attempt.
 - [ ] Verify actor roster, identity, permissions, and joins/reconnects. An offline
-  login username alone is not an identity boundary against arbitrary code.
+  login username alone is not an identity boundary against arbitrary code. Fixed
+  login name/UUID admission, one-use transport and server UUID/roster snapshots
+  are qualified; permission escalation and adversarial game behavior remain open.
 - [ ] Demonstrate that participant-written success claims cannot affect scoring,
   and that an observer failure cannot count as an observed negative control.
 

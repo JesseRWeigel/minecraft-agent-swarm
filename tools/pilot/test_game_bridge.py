@@ -4,7 +4,20 @@ import socket
 import threading
 import time
 import unittest
+from unittest.mock import patch
 from tools.pilot.game_bridge import pump, GameBridge
+from tools.pilot.login_identity import OFFLINE_UUID
+
+def _varint(n):
+    out=b""
+    while True:
+        b=n&127; n>>=7; out+=bytes([b|(128 if n else 0)])
+        if not n:return out
+def _login(name="PilotProbe", player=OFFLINE_UUID):
+    import uuid
+    host=b"127.0.0.1"; h=_varint(0)+_varint(769)+_varint(len(host))+host+(25585).to_bytes(2,"big")+_varint(2)
+    l=_varint(0)+_varint(len(name))+name.encode()+uuid.UUID(player).bytes
+    return _varint(len(h))+h+_varint(len(l))+l
 
 
 class GameBridgeTests(unittest.TestCase):
@@ -50,6 +63,44 @@ class GameBridgeTests(unittest.TestCase):
             self.assertEqual(bridge.close(), {"status":"stopped", "connections":0})
             self.assertFalse(bridge.thread.is_alive())
 
+    def test_valid_login_forwarded_once_with_payload_and_no_reconnect(self):
+        from unittest.mock import patch
+        from tools.pilot.test_login_identity import packets
+        h, login = packets()
+        prefix = h + login
+        upstream, server = socket.socketpair()
+        received = bytearray()
+        failures = []
+        def remote():
+            try:
+                with server:
+                    server.settimeout(2)
+                    while data := server.recv(4096): received.extend(data)
+                    server.sendall(b"server-response")
+            except Exception as error: failures.append(error)
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("tools.pilot.game_bridge.socket.create_connection", return_value=upstream) as connect:
+                bridge = GameBridge(Path(tmp)/"bridge")
+                thread = threading.Thread(target=remote); thread.start()
+                try:
+                    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                        client.settimeout(2); client.connect(str(bridge.path))
+                        client.sendall(prefix + b"play-payload"); client.shutdown(socket.SHUT_WR)
+                        response = bytearray()
+                        while data := client.recv(4096): response.extend(data)
+                    thread.join(3); bridge.thread.join(3)
+                    result = bridge.close()
+                    self.assertEqual(failures, [])
+                    self.assertEqual(received, prefix+b"play-payload")
+                    self.assertEqual(response, b"server-response")
+                    self.assertEqual(result["status"], "completed")
+                    self.assertEqual(result["identity"]["username"], "PilotProbe")
+                    connect.assert_called_once_with(("127.0.0.1", 25585), timeout=2)
+                    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as retry:
+                        with self.assertRaises(OSError): retry.connect(str(bridge.path))
+                finally:
+                    bridge.close(); upstream.close(); server.close(); thread.join(3)
+
     def test_idle_deadline(self):
         a, b = socket.socketpair(); c, d = socket.socketpair()
         try:
@@ -75,6 +126,26 @@ class GameBridgeTests(unittest.TestCase):
         finally:
             stop.set(); thread.join(timeout=1)
             for s in (a,b,c,d): s.close()
+
+    def test_invalid_login_never_connects_upstream(self):
+        for name, player in [("Other", OFFLINE_UUID),
+                             ("PilotProbe", "00000000-0000-0000-0000-000000000000")]:
+            with self.subTest(name=name, player=player), tempfile.TemporaryDirectory() as temp:
+                with patch("tools.pilot.game_bridge.socket.create_connection") as upstream:
+                    bridge = GameBridge(Path(temp)/"bridge")
+                    try:
+                        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                            client.connect(str(bridge.path))
+                            client.sendall(_login(name=name, player=player))
+                        bridge.thread.join(1)
+                        self.assertFalse(bridge.thread.is_alive())
+                        result = bridge.close()
+                        self.assertEqual(result["status"], "failed")
+                        self.assertEqual(result["connections"], 1)
+                        self.assertNotIn("identity", result)
+                        upstream.assert_not_called()
+                    finally:
+                        bridge.close()
 
 
 if __name__ == "__main__": unittest.main()

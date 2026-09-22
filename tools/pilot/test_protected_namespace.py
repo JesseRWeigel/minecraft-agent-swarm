@@ -72,7 +72,8 @@ result = {
     "host_secret_in_regular_fd": any(b"inheritable-host-fd-secret" in value for value in regular),
 }
 with socket.create_connection(("127.0.0.1", 25585), timeout=2) as client:
-    client.sendall(b"namespace-probe")
+    prefix = bytes.fromhex("10008106093132372e302e302e3163f1021c000a50696c6f7450726f6265f14b12b94db53b00ab8ccdacc19f233d")
+    client.sendall(prefix + b"namespace-probe")
     result["echo"] = client.recv(128).decode("utf8")
 result["second_game_connection_reachable"] = reachable(("127.0.0.1", 25585))
 result["second_bridge_connection_reachable"] = reachable("/game-bridge/game.sock", socket.AF_UNIX)
@@ -107,7 +108,14 @@ seen = {}
 def echo_once():
     connection, _ = listener.accept()
     with connection:
-        message = connection.recv(128)
+        prefix = bytes.fromhex("10008106093132372e302e302e3163f1021c000a50696c6f7450726f6265f14b12b94db53b00ab8ccdacc19f233d")
+        data = b""
+        while len(data) < len(prefix)+len(b"namespace-probe"):
+            chunk = connection.recv(128)
+            if not chunk: raise RuntimeError("early EOF")
+            data += chunk
+        assert data.startswith(prefix)
+        message = data[len(prefix):]
         seen["request"] = message.decode("utf8")
         connection.sendall(b"private-outer:" + message)
 thread = threading.Thread(target=echo_once)

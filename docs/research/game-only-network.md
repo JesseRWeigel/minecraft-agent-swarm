@@ -7,7 +7,7 @@ it is not a claim that arbitrary model-generated code is fully contained.
 ## Boundary
 
 The outer private namespace owns Paper, RCON, the trusted observer, and a
-single-use Unix-domain socket listener. That listener always forwards raw bytes
+single-use Unix-domain socket listener. After [fixed actor admission](actor-identity.md), that listener forwards bytes
 to `127.0.0.1:25585`, the isolated game server. It accepts no destination argument,
 proxy negotiation, forwarding command, or second connection.
 
@@ -17,13 +17,14 @@ socket and starts the fixed Node client. The socket directory is the only extra
 mount; it is read-only inside the participant. RCON, other outer ports, outer
 abstract Unix sockets, credentials, world files and observer code are not exposed.
 The participant may disrupt its own relay; doing so must fail or interrupt the
-trial, not grant broader access. Identity on the allowed game protocol is a
-separate pending gate.
+trial, not grant broader access. The trusted listener now validates the fixed
+login name and UUID before opening the upstream game connection.
 
 Both relay endpoints support one connection only, with no reconnect. Each
 relay buffers at most 64 KiB per direction in userspace and stops on a bounded
 deadline or cancellation. This is not a limit on kernel socket buffers, total
-process memory, CPU, disk or packet volume. Those aggregate limits remain open.
+process memory, CPU, disk or packet volume. Whole-trial resource bounds are
+documented separately below.
 
 The socket is created using a short `/proc/self/fd/...` path to the newly created
 private directory. This avoids Linux Unix-socket pathname limits without
@@ -85,9 +86,10 @@ qualify one fixed-client transport path, not arbitrary agents or learning.
 ## Remaining gates
 
 The [whole-trial cgroup integration](scoped-trials.md) now bounds aggregate
-memory/PID/CPU use for fixed-client launches. Disk/world-growth limits, actor
-identity, internal RCON stalls and
+memory/PID/CPU use for fixed-client launches. [Bounded storage](bounded-storage.md)
+caps world growth, and [actor admission](actor-identity.md) checks identity.
+Permission escalation, internal RCON stalls and
 mid-action failure checks remain before model-controlled experiments. A game
-bridge is not a game-protocol firewall: arbitrary bytes still reach Paper, so
+bridge is not a complete game-protocol firewall: after admission, packets still reach Paper, so
 server vulnerabilities and malicious game actions are not solved by this boundary.
 No learning, cost advantage or robotics-transfer claim follows from these tests.

@@ -185,6 +185,8 @@ def valid_sample(value, phase):
     obs = value.get("observations", {})
     if not isinstance(obs, dict):
         return False
+    if obs.get("uuid") != "f14b12b9-4db5-3b00-ab8c-cdacc19f233d" or obs.get("roster") != ["PilotProbe"]:
+        return False
     point = obs.get("position", {})
     if not isinstance(point, dict):
         return False
