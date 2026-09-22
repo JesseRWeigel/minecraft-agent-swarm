@@ -2553,6 +2553,28 @@ export class BotBrain {
           .items()
           .some((i) => i.name === "iron_pickaxe" || i.name === "diamond_pickaxe" || i.name === "netherite_pickaxe");
         if (!ironPick) {
+          // Fetch the makings first. Run 777: Atlas, Forge and Mason all
+          // reached this step, nine times between them, and every attempt
+          // answered "Can't craft iron_pickaxe - need: iron_ingot, stick"
+          // while the stash held three ingots and six raw iron. The plain
+          // craft action builds from what is in the pack and never walks to
+          // a chest.
+          const sp = this.roleConfig.stashPos;
+          if (sp) {
+            const { withdrawStash } = await import("../skills/stash.js");
+            const got: string[] = [];
+            for (const [name, count] of [
+              ["iron_ingot", 3],
+              ["stick", 4],
+              ["_log", 2],
+            ] as [string, number][]) {
+              const r = await withdrawStash(this.bot, sp, name, count, 40_000).catch(
+                (e: Error) => `${name}: ${e.message}`,
+              );
+              got.push(`${name}=${String(r).slice(0, 40)}`);
+            }
+            this.log.info("Brain", `Pickaxe makings from the stash: ${got.join(" | ")}`);
+          }
           this.log.info(
             "Brain",
             `OVERRIDE: gold needs an iron pickaxe and I have none — crafting one (team gold about ${ingotsAbout})`,

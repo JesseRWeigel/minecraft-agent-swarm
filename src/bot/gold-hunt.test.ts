@@ -60,3 +60,18 @@ test("gold hunt: gets an iron pickaxe before trying to mine gold", () => {
   assert.match(block, /iron_pickaxe|diamond_pickaxe|netherite_pickaxe/, "any pick that can harvest gold counts");
   assert.match(block, /item: "iron_pickaxe"/, "craft the pick by name");
 });
+
+test("gold hunt: fetches the pickaxe makings from the stash first", () => {
+  // Run 777: Atlas, Forge and Mason all reached the pickaxe step, nine times
+  // between them, and every attempt answered "Can't craft iron_pickaxe -
+  // need: iron_ingot, stick" while the stash held three ingots and six raw
+  // iron. The craft action builds from the pack and never walks to a chest.
+  const start = BRAIN.indexOf("Pickaxe makings from the stash");
+  assert.notStrictEqual(start, -1, "the withdrawal must exist and report itself");
+  const craft = BRAIN.indexOf('item: "iron_pickaxe"', start);
+  assert.notStrictEqual(craft, -1, "the craft still follows");
+  const block = BRAIN.slice(start - 900, craft);
+  for (const need of ["iron_ingot", "stick", "_log"]) {
+    assert.match(block, new RegExp(`"${need}"`), `${need} must be fetched before crafting`);
+  }
+});
