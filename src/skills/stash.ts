@@ -1481,6 +1481,33 @@ export async function withdrawStash(
     }
   }
 
+  // A chest the ledger names but the client has not loaded is not "missing",
+  // it is far away. Run 772: every armour attempt read "No raw_iron in the
+  // stash. Gather it yourself instead." while the ledger held six raw iron,
+  // and the stash has now sprawled to 173 chests, well past the twenty-block
+  // scan. blockAt returns null for an unloaded position, and the loop above
+  // skips those without a word, so the bot stood among chests declaring the
+  // shelves bare. Walk to the nearest one the ledger vouches for.
+  if (chestsToTry.length === 0) {
+    const here = bot.entity.position;
+    const known = chestsWithItem(matchName)
+      .filter((k) => deepOk || !offLevel(k.y))
+      .sort((a, b) => here.distanceTo(new Vec3(a.x, a.y, a.z)) - here.distanceTo(new Vec3(b.x, b.y, b.z)))
+      .slice(0, 2);
+    for (const k of known) {
+      if (bot.blockAt(new Vec3(k.x, k.y, k.z))) continue; // already loaded
+      console.log(
+        `[Stash] ${bot.username}: ledger says ${matchName} is at ${k.x},${k.y},${k.z} but that chunk is not loaded — walking there`,
+      );
+      await safeGoto(bot, new goals.GoalNear(k.x, k.y, k.z, 3), 30_000).catch(() => {});
+      const block = bot.blockAt(new Vec3(k.x, k.y, k.z));
+      if (block && (block.name === "chest" || block.name === "trapped_chest")) {
+        chestsToTry.push(block);
+        break;
+      }
+    }
+  }
+
   const allChests = bot.findBlocks({
     matching: (b) => b.name === "chest" || b.name === "trapped_chest",
     maxDistance: 20,

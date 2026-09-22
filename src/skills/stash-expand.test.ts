@@ -24,3 +24,20 @@ test("stash expansion: the wood path survives as the fallback", () => {
   assert.match(SOURCE, /Converted logs to planks for expansion/, "the log conversion must remain");
   assert.match(SOURCE, /Crafted a chest for expansion/, "the craft path must remain");
 });
+
+test("withdrawal: walks to a ledger chest whose chunk is not loaded", () => {
+  // Run 772: every armour attempt read "No raw_iron in the stash. Gather it
+  // yourself instead." while the ledger held six raw iron and the stash had
+  // grown to 173 chests, far past the twenty-block scan. blockAt returns null
+  // for an unloaded position and the ledger loop skips those silently, so the
+  // bot stood among chests declaring the shelves bare.
+  const start = SOURCE.indexOf("chestsWithItem(matchName)");
+  assert.notStrictEqual(start, -1, "the ledger-first lookup must exist");
+  const walk = SOURCE.indexOf("that chunk is not loaded", start);
+  const scan = SOURCE.indexOf("maxDistance: 20", start);
+  assert.notStrictEqual(walk, -1, "an unloaded ledger chest must be walked to");
+  assert.ok(walk < scan, "try the ledger's chest before falling back to the local scan");
+  const block = SOURCE.slice(walk - 400, walk + 700);
+  assert.match(block, /safeGoto\(/, "walking is what makes the chunk load");
+  assert.match(block, /slice\(0, 2\)/, "bounded: two walks at most, this runs inside a budget");
+});
