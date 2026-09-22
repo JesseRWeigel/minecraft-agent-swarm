@@ -55,6 +55,9 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Preserve partial observations on a real RCON query stall
+        run: node --test tools/pilot/protected-rcon-stall.test.mjs
+
       - name: Qualify generated-skill containment
         run: npm run test:sandbox
 

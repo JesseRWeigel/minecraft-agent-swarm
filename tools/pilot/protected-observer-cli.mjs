@@ -6,6 +6,9 @@ const REQUEST_BYTES = 4096;
 const RESULT_BYTES = 65536;
 const CONNECT_TIMEOUT_MS = 5000;
 const SAMPLE_TIMEOUT_MS = 5000;
+// Leave the sampler time to serialize its bounded partial timeout result.
+// The independent process watchdog remains the final lifetime bound.
+const SAMPLE_RESULT_TIMEOUT_MS = SAMPLE_TIMEOUT_MS + 1000;
 const FIXTURE_TIMEOUT_MS = 15000;
 const TOTAL_WATCHDOG_MS = 25000;
 const REQUEST_KEYS = ["action_id", "password", "phase", "schema_version", "trial_id"];
@@ -198,7 +201,7 @@ export async function runObserverProcess({
               actionId: request.action_id,
               operationTimeoutMs: SAMPLE_TIMEOUT_MS,
             }),
-          SAMPLE_TIMEOUT_MS,
+          SAMPLE_RESULT_TIMEOUT_MS,
         );
         const baselineVerification = verifyFixture(baseline);
         const result = { schema_version: 1, phase: "fixture", setup, baseline, baselineVerification };
@@ -219,7 +222,7 @@ export async function runObserverProcess({
             actionId: request.action_id,
             operationTimeoutMs: SAMPLE_TIMEOUT_MS,
           }),
-        SAMPLE_TIMEOUT_MS,
+        SAMPLE_RESULT_TIMEOUT_MS,
       );
       if (cancelled) throw new Error("observer cancelled");
       await writeResult(output, result, request.password);

@@ -103,3 +103,10 @@ python3 -m unittest discover -s tools/pilot
 
 Real namespace checks require a supported Linux host and an explicitly configured Bubblewrap executable; they are skipped by ordinary discovery. See the [explicit qualification commands](../plans/2026-09-19-protected-observer.md#qualified-synthetic-boundary-19-september-2026). Game qualification uses disposable copies and requires its own pinned local assets; the private world, raw logs, credentials, and model files are not bundled.
 
+
+### RCON timeout evidence
+
+A [real TCP query-stall regression](rcon-stall-qualification.md) exposed and fixed
+a timeout race that discarded partial observations. The sampler now retains its
+completed position before reporting the stalled query. This uses a synthetic
+RCON endpoint; combined Paper/game fault qualification remains open.
