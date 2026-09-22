@@ -97,3 +97,40 @@ test("gold hunt: smelts raw iron when the pickaxe is short an ingot", () => {
   assert.match(block, /countBanked\("raw_iron"/, "and only when there is ore to smelt");
   assert.match(block, /skill: "smelt_ores"/, "hand it to the smelter, which fetches its own ore");
 });
+
+test("gold hunt: mines iron ore when there is none held or banked", () => {
+  // Run 787: the one chest the ledger credited with iron sat at y=4 and held
+  // cobblestone, so three bots asked the stash for makings, got nothing, and
+  // failed "Can't craft iron_pickaxe" every fifteen minutes. No bot had mined
+  // iron ore in six of the last eight runs. A stone pick digs iron.
+  const start = BRAIN.indexOf("Pickaxe makings from the stash");
+  const craft = BRAIN.indexOf('item: "iron_pickaxe"', start);
+  const block = BRAIN.slice(start, craft);
+  const mine = block.indexOf('blockType: "iron_ore"');
+  assert.notStrictEqual(mine, -1, "the pickaxe step mines iron ore before crafting");
+  assert.match(block.slice(0, mine), /rawBanked > 0 \|\| rawHeldNow > 0/, "smelt when raw iron is held or banked");
+  assert.ok(block.indexOf("smelt_ores") < mine, "smelting comes before mining");
+  assert.match(block, /protectPos: this\.roleConfig\.stashPos/, "the iron trip keeps the stash zone protected");
+});
+
+test("gold hunt: gets sticks before crafting the pickaxe", () => {
+  // The craft action turns logs into planks and never planks into sticks, so
+  // a bot holding three ingots and a stack of planks still fails the craft.
+  const start = BRAIN.indexOf("Pickaxe makings from the stash");
+  const craft = BRAIN.indexOf('item: "iron_pickaxe"', start);
+  const block = BRAIN.slice(start, craft);
+  const stick = block.indexOf('item: "stick"');
+  assert.notStrictEqual(stick, -1, "craft sticks when short of two");
+  assert.ok(block.indexOf('"gather_wood", { count: 2 }') < stick, "gather wood first when holding none");
+  assert.match(block, /allowedActions\.includes\("gather_wood"\)/, "only roles that may gather wood go for it");
+});
+
+test("gold hunt: a supply step that delivered earns a quicker next pass", () => {
+  const start = BRAIN.indexOf("const quickerNextPass");
+  assert.notStrictEqual(start, -1);
+  assert.match(
+    BRAIN.slice(start, start + 200),
+    /lastGoldHuntMs = Date\.now\(\) - 600_000/,
+    "five minutes, not fifteen",
+  );
+});

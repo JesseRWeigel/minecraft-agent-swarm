@@ -2637,16 +2637,25 @@ export class BotBrain {
           // two with six raw iron beside them. The smelter turns one into the
           // other and knows how to fetch its own ore, so hand it the job and
           // craft on the next pass rather than failing on arithmetic.
-          const ingotsHeldNow = this.bot.inventory
-            .items()
-            .filter((i) => i.name === "iron_ingot")
-            .reduce((n, i) => n + i.count, 0);
+          const held = (name: string) =>
+            this.bot.inventory
+              .items()
+              .filter((i) => i.name === name)
+              .reduce((n, i) => n + i.count, 0);
+          const ingotsHeldNow = held("iron_ingot");
+          const rawHeldNow = held("raw_iron");
+          // A supply step that delivered earns the next pass in five minutes
+          // rather than fifteen, so the chain runs in under an hour.
+          const quickerNextPass = () => {
+            this.lastGoldHuntMs = Date.now() - 600_000;
+          };
           if (ingotsHeldNow < 3 && sp) {
             const { stashCount: countBanked } = await import("../skills/stash-ledger.js");
-            if (countBanked("raw_iron", sp.y) > 0) {
+            const rawBanked = countBanked("raw_iron", sp.y);
+            if (rawBanked > 0 || rawHeldNow > 0) {
               this.log.info(
                 "Brain",
-                `OVERRIDE: ${ingotsHeldNow} ingots for a pickaxe that costs 3, and raw iron is banked — smelting first`,
+                `OVERRIDE: ${ingotsHeldNow} ingots for a pickaxe that costs 3, with ${rawHeldNow} raw iron held and ${rawBanked} banked — smelting first`,
               );
               const smeltResult = await this.executeActionUnlessPaused("invoke_skill", {
                 skill: "smelt_ores",
@@ -2656,8 +2665,48 @@ export class BotBrain {
               this.events.onAction("smelt_ores", smeltResult);
               this.lastAction = "smelt_ores";
               this.lastResult = smeltResult;
+              if (held("iron_ingot") > ingotsHeldNow) quickerNextPass();
               return;
             }
+            // Run 787: no iron anywhere. The one chest the ledger credited
+            // with iron sits at y=4, sixty-six blocks under the stash, and it
+            // holds cobblestone now. Three bots each asked for the makings,
+            // got none, and failed the craft on the same line every fifteen
+            // minutes, while no bot mined iron ore in six of the last eight
+            // runs. With nothing held or banked the pickaxe step is a mining
+            // trip, and a stone pick digs iron.
+            this.log.info(
+              "Brain",
+              `OVERRIDE: ${ingotsHeldNow} ingots and no raw iron held or banked for a pickaxe that costs 3 — mining iron_ore first`,
+            );
+            const ironResult = await this.executeActionUnlessPaused("mine_block", {
+              blockType: "iron_ore",
+              protectPos: this.roleConfig.stashPos,
+            });
+            this.events.onAction("mine_block", ironResult);
+            this.lastAction = "mine_block";
+            this.lastResult = ironResult;
+            if (/^Mined \d+x/.test(String(ironResult))) quickerNextPass();
+            return;
+          }
+          // Sticks are the other half of the recipe, and the craft action
+          // turns logs into planks but never planks into sticks. Run 787's
+          // stash held no sticks, planks or logs at all.
+          if (held("stick") < 2) {
+            const woodHeld = this.bot.inventory
+              .items()
+              .some((i) => i.name.endsWith("_planks") || i.name.endsWith("_log"));
+            if (!woodHeld && this.roleConfig.allowedActions.includes("gather_wood")) {
+              this.log.info("Brain", "OVERRIDE: the pickaxe needs sticks and I hold no wood — gathering wood first");
+              const woodResult = await this.executeActionUnlessPaused("gather_wood", { count: 2 });
+              this.events.onAction("gather_wood", woodResult);
+              this.lastAction = "gather_wood";
+              this.lastResult = woodResult;
+              if (this.bot.inventory.items().some((i) => i.name.endsWith("_log"))) quickerNextPass();
+              return;
+            }
+            const stickResult = await this.executeActionUnlessPaused("craft", { item: "stick" });
+            this.log.info("Brain", `Sticks for the pickaxe: ${String(stickResult).slice(0, 80)}`);
           }
           this.log.info(
             "Brain",
