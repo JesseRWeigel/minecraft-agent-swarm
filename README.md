@@ -43,8 +43,8 @@ endpoint that otherwise looks successful. A [disconnect during the action window
 is now rejected without a score; a separate intermittent bridge-shutdown failure
 is preserved and unresolved. [Relay diagnostics and a strict offline action parser](docs/research/bridge-diagnostics.md)
 are now in place. The [bounded action executor](docs/research/model-action-session.md)
-also passes offline tests for ordering, deadlines and cancellation; game/model
-integration remains next. These are fixed-client checks, not a model benchmark.
+and its dedicated pipe transport pass offline tests for ordering, deadlines,
+cancellation and subprocess round trips; game/model integration remains next. These are fixed-client checks, not a model benchmark.
 
 ---
 

@@ -8,8 +8,8 @@ is claimed for this interface.
 already connected bot. It parses each request with the strict schema, executes
 one action at a time, and returns a bounded response. Construct the session only
 after the trusted supervisor begins the action window: its timer starts at creation.
-The caller still owns process isolation, pipe framing, independent scoring and
-final trial cleanup.
+The caller still owns process isolation, independent scoring and final trial
+cleanup. The dedicated action channel below supplies bounded pipe framing.
 
 ## Enforced behavior
 
@@ -63,15 +63,54 @@ diagnostic evidence when available. JavaScript deadlines also cannot preempt a
 synchronously blocked event loop; the existing outer process/resource deadline
 must remain in place when this is integrated.
 
+## Dedicated action channel
+
+`runModelActionChannel({input, output, session, timeoutMs})` accepts dedicated
+binary readable/writable streams and a trusted `createModelActionSession` instance.
+Never attach these to the participant lifecycle streams carrying
+`ready/begin/action_finished/finalize`. The channel is implemented independently;
+extra file descriptors and the protected runner are not connected yet.
+
+Each request is one UTF-8 JSON object followed by LF, with at most 4,096 bytes
+before the LF. Fragmented reads are supported. The caller must wait for each
+reply before sending the next request; pipelined frames and input during an
+executing action invalidate the channel. One next frame may wait while the
+previous reply's write callback is pending, because the peer can receive a reply
+before that local callback fires. It never executes concurrently.
+
+Replies are JSON lines capped at 20 KiB each. Only the session response envelope
+is accepted; observations must be marked `participant_bot`. The channel relies on
+the trusted session's bounded observation projection, rather than sanitizing an
+arbitrary replacement session. At most 25 requests and 25 reply budgets are
+accepted. The default 20-second overall deadline includes idle reads, action
+execution, output backpressure and final EOF; it may be shortened but not enlarged.
+The session retains its own action and lifetime deadlines.
+
+Success requires a written `finished` reply followed by clean input EOF. Trailing
+bytes, partial EOF, stream errors, invalid responses or deadline expiration close
+the session and reject the channel. Late completions cannot emit a reply or start
+queued work. Diagnostics contain only stage, request count and byte counts; raw
+requests and exception messages are not echoed. Output byte counts include bytes
+submitted to the writable, not an acknowledgement from the peer. Streams are
+owned for one channel lifetime; error listeners remain to absorb late errors.
+The host must invalidate any channel failure, and must retain its outer deadline
+because JavaScript cannot preempt a synchronously blocked event loop.
+
 ## Qualification and remaining integration
 
-The complete pilot JavaScript suite passes 150 tests, including session tests for
+The complete pilot JavaScript suite passes 159 tests, including session tests for
 ordered primitives, invalid sequence, invisible/stale/distant/undiggable targets,
 concurrent cancellation, late completions, death, disconnect, action/session caps,
 finish and transcript timing. Observation tests cover metadata exclusion, invalid
 slots/coordinates and coercible names. These tests run on Node 20 and 22 in CI.
 
-Next implement the bounded pipe bridge, preserving separate trusted lifecycle
+Channel tests also cover fragmented/pipelined/oversized requests, write callback
+races, stalled output, trailing data after finish and suppression of late replies.
+A real Node subprocess exchanges observe/look/dig/move/finish over OS pipes with
+the actual session and a bot double; a lifecycle message on that channel is
+rejected with no action reply. This establishes transport behavior, not gameplay.
+
+Next wire dedicated action descriptors while preserving trusted lifecycle
 messages. Capture these sources in the participant manifest, pass every session
 failure into host acceptance, and replay an explicit observe/look/dig/move/finish
 sequence in an isolated game. Require positive/no-action controls and a cancelled
