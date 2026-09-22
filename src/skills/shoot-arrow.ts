@@ -119,10 +119,21 @@ export const shootArrowSkill: Skill = {
       };
     }
     const hunting = target.name === HOSTILE_TARGET;
+    // Close on an animal, keep away from a raider.
+    //
+    // Run 779 found pillagers twice and lost both: "The pillager slipped away
+    // before the shot". The approach walked to within four blocks of a moving
+    // patrol that shoots back, which is slow, dangerous and unnecessary,
+    // because a crossbow reaches far further than that. Stand off instead,
+    // and only walk if the target is out of range.
+    const closeTo = hunting ? 12 : 4;
+    const giveUpAt = hunting ? 24 : 8;
     step(`Stalking a ${target.name} (${bot.entity.position.distanceTo(target.position).toFixed(0)} blocks)...`, 0.6);
     bot.pathfinder.setMovements(baseMoves(bot));
-    await safeGoto(bot, new goals.GoalFollow(target, 4), 30_000).catch(() => {});
-    if (!target.isValid || bot.entity.position.distanceTo(target.position) > 8) {
+    if (bot.entity.position.distanceTo(target.position) > closeTo) {
+      await safeGoto(bot, new goals.GoalFollow(target, closeTo), 30_000).catch(() => {});
+    }
+    if (!target.isValid || bot.entity.position.distanceTo(target.position) > giveUpAt) {
       return { success: false, message: resumable(`The ${target.name} slipped away before the shot.`) };
     }
 

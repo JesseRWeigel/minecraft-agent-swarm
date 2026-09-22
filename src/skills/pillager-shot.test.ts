@@ -28,3 +28,19 @@ test("pillager shot: hunting keeps firing until the raider is down", () => {
 test("pillager shot: falls back to an animal when no raider is about", () => {
   assert.match(SKILL, /\?\?\s*bot\.nearestEntity\(\(e\) => TARGETS\.has/, "the animal search remains the fallback");
 });
+
+test("pillager shot: stands off a raider rather than walking into it", () => {
+  // Run 779 found pillagers twice and lost both to "The pillager slipped away
+  // before the shot", because the approach closed to four blocks on a moving
+  // patrol that shoots back. A crossbow reaches much further than that.
+  const close = SKILL.indexOf("const closeTo =");
+  assert.notStrictEqual(close, -1, "the approach distance must depend on the target");
+  const block = SKILL.slice(close, close + 600);
+  assert.match(block, /hunting \? 12 : 4/, "stand off a raider, close on an animal");
+  assert.match(block, /hunting \? 24 : 8/, "and allow it to wander further before giving up");
+  assert.match(
+    block,
+    /if \(bot\.entity\.position\.distanceTo\(target\.position\) > closeTo\)/,
+    "only walk when out of range",
+  );
+});
