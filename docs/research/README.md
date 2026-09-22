@@ -176,3 +176,10 @@ bounded observe/look/move/dig interface and its qualification gates.
 errno and buffer/EOF state without packet contents. One new no-action game passed;
 the intermittent shutdown cause is still unknown. The strict offline model-action
 parser is implemented and tested; the stateful broker and model hookup remain next.
+
+### Bounded action session
+
+The [stateful action executor](model-action-session.md) now enforces ordering,
+concurrency, target checks, action/session deadlines and cancellation in offline
+tests. Its bounded observations are advisory. Game/pipe integration remains next;
+no model calls or new gameplay results are claimed.
