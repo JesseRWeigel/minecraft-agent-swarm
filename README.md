@@ -41,7 +41,8 @@ target, and doing nothing. [Fault-injection checks](docs/research/oak-fault-qual
 also reject injected progress and missing terminal observations, including a forged
 endpoint that otherwise looks successful. A [disconnect during the action window](docs/research/oak-interruption-qualification.md)
 is now rejected without a score; a separate intermittent bridge-shutdown failure
-is preserved and unresolved. These are fixed-client checks, not a model benchmark.
+is preserved and unresolved. [Relay diagnostics and a strict offline action parser](docs/research/bridge-diagnostics.md)
+are now in place for the next model-interface stage. These are fixed-client checks, not a model benchmark.
 
 ---
 

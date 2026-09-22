@@ -101,11 +101,46 @@ class GameBridgeTests(unittest.TestCase):
                 finally:
                     bridge.close(); upstream.close(); server.close(); thread.join(3)
 
+    def test_write_failure_retains_bounded_metadata_without_payload(self):
+        a,b=socket.socketpair();c,d=socket.socketpair()
+        try:
+            c.shutdown(socket.SHUT_WR)
+            a.sendall(b"private-packet-content")
+            with self.assertRaises(BrokenPipeError) as caught:
+                pump(b,c,threading.Event(),timeout=1)
+            diagnostic=getattr(caught.exception,"bridge_diagnostics",{})
+            self.assertEqual(diagnostic.get("operation"),"write")
+            self.assertEqual(diagnostic.get("side"),"right")
+            self.assertEqual(diagnostic.get("pending_right"),22)
+            self.assertEqual(diagnostic.get("left_to_right"),0)
+            self.assertNotIn("private-packet-content",str(diagnostic))
+        finally:
+            for stream in (a,b,c,d):stream.close()
+
+    def test_real_tcp_reset_is_rejected_with_read_direction(self):
+        import struct,errno
+        listener=socket.socket();listener.bind(("127.0.0.1",0));listener.listen(1)
+        client=socket.create_connection(listener.getsockname());left,_=listener.accept()
+        right,remote=socket.socketpair()
+        try:
+            client.setsockopt(socket.SOL_SOCKET,socket.SO_LINGER,struct.pack("ii",1,0))
+            client.close()
+            with self.assertRaises(ConnectionResetError) as caught:
+                pump(left,right,threading.Event(),timeout=1)
+            diagnostic=caught.exception.bridge_diagnostics
+            self.assertEqual(diagnostic["operation"],"read")
+            self.assertEqual(diagnostic["side"],"left")
+            self.assertEqual(diagnostic["errno"],errno.ECONNRESET)
+            self.assertEqual(diagnostic["error_type"],"ConnectionResetError")
+        finally:
+            for stream in (listener,client,left,right,remote):stream.close()
+
     def test_idle_deadline(self):
         a, b = socket.socketpair(); c, d = socket.socketpair()
         try:
             start = time.monotonic()
-            with self.assertRaises(TimeoutError): pump(b, c, threading.Event(), timeout=0.1)
+            with self.assertRaises(TimeoutError) as caught: pump(b, c, threading.Event(), timeout=0.1)
+            self.assertEqual(getattr(caught.exception,"bridge_diagnostics",{}).get("operation"),"deadline")
             self.assertLess(time.monotonic()-start, 1)
         finally:
             for s in (a,b,c,d): s.close()

@@ -169,3 +169,10 @@ between begin and completion, with a server-observed pre-kick state and passing
 controls. One unexpected bridge-finalization failure remains preserved and unresolved.
 The [model action adapter plan](model-action-adapter-plan.md) defines the next
 bounded observe/look/move/dig interface and its qualification gates.
+
+### Bridge evidence and model-action parser
+
+[Bounded relay diagnostics](bridge-diagnostics.md) now preserve failure operation,
+errno and buffer/EOF state without packet contents. One new no-action game passed;
+the intermittent shutdown cause is still unknown. The strict offline model-action
+parser is implemented and tested; the stateful broker and model hookup remain next.

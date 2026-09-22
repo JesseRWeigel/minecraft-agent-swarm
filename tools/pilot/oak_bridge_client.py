@@ -35,7 +35,7 @@ def main():
                 bridge.connect("/game-bridge/game.sock")
                 outcome.update(pump(client, bridge, stop))
         except Exception as error:
-            outcome.update(status="failed", error_type=type(error).__name__, errno=getattr(error, "errno", None))
+            outcome.update(status="failed", error_type=type(error).__name__[:64], errno=getattr(error, "errno", None), relay_diagnostics=getattr(error,"bridge_diagnostics",None))
         finally:
             listener.close()
 
@@ -47,6 +47,7 @@ def main():
         deadline = time.monotonic() + 175
         while child.poll() is None:
             if outcome["status"] == "failed" or time.monotonic() >= deadline:
+                print(json.dumps({"relay":outcome,"child_returncode":child.poll(),"phase":"child_running","deadline_expired":time.monotonic()>=deadline}),file=sys.stderr,flush=True)
                 raise RuntimeError("game bridge failed")
             time.sleep(0.05)
         thread.join(timeout=2)

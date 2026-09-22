@@ -16,40 +16,53 @@ def pump(left, right, stop, *, timeout=180):
     shut = {left: False, right: False}
     counts = {"left_to_right": 0, "right_to_left": 0}
     deadline = time.monotonic() + timeout
-    for stream in peers:
-        stream.setblocking(False)
-    while True:
-        if stop.is_set():
-            return {"status": "stopped", **counts}
-        if time.monotonic() >= deadline:
-            raise TimeoutError("bridge deadline")
+    operation="setup";side=None
+    try:
         for stream in peers:
-            if eof[peers[stream]] and not buffers[stream] and not shut[stream]:
-                stream.shutdown(socket.SHUT_WR)
-                shut[stream] = True
-        if all(eof.values()) and not any(buffers.values()):
-            return {"status": "completed", **counts}
-        readable = [s for s in peers if not eof[s] and len(buffers[peers[s]]) < BUFFER_LIMIT]
-        writable = [s for s in peers if buffers[s]]
-        ready_read, ready_write, _ = select.select(readable, writable, [], min(0.1, max(0, deadline-time.monotonic())))
-        for stream in ready_read:
-            try:
-                data = stream.recv(min(16384, BUFFER_LIMIT-len(buffers[peers[stream]])))
-            except BlockingIOError:
-                continue
-            if data:
-                buffers[peers[stream]].extend(data)
-            else:
-                eof[stream] = True
-        for stream in ready_write:
-            try:
-                sent = stream.send(buffers[stream])
-            except BlockingIOError:
-                continue
-            if sent <= 0:
-                raise OSError("bridge write failed")
-            del buffers[stream][:sent]
-            counts["left_to_right" if stream is right else "right_to_left"] += sent
+            stream.setblocking(False)
+        while True:
+            if stop.is_set():
+                return {"status": "stopped", **counts}
+            if time.monotonic() >= deadline:
+                operation="deadline";side=None
+                raise TimeoutError("bridge deadline")
+            for stream in peers:
+                if eof[peers[stream]] and not buffers[stream] and not shut[stream]:
+                    operation="half_close";side="left" if stream is left else "right"
+                    stream.shutdown(socket.SHUT_WR)
+                    shut[stream] = True
+            if all(eof.values()) and not any(buffers.values()):
+                return {"status": "completed", **counts}
+            readable = [s for s in peers if not eof[s] and len(buffers[peers[s]]) < BUFFER_LIMIT]
+            writable = [s for s in peers if buffers[s]]
+            operation="select";side=None
+            ready_read, ready_write, _ = select.select(readable, writable, [], min(0.1, max(0, deadline-time.monotonic())))
+            for stream in ready_read:
+                try:
+                    operation="read";side="left" if stream is left else "right"
+                    data = stream.recv(min(16384, BUFFER_LIMIT-len(buffers[peers[stream]])))
+                except BlockingIOError:
+                    continue
+                if data:
+                    buffers[peers[stream]].extend(data)
+                else:
+                    eof[stream] = True
+            for stream in ready_write:
+                try:
+                    operation="write";side="left" if stream is left else "right"
+                    sent = stream.send(buffers[stream])
+                except BlockingIOError:
+                    continue
+                if sent <= 0:
+                    raise OSError("bridge write failed")
+                del buffers[stream][:sent]
+                counts["left_to_right" if stream is right else "right_to_left"] += sent
+    except Exception as error:
+        error.bridge_diagnostics={"operation":operation,"side":side,
+            "error_type":type(error).__name__[:64],"errno":getattr(error,"errno",None),
+            "pending_left":len(buffers[left]),"pending_right":len(buffers[right]),
+            "eof_left":eof[left],"eof_right":eof[right],**counts}
+        raise
 
 
 class GameBridge:
@@ -77,6 +90,7 @@ class GameBridge:
         self.thread.start()
 
     def _run(self):
+        stage="accept"
         try:
             deadline = time.monotonic()+180
             while not self.stop.is_set():
@@ -94,14 +108,20 @@ class GameBridge:
             self.result["connections"] = 1
             from tools.pilot.login_identity import admit_login
             with client:
+                stage="login"
                 prefix, identity = admit_login(client, self.stop)
                 self.result["identity"] = identity
+                stage="connect"
                 with socket.create_connection(GAME_ENDPOINT, timeout=2) as game:
+                    stage="login_forward"
                     game.sendall(prefix)
+                    stage="relay"
                     self.result.update(pump(client, game, self.stop))
                     self.result["left_to_right"] += len(prefix)
-        except Exception:
-            self.result["status"] = "failed"
+        except Exception as error:
+            self.result.update(status="failed", failure_stage=stage,
+                error_type=type(error).__name__[:64],errno=getattr(error,"errno",None),
+                relay_diagnostics=getattr(error,"bridge_diagnostics",None))
         finally:
             self.listener.close()
 

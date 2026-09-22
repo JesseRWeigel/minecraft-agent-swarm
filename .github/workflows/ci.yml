@@ -61,6 +61,9 @@ jobs:
       - name: Test oak-log observer and predicate components
         run: node --test tools/pilot/oak*.test.mjs
 
+      - name: Test offline model action schema
+        run: node --test tools/pilot/model-action*.test.mjs
+
       - name: Qualify generated-skill containment
         run: npm run test:sandbox
 

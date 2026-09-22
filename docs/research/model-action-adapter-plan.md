@@ -1,6 +1,7 @@
 # First model-facing action adapter
 
-Status: implementation plan, not a running model experiment. The deterministic
+Status: the [offline request parser](bridge-diagnostics.md) is implemented; the
+stateful broker and model integration remain planned. No running model experiment. The deterministic
 [oak controls](oak-game-qualification.md), [fault checks](oak-fault-qualification.md)
 and [interruption check](oak-interruption-qualification.md) establish the current
 starting point. Do not keep adding unrelated fault cases before building this
@@ -39,7 +40,7 @@ instead of silently extending it. Model inference budgets are a separate decisio
 freeze and qualify a revised session/transport/whole-trial budget before real model
 calls, including input/output token caps and treatment of latency/timeouts.
 
-Before model trials, improve bounded bridge shutdown diagnostics and investigate
+Bounded bridge shutdown diagnostics are now implemented. Before model trials, investigate
 the preserved intermittent finalization failure from the interruption control set.
 A passing repeat is not a root-cause fix. Broker unit work can proceed in parallel.
 
