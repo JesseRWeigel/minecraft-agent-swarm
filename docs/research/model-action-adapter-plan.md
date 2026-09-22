@@ -1,8 +1,8 @@
 # First model-facing action adapter
 
-Status: the strict parser and [bounded action session](model-action-session.md)
-are implemented and tested offline. Pipe/game integration and model experiments
-remain planned. The deterministic
+Status: the strict parser, [bounded action session and dedicated pipe channel](model-action-session.md)
+are implemented and tested offline, including real subprocess pipes. Protected
+runner integration, game qualification and model experiments remain planned. The deterministic
 [oak controls](oak-game-qualification.md), [fault checks](oak-fault-qualification.md)
 and [interruption check](oak-interruption-qualification.md) establish the current
 starting point. Do not keep adding unrelated fault cases before building this
@@ -22,7 +22,7 @@ non-finite numbers, oversized messages, overlapping actions and replayed sequenc
 
 | Action | Inputs and initial caps | Behavior |
 | --- | --- | --- |
-| `observe` | No arguments | Capped local bot state and at most 64 nearby visible blocks |
+| `observe` | No arguments | Capped local bot state and at most one cursor-visible block |
 | `look` | Finite yaw/pitch in declared radian ranges | Change orientation only |
 | `move` | One enum direction; integer 1-20 ticks | Hold one control, then clear it, at most one second nominal duration |
 | `dig` | Explicit integer block coordinate, within 4.5 blocks | Verify actual reach, visibility and diggability; dig only that current block |
@@ -47,8 +47,8 @@ A passing repeat is not a root-cause fix. Broker unit work can proceed in parall
 
 ## Two implementation milestones
 
-1. Implement the broker, strict schemas, bounded observation serialization and
-   cleanup. Use fake-bot/real-pipe tests without models or GPU use. A timeout,
+1. Offline milestone implemented and tested: the broker, strict schemas, bounded observation serialization and
+   cleanup, with fake-bot/real-pipe tests without models or GPU use. A timeout,
    disconnect or malformed request clears controls and closes the bot. Late dig
    resolution cannot start subsequent movement. Partial transcripts are preserved.
 2. Replay explicit observe/look/dig/move/finish actions through the isolated game
