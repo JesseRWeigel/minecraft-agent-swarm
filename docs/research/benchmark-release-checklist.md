@@ -63,9 +63,11 @@ roster. Permissions and other failure timings remain pending; the combined box s
   in the historical qualification.
 - [ ] Choose a small survival task with a server-checkable predicate and a
   bounded time budget. Include an impossible/no-action control.
-- [ ] Supply a minimal redistributable fixture or precise fixture-generation
-  recipe and expected starting-state hash. The private long-running world is
-  not a public reproduction dependency to silently assume readers possess.
+- [x] Supply a minimal redistributable fixture or precise fixture-generation
+  recipe and expected starting-state hash. The [fresh-world recipe](fresh-fixture.md)
+  has one generated archive and both controls qualified without private-world input.
+  Published hashes identify that instance; regenerated UUIDs/timestamps may differ.
+  Independent clean-host reproduction remains the next unchecked gate.
 - [ ] Publish setup, versions, commands, expected failures, and hardware needs;
   verify them from a clean checkout without access to private logs or secrets.
 

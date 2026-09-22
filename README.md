@@ -29,6 +29,10 @@ and [study protocol](docs/pilot-study-protocol.md). Jev-inspired decision models
 are an [optional comparison under investigation](docs/research/typed-decision-models.md),
 not a requirement for running the swarm.
 
+The experimental track now includes a [fresh-world generation recipe](docs/research/fresh-fixture.md)
+that passed forward and stationary controls without the private swarm world.
+This qualifies test infrastructure; it is not a model-performance result.
+
 ---
 
 ## Architecture

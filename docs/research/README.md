@@ -123,3 +123,11 @@ A [mid-action disconnect qualification](midaction-qualification.md) now confirms
 server-observed movement before interruption, then rejects the trial when no
 completion or valid terminal observation arrives. Progress had already exceeded
 the distance threshold, demonstrating why progress alone cannot count as success.
+
+### Fresh reproduction input
+
+A [fixed-seed fixture generator](fresh-fixture.md) now removes the private-world
+dependency from the tested movement setup. Its generated archive passed both
+protected controls: 4.31 blocks forward and zero stationary displacement. The
+recipe, input pins and derived evidence are documented; independent clean-host
+reproduction and useful survival tasks remain open.
