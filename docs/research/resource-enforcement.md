@@ -1,8 +1,8 @@
 # Resource enforcement qualification
 
 Status, 22 September 2026 UTC: real synthetic kernel enforcement is verified on
-the development WSL host. **The Minecraft launcher is not yet cgroup-limited.**
-This is evidence for choosing the next launcher implementation, not approval to
+the development WSL host. **The subsequent [game launcher integration](scoped-trials.md) now applies verified whole-trial scopes.**
+The original synthetic evidence below informed that implementation; it does not qualify arbitrary agents or approve attempts to
 run arbitrary model-generated code.
 
 The host supports cgroup v2 and transient systemd user scopes without changing
@@ -50,7 +50,10 @@ records and failed attempts are not overwritten. Normal unit-test discovery does
 not run kernel pressure probes, and ordinary CI therefore does not establish
 host-specific controller support.
 
-## Next integration gate
+## Integration follow-up
+
+The [scoped-trial implementation](scoped-trials.md) now wraps the fixed-client
+game path. The original acceptance requirements remain useful:
 
 Wrap the entire isolated trial tree in a verified scope **before** spawning its
 server, participant or observers. Preserve effective limits and kernel event

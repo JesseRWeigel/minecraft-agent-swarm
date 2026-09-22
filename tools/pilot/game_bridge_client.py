@@ -3,6 +3,7 @@
 Executed in the participant's separate network namespace. No observer mount,
 credential, arbitrary target, command argument, or forwarding request exists.
 """
+import json
 import socket
 import subprocess
 import sys
@@ -36,8 +37,8 @@ def main():
                 bridge.settimeout(2)
                 bridge.connect("/game-bridge/game.sock")
                 outcome.update(pump(client, bridge, stop))
-        except Exception:
-            outcome["status"] = "failed"
+        except Exception as error:
+            outcome.update(status="failed", error_type=type(error).__name__, errno=getattr(error,"errno",None))
         finally:
             listener.close()
     thread = threading.Thread(target=relay, daemon=True)
@@ -56,6 +57,7 @@ def main():
         # relay. Cancellation in finally is cleanup, never success evidence.
         thread.join(timeout=2)
         if outcome["status"] != "completed" or thread.is_alive():
+            print(json.dumps({"relay":outcome,"child_returncode":child.returncode,"relay_alive":thread.is_alive()}),file=sys.stderr,flush=True)
             raise RuntimeError("game bridge did not complete")
         return child.returncode
     finally:

@@ -17,15 +17,17 @@ isolated game runs. All were rejected; no missing sample became a negative
 control. Mid-action failures and internal RCON stalls remain unqualified.
 
 [Kernel resource probes](resource-enforcement.md) verify scoped memory, PID and
-CPU enforcement on WSL. Launcher integration, game-sized budgets and disk limits
-are still pending; the acceptance box remains open.
+CPU enforcement on WSL. [Whole-trial integration](scoped-trials.md) now has
+fixed-client controls and an OOM rejection case. Disk/world-growth limits and
+actor identity remain pending; the combined acceptance box stays open.
 
 ## 1. Finish the deterministic path
 
 - [ ] Complete resource/network gates around the connected protected participant,
   bounded pipes, observer process and outer worker. Fixed-client namespaces hide
   credentials/world/evidence and bound pipes, lifetime and scratch; aggregate
-  resource limits remain for arbitrary code. The current
+  memory/PID/CPU limits now cover the launched fixed-client tree; disk/world-growth
+  bounds remain. The current
   [game-only network bridge](game-only-network.md) has its own qualification; it
   does not constrain game-protocol actions or actor identity.
 - [x] Capture and pin the current no-respawn client and executed qualification sources.

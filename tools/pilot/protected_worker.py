@@ -359,6 +359,10 @@ def main():
                 result["error"] = "participant_cleanup_uncertain"
         if transport is not None:
             try:
+                write_result("participant-diagnostics.json", {"stderr": transport.stderr.decode(errors="replace"), "stdout_bytes": transport.stdout_bytes})
+            except Exception:
+                result["error"] = result["error"] or "participant_diagnostics_write_failed"
+            try:
                 transport.close()
             except Exception:
                 result["error"] = "participant_pipe_cleanup_failed"

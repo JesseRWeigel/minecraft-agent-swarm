@@ -84,7 +84,9 @@ qualify one fixed-client transport path, not arbitrary agents or learning.
 
 ## Remaining gates
 
-Actor identity, aggregate cgroup/resource budgets, internal RCON stalls and
+The [whole-trial cgroup integration](scoped-trials.md) now bounds aggregate
+memory/PID/CPU use for fixed-client launches. Disk/world-growth limits, actor
+identity, internal RCON stalls and
 mid-action failure checks remain before model-controlled experiments. A game
 bridge is not a game-protocol firewall: arbitrary bytes still reach Paper, so
 server vulnerabilities and malicious game actions are not solved by this boundary.

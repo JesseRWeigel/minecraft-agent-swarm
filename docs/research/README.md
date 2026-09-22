@@ -58,9 +58,10 @@ The long-running swarm archive is useful material for failure analysis, but it i
 ### Resource-limit feasibility
 
 [Actual WSL cgroup probes](resource-enforcement.md) now verify memory, PID and CPU
-enforcement, including a child that calls `setsid()`. The game launcher does not
-yet apply this profile; whole-trial integration and a disk/world-growth bound
-remain before arbitrary model-controlled trials.
+enforcement, including a child that calls `setsid()`. The
+[game launcher now applies a verified whole-trial scope](scoped-trials.md), with
+normal game controls and an OOM rejection case preserved. Disk/world growth,
+actor identity and an earlier unresolved shutdown failure remain open.
 
 ### Repository boundary
 

@@ -129,6 +129,11 @@ class ProtectedWorkerTests(unittest.TestCase):
         self.assertTrue(result["suspended_for_test"])
         with self.assertRaises(ProcessLookupError): os.kill(result["pid"], 0)
 
+    def test_invalid_resource_profile_rejected_before_workspace_mutation(self):
+        with self.assertRaisesRegex(ValueError,"resource profile"):
+            run_protected_qualification(launch=True,resource_profile="unlimited",workspace=Path('/not-created'),
+                                       restore_kwargs={},tool_snapshot=Path('/none'),tool_manifest_sha256='a'*64)
+
     def test_helper_uses_private_stdin_and_bounded_capture(self):
         result = capture_process([sys.executable, "-c", "import sys,json; v=json.load(sys.stdin); print(json.dumps({'received':v['phase']}))"], {"phase": "before", "password": "synthetic-secret"}, timeout=2)
         self.assertEqual(result["returncode"], 0)

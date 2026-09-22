@@ -14,6 +14,7 @@ from tools.pilot.client_tools import verify_tools
 from tools.pilot.qualification import _private_new, _write, _sha, _capture_json, QUAL_PROPERTIES
 from tools.pilot.protected_worker import score, fixture_valid, FAILURE_CASES
 from tools.pilot.server import _build_sandbox_argv, _validate_executable, run_owned
+from tools.pilot.scoped_trial import run_scoped, PROFILES
 
 PARTICIPANT_FILES = ("protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs", "game_bridge.py", "game_bridge_client.py")
 OBSERVER_FILES = ("protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
@@ -76,10 +77,12 @@ def validate_result(value, mode):
 
 
 def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool_snapshot,
-                                 tool_manifest_sha256, movement_mode="forward", failure_case="none",
+                                 tool_manifest_sha256, movement_mode="forward", failure_case="none", resource_profile="game",
                                  bwrap_path=Path("/usr/bin/bwrap"), runner=run_owned):
     if launch is not True:
         raise ValueError("explicit launch=True required")
+    if resource_profile not in PROFILES:
+        raise ValueError("invalid resource profile")
     if failure_case not in FAILURE_CASES:
         raise ValueError("invalid fixed failure case")
     if movement_mode not in {"forward", "stationary"}:
@@ -92,7 +95,7 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
     tools = Path(tool_snapshot).resolve(strict=True)
     workspace = _private_new(workspace)
     summary = {"schema_version": 1, "status": "failed", "movement_mode": movement_mode, "failure_case": failure_case,
-               "tool_manifest_sha256": tool_manifest_sha256, "error": None,
+               "tool_manifest_sha256": tool_manifest_sha256, "error": None, "resource_profile": resource_profile,
                "independent_observer_process": False,
                "claim_limit": "Fixed deterministic client in nested namespace; no model performance or arbitrary-code resource-containment claim."}
     runtime = workspace / "runtime"
@@ -121,8 +124,9 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
                              "--ro-bind", str(bwrap), "/pilot-bwrap",
                              "--setenv", "PYTHONPATH", "/observer-code"]
         summary["stage"] = "launch"
-        process = runner(args, cwd=runtime, env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
-                         timeout_seconds=180, stop_grace_seconds=10, log_limit_bytes=1024 * 1024)
+        process, resources = run_scoped(args, workspace=workspace, cwd=runtime,
+            env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}, profile=resource_profile, runner=runner)
+        summary["resource_scope"] = resources
         summary["stage"] = "validate"
         summary["process"] = process.to_dict()
         result, digest = _capture_json(runtime / "protected-result.json", 1024 * 1024)
@@ -131,7 +135,7 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
         summary["evidence_valid"] = validate_result(result, movement_mode)
         summary["independent_observer_process"] = bool(isinstance(result, dict) and result.get("independent_observer_process") is True)
         clean = process.returncode == 0 and not any((process.timed_out, process.cleanup_uncertain, process.stdout_truncated, process.stderr_truncated))
-        summary["status"] = "qualified" if clean and summary["evidence_valid"] else "failed"
+        summary["status"] = "qualified" if clean and summary["evidence_valid"] and resources["valid"] and resource_profile == "game" else "failed"
     except Exception:
         summary["error"] = "protected_preparation_or_launch_failed"
     finally:
