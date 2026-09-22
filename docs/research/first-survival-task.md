@@ -1,7 +1,8 @@
 # First survival task: collect one oak log
 
-Status: implementation design, not a running task, registered experiment or
-model result. The fresh-world movement qualification is the preceding gate.
+Status: [observer and predicate components](oak-evaluator-components.md) are
+implemented and tested synthetically; the complete task is not running or
+game-qualified. This is not a registered experiment or model result. The fresh-world movement qualification is the preceding gate.
 
 ## Why this task
 
