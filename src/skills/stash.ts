@@ -1228,6 +1228,21 @@ export async function depositStash(
     // next bounce). All materials are still bot-earned; this only removes
     // the multi-step timing coordination the LLM can't hold.
     if (!chestItem) {
+      // Ask the chests for a chest before building one.
+      //
+      // Run 770: "Expansion blocked: carrying 0 planks and no logs", twice,
+      // while the stash ledger held 115 chests and not one log or plank. The
+      // bot was standing at a wall of chests, needing a chest, and the only
+      // route this code knew was to craft one out of wood it did not have.
+      try {
+        await withdrawStash(bot, stashPos, "chest", 1);
+        chestItem = bot.inventory.items().find((i) => i.name === "chest");
+        if (chestItem) console.log("[Stash] Took a spare chest from the stash for expansion");
+      } catch {
+        /* none banked — the craft path below is the fallback */
+      }
+    }
+    if (!chestItem) {
       const countPlanks = () =>
         bot.inventory
           .items()
