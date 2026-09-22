@@ -43,7 +43,8 @@ roster. Permissions and other failure timings remain pending; the combined box s
   login username alone is not an identity boundary against arbitrary code. Fixed
   login name/UUID admission, one-use transport and server UUID/roster snapshots
   are qualified. [Survival-mode scoring](game-mode-qualification.md) rejects a
-  trusted post-action creative-mode injection; participant-issued command denial,
+  trusted post-action creative-mode injection. [Two player-command probes](permission-qualification.md)
+  now have server receipts and an operator-authorized positive control. Broader
   permission escalation and adversarial game behavior remain open.
 - [ ] Demonstrate that participant-written success claims cannot affect scoring,
   and that an observer failure cannot count as an observed negative control.

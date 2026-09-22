@@ -92,6 +92,8 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
         raise ValueError("invalid resource profile")
     if failure_case not in FAILURE_CASES:
         raise ValueError("invalid fixed failure case")
+    if failure_case in {"command_denied", "command_authorized"} and movement_mode != "stationary":
+        raise ValueError("command probe requires stationary mode")
     if movement_mode not in {"forward", "stationary"}:
         raise ValueError("invalid fixed movement mode")
     if storage_tool_root is None:

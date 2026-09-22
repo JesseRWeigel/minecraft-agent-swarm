@@ -339,3 +339,23 @@ test("faulty late bot cleanup still destroys its socket without unhandled reject
     process.off("unhandledRejection", listener);
   }
 });
+
+test("permission probe sends only fixed commands after begin and waits before completion", async () => {
+  const f = fixture({ movement: "stationary" });
+  f.bot.chat = (text) => f.events.push(`chat:${text}`);
+  const result = await runParticipant({ ...f.args, commandProbe: "permissions" });
+  assert.equal(result.status, "protocol_completed");
+  assert.deepEqual(f.events.filter(x => x.startsWith("chat:")), ["chat:/op PilotProbe", "chat:/gamemode creative"]);
+  assert.ok(f.events.indexOf("receive:begin") < f.events.indexOf("chat:/op PilotProbe"));
+  assert.ok(f.events.indexOf("chat:/gamemode creative") < f.events.indexOf("send:action_finished"));
+  assert.equal(f.events.filter(x => x === "action:wait").length, 3);
+  assert.equal(f.events.includes("forward:true"), false);
+});
+
+test("rejects arbitrary probes or probe movement before bot creation", async () => {
+  const f = fixture();
+  for (const options of [{commandProbe: "arbitrary"}, {commandProbe: "permissions", movement: "forward"}]) {
+    await assert.rejects(() => runParticipant({...f.args, ...options}), /probe/);
+  }
+  assert.equal(f.events.includes("create"), false);
+});

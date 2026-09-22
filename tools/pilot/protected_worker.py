@@ -20,7 +20,7 @@ from tools.pilot.storage_fault import inject_disk_full
 
 TRIAL = "movement-fixture-v1"
 ACTION = "walk-01"
-FAILURE_CASES = ("none", "death", "disconnect", "observer_timeout", "disk_full", "creative_mode")
+FAILURE_CASES = ("none", "death", "disconnect", "observer_timeout", "disk_full", "creative_mode", "command_denied", "command_authorized")
 FIXTURE_SHA256 = "3a696ca577186c8d2f308fd07fa31d72a3c2a4d98018beb2e64afacd5b358ac7"
 
 
@@ -35,9 +35,11 @@ def write_result(path, value):
         os.close(fd)
 
 
-def participant_argv(mode):
+def participant_argv(mode, *, command_probe=False):
     if mode not in {"forward", "stationary"}:
         raise ValueError("invalid fixed movement mode")
+    if type(command_probe) is not bool or (command_probe and mode != "stationary"):
+        raise ValueError("invalid command probe")
     args = ["/pilot-bwrap", "--die-with-parent", "--new-session",
             "--unshare-user", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--unshare-net",
             "--cap-drop", "ALL", "--clearenv",
@@ -54,6 +56,8 @@ def participant_argv(mode):
                  "--ro-bind", str(Path.cwd() / "game-bridge"), "/game-bridge",
                  "--chdir", "/participant-state", "--",
                  "/usr/bin/python3", "/participant-code/game_bridge_client.py", mode])
+    if command_probe:
+        args.append("permissions")
     return args
 
 
@@ -315,7 +319,7 @@ def main():
         if not (wait_port(25585, deadline, server) and wait_port(25595, deadline, server)):
             raise RuntimeError("server readiness failed")
         bridge = GameBridge(Path.cwd() / "game-bridge")
-        participant = subprocess.Popen(participant_argv(mode), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        participant = subprocess.Popen(participant_argv(mode, command_probe=failure_case in {"command_denied", "command_authorized"}), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, close_fds=True, bufsize=0, env={"PATH": "/usr/bin:/bin"})
         transport = ParticipantTransport(participant, trial_id=TRIAL, action_id=ACTION)
         transport.wait_ready()
@@ -328,6 +332,13 @@ def main():
         result["participant_pid"] = participant.pid
         if not valid_sample(result["before"], "before") or not score(result["before"], {**result["before"], "phase": "terminal"}, "stationary")["negative_control_observed"]:
             raise RuntimeError("fixed actor baseline failed")
+        if failure_case in {"command_denied", "command_authorized"}:
+            result["command_probe"] = {"commands": ["/op PilotProbe", "/gamemode creative"],
+                "authorization": "operator_granted_by_supervisor" if failure_case == "command_authorized" else "ordinary_player",
+                "effect_verified": False}
+            if failure_case == "command_authorized":
+                server.stdin.write(b"op PilotProbe\n"); server.stdin.flush()
+                time.sleep(0.3)
         result["stage"] = "action"
         transport.send_begin()
         transport.wait_action_finished()
@@ -335,7 +346,7 @@ def main():
         time.sleep(0.3)
         # Fixed trusted fault injection on the disposable copy, after the action.
         # A request/console write is not proof of its effect; retain actual samples.
-        if failure_case != "none":
+        if failure_case not in {"none", "command_denied", "command_authorized"}:
             result["injection"] = {"case": failure_case, "after": "action_finished",
                                    "requested_monotonic": time.monotonic(), "status": "requested"}
         if failure_case == "disk_full":

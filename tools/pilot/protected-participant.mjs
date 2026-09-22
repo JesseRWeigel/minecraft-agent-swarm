@@ -117,6 +117,7 @@ export async function runParticipant({
   trialId,
   actionId,
   movement = "forward",
+  commandProbe = "none",
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   nowMonotonic = performance.now.bind(performance),
   phaseTimeoutMs = DEFAULT_PHASE_TIMEOUT_MS,
@@ -126,6 +127,8 @@ export async function runParticipant({
     throw new TypeError("participant adapters required");
   if (!validId(trialId) || !validId(actionId)) throw new RangeError("invalid supervisor ID");
   if (movement !== "forward" && movement !== "stationary") throw new RangeError("invalid movement");
+  if (!["none", "permissions"].includes(commandProbe) || (commandProbe !== "none" && movement !== "stationary"))
+    throw new RangeError("invalid command probe");
   if (typeof sleep !== "function" || typeof nowMonotonic !== "function")
     throw new TypeError("participant clocks required");
   if (!Number.isInteger(phaseTimeoutMs) || phaseTimeoutMs < 1 || phaseTimeoutMs > DEFAULT_PHASE_TIMEOUT_MS)
@@ -196,6 +199,12 @@ export async function runParticipant({
     await runPhase(() => sendMessage(outgoing("ready", trialId, actionId)), "send ready");
     const begin = await runPhase(() => waitForCommand(), "wait begin");
     validateCommand(begin, "begin", trialId, actionId);
+    if (commandProbe === "permissions") {
+      for (const text of ["/op PilotProbe", "/gamemode creative"]) {
+        await runPhase(() => bot.chat(text), "fixed permission command");
+        await runPhase(() => sleep(ACTION_MS), "command settle");
+      }
+    }
     if (movement === "forward") bot.setControlState("forward", true);
     try {
       await runPhase(() => sleep(ACTION_MS), "fixed action");

@@ -127,12 +127,19 @@ class ProtectedWorkerTests(unittest.TestCase):
         self.assertEqual(args.count("--size"), 2)
         with self.assertRaises(ValueError): participant_argv("arbitrary")
 
+    def test_permission_probe_is_fixed_stationary_and_uses_same_namespace(self):
+        args = participant_argv("stationary", command_probe=True)
+        self.assertEqual(args[-2:], ["stationary", "permissions"])
+        self.assertNotIn("/observer-code", args)
+        self.assertIn("--unshare-net", args)
+        with self.assertRaises(ValueError): participant_argv("forward", command_probe=True)
+
     def test_explicit_launch_required_before_any_workspace_mutation(self):
         with self.assertRaisesRegex(ValueError, "launch=True"):
             run_protected_qualification(workspace=Path('/not-created'), restore_kwargs={}, tool_snapshot=Path('/none'), tool_manifest_sha256='a'*64)
 
     def test_fault_injection_cannot_be_accepted_even_with_successful_samples(self):
-        for case in ("death", "disconnect", "observer_timeout", "disk_full", "creative_mode", "unknown"):
+        for case in ("death", "disconnect", "observer_timeout", "disk_full", "creative_mode", "command_denied", "command_authorized", "unknown"):
             row = outcome(); row["failure_case"] = case
             self.assertFalse(validate_result(row, "forward"))
 

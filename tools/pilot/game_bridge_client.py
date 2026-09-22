@@ -13,7 +13,10 @@ from game_bridge import GAME_ENDPOINT, pump
 
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in {"forward", "stationary"}:
+    if len(sys.argv) not in {2, 3} or sys.argv[1] not in {"forward", "stationary"}:
+        return 2
+    probe = len(sys.argv) == 3
+    if probe and (sys.argv[2] != "permissions" or sys.argv[1] != "stationary"):
         return 2
     stop = threading.Event()
     outcome = {"status": "waiting"}
@@ -47,7 +50,7 @@ def main():
     try:
         child = subprocess.Popen(["/pilot-tools/bin/node", "--max-old-space-size=256",
             "/participant-code/protected-participant-cli.mjs", "--trial-id", "movement-fixture-v1",
-            "--action-id", "walk-01", "--movement", sys.argv[1]], close_fds=True)
+            "--action-id", "walk-01", "--movement", sys.argv[1]] + (["--command-probe", "permissions"] if probe else []), close_fds=True)
         deadline = time.monotonic()+175
         while child.poll() is None:
             if outcome["status"] == "failed" or time.monotonic() >= deadline:

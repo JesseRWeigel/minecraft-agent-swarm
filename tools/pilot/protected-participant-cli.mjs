@@ -6,11 +6,11 @@ const ID_PATTERN = /[A-Za-z0-9][A-Za-z0-9._-]{0,63}/;
 const TOTAL_WATCHDOG_MS = 90_000;
 
 function parseArguments(argv) {
-  if (!Array.isArray(argv) || argv.length !== 6) throw new Error("invalid arguments");
+  if (!Array.isArray(argv) || ![6, 8].includes(argv.length)) throw new Error("invalid arguments");
   const values = {};
   for (let index = 0; index < argv.length; index += 2) {
     const name = argv[index];
-    if (!["--trial-id", "--action-id", "--movement"].includes(name) || name in values)
+    if (!["--trial-id", "--action-id", "--movement", "--command-probe"].includes(name) || name in values)
       throw new Error("invalid arguments");
     values[name] = argv[index + 1];
   }
@@ -20,7 +20,10 @@ function parseArguments(argv) {
   )
     throw new Error("invalid arguments");
   if (!["forward", "stationary"].includes(values["--movement"])) throw new Error("invalid arguments");
-  return { trialId: values["--trial-id"], actionId: values["--action-id"], movement: values["--movement"] };
+  const commandProbe = values["--command-probe"] ?? "none";
+  if (!["none", "permissions"].includes(commandProbe) || (commandProbe !== "none" && values["--movement"] !== "stationary"))
+    throw new Error("invalid command probe");
+  return { commandProbe, trialId: values["--trial-id"], actionId: values["--action-id"], movement: values["--movement"] };
 }
 
 function writeGenericFailure(error) {

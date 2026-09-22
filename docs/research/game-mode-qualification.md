@@ -62,3 +62,6 @@ coverage remains open.
 The live swarm, its mode and world, and GPU/model workload were unchanged. No
 learning, model performance, cost savings or robotics transfer was measured.
 Historical observations remain pinned to their earlier schemas and sources.
+
+[Player-issued command follow-up](permission-qualification.md): self-op and
+creative-mode attempts now have ordinary-player and operator-authorized controls.

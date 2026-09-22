@@ -12,6 +12,7 @@ test("validates arguments before loading mineflayer", async () => {
   for (const bad of [
     [],
     argv.slice(0, -1),
+    [...argv, "--command-probe", "arbitrary"],
     [...argv, "extra"],
     [...argv.slice(0, -1), "sideways"],
     ["--trial-id", "../bad", ...argv.slice(2)],
@@ -141,4 +142,26 @@ test("watchdog bounds dependency loading", async () => {
   assert.equal(code, 1);
   assert.ok(Date.now() - started < 250);
   assert.equal(diagnostic, "participant failed\n");
+});
+
+test("passes the fixed permission probe to the participant", async () => {
+  let received;
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let lines = 0;
+  output.on("data", () => { input.write(protocolLine(++lines === 1 ? "begin" : "finalize")); });
+  const code = await runParticipantProcess({ argv: [...argv, "--command-probe", "permissions"],
+    input, output, error: new PassThrough(),
+    loadMineflayer: async () => ({createBot() {}}),
+    run: async options => {
+      received = options.commandProbe;
+      await options.sendMessage(JSON.parse(protocolLine("ready")));
+      await options.waitForCommand();
+      await options.sendMessage(JSON.parse(protocolLine("action_finished")));
+      await options.waitForCommand();
+      return {schema_version: 1, status: "protocol_completed"};
+    }
+  });
+  assert.equal(code, 0);
+  assert.equal(received, "permissions");
 });

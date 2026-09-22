@@ -68,7 +68,10 @@ bounded external receipt. [Fixed actor admission and server identity checks](act
 now bind the connection to the expected UUID and one-player roster, with fresh
 forward/stationary game controls. A [survival-mode integrity check](game-mode-qualification.md)
 now rejects a deliberate post-action creative-mode change, with both controls
-repeated. Participant-issued privileged commands, remaining combined fault cases
+repeated. [Player-command probes](permission-qualification.md) now verify that
+ordinary-player self-op and creative-mode attempts have no observed effect,
+while the same client changes mode in an operator-authorized control. Broader
+permissions/protocol behavior, remaining combined fault cases
 and an earlier unresolved shutdown failure remain open.
 
 ### Repository boundary
