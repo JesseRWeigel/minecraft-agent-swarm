@@ -91,7 +91,8 @@ assert result["status"] == "qualified"
 ```
 
 Path variables are operator-supplied absolute `Path` instances; pins are SHA-256
-strings. Only `failure_case="none"` is supported by this task launcher. Every
+strings. The [fault-injection follow-up](oak-fault-qualification.md) documents the three
+explicit fault modes and their allowed client pairings. Every
 run needs a new workspace. Raw runtime images remain private and contain the
 per-attempt server configuration/credential; publish only reviewed derivatives.
 
@@ -100,7 +101,9 @@ per-attempt server configuration/credential; publish only reviewed derivatives.
 The [follow-up control set](oak-negative-controls.md) now includes actual
 broken-but-uncollected and bedrock-barrier approach checks plus repeated
 collection/no-action controls. This does not complete the survival-task failure
-matrix. Add injected-item, interrupted-action and observation-failure cases. Strengthen full arena-volume
+matrix. The [fault-injection follow-up](oak-fault-qualification.md) now rejects
+item injections and one suspended terminal observer. Mid-action interruptions
+and other observation failures remain. Strengthen full arena-volume
 verification and qualify any model-facing action adapter before collecting model
 results. The no-action client finishes immediately; its duration is not a matched
 model-comparison budget. No GPU workload, model inference, live-world reset or

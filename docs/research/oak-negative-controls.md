@@ -17,9 +17,10 @@ all four attempts. Each had normal participant and Java exits, confirmed scope
 cleanup and storage unmount. The export rehashed the captured sources, source
 manifest, closed runtime image and saved world metadata. It recovered fixture,
 before and terminal observer records from the unmounted image and compared their
-payloads with the worker result. The current host launcher independently captures
-before/terminal records; fixture-record comparison is an additional export audit,
-not yet a separate host-launch acceptance gate.
+payloads with the worker result. At this checkpoint the host independently
+captured before/terminal records, while fixture comparison was an additional
+export audit. All three are now direct host-launch gates in the
+[fault-injection follow-up](oak-fault-qualification.md).
 
 ## What the controls establish
 
@@ -49,9 +50,10 @@ its predeclared expected outcome. Setup commands run before the action and are
 not agent-earned progress. No model calls, GPU inference, live-world changes or
 live swarm restarts were made.
 
-Next: bind raw fixture observer records directly in host acceptance, reject
-injected-item false positives, qualify interrupted actions and missing observations
-for this oak task, then build the bounded model-facing action adapter. Full arena
+The [fault-injection follow-up](oak-fault-qualification.md) now binds raw fixture
+receipts in host acceptance, rejects injected progress and qualifies one missing
+terminal-observer case. Next are mid-action interruptions and the bounded
+model-facing action adapter. Full arena
 volume verification and independent-host reproduction remain open. Do not report
 model learning, cost savings or robotics transfer from these controls.
 

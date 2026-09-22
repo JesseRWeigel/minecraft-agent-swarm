@@ -9,7 +9,14 @@ TRIAL="collect-oak-log-v1"
 ACTION="collect-01"
 FIXTURE_SHA256="b8d4a036e735f449674c207c94af99be2dc40680245ceb56c4f7c2a76e91a942"
 BLOCKED_FIXTURE_SHA256="5dd6ea35b37631087390babda3044ce60fd9800b75bb150a5ec68d50a3100a39"
-FAILURE_CASES=("none",)
+FAILURE_CASES=("none", "item_only", "item_and_block", "observer_timeout")
+
+def fault_mode_valid(fault, mode):
+    if mode not in ('forward','stationary','mine_only','blocked'):return False
+    if fault=='none':return True
+    if fault in ('item_only','item_and_block'):return mode=='stationary'
+    return fault=='observer_timeout' and mode=='forward'
+
 
 def fixture_valid(value,mode="forward"):
     if mode=="blocked":
@@ -42,10 +49,12 @@ def baseline_valid(s):
         and o.get('gameMode')==0 and o.get('health')==20 and o.get('dimension')=='minecraft:overworld'
         and o.get('position')=={'x':0.5,'y':200,'z':0.5})
 
-def observe(phase,password,blocked=False):
+def observe(phase,password,blocked=False,suspend_for_test=False):
+    if suspend_for_test and phase!="terminal":raise ValueError("only terminal observer may be suspended")
     cli="oak-blocked-observer-cli.mjs" if blocked and phase=="fixture" else "oak-observer-cli.mjs"
     c=capture_process(['/pilot-tools/bin/node','--max-old-space-size=256','/observer-code/'+cli],
-        {'schema_version':1,'phase':phase,'trial_id':TRIAL,'action_id':ACTION,'password':password})
+        {'schema_version':1,'phase':phase,'trial_id':TRIAL,'action_id':ACTION,'password':password},
+        timeout=2 if suspend_for_test else 30,suspend_for_test=suspend_for_test)
     for channel in ('stdout','stderr'):
         p=Path('observer-'+phase+'.'+channel)
         fd=os.open(p,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
@@ -56,6 +65,19 @@ def observe(phase,password,blocked=False):
     write_result('observer-'+phase+'.json',record)
     if c['error'] or c['returncode']!=0 or not isinstance(v,dict):raise RuntimeError('observer failed')
     return v
+
+def inject_items(mode,password):
+    captured=capture_process(['/pilot-tools/bin/node','--max-old-space-size=256','/observer-code/oak-fault-cli.mjs'],
+        {'schema_version':1,'mode':mode,'trial_id':TRIAL,'action_id':ACTION,'password':password,'operation_timeout_ms':5000})
+    try:value=json.loads(captured['stdout'])
+    except (ValueError,UnicodeError):value=None
+    receipt={k:v for k,v in captured.items() if k not in ('stdout','stderr')}
+    receipt['result']=value
+    write_result('fault-injection.json',receipt)
+    if captured['error'] or captured['returncode']!=0 or not isinstance(value,dict) or value.get('status')!='completed' or value.get('mode')!=mode:
+        raise RuntimeError('fault injection failed')
+    return value
+
 
 def score_files(node,code,runtime):
     c=capture_process([str(node),'--max-old-space-size=256',str(code/'oak-score-cli.mjs'),str(runtime)],{},timeout=5)
@@ -83,10 +105,10 @@ def endpoint_valid(value,mode,before,terminal):
         and terminal['actorSample'].get('observations',{}).get('position')==before['actorSample'].get('observations',{}).get('position'))
 
 def main():
-    if len(sys.argv) not in (2,3) or sys.argv[1] not in ('forward','stationary','mine_only','blocked') or (len(sys.argv)==3 and sys.argv[2]!='none'):return 2
+    if len(sys.argv) not in (2,3) or sys.argv[1] not in ('forward','stationary','mine_only','blocked') or not fault_mode_valid(sys.argv[2] if len(sys.argv)==3 else 'none',sys.argv[1]):return 2
     if os.readlink('/proc/self/ns/net')==Path('/observer-code/host-network-namespace').read_text().strip():raise RuntimeError('private namespace required')
-    mode=sys.argv[1];password=Path('.qualification-rcon-password').read_text().strip()
-    result={'schema_version':1,'status':'failed','control_mode':mode,'trial_id':TRIAL,'action_id':ACTION,'failure_case':'none',
+    mode=sys.argv[1];fault=sys.argv[2] if len(sys.argv)==3 else 'none';password=Path('.qualification-rcon-password').read_text().strip()
+    result={'schema_version':1,'status':'failed','control_mode':mode,'trial_id':TRIAL,'action_id':ACTION,'failure_case':fault,'injection':None,
         'independent_observer_process':False,'network_policy':'game_only_unix_v1','game_bridge':None,'participant_returncode':None,'java_returncode':None,
         'stop_sent':False,'term_sent':False,'kill_sent':False,'participant_forced_cleanup':False,'before':None,'terminal':None,'fixture':None,'score':None,'error':None,'stage':'server_start','action_finished_received':False}
     server=participant=transport=bridge=None
@@ -105,7 +127,11 @@ def main():
         result['stage']='action';result['action_started_monotonic']=time.monotonic();transport.send_begin();transport.wait_action_finished()
         result['action_finished_monotonic']=time.monotonic();result['action_finished_received']=True
         if result['action_finished_monotonic']-result['action_started_monotonic']>20:raise RuntimeError('action budget exceeded')
-        time.sleep(.3);result['stage']='terminal';result['terminal']=observe('terminal',password)
+        time.sleep(.3)
+        if fault in ('item_only','item_and_block'):
+            result['stage']='fault_injection';result['injection']=inject_items(fault,password)
+            time.sleep(.3)
+        result['stage']='terminal';result['terminal']=observe('terminal',password,suspend_for_test=fault=='observer_timeout')
         result['score']=score_files(Path('/pilot-tools/bin/node'),Path('/observer-code'),Path.cwd())
         result['stage']='finalize';transport.send_finalize();transport.wait_exit()
     except Exception:result['error']='oak_qualification_failed'
@@ -125,7 +151,7 @@ def main():
         except Exception:result['error']='server_cleanup_uncertain'
         clean=result['error'] is None and result['participant_returncode']==0 and result['java_returncode']==0 and result['stop_sent'] and not any(result[k] for k in ('term_sent','kill_sent','participant_forced_cleanup'))
         accepted=endpoint_valid(result['score'],mode,result['before'],result['terminal'])
-        result['status']='qualified' if clean and accepted else 'failed'
+        result['status']='qualified' if fault=='none' and clean and accepted else 'failed'
         write_result('protected-result.json',result)
     return 0 if result['status']=='qualified' else 1
 

@@ -13,12 +13,12 @@ from tools.pilot import prepare, restore
 from tools.pilot.bounded_storage import BoundedStorage
 from tools.pilot.client_tools import verify_tools
 from tools.pilot.qualification import _private_new, _write, _sha, _capture_json, QUAL_PROPERTIES
-from tools.pilot.oak_worker import fixture_valid, FAILURE_CASES, score_files, endpoint_valid
+from tools.pilot.oak_worker import fixture_valid, FAILURE_CASES, score_files, endpoint_valid, fault_mode_valid
 from tools.pilot.server import _build_sandbox_argv, _validate_executable, run_owned
 from tools.pilot.scoped_trial import run_scoped, PROFILES
 
 PARTICIPANT_FILES = ("oak-participant-cli.mjs", "oak-participant.mjs", "oak_bridge_client.py", "protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs", "game_bridge.py", "game_bridge_client.py")
-OBSERVER_FILES = ("oak-blocked-fixture.mjs", "oak-blocked-observer-cli.mjs", "oak-observer-cli.mjs", "oak-fixture.mjs", "oak-task.mjs", "oak-inventory.mjs", "oak-score-cli.mjs", "protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
+OBSERVER_FILES = ("oak-fault-cli.mjs", "oak-blocked-fixture.mjs", "oak-blocked-observer-cli.mjs", "oak-observer-cli.mjs", "oak-fixture.mjs", "oak-task.mjs", "oak-inventory.mjs", "oak-score-cli.mjs", "protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
 PYTHON_FILES = ("oak_worker.py", "protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py", "login_identity.py", "rcon_stall.py")
 
 
@@ -57,10 +57,25 @@ def capture_sources(workspace):
     return digest
 
 
+def capture_observer_records(runtime, result):
+    """Bind every saved observer process receipt to the worker's copied payload."""
+    matches = isinstance(result, dict)
+    pins = {}
+    for phase in ("fixture", "before", "terminal"):
+        record, pin = _capture_json(runtime / ("observer-" + phase + ".json"), 65536)
+        pins[phase] = pin
+        matches = bool(matches and pin and isinstance(record, dict)
+            and type(record.get("returncode")) is int and record["returncode"] == 0
+            and "error" in record and record["error"] is None
+            and isinstance(record.get("result"), dict)
+            and record["result"] == result.get(phase))
+    return matches, pins
+
+
 def validate_result(value, mode, recomputed):
     if not isinstance(value, dict) or type(value.get("schema_version")) is not int or value["schema_version"] != 1:
         return False
-    if value.get("failure_case", "none") != "none":
+    if value.get("failure_case", "none") != "none" or value.get("injection") is not None:
         return False
     if value.get("control_mode") != mode or value.get("trial_id") != "collect-oak-log-v1" or value.get("action_id") != "collect-01":
         return False
@@ -96,7 +111,7 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
         raise ValueError("explicit launch=True required")
     if resource_profile not in PROFILES:
         raise ValueError("invalid resource profile")
-    if failure_case not in FAILURE_CASES:
+    if failure_case not in FAILURE_CASES or not fault_mode_valid(failure_case, control_mode):
         raise ValueError("invalid fixed failure case")
     if control_mode not in {"forward", "stationary", "mine_only", "blocked"}:
         raise ValueError("invalid fixed movement mode")
@@ -161,13 +176,12 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
         summary["world_level_sha256"] = level.sha256
         summary["result"] = result
         summary["host_score"] = score_files(tools / "bin/node", workspace / "observer-code", runtime)
-        records_match = isinstance(result,dict)
-        summary["observer_records"] = {}
-        for phase in ("before", "terminal"):
-            record, pin = _capture_json(runtime / ("observer-" + phase + ".json"), 65536)
-            summary["observer_records"][phase] = pin
-            records_match = records_match and isinstance(record,dict) and record.get("result") == result.get(phase)
-        summary["evidence_valid"] = records_match and validate_result(result, control_mode, summary["host_score"])
+        records_match, summary["observer_records"] = capture_observer_records(runtime, result)
+        summary["observer_records_valid"] = records_match
+        injection, injection_pin = _capture_json(runtime / "fault-injection.json", 65536)
+        summary["fault_injection_record"] = injection
+        summary["fault_injection_sha256"] = injection_pin
+        summary["evidence_valid"] = failure_case == "none" and not (runtime / "fault-injection.json").exists() and records_match and validate_result(result, control_mode, summary["host_score"])
         summary["independent_observer_process"] = bool(isinstance(result, dict) and result.get("independent_observer_process") is True)
         clean = process.returncode == 0 and not any((process.timed_out, process.cleanup_uncertain, process.stdout_truncated, process.stderr_truncated))
         summary["status"] = "qualified" if clean and summary["evidence_valid"] and resources["valid"] and resource_profile == "game" else "failed"

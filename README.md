@@ -37,7 +37,9 @@ infrastructure; it is not a model-performance result. A fixed survival client
 now also [mines and collects one oak log](docs/research/oak-game-qualification.md),
 with a server-verified outcome. [Four same-source controls](docs/research/oak-negative-controls.md)
 distinguish collection from breaking without collection, approaching a bedrock-enclosed
-target, and doing nothing. These are fixed-client checks, not a model benchmark.
+target, and doing nothing. [Fault-injection checks](docs/research/oak-fault-qualification.md)
+also reject injected progress and missing terminal observations, including a forged
+endpoint that otherwise looks successful. These are fixed-client checks, not a model benchmark.
 
 ---
 

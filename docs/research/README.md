@@ -153,3 +153,11 @@ scorer failure remains preserved; final same-source controls pass after a JSON
 key-order comparison fix. [Four follow-up controls](oak-negative-controls.md) now
 separate collection from mining without pickup, bedrock-barrier approach and no
 action. This is a fixed scripted client, not a model result.
+
+### Oak fault-injection checks
+
+[Three real fault trials](oak-fault-qualification.md) now reject a granted item,
+a granted item plus removed target, and a missing terminal observer. The second
+case exposes the endpoint-only scorer's provenance limit. Fresh collection and
+no-action controls pass with direct host binding of all three observer receipts.
+One storage-blocked prelaunch attempt is preserved too.
