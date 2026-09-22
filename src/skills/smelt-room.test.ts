@@ -44,3 +44,16 @@ test("smelt ores: never asks a furnace slot for more than it can hold", () => {
   assert.match(inputCall, /roomIn\(furnace\.inputItem\(\)/, "the input put must be capped by the input slot's room");
   assert.match(source, /stackSize \?\? 64/, "a slot holds one stack, whatever that item's stack size is");
 });
+
+test("smelt ores: the error names the step it failed at", () => {
+  // Three runs of "Error: destination full" and three wrong guesses, because
+  // the catch wraps nine furnace operations and named none of them. The error
+  // line must carry the step, the furnace slots and the free-slot count.
+  const source = fs.readFileSync(path.join(__dirname, "smelt-ores.ts"), "utf8");
+  assert.match(source, /smelt error at step "\$\{step\}"/, "the failing step must be named");
+  assert.match(source, /furnace \$\{slotState\(\)\}/, "the slot contents must be reported");
+  assert.match(source, /pack \$\{bot\.inventory\.emptySlotCount\(\)\} free/, "the pack state must be reported");
+  for (const marker of ["open", "reclaim-output", "putFuel", "putInput", "wait"]) {
+    assert.match(source, new RegExp(`step = "${marker}"`), `the ${marker} step must be marked`);
+  }
+});

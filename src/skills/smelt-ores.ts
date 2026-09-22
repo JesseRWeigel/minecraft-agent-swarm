@@ -258,6 +258,22 @@ export const smeltOresSkill: Skill = {
         active: true,
       });
 
+      // Where the batch got to, for the error line below.
+      //
+      // Runs 765, 766 and 767 all logged "Smelt error: Error: destination
+      // full" and every guess about which call threw was wrong: the pack was
+      // not full, the reclaim found nothing to clear, and capping the puts by
+      // the slot's remaining room changed nothing. The catch wraps nine
+      // furnace operations and names none of them, so say which one was in
+      // flight and what the slots held when it went.
+      let step = "find";
+      let openFurnaceRef: Awaited<ReturnType<typeof bot.openFurnace>> | null = null;
+      const slotState = () => {
+        const f = openFurnaceRef;
+        if (!f) return "no furnace";
+        const name = (i: { name?: string; count?: number } | null) => (i ? `${i.name}x${i.count}` : "-");
+        return `in=${name(f.inputItem())} fuel=${name(f.fuelItem())} out=${name(f.outputItem())}`;
+      };
       try {
         // Re-find furnace (might have shifted from furnace to lit_furnace)
         furnaceBlock = bot.findBlock({
@@ -270,10 +286,13 @@ export const smeltOresSkill: Skill = {
         // truly reachable/loaded) — this hung smelt_ores to the 240s watchdog
         // repeatedly, producing 0 ingots. Bound it so it fails fast and the
         // batch is skipped (caught below).
+        step = "open";
         const furnace = (await Promise.race([
           bot.openFurnace(furnaceBlock),
           new Promise((_, rej) => setTimeout(() => rej(new Error("openFurnace timeout")), 10000)),
         ])) as Awaited<ReturnType<typeof bot.openFurnace>>;
+        openFurnaceRef = furnace;
+        step = "opened";
 
         // Make room before touching the furnace.
         //
@@ -311,7 +330,9 @@ export const smeltOresSkill: Skill = {
         // output always (it's free ingots), input/fuel only when they hold
         // something this batch can't use.
         try {
+          step = "reclaim-output";
           if (furnace.outputItem()) await furnace.takeOutput();
+          step = "reclaim-input";
           const jammedInput = furnace.inputItem();
           if (jammedInput && jammedInput.name !== batch.itemName) await furnace.takeInput();
           const jammedFuel = furnace.fuelItem();
@@ -338,6 +359,7 @@ export const smeltOresSkill: Skill = {
         };
 
         // Put fuel first
+        step = "putFuel";
         const fuelItem = bot.inventory.items().find((i) => FUEL_ITEMS.includes(i.name));
         if (fuelItem) {
           const fuelNeeded =
@@ -349,6 +371,7 @@ export const smeltOresSkill: Skill = {
         }
 
         // Put ores in input
+        step = "putInput";
         const inputItem = bot.inventory.items().find((i) => i.name === batch.itemName);
         if (inputItem) {
           const room = roomIn(furnace.inputItem(), inputItem);
@@ -361,6 +384,7 @@ export const smeltOresSkill: Skill = {
         }
 
         // Wait for smelting (10s per item, capped at 2 minutes)
+        step = "wait";
         const waitMs = Math.min(batch.count * 10500 + 3000, 120000);
         const startTime = Date.now();
 
@@ -380,7 +404,9 @@ export const smeltOresSkill: Skill = {
 
         furnace.close();
       } catch (err) {
-        console.log(`[Skill] Smelt error: ${err}`);
+        console.log(
+          `[Skill] ${bot.username}: smelt error at step "${step}" on ${batch.count}x ${batch.itemName}: ${err} | furnace ${slotState()} | pack ${bot.inventory.emptySlotCount()} free`,
+        );
         continue;
       }
     }
