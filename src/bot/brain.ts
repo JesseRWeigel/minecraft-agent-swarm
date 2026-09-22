@@ -2526,7 +2526,7 @@ export class BotBrain {
     // the loop closes itself. Overworld gold ore breaks that circle: it sits
     // deep, the miner is already down there, and one vein is enough.
     if (
-      this.roleConfig.allowedActions.includes("mine") &&
+      this.roleConfig.allowedActions.includes("mine_block") &&
       /overworld/.test(String(this.bot.game.dimension)) &&
       Date.now() - this.lastGoldHuntMs > 900_000
     ) {
@@ -2548,9 +2548,12 @@ export class BotBrain {
           `OVERRIDE: the Nether trip needs 4 gold and the team can reach about ${ingotsAbout} — mining gold_ore`,
         );
         this.events.onThought("Four gold buys the boots that keep piglins friendly. Time to find a vein.");
-        const result = await this.executeActionUnlessPaused("mine", { block: "gold_ore" });
-        this.events.onAction("mine", result);
-        this.lastAction = "mine";
+        const result = await this.executeActionUnlessPaused("mine_block", {
+          blockType: "gold_ore",
+          protectPos: this.roleConfig.stashPos,
+        });
+        this.events.onAction("mine_block", result);
+        this.lastAction = "mine_block";
         this.lastResult = result;
         return;
       }

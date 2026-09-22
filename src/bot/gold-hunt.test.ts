@@ -21,6 +21,19 @@ test("gold hunt: fires only while the fortress is unearned and gold is short", (
   assert.match(block, /overworld/, "gold hunting belongs in the overworld, not past the portal");
 });
 
+test("gold hunt: calls the action by the name the roles actually allow", () => {
+  // Run 775: the override never fired once. It gated on allowedActions
+  // containing "mine", and every role lists the action as "mine_block", so
+  // the condition was false for all five bots. The action also takes
+  // blockType rather than block.
+  const roles = fs.readFileSync(path.join(__dirname, "role.ts"), "utf8");
+  assert.match(roles, /"mine_block"/, "the roles name the action mine_block");
+  const start = BRAIN.indexOf("the Nether trip needs 4 gold");
+  const block = BRAIN.slice(start - 1500, start + 700);
+  assert.match(block, /allowedActions\.includes\("mine_block"\)/, "gate on the name the roles use");
+  assert.match(block, /blockType: "gold_ore"/, "mine_block reads blockType");
+});
+
 test("gold hunt: counts every form of gold the team can reach", () => {
   const start = BRAIN.indexOf("const ingotsAbout =");
   assert.notStrictEqual(start, -1);
