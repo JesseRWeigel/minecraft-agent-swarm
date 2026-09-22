@@ -26,3 +26,21 @@ test("smelt ores: the reclaim failure says why", () => {
   const source = fs.readFileSync(path.join(__dirname, "smelt-ores.ts"), "utf8");
   assert.match(source, /furnace reclaim failed \(\$\{\(e as Error\)\.message\}\)/, "log the real error");
 });
+
+test("smelt ores: never asks a furnace slot for more than it can hold", () => {
+  // Run 766: four "Error: destination full", thrown straight after "Smelting
+  // 2x raw_iron", with the reclaim finding nothing and the pack not full. The
+  // slots already held the same item, which the reclaim leaves alone by
+  // design, so the put asked a full stack to take more.
+  const source = fs.readFileSync(path.join(__dirname, "smelt-ores.ts"), "utf8");
+  const room = source.indexOf("const roomIn =");
+  const fuel = source.indexOf("furnace.putFuel(");
+  const input = source.indexOf("furnace.putInput(");
+  assert.notStrictEqual(room, -1, "the remaining-room helper must exist");
+  assert.ok(room < fuel && room < input, "compute the room before either put");
+  const fuelCall = source.slice(fuel - 220, fuel + 80);
+  const inputCall = source.slice(input - 260, input + 80);
+  assert.match(fuelCall, /roomIn\(furnace\.fuelItem\(\)/, "the fuel put must be capped by the fuel slot's room");
+  assert.match(inputCall, /roomIn\(furnace\.inputItem\(\)/, "the input put must be capped by the input slot's room");
+  assert.match(source, /stackSize \?\? 64/, "a slot holds one stack, whatever that item's stack size is");
+});

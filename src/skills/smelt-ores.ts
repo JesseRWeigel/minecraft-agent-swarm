@@ -324,18 +324,40 @@ export const smeltOresSkill: Skill = {
           );
         }
 
+        // Only put in what the slot can still hold.
+        //
+        // Run 766: four "Error: destination full", all thrown right after
+        // "Smelting 2x raw_iron", with the reclaim above finding nothing to
+        // clear and the pack not full. The furnace slots already held the SAME
+        // item, and the reclaim leaves those alone on purpose, so the put
+        // asked a slot with 64 coal to take more. A slot holds one stack; ask
+        // for the difference.
+        const roomIn = (slot: { count: number; stackSize?: number } | null, incoming: { type: number }) => {
+          const max = bot.registry.items[incoming.type]?.stackSize ?? 64;
+          return slot ? Math.max(0, max - slot.count) : max;
+        };
+
         // Put fuel first
         const fuelItem = bot.inventory.items().find((i) => FUEL_ITEMS.includes(i.name));
         if (fuelItem) {
           const fuelNeeded =
             fuelItem.name === "coal" || fuelItem.name === "charcoal" ? Math.ceil(batch.count / 8) : batch.count;
-          await furnace.putFuel(fuelItem.type, null, Math.min(fuelNeeded, fuelItem.count));
+          const room = roomIn(furnace.fuelItem(), fuelItem);
+          const put = Math.min(fuelNeeded, fuelItem.count, room);
+          if (put > 0) await furnace.putFuel(fuelItem.type, null, put);
+          else console.log(`[Skill] ${bot.username}: fuel slot already full, smelting on what is in there`);
         }
 
         // Put ores in input
         const inputItem = bot.inventory.items().find((i) => i.name === batch.itemName);
         if (inputItem) {
-          await furnace.putInput(inputItem.type, null, Math.min(batch.count, inputItem.count));
+          const room = roomIn(furnace.inputItem(), inputItem);
+          const put = Math.min(batch.count, inputItem.count, room);
+          if (put > 0) await furnace.putInput(inputItem.type, null, put);
+          else
+            console.log(
+              `[Skill] ${bot.username}: input slot already holds a full stack of ${batch.itemName}; waiting on this load`,
+            );
         }
 
         // Wait for smelting (10s per item, capped at 2 minutes)
