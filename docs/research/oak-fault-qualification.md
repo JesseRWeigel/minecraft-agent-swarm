@@ -80,8 +80,10 @@ Invalid fault/client pairings are rejected before workspace creation. Inspect
 receipts and terminal state to establish that a fault actually occurred; a generic
 failed status alone is insufficient.
 
-Next are a mid-action oak interruption, stronger arena verification and a bounded
-model-facing action adapter. The results do not establish learning, coaching cost
+The [oak interruption follow-up](oak-interruption-qualification.md) now covers one
+disconnect timing and retains an unexpected bridge-finalization failure. Next are
+better bridge diagnostics and the [bounded model action adapter](model-action-adapter-plan.md),
+with stronger arena verification still open. The results do not establish learning, coaching cost
 savings, robotics transfer or arbitrary-agent containment.
 
 Validation: 129 pilot JavaScript tests and 374 Python tests passed locally,

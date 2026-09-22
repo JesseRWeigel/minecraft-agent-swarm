@@ -1,4 +1,4 @@
-// Component qualification only: the game supervisor does not launch this task yet.
+// Trusted oak observations for the isolated fixed-client supervisor.
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { performance } from "node:perf_hooks";
@@ -53,7 +53,7 @@ export async function sampleOakTask({
   if (
     !rcon ||
     typeof rcon.send !== "function" ||
-    !["before", "terminal"].includes(phase) ||
+    !["before", "during", "terminal"].includes(phase) ||
     !validId(trialId) ||
     !validId(actionId) ||
     !Number.isInteger(operationTimeoutMs) ||

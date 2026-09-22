@@ -120,7 +120,7 @@ test("unknown block replies, contradictory tests and malformed inventory cannot 
 });
 test("invalid identifiers, phases and deadlines issue no queries", async () => {
   for (const change of [
-    { phase: "during" },
+    { phase: "unknown" },
     { trialId: "bad\n" },
     { operationTimeoutMs: Infinity },
     { operationTimeoutMs: 0 },
@@ -230,4 +230,14 @@ test("host JSON key sorting preserves the observed inventory predicate", async (
           )
         : x;
   assert.equal(scoreOakTask(JSON.parse(JSON.stringify(sorted(p)))).acquired, true);
+});
+
+test("during-action sample is retained but cannot substitute for a terminal sample", async () => {
+ const p=await pair();
+ const during=await sampleOakTask({rcon:adapter(),phase:"during",trialId:p.trialId,actionId:p.actionId});
+ assert.equal(during.status,"sampled");
+ assert.equal(during.actorSample.phase,"during");
+ assert.equal(during.targetBlock,"minecraft:oak_log");
+ assert.deepEqual(during.inventory,[]);
+ assert.equal(scoreOakTask({...p,terminal:during}).status,"invalid");
 });

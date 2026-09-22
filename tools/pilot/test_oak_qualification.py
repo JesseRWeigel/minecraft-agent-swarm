@@ -80,6 +80,8 @@ class OakQualificationTests(unittest.TestCase):
    for mode in ('forward','mine_only','blocked'):
     self.assertFalse(fault_mode_valid(fault,mode))
   self.assertTrue(fault_mode_valid('observer_timeout','forward'))
+  self.assertTrue(fault_mode_valid('mid_action_disconnect','forward'))
+  self.assertFalse(fault_mode_valid('mid_action_disconnect','stationary'))
   self.assertFalse(fault_mode_valid('observer_timeout','stationary'))
   self.assertFalse(fault_mode_valid('unknown','forward'))
 

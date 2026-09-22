@@ -11,6 +11,7 @@ const TRIAL_ID = "collect-oak-log-v1";
 const ACTION_ID = "collect-01";
 
 const COMMANDS = Object.freeze({
+  mid_action_disconnect: Object.freeze(["kick PilotProbe Oak qualification disconnect"]),
   item_only: Object.freeze(["give PilotProbe minecraft:oak_log 1"]),
   item_and_block: Object.freeze([
     "give PilotProbe minecraft:oak_log 1",

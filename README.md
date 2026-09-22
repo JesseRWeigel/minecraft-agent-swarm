@@ -39,7 +39,9 @@ with a server-verified outcome. [Four same-source controls](docs/research/oak-ne
 distinguish collection from breaking without collection, approaching a bedrock-enclosed
 target, and doing nothing. [Fault-injection checks](docs/research/oak-fault-qualification.md)
 also reject injected progress and missing terminal observations, including a forged
-endpoint that otherwise looks successful. These are fixed-client checks, not a model benchmark.
+endpoint that otherwise looks successful. A [disconnect during the action window](docs/research/oak-interruption-qualification.md)
+is now rejected without a score; a separate intermittent bridge-shutdown failure
+is preserved and unresolved. These are fixed-client checks, not a model benchmark.
 
 ---
 

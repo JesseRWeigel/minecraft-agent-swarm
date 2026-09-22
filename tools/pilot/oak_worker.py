@@ -9,13 +9,13 @@ TRIAL="collect-oak-log-v1"
 ACTION="collect-01"
 FIXTURE_SHA256="b8d4a036e735f449674c207c94af99be2dc40680245ceb56c4f7c2a76e91a942"
 BLOCKED_FIXTURE_SHA256="5dd6ea35b37631087390babda3044ce60fd9800b75bb150a5ec68d50a3100a39"
-FAILURE_CASES=("none", "item_only", "item_and_block", "observer_timeout")
+FAILURE_CASES=("none", "item_only", "item_and_block", "observer_timeout", "mid_action_disconnect")
 
 def fault_mode_valid(fault, mode):
     if mode not in ('forward','stationary','mine_only','blocked'):return False
     if fault=='none':return True
     if fault in ('item_only','item_and_block'):return mode=='stationary'
-    return fault=='observer_timeout' and mode=='forward'
+    return fault in ('observer_timeout','mid_action_disconnect') and mode=='forward'
 
 
 def fixture_valid(value,mode="forward"):
@@ -66,7 +66,7 @@ def observe(phase,password,blocked=False,suspend_for_test=False):
     if c['error'] or c['returncode']!=0 or not isinstance(v,dict):raise RuntimeError('observer failed')
     return v
 
-def inject_items(mode,password):
+def inject_fault(mode,password):
     captured=capture_process(['/pilot-tools/bin/node','--max-old-space-size=256','/observer-code/oak-fault-cli.mjs'],
         {'schema_version':1,'mode':mode,'trial_id':TRIAL,'action_id':ACTION,'password':password,'operation_timeout_ms':5000})
     try:value=json.loads(captured['stdout'])
@@ -110,7 +110,7 @@ def main():
     mode=sys.argv[1];fault=sys.argv[2] if len(sys.argv)==3 else 'none';password=Path('.qualification-rcon-password').read_text().strip()
     result={'schema_version':1,'status':'failed','control_mode':mode,'trial_id':TRIAL,'action_id':ACTION,'failure_case':fault,'injection':None,
         'independent_observer_process':False,'network_policy':'game_only_unix_v1','game_bridge':None,'participant_returncode':None,'java_returncode':None,
-        'stop_sent':False,'term_sent':False,'kill_sent':False,'participant_forced_cleanup':False,'before':None,'terminal':None,'fixture':None,'score':None,'error':None,'stage':'server_start','action_finished_received':False}
+        'stop_sent':False,'term_sent':False,'kill_sent':False,'participant_forced_cleanup':False,'before':None,'during':None,'terminal':None,'fixture':None,'score':None,'error':None,'stage':'server_start','action_finished_received':False}
     server=participant=transport=bridge=None
     try:
         server=subprocess.Popen(['/usr/bin/java','-Xms512M','-Xmx2G','-Djava.awt.headless=true','-jar','server.jar','--nogui'],stdin=subprocess.PIPE,close_fds=True,env={'PATH':'/usr/bin:/bin','LANG':'C.UTF-8','HOME':str(Path.cwd())})
@@ -124,12 +124,30 @@ def main():
         if not fixture_valid(result['fixture'],mode):raise RuntimeError('fixture invalid')
         result['before']=observe('before',password);result['independent_observer_process']=True
         if not baseline_valid(result['before']):raise RuntimeError('baseline invalid')
-        result['stage']='action';result['action_started_monotonic']=time.monotonic();transport.send_begin();transport.wait_action_finished()
+        result['stage']='action';result['action_started_monotonic']=time.monotonic();transport.send_begin()
+        result['action_begin_sent_monotonic']=time.monotonic()
+        if fault=='mid_action_disconnect':
+            time.sleep(.2)
+            result['during']=observe('during',password)
+            result['injection_requested_monotonic']=time.monotonic()
+            result['injection']=inject_fault(fault,password)
+            try:
+                transport.wait_action_finished()
+                result['action_finished_received']=True
+                result['action_finished_monotonic']=time.monotonic()
+            except Exception:
+                result['action_finished_received']=False
+            result['stage']='interrupted_action'
+            try:result['terminal']=observe('terminal',password)
+            except Exception:pass
+            # Preserve a raced completion; it must never be called an interruption.
+            raise RuntimeError('deliberate action interruption')
+        transport.wait_action_finished()
         result['action_finished_monotonic']=time.monotonic();result['action_finished_received']=True
         if result['action_finished_monotonic']-result['action_started_monotonic']>20:raise RuntimeError('action budget exceeded')
         time.sleep(.3)
         if fault in ('item_only','item_and_block'):
-            result['stage']='fault_injection';result['injection']=inject_items(fault,password)
+            result['stage']='fault_injection';result['injection']=inject_fault(fault,password)
             time.sleep(.3)
         result['stage']='terminal';result['terminal']=observe('terminal',password,suspend_for_test=fault=='observer_timeout')
         result['score']=score_files(Path('/pilot-tools/bin/node'),Path('/observer-code'),Path.cwd())

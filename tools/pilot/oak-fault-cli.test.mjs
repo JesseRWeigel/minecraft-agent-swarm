@@ -124,3 +124,13 @@ test("times out a stalled RCON command, reports structured failure, and closes t
   assert.equal(error.text(), "oak fault failed\n");
   assert.equal(closed, 2);
 });
+
+test("mid-action disconnect issues only a fixed kick and records its receipt", async () => {
+ const output=sink(),sent=[];
+ const code=await runOakFaultProcess({input:Readable.from([request({mode:"mid_action_disconnect"})]),output:output.stream,error:sink().stream,
+ connect:async()=>({end:async()=>{},socket:{destroy(){}}}),
+ send:async(_rcon,command)=>(sent.push(command),"Kicked PilotProbe: Oak qualification disconnect")});
+ assert.equal(code,0);
+ assert.deepEqual(sent,["kick PilotProbe Oak qualification disconnect"]);
+ assert.equal(JSON.parse(output.text()).commands[0].outcome,"issued");
+});

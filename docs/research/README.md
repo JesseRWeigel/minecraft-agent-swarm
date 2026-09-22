@@ -161,3 +161,11 @@ a granted item plus removed target, and a missing terminal observer. The second
 case exposes the endpoint-only scorer's provenance limit. Fresh collection and
 no-action controls pass with direct host binding of all three observer receipts.
 One storage-blocked prelaunch attempt is preserved too.
+
+### Oak interruption and model interface
+
+The [interruption check](oak-interruption-qualification.md) now rejects a disconnect
+between begin and completion, with a server-observed pre-kick state and passing
+controls. One unexpected bridge-finalization failure remains preserved and unresolved.
+The [model action adapter plan](model-action-adapter-plan.md) defines the next
+bounded observe/look/move/dig interface and its qualification gates.
