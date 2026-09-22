@@ -113,5 +113,6 @@ RCON endpoint; combined Paper/game fault qualification remains open.
 
 The [isolated Paper follow-up](rcon-game-qualification.md) now retains partial
 evidence for a deliberately withheld RCON reply and passes its forward control.
-The same-source stationary control was blocked before launch by the host storage
-reserve and remains outstanding.
+The initially blocked stationary control now also passes after lossless sparse
+archival reclaimed space from completed images. Their exact hashes and logical
+sizes are unchanged; the host reserve remains intact.

@@ -52,5 +52,6 @@ mid-action faults are still release gates, followed by redistributable inputs
 and the prespecified model comparison.
 
 [Real-game follow-up](rcon-game-qualification.md): Paper reply withholding now
-has a retained fault case and forward control. Storage headroom blocked the
-stationary control; the combined check remains incomplete.
+has a retained fault case and both controls. An initial storage block was
+resolved through byte-preserving sparse archival; the repeated stationary
+control passed.

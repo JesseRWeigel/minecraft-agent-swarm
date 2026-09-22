@@ -22,6 +22,7 @@ protected launcher and can never be a successful benchmark trial.
 | 001 | Post-action RCON reply stall | Authenticated; both queries reached Paper; a 77-byte dimension reply was withheld; observer timed out at about 5 seconds, retaining position |
 | 002 | Same-source ordinary forward control | Qualified, 3.797923 blocks |
 | 003 | Same-source stationary control | Blocked before game launch by storage reserve; no gameplay result |
+| 004 | Same-source stationary control after sparse archival | Qualified, zero movement; normal exits |
 
 The failed terminal record is preserved separately as `observer-terminal.json`.
 It contains a completed position and a timed-out dimension query, with nonzero
@@ -42,14 +43,30 @@ violation. The fault's aggregate scope validity is false because the worker
 correctly exits nonzero. Persisted results, partial observations, world metadata
 and images were rehashed; the source archive was unchanged.
 
-## Incomplete control and storage limit
+## Storage recovery and completed control
 
-The host had about 40.7 GiB available when the final control was attempted. A
-new 2 GiB image would breach the existing 40 GiB free-space reserve. Preparation
-stopped before creating an image or launching Minecraft. The failed attempt's
-manifest/summary remain preserved; no evidence was deleted and the reserve was
-not lowered. The new-source stationary control is still required. Older controls
-retain their own source pins and are not substitutes for this missing control.
+Attempt 003 was blocked with about 40.7 GiB free: a new 2 GiB image would breach
+the existing 40 GiB host reserve. Its failed preparation record remains preserved.
+
+After confirming attempts 001 and 002 were unmounted and not open by a process,
+zero-filled regions in those completed images were converted into sparse regions
+with `fallocate --dig-holes`. Each retained its exact 2,147,483,648-byte logical
+size and original SHA-256 hash. Each released 986,243,072 allocated bytes, a total
+of 1,972,486,144 bytes (about 1.84 GiB). The allocation ledger is included in the
+derived evidence. No world, log or image content was removed.
+
+This allowed attempt 004 to run with the same captured sources and full 2 GiB
+runtime reservation. It recorded zero movement in survival, exited normally and
+cleaned up its scope and mount. The post-action fault/forward/stationary set is
+now complete; the earlier blocked attempt remains in the denominator of attempts.
+
+Sparse archival is only for completed evidence images. Original run manifests
+retain the allocated-byte counts measured at shutdown; the separate archive
+ledger records the later allocation change. Hash verification establishes byte
+identity, not current disk reservation. A sparse archive must never be treated
+as a fully reserved writable trial image. Active runtime allocation checks and
+the 40 GiB reserve were not changed. Host headroom remains limited, so further
+trials need additional archival or storage capacity.
 
 ## Scope
 
@@ -58,7 +75,6 @@ internal Paper deadlock, authentication failure or mid-action outage. Unit tests
 also cover frame limits, cancellation and the fixed endpoint selection. The
 [transport-level regression](rcon-stall-qualification.md) continues in CI.
 
-Next: restore adequate storage headroom, repeat the stationary control, then
-qualify remaining mid-action faults and prepare redistributable reproduction
+Next: qualify remaining mid-action faults and prepare redistributable reproduction
 inputs. The live swarm, mode, world and GPU/model workload were untouched. No
 model performance, learning, cost advantage or robotics transfer was measured.
