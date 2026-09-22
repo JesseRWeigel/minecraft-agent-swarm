@@ -31,7 +31,9 @@ not a requirement for running the swarm.
 
 The experimental track now includes a [fresh-world generation recipe](docs/research/fresh-fixture.md)
 that passed forward and stationary controls without the private swarm world.
-This qualifies test infrastructure; it is not a model-performance result.
+The [clean-checkout reproduction](docs/research/clean-checkout-reproduction.md)
+also passes with fresh dependencies on the same WSL host. This qualifies test
+infrastructure; it is not a model-performance result.
 
 ---
 

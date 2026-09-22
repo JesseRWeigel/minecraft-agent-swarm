@@ -115,3 +115,7 @@ terrain is a minimal movement input; useful survival-task fixtures, arbitrary
 agent qualification, and a prespecified model comparison are still needed.
 These results do not demonstrate learning, lower inference costs or robotics
 transfer. No live swarm state, world, supervisor or GPU workload was changed.
+
+A [subsequent clean-checkout run](clean-checkout-reproduction.md) regenerated the
+world and repeated both controls with freshly installed dependencies on this same
+WSL host. Independent-host/operator reproduction remains unverified.

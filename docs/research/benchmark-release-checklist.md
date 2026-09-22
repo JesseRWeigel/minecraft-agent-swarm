@@ -62,7 +62,9 @@ roster. Permissions and other failure timings remain pending; the combined box s
   World-archive equality alone did not give equal fresh-player spawn positions
   in the historical qualification.
 - [ ] Choose a small survival task with a server-checkable predicate and a
-  bounded time budget. Include an impossible/no-action control.
+  bounded time budget. Include an impossible/no-action control. The
+  [oak-log acquisition design](first-survival-task.md) specifies the next task;
+  its evaluator and actual gameplay controls are not implemented yet.
 - [x] Supply a minimal redistributable fixture or precise fixture-generation
   recipe and expected starting-state hash. The [fresh-world recipe](fresh-fixture.md)
   has one generated archive and both controls qualified without private-world input.
@@ -70,6 +72,9 @@ roster. Permissions and other failure timings remain pending; the combined box s
   Independent clean-host reproduction remains the next unchecked gate.
 - [ ] Publish setup, versions, commands, expected failures, and hardware needs;
   verify them from a clean checkout without access to private logs or secrets.
+  [Same-host clean-checkout reproduction](clean-checkout-reproduction.md) now passes
+  generation and both controls with fresh dependencies. Host prerequisite setup
+  and independent-machine portability remain unverified, so this gate stays open.
 
 ## 3. Prespecify the model comparison
 

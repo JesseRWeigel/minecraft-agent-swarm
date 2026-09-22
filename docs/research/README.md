@@ -131,3 +131,11 @@ dependency from the tested movement setup. Its generated archive passed both
 protected controls: 4.31 blocks forward and zero stationary displacement. The
 recipe, input pins and derived evidence are documented; independent clean-host
 reproduction and useful survival tasks remain open.
+
+### Clean-checkout reproduction
+
+The fixture and both controls now [pass from a fresh checkout](clean-checkout-reproduction.md)
+with a new dependency installation and client snapshot on the same WSL host.
+Independent-host reproduction remains open. The next implementation target is
+[collecting one oak log](first-survival-task.md), with server-verified block and
+inventory evidence; that survival task is a design, not a measured result.
