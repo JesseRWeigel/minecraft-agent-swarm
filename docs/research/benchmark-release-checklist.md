@@ -16,6 +16,10 @@ now cover death, disconnect and a suspended-observer parent timeout in real
 isolated game runs. All were rejected; no missing sample became a negative
 control. Mid-action failures and internal RCON stalls remain unqualified.
 
+[Kernel resource probes](resource-enforcement.md) verify scoped memory, PID and
+CPU enforcement on WSL. Launcher integration, game-sized budgets and disk limits
+are still pending; the acceptance box remains open.
+
 ## 1. Finish the deterministic path
 
 - [ ] Complete resource/network gates around the connected protected participant,

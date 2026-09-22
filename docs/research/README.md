@@ -55,6 +55,13 @@ These were infrastructure checks with no model involved. Spawn positions differe
 
 The long-running swarm archive is useful material for failure analysis, but it is not automatically a training-ready dataset. Simulation performance alone does not establish transfer to robotics. See the [first-release checklist](benchmark-release-checklist.md), [study protocol](../pilot-study-protocol.md), and [protected observer design and remaining gates](../plans/2026-09-19-protected-observer.md).
 
+### Resource-limit feasibility
+
+[Actual WSL cgroup probes](resource-enforcement.md) now verify memory, PID and CPU
+enforcement, including a child that calls `setsid()`. The game launcher does not
+yet apply this profile; whole-trial integration and a disk/world-growth bound
+remain before arbitrary model-controlled trials.
+
 ### Repository boundary
 
 Keep the swarm and this experimental track together while the evaluator directly

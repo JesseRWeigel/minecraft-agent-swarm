@@ -1,0 +1,510 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-22",
+  "scope": "Synthetic cgroup enforcement on this WSL host, not Minecraft launcher integration or model qualification.",
+  "game_or_model_launched": false,
+  "live_swarm_changed": false,
+  "limits": {
+    "memory_bytes": 134217728,
+    "swap_bytes": 0,
+    "tasks": 16,
+    "cpu_fraction_of_one_core": 0.25,
+    "scope_runtime_seconds": 15
+  },
+  "development_history": [
+    "Batch001 memory recorder stopped by systemd default OOMPolicy=stop; manager reported Result=oom-kill. Raw attempt retained.",
+    "Batch002 used diagnostic OOMPolicy=continue to retain the recorder and captured child OOM evidence.",
+    "Batch003 additionally checked that no tasks remained in any surviving scoped cgroup. All four final scenarios qualified."
+  ],
+  "limitations": [
+    "Diagnostic OOMPolicy=continue is not the recommended production trial policy.",
+    "No disk/world-growth, GPU-memory or I/O-bandwidth limit demonstrated.",
+    "No cgroup restriction is yet added to the game launcher.",
+    "CPU evidence demonstrates throttling, not a performance benchmark."
+  ],
+  "attempts": [
+    {
+      "schema_version": 1,
+      "scenario": "baseline",
+      "status": "qualified",
+      "unit": "codex-resource-probe-70beda029768474d9218d7c4f222541a.scope",
+      "started_at_utc": "2026-09-22T00:04:48.802848+00:00",
+      "result": {
+        "schema_version": 1,
+        "scenario": "baseline",
+        "limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        },
+        "enforcement_observed": true,
+        "source_sha256": "92068088ca360564520b6c482003a036878d549ac9c50a647c1d0a5cd10ce263",
+        "elapsed_seconds": 3.8277357816696167e-07,
+        "final_limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        }
+      },
+      "returncode": 0,
+      "cleanup_state": "inactive",
+      "cleanup_confirmed": true,
+      "batch": "resource-probe-20260921-001",
+      "private_record_sha256": "5ce1a735db1fd9fca3ca126c684fb7ba2c4ec2efea9de6de165d6181bb486459"
+    },
+    {
+      "schema_version": 1,
+      "scenario": "memory",
+      "status": "failed",
+      "unit": "codex-resource-probe-97f51b0b6572412a9bfd17527960ac0b.scope",
+      "started_at_utc": "2026-09-22T00:04:48.892615+00:00",
+      "result": null,
+      "returncode": -15,
+      "error": "probe_launch_or_evidence_failed",
+      "cleanup_state": "failed",
+      "cleanup_confirmed": true,
+      "batch": "resource-probe-20260921-001",
+      "private_record_sha256": "3d40796b5c70db97b051b9a009cfc1f67533b460b88c786dfe9f81c57f855354"
+    },
+    {
+      "schema_version": 1,
+      "scenario": "pids",
+      "status": "qualified",
+      "unit": "codex-resource-probe-5ac513af37d94b2496f641ece1128904.scope",
+      "started_at_utc": "2026-09-22T00:04:49.276212+00:00",
+      "result": {
+        "schema_version": 1,
+        "scenario": "pids",
+        "limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        },
+        "enforcement_observed": true,
+        "source_sha256": "92068088ca360564520b6c482003a036878d549ac9c50a647c1d0a5cd10ce263",
+        "created_children": 15,
+        "fork_rejected": true,
+        "before": {
+          "max": 0
+        },
+        "after": {
+          "max": 1
+        },
+        "elapsed_seconds": 0.053920143749564886,
+        "final_limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        }
+      },
+      "returncode": 0,
+      "cleanup_state": "inactive",
+      "cleanup_confirmed": true,
+      "batch": "resource-probe-20260921-001",
+      "private_record_sha256": "c8976e510f10541397a2065c8969ea80bff468419501a2ade11fb1a8a4437f5c"
+    },
+    {
+      "schema_version": 1,
+      "scenario": "cpu",
+      "status": "qualified",
+      "unit": "codex-resource-probe-ec58b8938cd7473a845537255ecc3b06.scope",
+      "started_at_utc": "2026-09-22T00:04:49.391996+00:00",
+      "result": {
+        "schema_version": 1,
+        "scenario": "cpu",
+        "limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        },
+        "enforcement_observed": true,
+        "source_sha256": "92068088ca360564520b6c482003a036878d549ac9c50a647c1d0a5cd10ce263",
+        "before": {
+          "usage_usec": 21035,
+          "user_usec": 21035,
+          "system_usec": 0,
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "after": {
+          "usage_usec": 404064,
+          "user_usec": 404064,
+          "system_usec": 0,
+          "nr_periods": 16,
+          "nr_throttled": 16,
+          "throttled_usec": 1327962,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "elapsed_seconds": 1.539173062890768,
+        "final_limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        }
+      },
+      "returncode": 0,
+      "cleanup_state": "inactive",
+      "cleanup_confirmed": true,
+      "batch": "resource-probe-20260921-001",
+      "private_record_sha256": "749e5e8094a7b279d1ed3713c11b5909de62c6827c9ddefa66b7fdf07ca5e768"
+    },
+    {
+      "schema_version": 1,
+      "scenario": "baseline",
+      "status": "qualified",
+      "unit": "codex-resource-probe-ff3adecdcecb4aa6a28768cdd048a5dc.scope",
+      "started_at_utc": "2026-09-22T00:05:32.710907+00:00",
+      "result": {
+        "schema_version": 1,
+        "scenario": "baseline",
+        "limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        },
+        "enforcement_observed": true,
+        "source_sha256": "e87c9642c14894c1bd6226abd9acf3f956a81adcc367c3378324fa47e88fc658",
+        "elapsed_seconds": 4.130415618419647e-07,
+        "final_limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        }
+      },
+      "diagnostic_oom_policy": "continue",
+      "returncode": 0,
+      "cleanup_state": "inactive",
+      "cleanup_confirmed": true,
+      "batch": "resource-probe-20260922-002",
+      "private_record_sha256": "dce035f91c4292edb08d23494412d7a5cc42f7fca129b52d9bc8436a0220b685"
+    },
+    {
+      "schema_version": 1,
+      "scenario": "memory",
+      "status": "qualified",
+      "unit": "codex-resource-probe-a8451f57c3df40b9a7a9b7af05ef46f1.scope",
+      "started_at_utc": "2026-09-22T00:05:32.779189+00:00",
+      "result": {
+        "schema_version": 1,
+        "scenario": "memory",
+        "limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        },
+        "enforcement_observed": true,
+        "source_sha256": "e87c9642c14894c1bd6226abd9acf3f956a81adcc367c3378324fa47e88fc658",
+        "child_same_cgroup_after_setsid": true,
+        "child_exitcode": -9,
+        "before": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "after": {
+          "low": 0,
+          "high": 0,
+          "max": 35,
+          "oom": 1,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        },
+        "elapsed_seconds": 0.2898094495758414,
+        "final_limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        }
+      },
+      "diagnostic_oom_policy": "continue",
+      "returncode": 0,
+      "cleanup_state": "inactive",
+      "cleanup_confirmed": true,
+      "batch": "resource-probe-20260922-002",
+      "private_record_sha256": "21dacfe1472189cbd588ff48d8c0a40eb7e51b7c4cd4e9b40c234dd27c95e588"
+    },
+    {
+      "schema_version": 1,
+      "scenario": "pids",
+      "status": "qualified",
+      "unit": "codex-resource-probe-895b90be56d84ac6a6d04bfce57092ab.scope",
+      "started_at_utc": "2026-09-22T00:05:33.101127+00:00",
+      "result": {
+        "schema_version": 1,
+        "scenario": "pids",
+        "limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        },
+        "enforcement_observed": true,
+        "source_sha256": "e87c9642c14894c1bd6226abd9acf3f956a81adcc367c3378324fa47e88fc658",
+        "created_children": 15,
+        "fork_rejected": true,
+        "before": {
+          "max": 0
+        },
+        "after": {
+          "max": 1
+        },
+        "elapsed_seconds": 0.06062795268371701,
+        "final_limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        }
+      },
+      "diagnostic_oom_policy": "continue",
+      "returncode": 0,
+      "cleanup_state": "inactive",
+      "cleanup_confirmed": true,
+      "batch": "resource-probe-20260922-002",
+      "private_record_sha256": "27d237c7c383865db2ebc077385cec7261b15a957d1db2d7d59937d2a2d2a316"
+    },
+    {
+      "schema_version": 1,
+      "scenario": "cpu",
+      "status": "qualified",
+      "unit": "codex-resource-probe-be9fbd2b189f4d99beae3318d2eaaf07.scope",
+      "started_at_utc": "2026-09-22T00:05:33.217188+00:00",
+      "result": {
+        "schema_version": 1,
+        "scenario": "cpu",
+        "limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        },
+        "enforcement_observed": true,
+        "source_sha256": "e87c9642c14894c1bd6226abd9acf3f956a81adcc367c3378324fa47e88fc658",
+        "before": {
+          "usage_usec": 21142,
+          "user_usec": 12685,
+          "system_usec": 8456,
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "after": {
+          "usage_usec": 401852,
+          "user_usec": 393395,
+          "system_usec": 8456,
+          "nr_periods": 16,
+          "nr_throttled": 16,
+          "throttled_usec": 1298103,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "elapsed_seconds": 1.5103828222490847,
+        "final_limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        }
+      },
+      "diagnostic_oom_policy": "continue",
+      "returncode": 0,
+      "cleanup_state": "inactive",
+      "cleanup_confirmed": true,
+      "batch": "resource-probe-20260922-002",
+      "private_record_sha256": "52816a5d4f108eb77d99cf9bbbdafa840ca909775cb8c0ec70d03ee6f8e3de6f"
+    },
+    {
+      "schema_version": 1,
+      "scenario": "baseline",
+      "status": "qualified",
+      "unit": "codex-resource-probe-baac6ddeb8e34ff0852c4285856b6c1e.scope",
+      "started_at_utc": "2026-09-22T00:06:24.670557+00:00",
+      "result": {
+        "schema_version": 1,
+        "scenario": "baseline",
+        "limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        },
+        "enforcement_observed": true,
+        "source_sha256": "7a126951c38ed88ceaac1396b8ad0533d3c718bb163f6c1992e9cd1c0eba619f",
+        "elapsed_seconds": 3.8137659430503845e-07,
+        "final_limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        }
+      },
+      "diagnostic_oom_policy": "continue",
+      "returncode": 0,
+      "cleanup_state": "inactive",
+      "cleanup_confirmed": true,
+      "batch": "resource-probe-20260922-003",
+      "private_record_sha256": "954e47757570f78edd2ebf60b73fda5d7f992de009dbaf76a1492e9f092af460"
+    },
+    {
+      "schema_version": 1,
+      "scenario": "memory",
+      "status": "qualified",
+      "unit": "codex-resource-probe-126fe82c06bb45a199312c53e073760a.scope",
+      "started_at_utc": "2026-09-22T00:06:24.753458+00:00",
+      "result": {
+        "schema_version": 1,
+        "scenario": "memory",
+        "limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        },
+        "enforcement_observed": true,
+        "source_sha256": "7a126951c38ed88ceaac1396b8ad0533d3c718bb163f6c1992e9cd1c0eba619f",
+        "child_same_cgroup_after_setsid": true,
+        "child_exitcode": -9,
+        "before": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "after": {
+          "low": 0,
+          "high": 0,
+          "max": 44,
+          "oom": 1,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        },
+        "elapsed_seconds": 0.233233239967376,
+        "final_limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        }
+      },
+      "diagnostic_oom_policy": "continue",
+      "returncode": 0,
+      "cleanup_state": "inactive",
+      "cleanup_confirmed": true,
+      "batch": "resource-probe-20260922-003",
+      "private_record_sha256": "053fb1b191661039fc92257c10cd2c198ac754dc35d7bec17dfb529fe34ba90a"
+    },
+    {
+      "schema_version": 1,
+      "scenario": "pids",
+      "status": "qualified",
+      "unit": "codex-resource-probe-a271b977625c468ea863a734cc4939c8.scope",
+      "started_at_utc": "2026-09-22T00:06:25.021041+00:00",
+      "result": {
+        "schema_version": 1,
+        "scenario": "pids",
+        "limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        },
+        "enforcement_observed": true,
+        "source_sha256": "7a126951c38ed88ceaac1396b8ad0533d3c718bb163f6c1992e9cd1c0eba619f",
+        "created_children": 15,
+        "fork_rejected": true,
+        "before": {
+          "max": 0
+        },
+        "after": {
+          "max": 1
+        },
+        "elapsed_seconds": 0.14627399994060397,
+        "final_limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        }
+      },
+      "diagnostic_oom_policy": "continue",
+      "returncode": 0,
+      "cleanup_state": "inactive",
+      "cleanup_confirmed": true,
+      "batch": "resource-probe-20260922-003",
+      "private_record_sha256": "7dd574f9d10928b2d3fa636202c6f108f92f68a1b753deb5482dfa63763948b6"
+    },
+    {
+      "schema_version": 1,
+      "scenario": "cpu",
+      "status": "qualified",
+      "unit": "codex-resource-probe-56fcb4aa269f4f58bcb1463d550249c3.scope",
+      "started_at_utc": "2026-09-22T00:06:25.225075+00:00",
+      "result": {
+        "schema_version": 1,
+        "scenario": "cpu",
+        "limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        },
+        "enforcement_observed": true,
+        "source_sha256": "7a126951c38ed88ceaac1396b8ad0533d3c718bb163f6c1992e9cd1c0eba619f",
+        "before": {
+          "usage_usec": 21160,
+          "user_usec": 16928,
+          "system_usec": 4232,
+          "nr_periods": 0,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "after": {
+          "usage_usec": 401953,
+          "user_usec": 397584,
+          "system_usec": 4369,
+          "nr_periods": 16,
+          "nr_throttled": 16,
+          "throttled_usec": 1330596,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "elapsed_seconds": 1.5385890947654843,
+        "final_limits": {
+          "memory": "134217728",
+          "swap": "0",
+          "pids": "16",
+          "cpu": "25000 100000"
+        }
+      },
+      "diagnostic_oom_policy": "continue",
+      "returncode": 0,
+      "cleanup_state": "inactive",
+      "cleanup_confirmed": true,
+      "batch": "resource-probe-20260922-003",
+      "private_record_sha256": "d85ce1da3bad23aebb10d108bcc0f11a08bc35af07fee15ba8de84c8d9b017e5"
+    }
+  ]
+}
