@@ -362,6 +362,22 @@ export const smeltOresSkill: Skill = {
         step = "putFuel";
         const fuelItem = bot.inventory.items().find((i) => FUEL_ITEMS.includes(i.name));
         if (fuelItem) {
+          // A slot holds ONE kind of item. Run 768 named this exactly:
+          // 'smelt error at step "putFuel" on 21x raw_copper: Error:
+          // destination full | furnace in=- fuel=oak_planksx4 out=- | pack 4
+          // free'. Four planks in a sixty-four slot is not full, and coal
+          // still cannot go in on top of planks. The reclaim above leaves
+          // them because planks ARE fuel, which is right for the fuel already
+          // burning and wrong for putting a different one in.
+          const inFuelSlot = furnace.fuelItem();
+          if (inFuelSlot && inFuelSlot.type !== fuelItem.type) {
+            step = "reclaim-fuel-mismatch";
+            console.log(
+              `[Skill] ${bot.username}: fuel slot holds ${inFuelSlot.name}x${inFuelSlot.count} and this load brings ${fuelItem.name}; taking the ${inFuelSlot.name} back first`,
+            );
+            await furnace.takeFuel().catch(() => {});
+            step = "putFuel";
+          }
           const fuelNeeded =
             fuelItem.name === "coal" || fuelItem.name === "charcoal" ? Math.ceil(batch.count / 8) : batch.count;
           const room = roomIn(furnace.fuelItem(), fuelItem);

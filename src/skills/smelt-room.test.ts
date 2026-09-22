@@ -57,3 +57,16 @@ test("smelt ores: the error names the step it failed at", () => {
     assert.match(source, new RegExp(`step = "${marker}"`), `the ${marker} step must be marked`);
   }
 });
+
+test("smelt ores: a different fuel is taken out before a new one goes in", () => {
+  // The instrumented line from run 768 named it: 'smelt error at step
+  // "putFuel" on 21x raw_copper: Error: destination full | furnace in=-
+  // fuel=oak_planksx4 out=- | pack 4 free'. Four planks in a sixty-four slot
+  // is not full, and coal cannot stack on planks. A slot holds one kind.
+  const source = fs.readFileSync(path.join(__dirname, "smelt-ores.ts"), "utf8");
+  const mismatch = source.indexOf("inFuelSlot.type !== fuelItem.type");
+  const take = source.indexOf("furnace.takeFuel()", mismatch);
+  const put = source.indexOf("furnace.putFuel(", mismatch);
+  assert.notStrictEqual(mismatch, -1, "the fuel type must be compared");
+  assert.ok(take > mismatch && take < put, "take the wrong fuel out before putting the right one in");
+});
