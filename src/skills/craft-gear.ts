@@ -154,11 +154,23 @@ export const craftGearSkill: Skill = {
           .reduce((s, i) => s + i.count, 0);
       if (ingotsHeld() < 4 && !signal.aborted) {
         const { withdrawStash } = await import("./stash.js");
-        await withdrawStash(bot, stashPos, "raw_iron", 8).catch(() => {});
+        // Say what the withdrawal did, always.
+        //
+        // Run 771: this step logged NOTHING for a whole hour while the armour
+        // step reported "0 ingots (budget 0)" over and over and the ledger
+        // held six raw iron. A branch that only speaks on success cannot tell
+        // "the stash had none" from "the walk failed" from "it never ran",
+        // and that ambiguity has already cost three cycles on the furnace.
+        const raw = await withdrawStash(bot, stashPos, "raw_iron", 8).catch(
+          (e: Error) => `withdraw threw: ${e.message}`,
+        );
         const rawHeld = bot.inventory
           .items()
           .filter((i) => i.name === "raw_iron")
           .reduce((s, i) => s + i.count, 0);
+        console.log(
+          `[GearDebug] armour: ${ingotsHeld()} ingots, asked the stash for raw iron -> ${String(raw).slice(0, 80)}; now holding ${rawHeld} raw`,
+        );
         if (rawHeld > 0) {
           console.log(`[GearDebug] armour: ${ingotsHeld()} ingots and ${rawHeld} raw iron — smelting before the forge`);
           const { smeltOresSkill } = await import("./smelt-ores.js");

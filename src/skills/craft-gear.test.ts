@@ -66,3 +66,16 @@ test("craft gear: raw iron is smelted before the armour step gives up", () => {
     "smelt_ores skips its stash phase unless it is given the stash position",
   );
 });
+
+test("craft gear: the raw-iron withdrawal reports itself either way", () => {
+  // Run 771: the smelt step logged nothing for an hour while the armour step
+  // repeated "0 ingots (budget 0)" and the ledger held six raw iron. A branch
+  // that only speaks on success cannot tell an empty stash from a failed walk.
+  const source = fs.readFileSync(path.join(__dirname, "craft-gear.ts"), "utf8");
+  const ask = source.indexOf("asked the stash for raw iron");
+  const smelt = source.indexOf("smelting before the forge");
+  assert.notStrictEqual(ask, -1, "the withdrawal result must be logged");
+  assert.ok(ask < smelt, "log the withdrawal before the success-only smelt line");
+  const block = source.slice(ask - 600, ask);
+  assert.match(block, /withdraw threw/, "a thrown withdrawal must be reported, not swallowed");
+});
