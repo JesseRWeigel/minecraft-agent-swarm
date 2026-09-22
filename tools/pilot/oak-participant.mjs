@@ -1,4 +1,6 @@
 import { performance } from "node:perf_hooks";
+import { createModelActionSession } from "./model-action-session.mjs";
+import { runModelActionChannel } from "./model-action-channel.mjs";
 
 const HOST = "127.0.0.1";
 const PORT = 25585;
@@ -145,6 +147,8 @@ export async function runParticipant({
   trialId = TRIAL_ID,
   actionId = ACTION_ID,
   movement = "forward",
+  actionInput,
+  actionOutput,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   nowMonotonic = performance.now.bind(performance),
   phaseTimeoutMs = PHASE_TIMEOUT_MS,
@@ -153,7 +157,14 @@ export async function runParticipant({
   if (typeof createBot !== "function" || typeof sendMessage !== "function" || typeof waitForCommand !== "function")
     throw new TypeError("participant adapters required");
   if (trialId !== TRIAL_ID || actionId !== ACTION_ID) throw new RangeError("fixed supervisor IDs required");
-  if (!["forward", "stationary", "mine_only", "blocked"].includes(movement)) throw new RangeError("invalid movement");
+  if (!["forward", "stationary", "mine_only", "blocked", "model"].includes(movement))
+    throw new RangeError("invalid movement");
+  if (
+    movement === "model"
+      ? !actionInput?.on || !actionInput?.off || !actionOutput?.on || !actionOutput?.write
+      : actionInput !== undefined || actionOutput !== undefined
+  )
+    throw new TypeError("dedicated action streams required only in model mode");
   if (typeof sleep !== "function" || typeof nowMonotonic !== "function")
     throw new TypeError("participant clocks required");
   if (!Number.isInteger(phaseTimeoutMs) || phaseTimeoutMs < 1 || phaseTimeoutMs > PHASE_TIMEOUT_MS)
@@ -177,6 +188,8 @@ export async function runParticipant({
   }
   const deadline = started + totalTimeoutMs;
   const remaining = () => Math.max(0, deadline - now());
+  let actionSession;
+  const actionAbort = new AbortController();
   let bot,
     transportFailed = false,
     protocolCompleted = false,
@@ -213,6 +226,20 @@ export async function runParticipant({
     if (transportFailed) throw new Error("participant transport failed");
     await runPhase(() => sendMessage(outgoing("ready")), "send ready");
     validateCommand(await runPhase(() => waitForCommand(), "wait begin"), "begin");
+    if (movement === "model") {
+      actionSession = createModelActionSession({ bot });
+      await runPhase(
+        () =>
+          runModelActionChannel({
+            input: actionInput,
+            output: actionOutput,
+            session: actionSession,
+            signal: actionAbort.signal,
+          }),
+        "model action channel",
+        20000,
+      );
+    }
     if (movement === "forward" || movement === "mine_only")
       await runPhase(
         () => collectOakLog(bot, sleep, now, runPhase, () => cancelled, movement === "mine_only"),
@@ -225,8 +252,11 @@ export async function runParticipant({
       const barrier = bot.blockAtCursor(4.5);
       if (!barrier || barrier.name !== "bedrock" || bot.canDigBlock(barrier)) throw new Error("barrier not verified");
       bot.setControlState("forward", true);
-      try { await runPhase(() => sleep(1000), "blocked approach"); }
-      finally { if (!cancelled) bot.setControlState("forward", false); }
+      try {
+        await runPhase(() => sleep(1000), "blocked approach");
+      } finally {
+        if (!cancelled) bot.setControlState("forward", false);
+      }
     }
     await runPhase(() => sendMessage(outgoing("action_finished")), "send action finished");
     validateCommand(await runPhase(() => waitForCommand(), "wait finalize"), "finalize");
@@ -243,6 +273,8 @@ export async function runParticipant({
     result = { schema_version: 1, status: "failed" };
   } finally {
     cancelled = true;
+    actionAbort.abort();
+    actionSession?.close({ disconnect: !protocolCompleted });
     let cleanupRemaining = 0;
     try {
       cleanupRemaining = Math.min(1000, remaining());

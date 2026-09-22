@@ -1,4 +1,6 @@
 """Fixed oak-log participant bridge within the isolated game namespace."""
+import os
+from action_descriptors import validate_action_descriptors
 import json
 import socket
 import subprocess
@@ -9,8 +11,10 @@ from game_bridge import GAME_ENDPOINT, pump
 
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in {"forward", "stationary", "mine_only", "blocked"}:
+    if len(sys.argv) != 2 or sys.argv[1] not in {"forward", "stationary", "mine_only", "blocked", "model"}:
         return 2
+    action_mode = sys.argv[1] == "model"
+    if action_mode: validate_action_descriptors(3, 4)
     stop = threading.Event()
     outcome = {"status": "waiting"}
     listener = socket.socket()
@@ -43,7 +47,9 @@ def main():
     child = None
     thread.start()
     try:
-        child = subprocess.Popen(["/pilot-tools/bin/node", "--max-old-space-size=256", "/participant-code/oak-participant-cli.mjs", "--trial-id", "collect-oak-log-v1", "--action-id", "collect-01", "--movement", sys.argv[1]], close_fds=True)
+        child = subprocess.Popen(["/pilot-tools/bin/node", "--max-old-space-size=256", "/participant-code/oak-participant-cli.mjs", "--trial-id", "collect-oak-log-v1", "--action-id", "collect-01", "--movement", sys.argv[1]], close_fds=True, pass_fds=(3,4) if action_mode else ())
+        if action_mode:
+            os.close(3); os.close(4)
         deadline = time.monotonic() + 175
         while child.poll() is None:
             if outcome["status"] == "failed" or time.monotonic() >= deadline:

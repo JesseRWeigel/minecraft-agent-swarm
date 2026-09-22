@@ -239,3 +239,21 @@ test("real subprocess pipes carry a complete session and reject lifecycle input"
     }
   }
 });
+
+test("outer cancellation rejects idle channel and suppresses subsequent input", async () => {
+  const f = fixture(),
+    controller = new AbortController();
+  let bytes = 0;
+  f.output.on("data", (b) => (bytes += b.length));
+  const rejected = assert.rejects(runModelActionChannel({ ...f, signal: controller.signal }));
+  controller.abort();
+  assert.equal(f.closed, 1);
+  await rejected;
+  f.input.end(line("finish"));
+  assert.equal(bytes, 0);
+  assert.equal(f.closed, 1);
+  assert.equal(f.calls.length, 0);
+  const g = fixture();
+  await assert.rejects(runModelActionChannel({ ...g, signal: controller.signal }));
+  assert.equal(g.closed, 1);
+});

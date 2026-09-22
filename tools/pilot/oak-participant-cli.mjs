@@ -1,3 +1,4 @@
+import { createReadStream, createWriteStream, fstatSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { createParticipantPipes } from "./participant-pipes.mjs";
 import { runParticipant } from "./oak-participant.mjs";
@@ -18,7 +19,7 @@ function parseArguments(argv) {
   if (
     values["--trial-id"] !== TRIAL_ID ||
     values["--action-id"] !== ACTION_ID ||
-    !["forward", "stationary", "mine_only", "blocked"].includes(values["--movement"])
+    !["forward", "stationary", "mine_only", "blocked", "model"].includes(values["--movement"])
   )
     throw new Error("invalid arguments");
   return { trialId: TRIAL_ID, actionId: ACTION_ID, movement: values["--movement"] };
@@ -30,21 +31,57 @@ function writeGenericFailure(error) {
   } catch {}
 }
 
+function openDedicatedActionStreams() {
+  const read = fstatSync(3),
+    write = fstatSync(4);
+  const lifecycle = [0, 1, 2].map((fd) => fstatSync(fd));
+  if (
+    lifecycle.some((existing) =>
+      [read, write].some((action) => action.dev === existing.dev && action.ino === existing.ino),
+    )
+  )
+    throw new Error("action descriptor aliases lifecycle");
+  if (!read.isFIFO() || !write.isFIFO() || (read.dev === write.dev && read.ino === write.ino))
+    throw new Error("dedicated action pipes required");
+  const input = createReadStream(null, { fd: 3, autoClose: true, highWaterMark: 4097 });
+  try {
+    return { input, output: createWriteStream(null, { fd: 4, autoClose: true }) };
+  } catch (error) {
+    input.destroy();
+    throw error;
+  }
+}
+
 export async function runParticipantProcess({
   argv,
   input = process.stdin,
   output = process.stdout,
   error = process.stderr,
+  openActionStreams = openDedicatedActionStreams,
   loadMineflayer = () => import("mineflayer"),
   run = runParticipant,
   watchdogMs = TOTAL_WATCHDOG_MS,
   hardExitOnWatchdog = false,
 } = {}) {
-  let pipes, timer;
+  let pipes, timer, actionStreams;
   try {
     const options = parseArguments(argv);
     if (!Number.isInteger(watchdogMs) || watchdogMs < 1 || watchdogMs > TOTAL_WATCHDOG_MS)
       throw new Error("invalid watchdog");
+    if (options.movement === "model") {
+      const streams = openActionStreams();
+      if (
+        !streams?.input?.on ||
+        !streams?.output?.write ||
+        streams.input === streams.output ||
+        [input, output, error].includes(streams.input) ||
+        [input, output, error].includes(streams.output)
+      )
+        throw new Error("action streams must be separate");
+      actionStreams = streams;
+      actionStreams.input.on("error", () => {});
+      actionStreams.output.on("error", () => {});
+    }
     pipes = createParticipantPipes({ input, output, ...options });
     const watchdog = new Promise((_, reject) => {
       timer = setTimeout(() => {
@@ -61,6 +98,7 @@ export async function runParticipantProcess({
       return run({
         ...options,
         createBot: mineflayer.createBot,
+        ...(actionStreams ? { actionInput: actionStreams.input, actionOutput: actionStreams.output } : {}),
         sendMessage: pipes.sendMessage,
         waitForCommand: pipes.waitForCommand,
       });
@@ -75,6 +113,8 @@ export async function runParticipantProcess({
     return 1;
   } finally {
     clearTimeout(timer);
+    actionStreams?.input.destroy();
+    actionStreams?.output.destroy();
     try {
       await pipes?.close();
     } catch {}

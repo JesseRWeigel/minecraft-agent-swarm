@@ -52,3 +52,53 @@ test("rejects non-oak IDs and arguments before dependency loading", async () => 
   assert.equal(loaded, false);
   assert.equal(diagnostic, "participant failed\n");
 });
+
+test("model CLI uses separate action streams and closes them after lifecycle completion", async () => {
+  const input = new PassThrough(),
+    output = new PassThrough(),
+    actionInput = new PassThrough(),
+    actionOutput = new PassThrough();
+  let sent = 0,
+    seen;
+  output.on("data", () => input.write(line(++sent === 1 ? "begin" : "finalize")));
+  const code = await runParticipantProcess({
+    argv: [...argv.slice(0, -1), "model"],
+    input,
+    output,
+    error: new PassThrough(),
+    openActionStreams: () => ({ input: actionInput, output: actionOutput }),
+    loadMineflayer: async () => ({ createBot() {} }),
+    run: async (options) => {
+      seen = options;
+      await options.sendMessage(JSON.parse(line("ready")));
+      await options.waitForCommand();
+      await options.sendMessage(JSON.parse(line("action_finished")));
+      await options.waitForCommand();
+      return { schema_version: 1, status: "protocol_completed" };
+    },
+  });
+  assert.equal(code, 0);
+  assert.equal(seen.actionInput, actionInput);
+  assert.equal(seen.actionOutput, actionOutput);
+  assert.equal(actionInput.destroyed, true);
+  assert.equal(actionOutput.destroyed, true);
+});
+test("model CLI rejects lifecycle stream reuse before loading Mineflayer", async () => {
+  const input = new PassThrough(),
+    output = new PassThrough();
+  let loaded = false;
+  assert.equal(
+    await runParticipantProcess({
+      argv: [...argv.slice(0, -1), "model"],
+      input,
+      output,
+      error: new PassThrough(),
+      openActionStreams: () => ({ input, output }),
+      loadMineflayer: async () => {
+        loaded = true;
+      },
+    }),
+    1,
+  );
+  assert.equal(loaded, false);
+});

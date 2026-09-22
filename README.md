@@ -44,7 +44,9 @@ is now rejected without a score; a separate intermittent bridge-shutdown failure
 is preserved and unresolved. [Relay diagnostics and a strict offline action parser](docs/research/bridge-diagnostics.md)
 are now in place. The [bounded action executor](docs/research/model-action-session.md)
 and its dedicated pipe transport pass offline tests for ordering, deadlines,
-cancellation and subprocess round trips; game/model integration remains next. These are fixed-client checks, not a model benchmark.
+cancellation and subprocess round trips. Participant lifecycle gates and dedicated
+action pipes also pass production namespace isolation checks; a scripted game
+replay through this interface remains next. These are fixed-client checks, not a model benchmark.
 
 ---
 

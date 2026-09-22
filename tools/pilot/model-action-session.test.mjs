@@ -189,3 +189,34 @@ test("close cancels pending work and death stops the session", async () => {
     s.close();
   }
 });
+
+test("cancelled movement does not touch bot when its sleep resolves later", async () => {
+  const b = bot();
+  let release;
+  const s = createModelActionSession({ bot: b, sleep: () => new Promise((r) => (release = r)) });
+  const pending = s.execute(req(1, { kind: "move", direction: "forward", ticks: 1 }));
+  const rejected = assert.rejects(pending);
+  await new Promise((r) => setImmediate(r));
+  s.close();
+  await rejected;
+  const count = b.calls.length;
+  release();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(b.calls.length, count);
+});
+test("finished session may relinquish shutdown to the trusted lifecycle owner", async () => {
+  const b = bot(),
+    s = createModelActionSession({ bot: b });
+  await s.execute(req(1, { kind: "finish" }));
+  s.close({ disconnect: false });
+  b.emit("end");
+  assert.equal(s.status, "closed");
+  assert.equal(
+    b.calls.some((x) => x[0] === "end"),
+    false,
+  );
+  const c = bot(),
+    active = createModelActionSession({ bot: c });
+  assert.throws(() => active.close({ disconnect: false }));
+  active.close();
+});

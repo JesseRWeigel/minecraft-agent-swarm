@@ -168,6 +168,13 @@ raise SystemExit(0 if process.returncode == 0 and not thread.is_alive() and part
 class ProtectedNamespaceTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("PILOT_TEST_BWRAP"), "explicit Bubblewrap qualification required")
     def test_production_builder_hides_outer_mounts_and_keeps_private_loopback(self):
+        self.qualify(False)
+
+    @unittest.skipUnless(os.environ.get("PILOT_TEST_BWRAP"), "explicit Bubblewrap qualification required")
+    def test_model_action_pipes_cross_production_namespace_without_host_fds(self):
+        self.qualify(True)
+
+    def qualify(self, model):
         bwrap = _validate_executable(Path(os.environ["PILOT_TEST_BWRAP"]), "bwrap", expected_name="bwrap")
         repository = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary:
@@ -178,16 +185,25 @@ class ProtectedNamespaceTests(unittest.TestCase):
             (pilot_tools / "node_modules").mkdir()
             for directory in (runtime, observer, participant_code):
                 directory.mkdir(mode=0o700)
+            fake_node, outer = textwrap.dedent(FAKE_NODE), textwrap.dedent(OUTER)
+            if model:
+                fake_node = fake_node.replace('print(json.dumps(result, sort_keys=True), flush=True)', 'assert os.read(3,64) == b"bounded-action"\nos.write(4,b"bounded-reply")\nprint(json.dumps(result, sort_keys=True), flush=True)')
+                outer = outer.replace('from tools.pilot.game_bridge import GameBridge', 'from tools.pilot.game_bridge import GameBridge\nfrom tools.pilot.action_descriptors import ActionDescriptors, spawn_action_sandbox')
+                outer = outer.replace('try:\n    process = subprocess.Popen(', 'descriptors=ActionDescriptors.create()\nargs=participant_argv("stationary")\nargs[-1]="model"\nargs[args.index("/participant-code/game_bridge_client.py")]="/participant-code/oak_bridge_client.py"\ntry:\n    process = spawn_action_sandbox(')
+                outer = outer.replace('participant_argv("stationary"), stdin=subprocess.DEVNULL,', 'args, descriptors, stdin=subprocess.DEVNULL,')
+                outer = outer.replace('stderr=subprocess.PIPE, close_fds=True,', 'stderr=subprocess.PIPE,')
+                outer = outer.replace('    stdout, stderr = process.communicate(timeout=5)', '    os.write(descriptors.host_write,b"bounded-action")\n    stdout, stderr = process.communicate(timeout=5)\n    import select\n    assert select.select([descriptors.host_read],[],[],2)[0]\n    seen["action_reply"]=os.read(descriptors.host_read,64).decode()')
+                outer = outer.replace('    os.close(secret_fd)', '    os.close(secret_fd)\n    descriptors.close_child();descriptors.close_host()')
             files = {
                 runtime / "runtime-canary": "runtime-only-canary",
                 runtime / "inheritable-secret": "inheritable-host-fd-secret",
                 observer / "secret": "observer-only-secret",
                 participant_code / "code-canary": "immutable-code",
                 pilot_tools / "tool-canary": "immutable-tool",
-                pilot_tools / "bin" / "node": textwrap.dedent(FAKE_NODE),
-                root / "outer.py": textwrap.dedent(OUTER),
+                pilot_tools / "bin" / "node": fake_node,
+                root / "outer.py": outer,
             }
-            for name in ("game_bridge.py", "game_bridge_client.py"):
+            for name in ("game_bridge.py", "game_bridge_client.py", "oak_bridge_client.py", "action_descriptors.py"):
                 files[participant_code / name] = (repository / "tools/pilot" / name).read_text()
             for path, content in files.items():
                 path.write_text(content)
@@ -221,7 +237,7 @@ class ProtectedNamespaceTests(unittest.TestCase):
             self.assertTrue(participant["bridge_directory_write_blocked"])
             self.assertEqual(trusted["nested_returncode"], 0, trusted["nested_stderr"])
             self.assertTrue(trusted["echo_thread_finished"])
-            self.assertEqual(trusted["echo_observed"], {"request": "namespace-probe"})
+            self.assertEqual(trusted["echo_observed"], {"request": "namespace-probe", **({"action_reply":"bounded-reply"} if model else {})})
             self.assertEqual(participant["echo"], "private-outer:namespace-probe")
             for key in ("observer_secret_visible", "runtime_canary_visible", "test_source_visible",
                         "host_secret_in_environment", "outer_process_visible",

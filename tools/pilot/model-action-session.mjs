@@ -86,7 +86,7 @@ export function createModelActionSession({
       try {
         await sleep(action.ticks * 50);
       } finally {
-        safely(() => bot.clearControlStates());
+        if (state === "active") safely(() => bot.clearControlStates());
       }
       return {};
     }
@@ -182,13 +182,14 @@ export function createModelActionSession({
         busy = false;
       }
     },
-    close() {
+    close({ disconnect = true } = {}) {
       if (state === "closed") return;
+      if (typeof disconnect !== "boolean" || (!disconnect && state !== "finished")) throw failure();
       if (busy) rejectPending?.(failure());
       state = "closed";
       clearTimeout(sessionTimer);
       stop();
-      safely(() => bot.end());
+      if (disconnect) safely(() => bot.end());
     },
   });
 }

@@ -1,5 +1,5 @@
 // Dedicated action streams only. Never connect these to lifecycle stdin/stdout.
-export function runModelActionChannel({ input, output, session, timeoutMs = 20000 } = {}) {
+export function runModelActionChannel({ input, output, session, signal, timeoutMs = 20000 } = {}) {
   if (
     !input?.on ||
     !input?.off ||
@@ -9,7 +9,8 @@ export function runModelActionChannel({ input, output, session, timeoutMs = 2000
     typeof session?.close !== "function" ||
     !Number.isInteger(timeoutMs) ||
     timeoutMs < 1 ||
-    timeoutMs > 20000
+    timeoutMs > 20000 ||
+    (signal !== undefined && !(signal instanceof AbortSignal))
   )
     throw new TypeError("invalid model action channel");
   let state = "reading",
@@ -30,6 +31,7 @@ export function runModelActionChannel({ input, output, session, timeoutMs = 2000
   });
   const detach = () => {
     clearTimeout(timer);
+    signal?.removeEventListener("abort", fail);
     input.off("data", onData);
     input.off("end", onEnd);
     input.pause?.();
@@ -140,6 +142,11 @@ export function runModelActionChannel({ input, output, session, timeoutMs = 2000
   // Keep bounded no-op-on-settlement error handlers on the dedicated streams;
   // a late error after cancellation must not become an unhandled stream error.
   timer = setTimeout(fail, timeoutMs);
+  signal?.addEventListener("abort", fail, { once: true });
+  if (signal?.aborted) {
+    fail();
+    return done;
+  }
   input.on("error", fail);
   output.on("error", fail);
   input.on("end", onEnd);

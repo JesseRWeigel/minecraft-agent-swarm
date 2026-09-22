@@ -1,7 +1,8 @@
 # Bounded model-action session: offline qualification
 
-Status: implemented and tested with bot doubles; not yet wired into the protected
-Minecraft participant or a model coordinator. No game or model-performance result
+Status: implemented and tested with bot doubles, including the participant
+lifecycle, CLI and production namespace descriptor forwarding. The outer supervisor does not yet launch this path or a model
+coordinator. No game or model-performance result
 is claimed for this interface.
 
 `createModelActionSession({bot})` in `tools/pilot/model-action-session.mjs` owns an
@@ -65,11 +66,11 @@ must remain in place when this is integrated.
 
 ## Dedicated action channel
 
-`runModelActionChannel({input, output, session, timeoutMs})` accepts dedicated
+`runModelActionChannel({input, output, session, signal, timeoutMs})` accepts dedicated
 binary readable/writable streams and a trusted `createModelActionSession` instance.
 Never attach these to the participant lifecycle streams carrying
-`ready/begin/action_finished/finalize`. The channel is implemented independently;
-extra file descriptors and the protected runner are not connected yet.
+`ready/begin/action_finished/finalize`. The participant CLI has a dedicated descriptor entry point; the outer supervisor
+and scripted coordinator are not connected yet.
 
 Each request is one UTF-8 JSON object followed by LF, with at most 4,096 bytes
 before the LF. Fragmented reads are supported. The caller must wait for each
@@ -96,9 +97,55 @@ owned for one channel lifetime; error listeners remain to absorb late errors.
 The host must invalidate any channel failure, and must retain its outer deadline
 because JavaScript cannot preempt a synchronously blocked event loop.
 
+## Participant lifecycle gate
+
+The oak participant accepts an explicit `model` mode with separate action streams.
+It acquires the ordinary survival bot and sends `ready`, then waits for the
+trusted `begin` command before constructing the action session or reading actions.
+A finished action channel, including clean request EOF, is required before
+`action_finished`. The bot stays connected until the trusted `finalize` command
+so the server observer can sample terminal state. Model text cannot issue these
+lifecycle commands. Fixed-action modes reject supplied action streams.
+
+Outer phase or lifetime failure aborts the channel through `AbortSignal`, closes
+the session and prevents late action replies. Disconnect before finalization
+invalidates the lifecycle even after an action-channel finish. After trusted finalization, `close({disconnect: false})` retires a finished session
+before the existing bounded graceful quit. Active sessions cannot relinquish
+shutdown this way; failure cleanup still disconnects immediately. A cancelled
+movement cannot clear controls again when its sleep resolves later.
+
+The CLI's `model` mode opens descriptor 3 for action input and descriptor 4 for
+replies, requiring two distinct FIFO pipes whose OS identities differ from stdin, stdout
+and stderr. It rejects lifecycle-stream reuse in
+its injectable interface and closes action streams when the process runner ends.
+The source manifest captures the action modules and descriptor helper with the
+participant code.
+These entry points are not an enabled model trial: the outer supervisor still
+accepts only the existing fixed controls.
+
+## Namespace forwarding
+
+`ActionDescriptors.create()` owns two close-on-exec pipes. A standalone Python
+adapter remaps only their child ends to descriptors 3 and 4 before executing the
+sandbox. The threaded host uses `close_fds=True` and an explicit `pass_fds` tuple,
+never `preexec_fn` or broad inheritance. Remapping duplicates both ends first to
+avoid descriptor collisions; unrelated descriptors are closed before exec.
+The installed Bubblewrap preserves those inherited descriptors without an extra
+flag. The oak bridge wrapper validates their FIFO directions and identities,
+passes only 3/4 to Node, then closes its own copies. Close helpers are idempotent.
+
+The production nested-namespace probe exchanges action bytes through this exact
+wrapper while checking that host credentials, mounts, environment and unrelated
+inheritable descriptors remain hidden. The probe substitutes Python for the game
+client; it establishes forwarding and isolation, not Mineflayer behavior. A
+separate real Python-to-Node test uses the actual CLI/session with a bot double,
+exchanges the lifecycle protocol and action finish on separate OS pipes, and
+exits cleanly. Duplicated lifecycle descriptors are rejected before dependencies
+load. No Minecraft world or model is started by these tests.
+
 ## Qualification and remaining integration
 
-The complete pilot JavaScript suite passes 159 tests, including session tests for
+The complete pilot JavaScript suite passes 169 tests, including session tests for
 ordered primitives, invalid sequence, invisible/stale/distant/undiggable targets,
 concurrent cancellation, late completions, death, disconnect, action/session caps,
 finish and transcript timing. Observation tests cover metadata exclusion, invalid
@@ -110,8 +157,8 @@ A real Node subprocess exchanges observe/look/dig/move/finish over OS pipes with
 the actual session and a bot double; a lifecycle message on that channel is
 rejected with no action reply. This establishes transport behavior, not gameplay.
 
-Next wire dedicated action descriptors while preserving trusted lifecycle
-messages. Capture these sources in the participant manifest, pass every session
+Next connect the descriptor helper to the outer supervisor and add a bounded
+scripted host coordinator. Pass every session
 failure into host acceptance, and replay an explicit observe/look/dig/move/finish
 sequence in an isolated game. Require positive/no-action controls and a cancelled
 session whose endpoint cannot be promoted to success. Only then connect a model,

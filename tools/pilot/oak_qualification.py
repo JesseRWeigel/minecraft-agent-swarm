@@ -17,9 +17,9 @@ from tools.pilot.oak_worker import fixture_valid, FAILURE_CASES, score_files, en
 from tools.pilot.server import _build_sandbox_argv, _validate_executable, run_owned
 from tools.pilot.scoped_trial import run_scoped, PROFILES
 
-PARTICIPANT_FILES = ("oak-participant-cli.mjs", "oak-participant.mjs", "oak_bridge_client.py", "protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs", "game_bridge.py", "game_bridge_client.py")
+PARTICIPANT_FILES = ("action_descriptors.py", "model-action-session.mjs", "model-action-channel.mjs", "model-action-schema.mjs", "model-action-observation.mjs", "oak-participant-cli.mjs", "oak-participant.mjs", "oak_bridge_client.py", "protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs", "game_bridge.py", "game_bridge_client.py")
 OBSERVER_FILES = ("oak-fault-cli.mjs", "oak-blocked-fixture.mjs", "oak-blocked-observer-cli.mjs", "oak-observer-cli.mjs", "oak-fixture.mjs", "oak-task.mjs", "oak-inventory.mjs", "oak-score-cli.mjs", "protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
-PYTHON_FILES = ("oak_worker.py", "protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py", "login_identity.py", "rcon_stall.py")
+PYTHON_FILES = ("action_descriptors.py", "oak_worker.py", "protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py", "login_identity.py", "rcon_stall.py")
 
 
 def capture_sources(workspace):
