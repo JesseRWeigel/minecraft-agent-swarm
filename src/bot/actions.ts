@@ -18,6 +18,7 @@ const { goals, Movements } = pkg;
 import { Vec3 } from "vec3";
 import { isHostile } from "./perception.js";
 import { bedExplodesHere, BED_EXPLODES_MESSAGE } from "./bed-safety.js";
+import { withinDigReach, distanceToBlock } from "./dig-reach.js";
 import { travelBudgetMs } from "./mine-budget.js";
 import { canHarvest, harvestAdvice } from "./tool-tier.js";
 import { tooHighForFurniture, furnitureRefusal } from "./place-guard.js";
@@ -921,6 +922,19 @@ async function mineBlock(
   // timeouts against 8 iron mined in one session. See mine-budget.ts.
   const travelMs = travelBudgetMs(bot.entity.position.distanceTo(block.position));
   await safeGoto(bot, new goals.GoalNear(block.position.x, block.position.y, block.position.z, 2), travelMs);
+  // A walk can resolve without arriving. The pathfinder reports the goal
+  // reached, the nav diagnostic calls it a phantom arrival, and the bot is
+  // still far away; the dig that follows then hangs for the full twelve
+  // seconds and tells the brain only "dig timeout". Run 763 lost six of
+  // twenty-five mine_block calls that way and the swarm banked no iron.
+  const reachNow = () => distanceToBlock(bot.entity.position, block.position);
+  if (!withinDigReach(bot.entity.position, block.position)) {
+    // One more try at a goal that exists to put the block in reach.
+    await safeGoto(bot, new goals.GoalLookAtBlock(block.position, bot.world), Math.round(travelMs / 2)).catch(() => {});
+  }
+  if (!withinDigReach(bot.entity.position, block.position)) {
+    return `Walked toward ${block.name} at ${block.position.x},${block.position.y},${block.position.z} and stopped ${reachNow().toFixed(0)} blocks short, out of reach. Try a closer target or clear the way first.`;
+  }
   await equipPickaxe(bot);
   await digSafe(bot, block);
   let mined = 1;
