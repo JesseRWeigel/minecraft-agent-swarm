@@ -12,20 +12,20 @@ DESCRIPTOR_ADAPTER = os.path.join(os.path.dirname(__file__), "action_descriptors
 
 CHILD = r'''import json, os, sys, time
 mode=sys.argv[1]
-for expected in range(1, 3):
+for expected in range(1, 4) if mode == "delayed_dig" else range(1, 3):
  line=b""
  while not line.endswith(b"\n"):
   chunk=os.read(3,1)
   if not chunk: raise SystemExit(2)
   line += chunk
  request=json.loads(line)
- if mode == "idle": time.sleep(.2)
+ if mode == "idle" or (mode == "delayed_dig" and expected == 3): time.sleep(.2)
  if mode == "malformed": os.write(4,b'{"sequence":1}\n'); raise SystemExit(0)
  if mode == "duplicate": os.write(4,b'{"schema_version":1,"sequence":1,"sequence":1,"status":"completed","observation":{"source":"participant_bot"}}\n'); raise SystemExit(0)
  if mode == "nonfinite": os.write(4,b'{"schema_version":1,"sequence":1,"status":"completed","observation":{"source":"participant_bot","n":1e999}}\n'); raise SystemExit(0)
  if mode == "huge": os.write(4,b"x"*20480); raise SystemExit(0)
  if mode == "deep": os.write(4,b'{"schema_version":1,"sequence":1,"status":"completed","observation":{"source":"participant_bot","x":'+b"["*1200+b"0"+b"]"*1200+b"}}\n"); raise SystemExit(0)
- reply={"schema_version":1,"sequence":request["sequence"],"status":"finished" if expected==2 else "completed"}
+ reply={"schema_version":1,"sequence":request["sequence"],"status":"finished" if request["action"]["kind"] == "finish" else "completed"}
  if request["action"]["kind"] == "observe": reply["observation"]={"source":"participant_bot"}
  raw=(json.dumps(reply)+"\n").encode()
  if mode == "partial":
@@ -115,6 +115,20 @@ class CoordinatorTests(unittest.TestCase):
             self.assertIsNone(descriptors.host_write)
         finally:
             descriptors.close_child();descriptors.close_host()
+
+    def test_deadline_retains_completed_prefix_and_unfinished_dig(self):
+        descriptors, process = self.start("delayed_dig")
+        try:
+            result = run_action_script(descriptors, [{"kind":"observe"}, {"kind":"look","yaw":0,"pitch":0}, {"kind":"dig","x":0,"y":200,"z":3}, {"kind":"finish"}], timeout=.1)
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(len(result["records"]), 3)
+            self.assertTrue(all(row["reply"]["status"] == "completed" for row in result["records"][:2]))
+            self.assertIsNone(result["records"][2]["reply"])
+            self.assertIsNone(result["records"][2]["finished_monotonic"])
+            self.assertIsNone(descriptors.host_write)
+            self.assertIsNone(descriptors.host_read)
+        finally:
+            self.cleanup(descriptors, process)
 
     def test_finish_is_required_last(self):
         descriptors = ActionDescriptors.create()

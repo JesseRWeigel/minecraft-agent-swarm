@@ -66,12 +66,14 @@ Use the pinned inputs and environment from the
 `run_oak_qualification(..., launch=True, action_driver="scripted", control_mode="forward")`
 in a fresh attempt directory, then repeat with `control_mode="stationary"` in a
 second fresh directory. The scripted driver accepts only these two controls and
-`failure_case="none"`. Existing fixed-client mode remains the default. Storage
+`failure_case="none"` for ordinary controls. The forward scripted driver also
+accepts the explicit `scripted_deadline` fault described below. Existing fixed-client
+mode remains the default. Storage
 reserve, resource containment and world-copy requirements still apply.
 
-Next qualify an interrupted or rejected scripted action sequence in the actual game,
-including evidence that a successful-looking endpoint cannot override a failed
-session. Investigate the historical intermittent bridge shutdown failure before
+The [deadline-limited interruption check](scripted-deadline-qualification.md) now
+rejects an incomplete scripted dig and includes fresh same-source controls.
+Investigate the historical intermittent bridge shutdown failure before
 comparative model trials. Then freeze inference/time/token budgets and study
 conditions before connecting models. These results establish a working interface
 and auditable scripted trajectory, not learning, cost savings or robotics transfer.

@@ -12,13 +12,29 @@ TRIAL="collect-oak-log-v1"
 ACTION="collect-01"
 FIXTURE_SHA256="b8d4a036e735f449674c207c94af99be2dc40680245ceb56c4f7c2a76e91a942"
 BLOCKED_FIXTURE_SHA256="5dd6ea35b37631087390babda3044ce60fd9800b75bb150a5ec68d50a3100a39"
-FAILURE_CASES=("none", "item_only", "item_and_block", "observer_timeout", "mid_action_disconnect")
+FAILURE_CASES=("none", "item_only", "item_and_block", "observer_timeout", "mid_action_disconnect", "scripted_deadline")
 
 def fault_mode_valid(fault, mode):
     if mode not in ('forward','stationary','mine_only','blocked'):return False
     if fault=='none':return True
     if fault in ('item_only','item_and_block'):return mode=='stationary'
-    return fault in ('observer_timeout','mid_action_disconnect') and mode=='forward'
+    return fault in ('observer_timeout','mid_action_disconnect','scripted_deadline') and mode=='forward'
+
+
+def action_driver_valid(driver, mode, fault):
+    if not fault_mode_valid(fault,mode):return False
+    if driver=='fixed':return fault!='scripted_deadline'
+    return driver=='scripted' and mode in ('forward','stationary') and fault in ('none','scripted_deadline')
+
+
+def run_scripted_actions(descriptors, mode, fault, allowance, result):
+    timeout=min(allowance,.5) if fault=='scripted_deadline' else allowance
+    if fault=='scripted_deadline':
+        result['injection']={'schema_version':1,'kind':fault,'timeout_seconds':timeout,'started_monotonic':time.monotonic()}
+    result['action_script']=run_action_script(descriptors,scripted_actions(mode),timeout=timeout)
+    if fault=='scripted_deadline':
+        result['injection']['finished_monotonic']=time.monotonic()
+        write_result('fault-injection.json',result['injection'])
 
 
 def fixture_valid(value,mode="forward"):
@@ -110,7 +126,7 @@ def endpoint_valid(value,mode,before,terminal):
 def main():
     if len(sys.argv) not in (2,3,4) or sys.argv[1] not in ('forward','stationary','mine_only','blocked') or not fault_mode_valid(sys.argv[2] if len(sys.argv)>=3 else 'none',sys.argv[1]):return 2
     driver=sys.argv[3] if len(sys.argv)==4 else 'fixed'
-    if driver not in ('fixed','scripted') or (driver=='scripted' and (sys.argv[1] not in ('forward','stationary') or (len(sys.argv)>=3 and sys.argv[2]!='none'))):return 2
+    if not action_driver_valid(driver,sys.argv[1],sys.argv[2] if len(sys.argv)>=3 else 'none'):return 2
     if os.readlink('/proc/self/ns/net')==Path('/observer-code/host-network-namespace').read_text().strip():raise RuntimeError('private namespace required')
     mode=sys.argv[1];fault=sys.argv[2] if len(sys.argv)>=3 else 'none';password=Path('.qualification-rcon-password').read_text().strip()
     result={'schema_version':1,'status':'failed','control_mode':mode,'trial_id':TRIAL,'action_id':ACTION,'failure_case':fault,'injection':None,
@@ -138,7 +154,7 @@ def main():
         result['action_begin_sent_monotonic']=time.monotonic()
         if driver=='scripted':
             allowance=max(.001,20-(time.monotonic()-result['action_started_monotonic']))
-            result['action_script']=run_action_script(descriptors,scripted_actions(mode),timeout=allowance)
+            run_scripted_actions(descriptors,mode,fault,allowance,result)
             if not script_receipt_valid(result['action_script'],mode):raise RuntimeError('scripted actions failed')
         if fault=='mid_action_disconnect':
             time.sleep(.2)

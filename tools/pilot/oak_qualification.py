@@ -13,7 +13,7 @@ from tools.pilot import prepare, restore
 from tools.pilot.bounded_storage import BoundedStorage
 from tools.pilot.client_tools import verify_tools
 from tools.pilot.qualification import _private_new, _write, _sha, _capture_json, QUAL_PROPERTIES
-from tools.pilot.oak_worker import fixture_valid, FAILURE_CASES, score_files, endpoint_valid, fault_mode_valid
+from tools.pilot.oak_worker import fixture_valid, FAILURE_CASES, score_files, endpoint_valid, fault_mode_valid, action_driver_valid
 from tools.pilot.server import _build_sandbox_argv, _validate_executable, run_owned
 from tools.pilot.scoped_trial import run_scoped, PROFILES
 from tools.pilot.oak_script import script_receipt_valid
@@ -120,7 +120,7 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
                                  bwrap_path=Path("/usr/bin/bwrap"), runner=run_owned):
     if launch is not True:
         raise ValueError("explicit launch=True required")
-    if action_driver not in ('fixed','scripted') or (action_driver=='scripted' and (control_mode not in ('forward','stationary') or failure_case!='none')):
+    if not action_driver_valid(action_driver,control_mode,failure_case):
         raise ValueError('invalid action driver/control combination')
     if resource_profile not in PROFILES:
         raise ValueError("invalid resource profile")

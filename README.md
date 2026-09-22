@@ -51,6 +51,8 @@ and collects an oak log through that interface in 4.047 seconds, with independen
 server verification and a stationary control using identical sources and inputs.
 These are scripted infrastructure checks; no model benchmark or learning result is claimed.
 
+The research harness also [rejects a deadline-limited scripted dig](docs/research/scripted-deadline-qualification.md), preserving its partial transcript and passing fresh collection/stationary controls. These are scripted infrastructure checks, not model-learning results.
+
 ---
 
 ## Architecture
