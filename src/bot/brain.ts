@@ -288,6 +288,8 @@ export class BotBrain {
     ];
     return names.reduce((n, k) => n + stashCount(k, stashY), 0);
   }
+  /** Cooldown for the gold hunt that unblocks the Nether crossing. */
+  private lastGoldHuntMs = 0;
   private lastWaxOffMs = 0;
   private lastHoneyMs = 0;
   private lastToolReturnMs = 0;
@@ -2509,6 +2511,46 @@ export class BotBrain {
         const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "find_fortress" });
         this.events.onAction("find_fortress", result);
         this.lastAction = "find_fortress";
+        this.lastResult = result;
+        return;
+      }
+    }
+
+    // THE FORTRESS IS ONE GOLD INGOT SHORT, so go and dig one.
+    //
+    // Run 774: nine trips, eight of them ending "No gold to wear", with the
+    // preflight reporting "only 3 gold ingots reachable" and "only 1 gold
+    // nuggets, nine make an ingot". Four ingots buys the boots that keep
+    // piglins calm. The swarm's usual gold comes from nether gold ore, which
+    // is past the portal the missing gold is stopping him from crossing, so
+    // the loop closes itself. Overworld gold ore breaks that circle: it sits
+    // deep, the miner is already down there, and one vein is enough.
+    if (
+      this.roleConfig.allowedActions.includes("mine") &&
+      /overworld/.test(String(this.bot.game.dimension)) &&
+      Date.now() - this.lastGoldHuntMs > 900_000
+    ) {
+      const { stashCount } = await import("../skills/stash-ledger.js");
+      const stashY = this.roleConfig.stashPos?.y;
+      const ingotsAbout =
+        stashCount("gold_ingot", stashY) +
+        Math.floor(stashCount("gold_nugget", stashY) / 9) +
+        stashCount("raw_gold", stashY) +
+        stashCount("gold_block", stashY) * 9;
+      const earnedGold = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+      const fortressStillOpen = !(
+        earnedGold.has("nether/find_fortress") || earnedGold.has("minecraft:nether/find_fortress")
+      );
+      if (fortressStillOpen && ingotsAbout < 4) {
+        this.lastGoldHuntMs = Date.now();
+        this.log.info(
+          "Brain",
+          `OVERRIDE: the Nether trip needs 4 gold and the team can reach about ${ingotsAbout} — mining gold_ore`,
+        );
+        this.events.onThought("Four gold buys the boots that keep piglins friendly. Time to find a vein.");
+        const result = await this.executeActionUnlessPaused("mine", { block: "gold_ore" });
+        this.events.onAction("mine", result);
+        this.lastAction = "mine";
         this.lastResult = result;
         return;
       }
