@@ -4425,8 +4425,15 @@ export class BotBrain {
       normalizedParams.canMine = canMine;
     }
 
-    // Protect the village site from being strip-mined into bot-trapping pits
-    if (decision.action === "mine_block" && this.roleConfig.stashPos) {
+    // Protect the village site from being strip-mined into bot-trapping pits,
+    // and from being built over. Run 786: the single most-failed walk goal in
+    // the swarm was the stash itself at (286, 70, -314), 34 failures in half
+    // an hour, and an RCON scan of the seven blocks around it found scattered
+    // cobblestone at head height on every side. Mason placed it: 21 of the 31
+    // "building=true" diagnostics and 14 of the 22 place errors were his, and
+    // his role says to build constantly, which he does wherever he is standing,
+    // which is the stash.
+    if ((decision.action === "mine_block" || decision.action === "place_block") && this.roleConfig.stashPos) {
       normalizedParams.protectPos = this.roleConfig.stashPos;
     }
 

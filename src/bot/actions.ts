@@ -150,7 +150,7 @@ async function executeActionInner(bot: Bot, action: string, params: Record<strin
       case "build_shelter":
         return await buildShelter(bot);
       case "place_block":
-        return await placeBlock(bot, params.blockType || params.block || params.item);
+        return await placeBlock(bot, params.blockType || params.block || params.item, params.protectPos);
       case "sleep":
       case "sleep_in_bed": // common LLM aliases for sleep
       case "use_bed":
@@ -2279,7 +2279,14 @@ async function sleepInBed(bot: Bot): Promise<string> {
   }
 }
 
-async function placeBlock(bot: Bot, blockType: string): Promise<string> {
+/** Matches mine_block's PROTECT_RADIUS: the stash site stays walkable. */
+const PLACE_PROTECT_RADIUS = 12;
+
+async function placeBlock(
+  bot: Bot,
+  blockType: string,
+  protectPos?: { x: number; y: number; z: number },
+): Promise<string> {
   if (!blockType) return "What block should I place? Specify blockType.";
 
   const item = bot.inventory.items().find((i) => i.name.includes(blockType));
@@ -2300,6 +2307,17 @@ async function placeBlock(bot: Bot, blockType: string): Promise<string> {
   // Beds need special handling — use sleep action which auto-places
   if (item.name.includes("bed")) {
     return await sleepInBed(bot);
+  }
+
+  // The stash zone is for walking through, the same way mine_block keeps it
+  // from being dug into pits. Placement is always adjacent to the bot, so the
+  // bot's own position is the placement site for this purpose.
+  if (protectPos) {
+    const here = bot.entity.position;
+    const dist = Math.hypot(here.x - protectPos.x, here.z - protectPos.z);
+    if (dist <= PLACE_PROTECT_RADIUS) {
+      return `Not placing ${blockType} here: the ${PLACE_PROTECT_RADIUS}-block zone around The Stash is protected (${dist.toFixed(0)} blocks from it) — build elsewhere.`;
+    }
   }
 
   // Regular block placement — try multiple adjacent positions with fast timeout
