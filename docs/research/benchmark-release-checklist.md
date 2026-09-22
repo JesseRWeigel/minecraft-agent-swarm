@@ -64,8 +64,9 @@ roster. Permissions and other failure timings remain pending; the combined box s
 - [ ] Choose a small survival task with a server-checkable predicate and a
   bounded time budget. Include an impossible/no-action control. The
   [oak-log acquisition design](first-survival-task.md) specifies the next task;
-  its [observer/predicate components](oak-evaluator-components.md) now pass synthetic
-  checks. Fixture integration and actual gameplay controls remain outstanding.
+  its [integrated fixed client](oak-game-qualification.md) now passes collection
+  and no-action controls. The inaccessible-target control and remaining failure
+  matrix are still outstanding, so this gate stays open.
 - [x] Supply a minimal redistributable fixture or precise fixture-generation
   recipe and expected starting-state hash. The [fresh-world recipe](fresh-fixture.md)
   has one generated archive and both controls qualified without private-world input.

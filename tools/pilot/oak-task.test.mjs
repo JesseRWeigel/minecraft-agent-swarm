@@ -216,3 +216,18 @@ test("time spent preparing a sample reduces the actor-stage budget", async () =>
   assert.equal(result.errorCode, "timeout");
   assert.equal(r.calls.length, 0);
 });
+
+test("host JSON key sorting preserves the observed inventory predicate", async () => {
+  const p = await pair();
+  const sorted = (x) =>
+    Array.isArray(x)
+      ? x.map(sorted)
+      : x && typeof x === "object"
+        ? Object.fromEntries(
+            Object.keys(x)
+              .sort()
+              .map((k) => [k, sorted(x[k])]),
+          )
+        : x;
+  assert.equal(scoreOakTask(JSON.parse(JSON.stringify(sorted(p)))).acquired, true);
+});

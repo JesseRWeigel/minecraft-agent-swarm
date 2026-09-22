@@ -146,3 +146,10 @@ The [first survival task observer and host predicate](oak-evaluator-components.m
 now have synthetic tests for inventory parsing, block changes, false success and
 partial evidence. The full game task is not integrated yet; actual mining and
 collection controls remain next. No survival-task result is claimed.
+
+### First survival-task gameplay
+
+The [oak-log runner](oak-game-qualification.md) now passes actual mining/collection
+and a no-action control with server-observed inventory and block state. An initial
+scorer failure remains preserved; final same-source controls pass after a JSON
+key-order comparison fix. This is a fixed scripted client, not a model result.

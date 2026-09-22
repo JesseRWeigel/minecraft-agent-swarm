@@ -33,7 +33,9 @@ The experimental track now includes a [fresh-world generation recipe](docs/resea
 that passed forward and stationary controls without the private swarm world.
 The [clean-checkout reproduction](docs/research/clean-checkout-reproduction.md)
 also passes with fresh dependencies on the same WSL host. This qualifies test
-infrastructure; it is not a model-performance result.
+infrastructure; it is not a model-performance result. A fixed survival client
+now also [mines and collects one oak log](docs/research/oak-game-qualification.md),
+with a server-verified outcome and a passing no-action control.
 
 ---
 

@@ -1,5 +1,6 @@
 // Component qualification only: the game supervisor does not launch this task yet.
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { performance } from "node:perf_hooks";
 import { sampleActor } from "./protected-observer.mjs";
 import { parseInventoryReply } from "./oak-inventory.mjs";
@@ -37,7 +38,7 @@ function state(log, air) {
   return log ? "minecraft:oak_log" : air ? "minecraft:air" : "other";
 }
 function same(a, b) {
-  return JSON.stringify(a) === JSON.stringify(b);
+  return isDeepStrictEqual(a, b);
 }
 
 export async function sampleOakTask({

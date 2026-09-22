@@ -1,8 +1,8 @@
 # Oak-log evaluator components
 
-Status: synthetic component qualification only. The protected game launcher still
-runs movement, not this task. No actual oak-log mining, collection or model trial
-has been qualified by these modules.
+Status: the components now have an [integrated fixed-client gameplay qualification](oak-game-qualification.md).
+The history below describes the component tests; actual mining/collection and a
+no-action control have since passed. No model trial has been run.
 
 `tools/pilot/oak-task.mjs` adds a separate versioned observation envelope and
 pure host predicate for `collect-oak-log-v1`. It reuses the unchanged actor sampler
@@ -61,7 +61,7 @@ state, invalid clocks and malformed scorer input. The full local pilot JavaScrip
 suite passes 107 tests with its RCON dependency supplied. Synthetic adapters
 supply the replies; these results do not establish Paper reply compatibility.
 
-## Next integration gates
+## Original integration gates and current follow-up
 
 1. Add and pin the bedrock/air arena fixture with independent initial readbacks.
 2. Wire this observer through a protected child process with private RCON
@@ -77,3 +77,8 @@ supply the replies; these results do not establish Paper reply compatibility.
 See the [task design](first-survival-task.md) for the remaining false-success
 matrix and study boundaries. No GPU/model workload or live swarm change is part
 of this component implementation.
+
+The integrated runner now implements the fixture, protected child wiring, positive
+client and no-action control. Actual Paper replies were observed, including the
+sorted-JSON inventory regression. Broader controls and full arena checks remain
+open; consult the gameplay qualification for the exact measured scope.
