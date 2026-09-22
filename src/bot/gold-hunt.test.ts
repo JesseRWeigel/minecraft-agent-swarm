@@ -75,3 +75,25 @@ test("gold hunt: fetches the pickaxe makings from the stash first", () => {
     assert.match(block, new RegExp(`"${need}"`), `${need} must be fetched before crafting`);
   }
 });
+
+test("gold hunt: asks for planks, which is the wood the stash actually holds", () => {
+  // Run 781: the stash held 56 oak planks, no sticks and no logs, and the
+  // withdrawal asked only for sticks and logs, so it came back empty while
+  // the makings sat on the shelf. Two planks are four sticks.
+  const start = BRAIN.indexOf("Pickaxe makings from the stash");
+  const list = BRAIN.slice(start - 900, start);
+  for (const want of ["iron_ingot", "stick", "planks", "_log"]) {
+    assert.match(list, new RegExp(`"${want}"`), `${want} must be on the withdrawal list`);
+  }
+});
+
+test("gold hunt: smelts raw iron when the pickaxe is short an ingot", () => {
+  // A pickaxe costs three ingots. The stash sat on two with six raw iron
+  // beside them for hours, and the craft can only ever report the shortfall.
+  const start = BRAIN.indexOf("ingots for a pickaxe that costs 3");
+  assert.notStrictEqual(start, -1, "the shortfall must be handled, not just reported");
+  const block = BRAIN.slice(start - 700, start + 700);
+  assert.match(block, /ingotsHeldNow < 3/, "three is the bar");
+  assert.match(block, /countBanked\("raw_iron"/, "and only when there is ore to smelt");
+  assert.match(block, /skill: "smelt_ores"/, "hand it to the smelter, which fetches its own ore");
+});

@@ -2563,9 +2563,15 @@ export class BotBrain {
           if (sp) {
             const { withdrawStash } = await import("../skills/stash.js");
             const got: string[] = [];
+            // Planks belong on this list. Run 781: the stash held 56 oak
+            // planks, no sticks and no logs, and this step asked only for
+            // sticks and logs, so it came back empty while the makings sat
+            // there. Two planks are four sticks, and the craft step converts
+            // them itself.
             for (const [name, count] of [
               ["iron_ingot", 3],
               ["stick", 4],
+              ["planks", 4],
               ["_log", 2],
             ] as [string, number][]) {
               const r = await withdrawStash(this.bot, sp, name, count, 40_000).catch(
@@ -2574,6 +2580,32 @@ export class BotBrain {
               got.push(`${name}=${String(r).slice(0, 40)}`);
             }
             this.log.info("Brain", `Pickaxe makings from the stash: ${got.join(" | ")}`);
+          }
+          // A pickaxe costs three ingots and the stash has been sitting on
+          // two with six raw iron beside them. The smelter turns one into the
+          // other and knows how to fetch its own ore, so hand it the job and
+          // craft on the next pass rather than failing on arithmetic.
+          const ingotsHeldNow = this.bot.inventory
+            .items()
+            .filter((i) => i.name === "iron_ingot")
+            .reduce((n, i) => n + i.count, 0);
+          if (ingotsHeldNow < 3 && sp) {
+            const { stashCount: countBanked } = await import("../skills/stash-ledger.js");
+            if (countBanked("raw_iron", sp.y) > 0) {
+              this.log.info(
+                "Brain",
+                `OVERRIDE: ${ingotsHeldNow} ingots for a pickaxe that costs 3, and raw iron is banked — smelting first`,
+              );
+              const smeltResult = await this.executeActionUnlessPaused("invoke_skill", {
+                skill: "smelt_ores",
+                stashPos: sp,
+                keepItems: this.roleConfig.keepItems,
+              });
+              this.events.onAction("smelt_ores", smeltResult);
+              this.lastAction = "smelt_ores";
+              this.lastResult = smeltResult;
+              return;
+            }
           }
           this.log.info(
             "Brain",
