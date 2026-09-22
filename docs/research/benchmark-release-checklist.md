@@ -19,8 +19,9 @@ control. Mid-action failures and internal RCON stalls remain unqualified.
 [Kernel resource probes](resource-enforcement.md) verify scoped memory, PID and
 CPU enforcement on WSL. [Whole-trial integration](scoped-trials.md) now has
 fixed-client controls and an OOM rejection case. [Bounded persistent storage](bounded-storage.md)
-now caps the runtime image; game-time full-disk fault behavior and actor identity
-remain pending. The combined acceptance box stays open.
+now caps the runtime image. [Post-action disk exhaustion](disk-full-qualification.md)
+now rejects missing terminal evidence with preserved partial records. Actor
+identity and other failure timings remain pending; the combined box stays open.
 
 ## 1. Finish the deterministic path
 
@@ -28,8 +29,8 @@ remain pending. The combined acceptance box stays open.
   bounded pipes, observer process and outer worker. Fixed-client namespaces hide
   credentials/world/evidence and bound pipes, lifetime and scratch; aggregate
   memory/PID/CPU limits cover the launched fixed-client tree and a fixed-capacity
-  image bounds runtime writes. Full-disk behavior during gameplay remains to
-  qualify. The current
+  image bounds runtime writes. Post-action disk exhaustion is qualified at one
+  timing; broader storage failures and actor identity remain. The current
   [game-only network bridge](game-only-network.md) has its own qualification; it
   does not constrain game-protocol actions or actor identity.
 - [x] Capture and pin the current no-respawn client and executed qualification sources.

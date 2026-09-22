@@ -16,10 +16,11 @@ import time
 
 from tools.pilot.participant_transport import ParticipantTransport
 from tools.pilot.game_bridge import GameBridge
+from tools.pilot.storage_fault import inject_disk_full
 
 TRIAL = "movement-fixture-v1"
 ACTION = "walk-01"
-FAILURE_CASES = ("none", "death", "disconnect", "observer_timeout")
+FAILURE_CASES = ("none", "death", "disconnect", "observer_timeout", "disk_full")
 FIXTURE_SHA256 = "3a696ca577186c8d2f308fd07fa31d72a3c2a4d98018beb2e64afacd5b358ac7"
 
 
@@ -333,6 +334,12 @@ def main():
         if failure_case != "none":
             result["injection"] = {"case": failure_case, "after": "action_finished",
                                    "requested_monotonic": time.monotonic(), "status": "requested"}
+        if failure_case == "disk_full":
+            if server.poll() is not None:
+                raise RuntimeError("disk fault requires running server")
+            result["injection"] = inject_disk_full(Path.cwd(), Path("/storage-fault-receipt.json"))
+            if result["injection"]["status"] != "injected":
+                raise RuntimeError("disk fault was not established")
         command = {"death": b"kill PilotProbe\n",
                    "disconnect": b"kick PilotProbe Qualification disconnect\n"}.get(failure_case)
         if command is not None:

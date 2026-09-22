@@ -28,10 +28,12 @@ class ProtectedStorageTests(unittest.TestCase):
                         storage.close.return_value = {"valid": True, "cleanup_uncertain": False}
                     result = host.run_protected_qualification(launch=True, workspace=root / "attempt",
                         restore_kwargs={}, tool_snapshot=root, tool_manifest_sha256="a"*64,
-                        storage_tool_root=root)
+                        storage_tool_root=root, failure_case="disk_full")
                     self.assertEqual(result["status"], "failed")
                     self.assertEqual(result["stage"], "restore")
                     self.assertEqual(restore.call_args.kwargs["reserve_bytes"], 64*1024**2)
+                    self.assertEqual(result["storage_fault"], {"status": "missing_or_invalid"})
+                    self.assertEqual(result["partial_observations"]["terminal"], {"status": "missing_or_invalid"})
                     storage.close.assert_called_once_with()
                     self.assertEqual(result["storage"]["cleanup_uncertain"], cleanup_fails)
                     self.assertTrue((root / "attempt" / "protected-summary.json").is_file())

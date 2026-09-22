@@ -11,6 +11,7 @@ import secrets
 
 from tools.pilot import prepare, restore
 from tools.pilot.bounded_storage import BoundedStorage
+from tools.pilot.storage_fault import read_receipt
 from tools.pilot.client_tools import verify_tools
 from tools.pilot.qualification import _private_new, _write, _sha, _capture_json, QUAL_PROPERTIES
 from tools.pilot.protected_worker import score, fixture_valid, FAILURE_CASES
@@ -19,7 +20,7 @@ from tools.pilot.scoped_trial import run_scoped, PROFILES
 
 PARTICIPANT_FILES = ("protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs", "game_bridge.py", "game_bridge_client.py")
 OBSERVER_FILES = ("protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
-PYTHON_FILES = ("protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py")
+PYTHON_FILES = ("protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py")
 
 
 def capture_sources(workspace):
@@ -104,6 +105,8 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
                "independent_observer_process": False,
                "claim_limit": "Fixed deterministic client in nested namespace; no model performance or arbitrary-code resource-containment claim."}
     secret_path = None
+    fault_receipt = workspace / "storage-fault-receipt.json"
+    runtime = None
     try:
         summary["stage"] = "capture_sources"
         summary["controller_sha256"] = prepare._capture_file(Path(__file__), "protected host controller", 1024*1024).sha256
@@ -135,6 +138,10 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
                              "--ro-bind", str(workspace / "participant-code"), "/participant-code",
                              "--ro-bind", str(bwrap), "/pilot-bwrap",
                              "--setenv", "PYTHONPATH", "/observer-code"]
+        if failure_case == "disk_full":
+            _write(fault_receipt, b"{}" + b" " * 4094)
+            index = args.index("--proc")
+            args[index:index] = ["--bind", str(fault_receipt), "/storage-fault-receipt.json"]
         summary["stage"] = "launch"
         process, resources = run_scoped(args, workspace=workspace, cwd=runtime,
             env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}, profile=resource_profile, runner=runner)
@@ -143,6 +150,7 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
         summary["process"] = process.to_dict()
         result, digest = _capture_json(runtime / "protected-result.json", 1024 * 1024)
         summary["evidence_sha256"] = digest
+        summary["evidence_status"] = "captured" if isinstance(result, dict) and digest else "missing_or_invalid"
         level = prepare._capture_file(runtime / "ai-world" / "level.dat", "preserved world metadata", 16 * 1024**2)
         summary["world_level_sha256"] = level.sha256
         summary["result"] = result
@@ -153,6 +161,20 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
     except Exception:
         summary["error"] = "protected_preparation_or_launch_failed"
     finally:
+        if failure_case == "disk_full":
+            try:
+                summary["storage_fault"] = read_receipt(fault_receipt)
+                summary["storage_fault_receipt_sha256"] = _sha(fault_receipt)
+            except Exception:
+                summary["storage_fault"] = {"status": "missing_or_invalid"}
+            summary["partial_observations"] = {}
+            for phase in ("before", "terminal"):
+                try:
+                    value, digest = _capture_json(runtime / ("observer-" + phase + ".json"), 65536)
+                    summary["partial_observations"][phase] = ({"record": value, "sha256": digest}
+                        if isinstance(value, dict) and digest else {"status": "missing_or_invalid"})
+                except Exception:
+                    summary["partial_observations"][phase] = {"status": "missing_or_invalid"}
         try:
             if secret_path is not None:
                 secret_path.unlink(missing_ok=True)

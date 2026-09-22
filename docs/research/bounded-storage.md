@@ -57,10 +57,10 @@ An abrupt helper death remains an invalid attempt even when cleanup succeeds;
 preserving its image does not prove filesystem consistency after that crash.
 
 The original source archive was rehashed unchanged. No live swarm process, mode,
-world or model was changed. Filling the volume **during gameplay** remains an
-unqualified fault case; the full-volume test above is synthetic and the small
-launcher image fails during preparation. These results establish infrastructure,
-not model performance or research conclusions.
+world or model was changed. These historical tests filled a synthetic volume or
+failed during preparation. A later [running-server disk-full qualification](disk-full-qualification.md)
+now covers exhaustion after the action and before terminal evidence persistence.
+Neither set establishes model performance or research conclusions.
 
 ## Local reproduction
 

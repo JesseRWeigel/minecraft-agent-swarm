@@ -84,6 +84,8 @@ cover every failure timing, network stall or generated participant behavior.
 
 The host API accepts `failure_case="none"` (default), `"death"`, `"disconnect"`
 or `"observer_timeout"` alongside the existing explicit launch and pinned inputs.
+The later [disk_full case](disk-full-qualification.md) has separate qualification
+evidence and a fixed-size external receipt.
 Unknown cases are rejected before creating a workspace. There is no arbitrary
 command argument. All fault runs are excluded from successful qualification,
 even if their serialized samples or score would otherwise pass.
