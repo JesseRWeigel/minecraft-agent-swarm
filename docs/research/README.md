@@ -116,3 +116,10 @@ evidence for a deliberately withheld RCON reply and passes its forward control.
 The initially blocked stationary control now also passes after lossless sparse
 archival reclaimed space from completed images. Their exact hashes and logical
 sizes are unchanged; the host reserve remains intact.
+
+### Interrupted actions
+
+A [mid-action disconnect qualification](midaction-qualification.md) now confirms
+server-observed movement before interruption, then rejects the trial when no
+completion or valid terminal observation arrives. Progress had already exceeded
+the distance threshold, demonstrating why progress alone cannot count as success.

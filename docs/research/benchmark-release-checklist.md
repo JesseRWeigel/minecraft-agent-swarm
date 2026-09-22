@@ -18,7 +18,9 @@ control. A [real TCP RCON stall test](rcon-stall-qualification.md) now retains
 partial timeout evidence. A [Paper reply-withholding follow-up](rcon-game-qualification.md)
 now rejects the fault and passes both forward and stationary controls. The
 initially storage-blocked stationary attempt remains preserved; a repeat passed
-after lossless sparse archival. Mid-action failures remain unqualified.
+after lossless sparse archival. A [mid-action disconnect](midaction-qualification.md)
+now has server-observed progress, absent completion and both controls. Other
+mid-action failure types and timings remain open.
 
 [Kernel resource probes](resource-enforcement.md) verify scoped memory, PID and
 CPU enforcement on WSL. [Whole-trial integration](scoped-trials.md) now has

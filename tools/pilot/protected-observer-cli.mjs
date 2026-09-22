@@ -72,7 +72,7 @@ async function readRequest(input) {
   }
   if (!value || Array.isArray(value) || typeof value !== "object") throw new Error("invalid request");
   if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(REQUEST_KEYS)) throw new Error("invalid request");
-  if (value.schema_version !== 1 || !["fixture", "before", "terminal", "terminal_rcon_stall"].includes(value.phase))
+  if (value.schema_version !== 1 || !["fixture", "before", "during", "terminal", "terminal_rcon_stall"].includes(value.phase))
     throw new Error("invalid request");
   if (
     typeof value.trial_id !== "string" ||

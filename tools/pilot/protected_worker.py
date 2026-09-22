@@ -21,7 +21,7 @@ from tools.pilot.rcon_stall import RconStall
 
 TRIAL = "movement-fixture-v1"
 ACTION = "walk-01"
-FAILURE_CASES = ("none", "death", "disconnect", "observer_timeout", "disk_full", "creative_mode", "command_denied", "command_authorized", "rcon_stall")
+FAILURE_CASES = ("none", "death", "disconnect", "observer_timeout", "disk_full", "creative_mode", "command_denied", "command_authorized", "rcon_stall", "mid_action_disconnect")
 FIXTURE_SHA256 = "3a696ca577186c8d2f308fd07fa31d72a3c2a4d98018beb2e64afacd5b358ac7"
 
 
@@ -342,6 +342,26 @@ def main():
                 time.sleep(0.3)
         result["stage"] = "action"
         transport.send_begin()
+        if failure_case == "mid_action_disconnect":
+            result["action_begin_sent_monotonic"] = time.monotonic()
+            time.sleep(0.2)
+            result["during"] = observe("during", password)
+            result["injection"] = {"case": failure_case, "after": "during_observation",
+                "requested_monotonic": time.monotonic(), "status": "console_command_sent"}
+            server.stdin.write(b"kick PilotProbe Mid-action qualification disconnect\n")
+            server.stdin.flush()
+            try:
+                transport.wait_action_finished()
+                result["action_finished_received"] = True
+            except Exception:
+                result["action_finished_received"] = False
+            result["stage"] = "interrupted_action"
+            try:
+                result["terminal"] = observe("terminal", password)
+            except Exception:
+                pass
+            # A raced completion is retained, never silently called mid-action.
+            raise RuntimeError("deliberate interrupted-action trial")
         transport.wait_action_finished()
         # Allow residual ordinary physics to settle while client remains connected.
         time.sleep(0.3)

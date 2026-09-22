@@ -22,7 +22,7 @@ class SampleFailure extends Error {
 
 function validateOptions({ rcon, phase, trialId, actionId, nowMonotonic, nowUtc, operationTimeoutMs }) {
   if (!rcon || typeof rcon.send !== "function") throw new TypeError("rcon.send is required");
-  if (phase !== "before" && phase !== "terminal") throw new RangeError("invalid observer phase");
+  if (!["before", "during", "terminal"].includes(phase)) throw new RangeError("invalid observer phase");
   if (
     typeof trialId !== "string" ||
     typeof actionId !== "string" ||

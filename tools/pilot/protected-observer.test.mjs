@@ -342,3 +342,9 @@ test("rejects invalid API inputs before querying", async () => {
     assert.equal(result.errorCode, "invalid_response");
   }
 });
+
+test("during-action observations remain separately identified", async () => {
+  const result = await sampleActor({rcon: fixture().rcon, phase: "during", trialId: "trial-01", actionId: "walk-01", ...clocks()});
+  assert.equal(result.status, "sampled");
+  assert.equal(result.phase, "during");
+});

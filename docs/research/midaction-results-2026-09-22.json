@@ -1,0 +1,1190 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-22",
+  "scope": "Server-confirmed movement followed by disconnect inside the fixed action window",
+  "live_swarm_modified": false,
+  "model_calls": 0,
+  "original_archive_rehashed_unchanged": true,
+  "sparse_archival": [
+    {
+      "date_utc": "2026-09-22T14:41:05.396304+00:00",
+      "method": "fallocate --dig-holes on completed unmounted images",
+      "original_run_manifests_unchanged": true,
+      "images": [
+        {
+          "attempt": "attempt-001",
+          "logical_bytes": 2147483648,
+          "sha256": "50cd1669f5324ef6e9eba171a8e305b75cc302783063fc68568c90268a52f418",
+          "allocated_before": 2147487744,
+          "allocated_after": 1161244672,
+          "reclaimed_bytes": 986243072
+        },
+        {
+          "attempt": "attempt-002",
+          "logical_bytes": 2147483648,
+          "sha256": "c0342083a0b8fe3fd4ea6395b0453eff20b9a7f9c58150c2fa7a7c7ace15e58d",
+          "allocated_before": 2147487744,
+          "allocated_after": 1161244672,
+          "reclaimed_bytes": 986243072
+        },
+        {
+          "attempt": "attempt-003",
+          "logical_bytes": 2147483648,
+          "sha256": "04cfa3f8255dd67dade493bb56c80a4245a422288654c248352c43d8f043ae1f",
+          "allocated_before": 2147487744,
+          "allocated_after": 1161244672,
+          "reclaimed_bytes": 986243072
+        },
+        {
+          "attempt": "attempt-004",
+          "logical_bytes": 2147483648,
+          "sha256": "fa7c29737dd82cadbd049c36476cccd3120e4f4b00f16e562237ddb0484ac6b4",
+          "allocated_before": 2147487744,
+          "allocated_after": 1161244672,
+          "reclaimed_bytes": 986243072
+        },
+        {
+          "attempt": "attempt-005",
+          "logical_bytes": 2147483648,
+          "sha256": "d538db9f01557b29f70d56179add3cbe88e63b5db7c69025311284beae5bb9d9",
+          "allocated_before": 2147487744,
+          "allocated_after": 1161244672,
+          "reclaimed_bytes": 986243072
+        }
+      ]
+    },
+    {
+      "date_utc": "2026-09-22T14:41:23.517594+00:00",
+      "method": "fallocate --dig-holes on completed unmounted images",
+      "original_run_manifests_unchanged": true,
+      "images": [
+        {
+          "attempt": "attempt-001",
+          "logical_bytes": 2147483648,
+          "sha256": "31d4cc77ae04d073a8963423331b7034acd6de859d03e23c8e7e4fcb99aaec95",
+          "allocated_before": 2147487744,
+          "allocated_after": 1161244672,
+          "reclaimed_bytes": 986243072
+        },
+        {
+          "attempt": "attempt-002",
+          "logical_bytes": 2147483648,
+          "sha256": "4701381f2ae3f48dd7f6792503f7b0077d23cd205cc27eae27254ffba76d4796",
+          "allocated_before": 2147487744,
+          "allocated_after": 1161244672,
+          "reclaimed_bytes": 986243072
+        },
+        {
+          "attempt": "attempt-003",
+          "logical_bytes": 2147483648,
+          "sha256": "c6a2fe0104ceac32b37a673115f80c7e750dae1bf41e12d4c8644f2478ae65d8",
+          "allocated_before": 2147487744,
+          "allocated_after": 1161244672,
+          "reclaimed_bytes": 986243072
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "One fixed disconnect timing, not all interrupted actions or death/server-crash timings.",
+    "During-action samples cannot replace terminal evidence.",
+    "The active observation adds measurement overhead; no performance benchmark is claimed."
+  ],
+  "attempts": [
+    {
+      "status": "failed",
+      "movement_mode": "forward",
+      "failure_case": "mid_action_disconnect",
+      "source_manifest_sha256": "fa8cc98ac195c6d7fcdda761837654847719aa12eb01e9f555580e5d13da9ff3",
+      "controller_sha256": "44f11226797400502e5d31a9d6c3bea68f631c1d53bcd4114971bcdaa9e46e19",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "storage": {
+        "capacity_bytes": 2147483648,
+        "cleanup_uncertain": false,
+        "daemon_as_bytes": 536870912,
+        "daemon_cpu_seconds": 120,
+        "daemon_fsize_bytes": 2147483648,
+        "fuse2fs_sha256": "bbf0aa57d97be717d4137fef2500f7f43a18186a93aced12a01a6ea64b9a8d7c",
+        "helper_exited": true,
+        "helper_forced_cleanup": false,
+        "helper_returncode": 0,
+        "image_allocated_bytes": 2147487744,
+        "image_fixed_size": true,
+        "image_preserved": true,
+        "image_sha256": "19823c702b97a2ac796420eeca10906daf41763a2d1d70a980a1dffb19e18c1a",
+        "libfuse_sha256": "654ae57bdd98c3c85e7a592e4f73cc59dc19a12d545bce77a57b0c4e7af8f394",
+        "module_sha256": "c73e844d4b04da6f1e98a2f81c6b749147d246b09363fbd295fdffea4ae4a766",
+        "mount_capacity_bytes": 2113794048,
+        "status": "closed",
+        "unmount_attempted": true,
+        "unmounted": true,
+        "valid": true,
+        "verified_clean": true
+      },
+      "resource_scope": {
+        "cleanup": {
+          "active_state": "inactive",
+          "confirmed": true,
+          "unit_result": "success"
+        },
+        "config_sha256": "324d7e28bf4c6f5b20584620a7235f32e37098da47caa7741a142d989fd44508",
+        "end": {
+          "child_returncode": 1,
+          "effective": {
+            "cpu": "200000 100000",
+            "cpu.stat": {
+              "burst_usec": 0,
+              "nr_bursts": 0,
+              "nr_periods": 226,
+              "nr_throttled": 154,
+              "system_usec": 2075829,
+              "throttled_usec": 59386708,
+              "usage_usec": 36289202,
+              "user_usec": 34213372
+            },
+            "memory": "4294967296",
+            "memory.events": {
+              "high": 0,
+              "low": 0,
+              "max": 0,
+              "oom": 0,
+              "oom_group_kill": 0,
+              "oom_kill": 0
+            },
+            "pids.events": {
+              "max": 0
+            },
+            "swap": "0",
+            "tasks": "256"
+          },
+          "limits_verified": true,
+          "no_limit_violations": true,
+          "profile": "game",
+          "schema_version": 1,
+          "unit": "codex-game-trial-e06643cf63694edf9d3d5e1bfa888bd8.scope"
+        },
+        "end_sha256": "321fd6e9c7cabfd382a87079fbfceb2a27d8a87571280b6b25626e56bca85d80",
+        "profile": "game",
+        "schema_version": 1,
+        "source_sha256": "6d21fa7248977ec8e17c806350d02242a08fa1533fdab889f3cc90078bbad00f",
+        "start": {
+          "config_sha256": "324d7e28bf4c6f5b20584620a7235f32e37098da47caa7741a142d989fd44508",
+          "effective": {
+            "cpu": "200000 100000",
+            "cpu.stat": {
+              "burst_usec": 0,
+              "nr_bursts": 0,
+              "nr_periods": 1,
+              "nr_throttled": 0,
+              "system_usec": 0,
+              "throttled_usec": 0,
+              "usage_usec": 16226,
+              "user_usec": 16226
+            },
+            "memory": "4294967296",
+            "memory.events": {
+              "high": 0,
+              "low": 0,
+              "max": 0,
+              "oom": 0,
+              "oom_group_kill": 0,
+              "oom_kill": 0
+            },
+            "pids.events": {
+              "max": 0
+            },
+            "swap": "0",
+            "tasks": "256"
+          },
+          "limits_verified": true,
+          "profile": "game",
+          "schema_version": 1,
+          "source_sha256": "6d21fa7248977ec8e17c806350d02242a08fa1533fdab889f3cc90078bbad00f",
+          "unit": "codex-game-trial-e06643cf63694edf9d3d5e1bfa888bd8.scope"
+        },
+        "start_sha256": "ccb6da94abbe29f2ecfd17275149d1de37bf823ba900fb56e3ec1b0f54436b18",
+        "unit": "codex-game-trial-e06643cf63694edf9d3d5e1bfa888bd8.scope",
+        "valid": false
+      },
+      "attempt": "attempt-001",
+      "fault_verification": {
+        "movement_observed_before_kick_blocks": 0.5500905943466687,
+        "seconds_from_begin_to_kick_request": 0.24350883206352592,
+        "only_ready_message_bytes_received": 91,
+        "server_kick_receipt_present": true,
+        "during_sample_cannot_replace_terminal": true
+      },
+      "before": {
+        "actionId": "walk-01",
+        "actor": "PilotProbe",
+        "observations": {
+          "dimension": "minecraft:overworld",
+          "gameMode": 0,
+          "health": 20,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 0.5
+          },
+          "roster": [
+            "PilotProbe"
+          ],
+          "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d"
+        },
+        "phase": "before",
+        "sample": {
+          "durationMs": 6.354273000000003,
+          "finishedAtUtc": "2026-09-22T14:42:01.229Z",
+          "finishedMonotonicMs": 31.682794,
+          "queryWindows": [
+            {
+              "durationMs": 1.3297600000000003,
+              "field": "Pos",
+              "finishedAtUtc": "2026-09-22T14:42:01.226Z",
+              "finishedMonotonicMs": 28.917667,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:01.225Z",
+              "startedMonotonicMs": 27.587907
+            },
+            {
+              "durationMs": 0.5846920000000004,
+              "field": "Dimension",
+              "finishedAtUtc": "2026-09-22T14:42:01.227Z",
+              "finishedMonotonicMs": 29.816419,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:01.226Z",
+              "startedMonotonicMs": 29.231727
+            },
+            {
+              "durationMs": 0.5570120000000003,
+              "field": "Health",
+              "finishedAtUtc": "2026-09-22T14:42:01.227Z",
+              "finishedMonotonicMs": 30.414618,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:01.227Z",
+              "startedMonotonicMs": 29.857606
+            },
+            {
+              "durationMs": 0.4276869999999988,
+              "field": "UUID",
+              "finishedAtUtc": "2026-09-22T14:42:01.228Z",
+              "finishedMonotonicMs": 30.898422,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:01.228Z",
+              "startedMonotonicMs": 30.470735
+            },
+            {
+              "durationMs": 0.31839399999999785,
+              "field": "Roster",
+              "finishedAtUtc": "2026-09-22T14:42:01.228Z",
+              "finishedMonotonicMs": 31.287985,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:01.228Z",
+              "startedMonotonicMs": 30.969591
+            },
+            {
+              "durationMs": 0.3726309999999984,
+              "field": "playerGameType",
+              "finishedAtUtc": "2026-09-22T14:42:01.229Z",
+              "finishedMonotonicMs": 31.672924,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:01.228Z",
+              "startedMonotonicMs": 31.300293
+            }
+          ],
+          "startedAtUtc": "2026-09-22T14:42:01.222Z",
+          "startedMonotonicMs": 25.328521
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "trialId": "movement-fixture-v1"
+      },
+      "during": {
+        "actionId": "walk-01",
+        "actor": "PilotProbe",
+        "observations": {
+          "dimension": "minecraft:overworld",
+          "gameMode": 0,
+          "health": 20,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 1.0500905943466687
+          },
+          "roster": [
+            "PilotProbe"
+          ],
+          "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d"
+        },
+        "phase": "during",
+        "sample": {
+          "durationMs": 10.474007,
+          "finishedAtUtc": "2026-09-22T14:42:01.475Z",
+          "finishedMonotonicMs": 37.699773,
+          "queryWindows": [
+            {
+              "durationMs": 1.1427729999999983,
+              "field": "Pos",
+              "finishedAtUtc": "2026-09-22T14:42:01.467Z",
+              "finishedMonotonicMs": 30.370063,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:01.466Z",
+              "startedMonotonicMs": 29.22729
+            },
+            {
+              "durationMs": 1.3683669999999992,
+              "field": "Dimension",
+              "finishedAtUtc": "2026-09-22T14:42:01.469Z",
+              "finishedMonotonicMs": 31.988127,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:01.468Z",
+              "startedMonotonicMs": 30.61976
+            },
+            {
+              "durationMs": 0.8308409999999995,
+              "field": "Health",
+              "finishedAtUtc": "2026-09-22T14:42:01.470Z",
+              "finishedMonotonicMs": 32.938192,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:01.469Z",
+              "startedMonotonicMs": 32.107351
+            },
+            {
+              "durationMs": 0.6562669999999997,
+              "field": "UUID",
+              "finishedAtUtc": "2026-09-22T14:42:01.471Z",
+              "finishedMonotonicMs": 33.704488,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:01.470Z",
+              "startedMonotonicMs": 33.048221
+            },
+            {
+              "durationMs": 3.337144000000002,
+              "field": "Roster",
+              "finishedAtUtc": "2026-09-22T14:42:01.474Z",
+              "finishedMonotonicMs": 37.160369,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:01.471Z",
+              "startedMonotonicMs": 33.823225
+            },
+            {
+              "durationMs": 0.492246999999999,
+              "field": "playerGameType",
+              "finishedAtUtc": "2026-09-22T14:42:01.475Z",
+              "finishedMonotonicMs": 37.686071,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:01.474Z",
+              "startedMonotonicMs": 37.193824
+            }
+          ],
+          "startedAtUtc": "2026-09-22T14:42:01.464Z",
+          "startedMonotonicMs": 27.225766
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "trialId": "movement-fixture-v1"
+      },
+      "terminal_record": {
+        "error": null,
+        "finished_monotonic": 2923523.954364827,
+        "pid": 138,
+        "result": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "errorCode": "invalid_response",
+          "observations": {},
+          "phase": "terminal",
+          "sample": {
+            "durationMs": 2.891894999999998,
+            "finishedAtUtc": "2026-09-22T14:42:02.284Z",
+            "finishedMonotonicMs": 27.677455,
+            "queryWindows": [
+              {
+                "durationMs": 0.8626989999999992,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-22T14:42:02.284Z",
+                "finishedMonotonicMs": 27.56533,
+                "outcome": "invalid",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:42:02.283Z",
+                "startedMonotonicMs": 26.702631
+              }
+            ],
+            "startedAtUtc": "2026-09-22T14:42:02.281Z",
+            "startedMonotonicMs": 24.78556
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "failed",
+          "trialId": "movement-fixture-v1"
+        },
+        "returncode": 1,
+        "started_monotonic": 2923523.916658322,
+        "suspended_for_test": false
+      },
+      "score": null,
+      "injection": {
+        "after": "during_observation",
+        "case": "mid_action_disconnect",
+        "requested_monotonic": 2923523.140218268,
+        "status": "console_command_sent"
+      },
+      "action_finished_received": false,
+      "post_unmount_verified_files": {
+        "protected-result.json": "e8281cb67fbcb90d4f81ebe533f006c260d3cad3dd61780929f652e012a31c2a",
+        "ai-world/level.dat": "301c5fc3e51361f0a00138fc01804e1d0844cf047b421b7050fd077b322ecbf7",
+        "observer-terminal.json": "a302240268c44b4f9281f8c6fd71142c95979652fda3eae2fdc0662dc30969bc",
+        "participant-diagnostics.json": "9bf1dc836db1bc426dd945d411a2ec142457b9bd99da03d802a1306aa180d75e",
+        "logs/latest.log": "46e0a83b07581b6e42a6facc0801eca544108fbd73e9945b4cbd43af2656a917"
+      },
+      "private_summary_sha256": "e5add8ea51933ff4d68e3a9488d750e92a7294702dd1169ad1ec44198abea3f4",
+      "lifecycle": {
+        "participant_returncode": 1,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false,
+        "participant_forced_cleanup": false,
+        "game_bridge": {
+          "connections": 1,
+          "identity": {
+            "policy": "fixed_offline_login_v1",
+            "protocol": 769,
+            "status": "admitted",
+            "username": "PilotProbe",
+            "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d"
+          },
+          "left_to_right": 388,
+          "right_to_left": 88206,
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "status": "qualified",
+      "movement_mode": "forward",
+      "failure_case": "none",
+      "source_manifest_sha256": "fa8cc98ac195c6d7fcdda761837654847719aa12eb01e9f555580e5d13da9ff3",
+      "controller_sha256": "44f11226797400502e5d31a9d6c3bea68f631c1d53bcd4114971bcdaa9e46e19",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "storage": {
+        "capacity_bytes": 2147483648,
+        "cleanup_uncertain": false,
+        "daemon_as_bytes": 536870912,
+        "daemon_cpu_seconds": 120,
+        "daemon_fsize_bytes": 2147483648,
+        "fuse2fs_sha256": "bbf0aa57d97be717d4137fef2500f7f43a18186a93aced12a01a6ea64b9a8d7c",
+        "helper_exited": true,
+        "helper_forced_cleanup": false,
+        "helper_returncode": 0,
+        "image_allocated_bytes": 2147487744,
+        "image_fixed_size": true,
+        "image_preserved": true,
+        "image_sha256": "8e98b93b8824f30b14993a3654f159fd4af189573667b583b9b8bc4993f4517c",
+        "libfuse_sha256": "654ae57bdd98c3c85e7a592e4f73cc59dc19a12d545bce77a57b0c4e7af8f394",
+        "module_sha256": "c73e844d4b04da6f1e98a2f81c6b749147d246b09363fbd295fdffea4ae4a766",
+        "mount_capacity_bytes": 2113794048,
+        "status": "closed",
+        "unmount_attempted": true,
+        "unmounted": true,
+        "valid": true,
+        "verified_clean": true
+      },
+      "resource_scope": {
+        "cleanup": {
+          "active_state": "inactive",
+          "confirmed": true,
+          "unit_result": "success"
+        },
+        "config_sha256": "23e3bdbb6d3e76b705ff658758dc95b5e6258137668a2036a3b7efc8876df1b9",
+        "end": {
+          "child_returncode": 0,
+          "effective": {
+            "cpu": "200000 100000",
+            "cpu.stat": {
+              "burst_usec": 0,
+              "nr_bursts": 0,
+              "nr_periods": 224,
+              "nr_throttled": 143,
+              "system_usec": 2384186,
+              "throttled_usec": 55581423,
+              "usage_usec": 35297177,
+              "user_usec": 32912990
+            },
+            "memory": "4294967296",
+            "memory.events": {
+              "high": 0,
+              "low": 0,
+              "max": 0,
+              "oom": 0,
+              "oom_group_kill": 0,
+              "oom_kill": 0
+            },
+            "pids.events": {
+              "max": 0
+            },
+            "swap": "0",
+            "tasks": "256"
+          },
+          "limits_verified": true,
+          "no_limit_violations": true,
+          "profile": "game",
+          "schema_version": 1,
+          "unit": "codex-game-trial-2e513fabff83400794098a11ba60c7ba.scope"
+        },
+        "end_sha256": "55aa6492a9710a8fb3c7d435735a16fb6e5127320cfe499f3f04eef7583d8f00",
+        "profile": "game",
+        "schema_version": 1,
+        "source_sha256": "6d21fa7248977ec8e17c806350d02242a08fa1533fdab889f3cc90078bbad00f",
+        "start": {
+          "config_sha256": "23e3bdbb6d3e76b705ff658758dc95b5e6258137668a2036a3b7efc8876df1b9",
+          "effective": {
+            "cpu": "200000 100000",
+            "cpu.stat": {
+              "burst_usec": 0,
+              "nr_bursts": 0,
+              "nr_periods": 0,
+              "nr_throttled": 0,
+              "system_usec": 4110,
+              "throttled_usec": 0,
+              "usage_usec": 16440,
+              "user_usec": 12330
+            },
+            "memory": "4294967296",
+            "memory.events": {
+              "high": 0,
+              "low": 0,
+              "max": 0,
+              "oom": 0,
+              "oom_group_kill": 0,
+              "oom_kill": 0
+            },
+            "pids.events": {
+              "max": 0
+            },
+            "swap": "0",
+            "tasks": "256"
+          },
+          "limits_verified": true,
+          "profile": "game",
+          "schema_version": 1,
+          "source_sha256": "6d21fa7248977ec8e17c806350d02242a08fa1533fdab889f3cc90078bbad00f",
+          "unit": "codex-game-trial-2e513fabff83400794098a11ba60c7ba.scope"
+        },
+        "start_sha256": "52f7f2e1fe6bce4b4e6928d329ef3328735abc6cf284eeeb8f2cb50e16fa907c",
+        "unit": "codex-game-trial-2e513fabff83400794098a11ba60c7ba.scope",
+        "valid": true
+      },
+      "attempt": "attempt-002",
+      "fault_verification": null,
+      "before": {
+        "actionId": "walk-01",
+        "actor": "PilotProbe",
+        "observations": {
+          "dimension": "minecraft:overworld",
+          "gameMode": 0,
+          "health": 20,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 0.5
+          },
+          "roster": [
+            "PilotProbe"
+          ],
+          "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d"
+        },
+        "phase": "before",
+        "sample": {
+          "durationMs": 9.850396000000003,
+          "finishedAtUtc": "2026-09-22T14:42:59.877Z",
+          "finishedMonotonicMs": 33.245088,
+          "queryWindows": [
+            {
+              "durationMs": 1.1361810000000006,
+              "field": "Pos",
+              "finishedAtUtc": "2026-09-22T14:42:59.870Z",
+              "finishedMonotonicMs": 26.344214,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:59.869Z",
+              "startedMonotonicMs": 25.208033
+            },
+            {
+              "durationMs": 0.7090369999999986,
+              "field": "Dimension",
+              "finishedAtUtc": "2026-09-22T14:42:59.871Z",
+              "finishedMonotonicMs": 27.267494,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:59.871Z",
+              "startedMonotonicMs": 26.558457
+            },
+            {
+              "durationMs": 1.085096,
+              "field": "Health",
+              "finishedAtUtc": "2026-09-22T14:42:59.872Z",
+              "finishedMonotonicMs": 28.392662,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:59.871Z",
+              "startedMonotonicMs": 27.307566
+            },
+            {
+              "durationMs": 0.6006339999999994,
+              "field": "UUID",
+              "finishedAtUtc": "2026-09-22T14:42:59.873Z",
+              "finishedMonotonicMs": 29.056444,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:59.873Z",
+              "startedMonotonicMs": 28.45581
+            },
+            {
+              "durationMs": 3.4093300000000006,
+              "field": "Roster",
+              "finishedAtUtc": "2026-09-22T14:42:59.877Z",
+              "finishedMonotonicMs": 32.553539,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:59.873Z",
+              "startedMonotonicMs": 29.144209
+            },
+            {
+              "durationMs": 0.6548519999999982,
+              "field": "playerGameType",
+              "finishedAtUtc": "2026-09-22T14:42:59.877Z",
+              "finishedMonotonicMs": 33.228274,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:42:59.877Z",
+              "startedMonotonicMs": 32.573422
+            }
+          ],
+          "startedAtUtc": "2026-09-22T14:42:59.868Z",
+          "startedMonotonicMs": 23.394692
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "trialId": "movement-fixture-v1"
+      },
+      "during": null,
+      "terminal_record": {
+        "error": null,
+        "finished_monotonic": 2923577.018671197,
+        "pid": 133,
+        "result": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "gameMode": 0,
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 4.297922578814884
+            },
+            "roster": [
+              "PilotProbe"
+            ],
+            "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d"
+          },
+          "phase": "terminal",
+          "sample": {
+            "durationMs": 6.253736,
+            "finishedAtUtc": "2026-09-22T14:43:01.216Z",
+            "finishedMonotonicMs": 31.688215,
+            "queryWindows": [
+              {
+                "durationMs": 1.1540500000000016,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-22T14:43:01.213Z",
+                "finishedMonotonicMs": 28.796143,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:43:01.212Z",
+                "startedMonotonicMs": 27.642093
+              },
+              {
+                "durationMs": 0.7284330000000026,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-22T14:43:01.214Z",
+                "finishedMonotonicMs": 29.756112,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:43:01.214Z",
+                "startedMonotonicMs": 29.027679
+              },
+              {
+                "durationMs": 0.49991199999999836,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-22T14:43:01.215Z",
+                "finishedMonotonicMs": 30.293087,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:43:01.214Z",
+                "startedMonotonicMs": 29.793175
+              },
+              {
+                "durationMs": 0.43468700000000027,
+                "field": "UUID",
+                "finishedAtUtc": "2026-09-22T14:43:01.215Z",
+                "finishedMonotonicMs": 30.783831,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:43:01.215Z",
+                "startedMonotonicMs": 30.349144
+              },
+              {
+                "durationMs": 0.34100799999999865,
+                "field": "Roster",
+                "finishedAtUtc": "2026-09-22T14:43:01.216Z",
+                "finishedMonotonicMs": 31.20264,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:43:01.215Z",
+                "startedMonotonicMs": 30.861632
+              },
+              {
+                "durationMs": 0.4606670000000008,
+                "field": "playerGameType",
+                "finishedAtUtc": "2026-09-22T14:43:01.216Z",
+                "finishedMonotonicMs": 31.674577,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:43:01.216Z",
+                "startedMonotonicMs": 31.21391
+              }
+            ],
+            "startedAtUtc": "2026-09-22T14:43:01.210Z",
+            "startedMonotonicMs": 25.434479
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "returncode": 0,
+        "started_monotonic": 2923576.978502148,
+        "suspended_for_test": false
+      },
+      "score": {
+        "delta": {
+          "x": 0.0,
+          "y": 0,
+          "z": 3.797922578814884
+        },
+        "horizontal_displacement": 3.797922578814884,
+        "movement_succeeded": true,
+        "negative_control_observed": false,
+        "observations_valid": true
+      },
+      "injection": null,
+      "action_finished_received": null,
+      "post_unmount_verified_files": {
+        "protected-result.json": "4a03973be7a39509cf43331ae4f2cf3e5484b3dad599e6a8f02ebaf5678f2a89",
+        "ai-world/level.dat": "d368df0dc6e8fe910371e43dbda4d80fbd6750e13a3e5f490e7d083514c5cc12",
+        "observer-terminal.json": "0f5234952895aa030d7bc58d9b0c39d6fb48722e37901db5da07f9a0021d9dd6",
+        "participant-diagnostics.json": "d1387b3c3ce806acee99e9aec70f5d0738cf54dfa70b85dcca1d10bf1d483fde",
+        "logs/latest.log": "23c61f0f4eaebc0df78a8542b1577d8a3ff0164111340ad3431b2e82de1b1c6e"
+      },
+      "private_summary_sha256": "a2c32abfef469f1e26d97c7af882dbdb868db77d30e680c8a4948ccff0dc61da",
+      "lifecycle": {
+        "participant_returncode": 0,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false,
+        "participant_forced_cleanup": false,
+        "game_bridge": {
+          "connections": 1,
+          "identity": {
+            "policy": "fixed_offline_login_v1",
+            "protocol": 769,
+            "status": "admitted",
+            "username": "PilotProbe",
+            "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d"
+          },
+          "left_to_right": 948,
+          "right_to_left": 335113,
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "status": "qualified",
+      "movement_mode": "stationary",
+      "failure_case": "none",
+      "source_manifest_sha256": "fa8cc98ac195c6d7fcdda761837654847719aa12eb01e9f555580e5d13da9ff3",
+      "controller_sha256": "44f11226797400502e5d31a9d6c3bea68f631c1d53bcd4114971bcdaa9e46e19",
+      "snapshot_sha256": "d0262b9fd731db810aa437bb0c3c87a0517ddc881bdbc9eba3cd7e5ff538035c",
+      "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+      "tool_manifest_sha256": "2d6a67e249fb8f055f0d17ce90a5096f14433c77afa0d5963250a61648ca806b",
+      "storage": {
+        "capacity_bytes": 2147483648,
+        "cleanup_uncertain": false,
+        "daemon_as_bytes": 536870912,
+        "daemon_cpu_seconds": 120,
+        "daemon_fsize_bytes": 2147483648,
+        "fuse2fs_sha256": "bbf0aa57d97be717d4137fef2500f7f43a18186a93aced12a01a6ea64b9a8d7c",
+        "helper_exited": true,
+        "helper_forced_cleanup": false,
+        "helper_returncode": 0,
+        "image_allocated_bytes": 2147487744,
+        "image_fixed_size": true,
+        "image_preserved": true,
+        "image_sha256": "cc51737e5f1e0aa241fe017be5407bb5919323d42b06545ec5625d7b99883ab9",
+        "libfuse_sha256": "654ae57bdd98c3c85e7a592e4f73cc59dc19a12d545bce77a57b0c4e7af8f394",
+        "module_sha256": "c73e844d4b04da6f1e98a2f81c6b749147d246b09363fbd295fdffea4ae4a766",
+        "mount_capacity_bytes": 2113794048,
+        "status": "closed",
+        "unmount_attempted": true,
+        "unmounted": true,
+        "valid": true,
+        "verified_clean": true
+      },
+      "resource_scope": {
+        "cleanup": {
+          "active_state": "inactive",
+          "confirmed": true,
+          "unit_result": "success"
+        },
+        "config_sha256": "88b8ea5687afd06ac8d4b3a62e1ed8d7bf3ae0f89b7f1b511357b8459ec9ef20",
+        "end": {
+          "child_returncode": 0,
+          "effective": {
+            "cpu": "200000 100000",
+            "cpu.stat": {
+              "burst_usec": 0,
+              "nr_bursts": 0,
+              "nr_periods": 215,
+              "nr_throttled": 147,
+              "system_usec": 2074069,
+              "throttled_usec": 56205110,
+              "usage_usec": 35472874,
+              "user_usec": 33398804
+            },
+            "memory": "4294967296",
+            "memory.events": {
+              "high": 0,
+              "low": 0,
+              "max": 0,
+              "oom": 0,
+              "oom_group_kill": 0,
+              "oom_kill": 0
+            },
+            "pids.events": {
+              "max": 0
+            },
+            "swap": "0",
+            "tasks": "256"
+          },
+          "limits_verified": true,
+          "no_limit_violations": true,
+          "profile": "game",
+          "schema_version": 1,
+          "unit": "codex-game-trial-897f7a7808184fa29a3e63254d8cbd7e.scope"
+        },
+        "end_sha256": "8d53ff686974cc55d8c96d6c940a4c83aca8823771db3187ac4ae5c469e6c419",
+        "profile": "game",
+        "schema_version": 1,
+        "source_sha256": "6d21fa7248977ec8e17c806350d02242a08fa1533fdab889f3cc90078bbad00f",
+        "start": {
+          "config_sha256": "88b8ea5687afd06ac8d4b3a62e1ed8d7bf3ae0f89b7f1b511357b8459ec9ef20",
+          "effective": {
+            "cpu": "200000 100000",
+            "cpu.stat": {
+              "burst_usec": 0,
+              "nr_bursts": 0,
+              "nr_periods": 1,
+              "nr_throttled": 0,
+              "system_usec": 4032,
+              "throttled_usec": 0,
+              "usage_usec": 20164,
+              "user_usec": 16131
+            },
+            "memory": "4294967296",
+            "memory.events": {
+              "high": 0,
+              "low": 0,
+              "max": 0,
+              "oom": 0,
+              "oom_group_kill": 0,
+              "oom_kill": 0
+            },
+            "pids.events": {
+              "max": 0
+            },
+            "swap": "0",
+            "tasks": "256"
+          },
+          "limits_verified": true,
+          "profile": "game",
+          "schema_version": 1,
+          "source_sha256": "6d21fa7248977ec8e17c806350d02242a08fa1533fdab889f3cc90078bbad00f",
+          "unit": "codex-game-trial-897f7a7808184fa29a3e63254d8cbd7e.scope"
+        },
+        "start_sha256": "dfaa9271047e8da1f4985170007980b650d18b421bb26b0c1cd8a52dd355a2a4",
+        "unit": "codex-game-trial-897f7a7808184fa29a3e63254d8cbd7e.scope",
+        "valid": true
+      },
+      "attempt": "attempt-003",
+      "fault_verification": null,
+      "before": {
+        "actionId": "walk-01",
+        "actor": "PilotProbe",
+        "observations": {
+          "dimension": "minecraft:overworld",
+          "gameMode": 0,
+          "health": 20,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 0.5
+          },
+          "roster": [
+            "PilotProbe"
+          ],
+          "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d"
+        },
+        "phase": "before",
+        "sample": {
+          "durationMs": 6.366635000000002,
+          "finishedAtUtc": "2026-09-22T14:44:17.751Z",
+          "finishedMonotonicMs": 30.563479,
+          "queryWindows": [
+            {
+              "durationMs": 1.1044649999999976,
+              "field": "Pos",
+              "finishedAtUtc": "2026-09-22T14:44:17.747Z",
+              "finishedMonotonicMs": 27.244922,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:44:17.746Z",
+              "startedMonotonicMs": 26.140457
+            },
+            {
+              "durationMs": 1.1419409999999992,
+              "field": "Dimension",
+              "finishedAtUtc": "2026-09-22T14:44:17.749Z",
+              "finishedMonotonicMs": 28.615501,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:44:17.748Z",
+              "startedMonotonicMs": 27.47356
+            },
+            {
+              "durationMs": 0.5583430000000007,
+              "field": "Health",
+              "finishedAtUtc": "2026-09-22T14:44:17.749Z",
+              "finishedMonotonicMs": 29.208644,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:44:17.749Z",
+              "startedMonotonicMs": 28.650301
+            },
+            {
+              "durationMs": 0.5316999999999972,
+              "field": "UUID",
+              "finishedAtUtc": "2026-09-22T14:44:17.750Z",
+              "finishedMonotonicMs": 29.806385,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:44:17.749Z",
+              "startedMonotonicMs": 29.274685
+            },
+            {
+              "durationMs": 0.32606799999999936,
+              "field": "Roster",
+              "finishedAtUtc": "2026-09-22T14:44:17.750Z",
+              "finishedMonotonicMs": 30.208014,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:44:17.750Z",
+              "startedMonotonicMs": 29.881946
+            },
+            {
+              "durationMs": 0.3319989999999997,
+              "field": "playerGameType",
+              "finishedAtUtc": "2026-09-22T14:44:17.751Z",
+              "finishedMonotonicMs": 30.549771,
+              "outcome": "completed",
+              "sent": true,
+              "startedAtUtc": "2026-09-22T14:44:17.750Z",
+              "startedMonotonicMs": 30.217772
+            }
+          ],
+          "startedAtUtc": "2026-09-22T14:44:17.744Z",
+          "startedMonotonicMs": 24.196844
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "trialId": "movement-fixture-v1"
+      },
+      "during": null,
+      "terminal_record": {
+        "error": null,
+        "finished_monotonic": 2923649.028862095,
+        "pid": 130,
+        "result": {
+          "actionId": "walk-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "gameMode": 0,
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            },
+            "roster": [
+              "PilotProbe"
+            ],
+            "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d"
+          },
+          "phase": "terminal",
+          "sample": {
+            "durationMs": 6.246449999999999,
+            "finishedAtUtc": "2026-09-22T14:44:19.092Z",
+            "finishedMonotonicMs": 30.903513,
+            "queryWindows": [
+              {
+                "durationMs": 1.209963000000002,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-22T14:44:19.089Z",
+                "finishedMonotonicMs": 27.891321,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:44:19.088Z",
+                "startedMonotonicMs": 26.681358
+              },
+              {
+                "durationMs": 0.6502920000000003,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-22T14:44:19.090Z",
+                "finishedMonotonicMs": 28.812327,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:44:19.089Z",
+                "startedMonotonicMs": 28.162035
+              },
+              {
+                "durationMs": 0.5878229999999967,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-22T14:44:19.091Z",
+                "finishedMonotonicMs": 29.455349,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:44:19.090Z",
+                "startedMonotonicMs": 28.867526
+              },
+              {
+                "durationMs": 0.5164550000000006,
+                "field": "UUID",
+                "finishedAtUtc": "2026-09-22T14:44:19.091Z",
+                "finishedMonotonicMs": 30.051088,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:44:19.091Z",
+                "startedMonotonicMs": 29.534633
+              },
+              {
+                "durationMs": 0.35064700000000215,
+                "field": "Roster",
+                "finishedAtUtc": "2026-09-22T14:44:19.092Z",
+                "finishedMonotonicMs": 30.482727,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:44:19.091Z",
+                "startedMonotonicMs": 30.13208
+              },
+              {
+                "durationMs": 0.39355799999999874,
+                "field": "playerGameType",
+                "finishedAtUtc": "2026-09-22T14:44:19.092Z",
+                "finishedMonotonicMs": 30.891092,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-22T14:44:19.092Z",
+                "startedMonotonicMs": 30.497534
+              }
+            ],
+            "startedAtUtc": "2026-09-22T14:44:19.086Z",
+            "startedMonotonicMs": 24.657063
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "movement-fixture-v1"
+        },
+        "returncode": 0,
+        "started_monotonic": 2923648.989401718,
+        "suspended_for_test": false
+      },
+      "score": {
+        "delta": {
+          "x": 0.0,
+          "y": 0,
+          "z": 0.0
+        },
+        "horizontal_displacement": 0.0,
+        "movement_succeeded": false,
+        "negative_control_observed": true,
+        "observations_valid": true
+      },
+      "injection": null,
+      "action_finished_received": null,
+      "post_unmount_verified_files": {
+        "protected-result.json": "9ecda1aafd4856955b223d263407954c115e7720b8da2bc319dec3644cef7f6b",
+        "ai-world/level.dat": "66c2f028f7a02469088bcd90b323ca6a4c9a48659ff0a02e959009f2c045aef6",
+        "observer-terminal.json": "aa87b939838057cd7f0313cf3eb049c67d968e753207c97ee99faf87d25113ac",
+        "participant-diagnostics.json": "d1387b3c3ce806acee99e9aec70f5d0738cf54dfa70b85dcca1d10bf1d483fde",
+        "logs/latest.log": "624b1428042fcedf21ffecc9dab7962839f780a567498d6b6b41c2006fe2f2d6"
+      },
+      "private_summary_sha256": "0bf5bb741e763c828d3ef3705bf9f8d95e4d9c6051bce4baf911f14cd7b25fc3",
+      "lifecycle": {
+        "participant_returncode": 0,
+        "java_returncode": 0,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false,
+        "participant_forced_cleanup": false,
+        "game_bridge": {
+          "connections": 1,
+          "identity": {
+            "policy": "fixed_offline_login_v1",
+            "protocol": 769,
+            "status": "admitted",
+            "username": "PilotProbe",
+            "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d"
+          },
+          "left_to_right": 252,
+          "right_to_left": 359493,
+          "status": "completed"
+        }
+      }
+    }
+  ]
+}
