@@ -19,8 +19,16 @@ export interface StuckState {
   since: number;
 }
 
-/** Moving less than this counts as standing still. */
-export const MOVED_BLOCKS = 3;
+/**
+ * How far a bot must get from its anchor to count as having gone somewhere.
+ *
+ * Three blocks was too tight. Run 785: Forge reported stuck at
+ * (357, 24, -287) nine times and the watchdog fired zero, because a bot
+ * wedged in a cave still shuffles, swims up a block and drops back, and every
+ * one of those resets a three-block clock. Net displacement is the question,
+ * so the anchor only moves when the bot genuinely leaves.
+ */
+export const MOVED_BLOCKS = 16;
 /** How long a bot may stand still before it is treated as trapped. */
 export const IMMOBILE_MS = 240_000;
 /** Above this height a motionless bot is idling rather than entombed. */
@@ -53,8 +61,18 @@ export function trackPosition(
  * height. With nothing in hand, the old depth rule still applies, so a bot
  * standing about on the surface is left alone.
  */
-export function isPinned(state: StuckState | null, now: number, y: number, working = false): boolean {
+export function isPinned(state: StuckState | null, now: number, y: number, working = false, failing = false): boolean {
   if (!state) return false;
   if (now - state.since < IMMOBILE_MS) return false;
-  return working || y <= DEEP_Y;
+  // Sixteen blocks is a wide enough anchor that a farmer working one plot
+  // could trip it, so a bot that is merely busy near the surface needs a
+  // second sign of trouble: failing walks. Underground, the depth speaks for
+  // itself.
+  if (y <= DEEP_Y) return true;
+  return working && failing;
+}
+
+/** How long this bot has been inside its anchor, for the diagnostic line. */
+export function pinnedForMs(state: StuckState | null, now: number): number {
+  return state ? now - state.since : 0;
 }

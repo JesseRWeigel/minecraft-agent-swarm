@@ -1411,7 +1411,23 @@ export class BotBrain {
       this.stuckState = trackPosition(this.stuckState, { x: p.x, y: p.y, z: p.z }, now);
       const { isSkillRunning: skillHolding } = await import("../skills/executor.js");
       const working = skillHolding(this.bot) || !!this.bot.pathfinder?.isMoving?.();
-      if (isPinned(this.stuckState, now, p.y, working) && now - this.lastPinnedEscapeMs > 300_000) {
+      // Say how long the anchor has held every couple of minutes. Two cycles
+      // running this rule fired zero times and the log could not say whether
+      // the clock was resetting, the depth test was wrong, or the block never
+      // ran at all.
+      const { pinnedForMs } = await import("./immobile-watchdog.js");
+      const heldFor = pinnedForMs(this.stuckState, now);
+      if (heldFor > 120_000 && now - this.lastPinnedLogMs > 120_000) {
+        this.lastPinnedLogMs = now;
+        this.log.info(
+          "Brain",
+          `[PinDebug] ${Math.round(heldFor / 1000)}s within 16 blocks of ${this.stuckState!.x.toFixed(0)},${this.stuckState!.y.toFixed(0)},${this.stuckState!.z.toFixed(0)} (now y=${p.y.toFixed(0)}, working=${working}, navFails=${this.navFailStreak})`,
+        );
+      }
+      if (
+        isPinned(this.stuckState, now, p.y, working, this.navFailStreak >= 3) &&
+        now - this.lastPinnedEscapeMs > 300_000
+      ) {
         this.lastPinnedEscapeMs = now;
         this.stuckState = { x: p.x, y: p.y, z: p.z, since: now };
         const {
@@ -3914,6 +3930,7 @@ export class BotBrain {
   /** Where this bot last genuinely moved, for the immobility watchdog. */
   private stuckState: { x: number; y: number; z: number; since: number } | null = null;
   private lastPinnedEscapeMs = 0;
+  private lastPinnedLogMs = 0;
 
   private beginActionCapture(
     decision: BrainDecision,
