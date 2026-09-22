@@ -1398,6 +1398,40 @@ export class BotBrain {
     // stash to withdraw one. Three bots sat this way at once at 7% action
     // success. The escape hand-digs a staircase up to daylight — bare hands
     // still break stone — from where wood and the stash are reachable again.
+    // A bot that has not moved in four minutes is stuck, whatever it believes
+    // it is doing. Run 783: Forge logged "[Stuck] at 324,-15,-320
+    // sides=dirt/water/water/water" fifty-six times in an hour while a skill
+    // held the slot, so the escape below, which is gated on no skill running,
+    // could never reach him. Position over time does not care what the skill
+    // thinks.
+    {
+      const { trackPosition, isPinned } = await import("./immobile-watchdog.js");
+      const now = Date.now();
+      const p = this.bot.entity.position;
+      this.stuckState = trackPosition(this.stuckState, { x: p.x, y: p.y, z: p.z }, now);
+      if (isPinned(this.stuckState, now, p.y) && now - this.lastPinnedEscapeMs > 300_000) {
+        this.lastPinnedEscapeMs = now;
+        this.stuckState = { x: p.x, y: p.y, z: p.z, since: now };
+        const {
+          isSkillRunning: skillRunning,
+          abortActiveSkill,
+          getActiveSkillName,
+        } = await import("../skills/executor.js");
+        const held = skillRunning(this.bot) ? getActiveSkillName(this.bot) : null;
+        this.log.info(
+          "Brain",
+          `OVERRIDE: pinned at ${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)} for four minutes${held ? ` inside ${held}` : ""} — digging out`,
+        );
+        if (held) abortActiveSkill(this.bot);
+        this.events.onThought("I have not moved in minutes. Dig up and start again.");
+        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "escape_to_surface" });
+        this.events.onAction("escape_to_surface", result);
+        this.lastAction = "escape_to_surface";
+        this.lastResult = result;
+        return;
+      }
+    }
+
     // Gated on being genuinely buried (deep, with a solid ceiling overhead) so
     // it never fires for a bot working normally near the surface.
     if (
@@ -3875,6 +3909,9 @@ export class BotBrain {
    *  still be stuck in a shaft (Mason, 17 blocks under the stash, every chest
    *  walk timing out with zero velocity) and the pickless gate ignored him. */
   private navFailStreak = 0;
+  /** Where this bot last genuinely moved, for the immobility watchdog. */
+  private stuckState: { x: number; y: number; z: number; since: number } | null = null;
+  private lastPinnedEscapeMs = 0;
 
   private beginActionCapture(
     decision: BrainDecision,
