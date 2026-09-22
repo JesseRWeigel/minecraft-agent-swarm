@@ -25,10 +25,21 @@ test("watchdog: shuffling on the spot does not count as moving", () => {
   assert.strictEqual(isPinned(s, t0 + IMMOBILE_MS, -15), true, "four minutes pinned underground");
 });
 
-test("watchdog: standing still near the surface is somebody's business, not a trap", () => {
+test("watchdog: standing still near the surface with nothing in hand is not a trap", () => {
   const t0 = 1_000_000;
   const s = trackPosition(null, { x: 300, y: 70, z: -310 }, t0);
-  assert.strictEqual(isPinned(s, t0 + IMMOBILE_MS * 3, 70), false, `y above ${DEEP_Y} is not entombed`);
+  assert.strictEqual(isPinned(s, t0 + IMMOBILE_MS * 3, 70, false), false, `y above ${DEEP_Y} and idle is fine`);
+});
+
+test("watchdog: motionless with work in hand is a trap at any height", () => {
+  // Run 784: Atlas reported stuck at (357, 55, -309) fifteen times and the
+  // watchdog ignored all of them, because 55 is above the y=45 line drawn to
+  // protect a bot idling at the village, whose floor is around y=70. The
+  // depth line excluded exactly the middle ground where bots get wedged.
+  const t0 = 1_000_000;
+  const s = trackPosition(null, { x: 357, y: 55, z: -309 }, t0);
+  assert.strictEqual(isPinned(s, t0 + IMMOBILE_MS, 55, true), true, "a skill or a live walk means it is trying");
+  assert.strictEqual(isPinned(s, t0 + IMMOBILE_MS, 55, false), false, "without work in hand, 55 is left alone");
 });
 
 test("watchdog: the brain aborts the held skill before digging out", () => {
@@ -42,4 +53,13 @@ test("watchdog: the brain aborts the held skill before digging out", () => {
   assert.match(block, /abortActiveSkill\(this\.bot\)/, "the held skill is cancelled");
   assert.match(block, /skill: "escape_to_surface"/, "and the escape is what runs next");
   assert.ok(block.indexOf("abortActiveSkill") < block.indexOf('skill: "escape_to_surface"'), "abort first");
+});
+
+test("watchdog: the brain measures work as a held skill or a live walk", () => {
+  const brain = fs.readFileSync(path.join(__dirname, "brain.ts"), "utf8");
+  const start = brain.indexOf("const working =");
+  assert.notStrictEqual(start, -1, "the brain must decide what counts as trying");
+  const block = brain.slice(start, start + 200);
+  assert.match(block, /skillHolding\(this\.bot\)/, "a held skill counts");
+  assert.match(block, /pathfinder\?\.isMoving\?\.\(\)/, "so does a walk in progress");
 });

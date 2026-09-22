@@ -39,12 +39,22 @@ export function trackPosition(
 }
 
 /**
- * Has this bot been pinned in one place, deep enough that digging out is the
- * answer? Shallow and motionless is a bot waiting for something, which is its
- * own business.
+ * Has this bot been pinned in one place while it was trying to get somewhere?
+ *
+ * Depth alone was the wrong test. Run 784: Atlas reported stuck at
+ * (357, 55, -309) fifteen times and the watchdog ignored every one, because
+ * 55 sits above the y=45 line drawn to protect a bot idling at the village.
+ * The village floor is around y=70, so the line excluded exactly the middle
+ * ground where a bot gets wedged.
+ *
+ * What separates a trapped bot from a resting one is whether it is trying.
+ * A bot inside a skill, or with the planner still walking it somewhere, has
+ * work in hand: four motionless minutes with work in hand is a trap at any
+ * height. With nothing in hand, the old depth rule still applies, so a bot
+ * standing about on the surface is left alone.
  */
-export function isPinned(state: StuckState | null, now: number, y: number): boolean {
+export function isPinned(state: StuckState | null, now: number, y: number, working = false): boolean {
   if (!state) return false;
-  if (y > DEEP_Y) return false;
-  return now - state.since >= IMMOBILE_MS;
+  if (now - state.since < IMMOBILE_MS) return false;
+  return working || y <= DEEP_Y;
 }

@@ -1409,7 +1409,9 @@ export class BotBrain {
       const now = Date.now();
       const p = this.bot.entity.position;
       this.stuckState = trackPosition(this.stuckState, { x: p.x, y: p.y, z: p.z }, now);
-      if (isPinned(this.stuckState, now, p.y) && now - this.lastPinnedEscapeMs > 300_000) {
+      const { isSkillRunning: skillHolding } = await import("../skills/executor.js");
+      const working = skillHolding(this.bot) || !!this.bot.pathfinder?.isMoving?.();
+      if (isPinned(this.stuckState, now, p.y, working) && now - this.lastPinnedEscapeMs > 300_000) {
         this.lastPinnedEscapeMs = now;
         this.stuckState = { x: p.x, y: p.y, z: p.z, since: now };
         const {
