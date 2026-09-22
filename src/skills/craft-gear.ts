@@ -138,6 +138,34 @@ export const craftGearSkill: Skill = {
           /* none in stash — craft whatever tier we can */
         }
       }
+      // RAW iron counts too, once it has been through a furnace.
+      //
+      // Run 764: Forge died twelve times in two hours wearing "-,-,-,-" while
+      // the stash held two ingots and nine raw iron, and this step reported
+      // "0 ingots (budget 0), nothing affordable (cheapest piece costs 4)"
+      // every time. Two ingots is short of the four a pair of boots needs, and
+      // nothing in the chain turned the raw iron into the missing two. The
+      // smelter skill does exactly that, and it needs the stash position or it
+      // skips its own withdrawal phase.
+      const ingotsHeld = () =>
+        bot.inventory
+          .items()
+          .filter((i) => i.name === "iron_ingot")
+          .reduce((s, i) => s + i.count, 0);
+      if (ingotsHeld() < 4 && !signal.aborted) {
+        const { withdrawStash } = await import("./stash.js");
+        await withdrawStash(bot, stashPos, "raw_iron", 8).catch(() => {});
+        const rawHeld = bot.inventory
+          .items()
+          .filter((i) => i.name === "raw_iron")
+          .reduce((s, i) => s + i.count, 0);
+        if (rawHeld > 0) {
+          console.log(`[GearDebug] armour: ${ingotsHeld()} ingots and ${rawHeld} raw iron — smelting before the forge`);
+          const { smeltOresSkill } = await import("./smelt-ores.js");
+          await smeltOresSkill.execute(bot, { stashPos }, signal, () => {}).catch(() => {});
+          console.log(`[GearDebug] armour: ${ingotsHeld()} ingots after smelting`);
+        }
+      }
     }
 
     // WOOD SELF-SUPPLY (same pattern as build_farm's hoe step, which works):
