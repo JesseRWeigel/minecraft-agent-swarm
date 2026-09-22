@@ -13,8 +13,17 @@ test("pillager shot: the archery rule stays awake for the pillager point", () =>
   // three times, five crossbows and 110 arrows banked, and this override
   // fired zero times because Take Aim and Ol' Betsy were both earned.
   assert.match(BRAIN, /whos_the_pillager_now/, "the third archery point must be checked");
-  assert.match(BRAIN, /!aimDone2 \|\| !betsyDone \|\| !pillagerDone/, "any unearned archery point keeps it running");
-  assert.match(BRAIN, /prefer: !pillagerDone/, "the preference is passed only while that point is open");
+  assert.match(
+    BRAIN,
+    /!aimDone2 \|\| !betsyDone \|\| \(!pillagerDone && pillagerNear\)/,
+    "an unearned point keeps it running, and the last one waits for a target",
+  );
+  assert.match(BRAIN, /prefer: onlyPillagerLeft \? "pillager"/, "the preference rides on the last-point flag");
+  assert.match(
+    BRAIN,
+    /const onlyPillagerLeft = aimDone2 && betsyDone && !pillagerDone/,
+    "which is what that flag means",
+  );
 });
 
 test("pillager shot: hunting keeps firing until the raider is down", () => {
@@ -25,8 +34,24 @@ test("pillager shot: hunting keeps firing until the raider is down", () => {
   assert.match(SKILL, /hunting \? !target\.isValid : hit/, "a hunt ends when the target drops, not on first blood");
 });
 
-test("pillager shot: falls back to an animal when no raider is about", () => {
-  assert.match(SKILL, /\?\?\s*bot\.nearestEntity\(\(e\) => TARGETS\.has/, "the animal search remains the fallback");
+test("pillager shot: does not shoot an animal when a pillager was asked for", () => {
+  // Take Aim and Ol' Betsy are earned by the time the pillager point is the
+  // one left, so an animal shot reports success and earns nothing. Run 780
+  // spent thirteen archery runs on donkeys and horses for no points.
+  const start = SKILL.indexOf("const target = wantPillager");
+  assert.notStrictEqual(start, -1, "the target choice must branch on the request");
+  const block = SKILL.slice(start, start + 240);
+  // The animal search must sit on the OTHER branch of the ternary, never as a
+  // fallback after the pillager search.
+  assert.match(block, /wantPillager\s*\?[\s\S]*HOSTILE_TARGET[\s\S]*:\s*bot\.nearestEntity/, "one branch each");
+  assert.doesNotMatch(block, /HOSTILE_TARGET\)\s*\)\s*\?\?/, "the pillager search must not fall through to an animal");
+});
+
+test("pillager shot: the rule waits until a raider is actually nearby", () => {
+  // Otherwise the override burns Blade's attention on an empty field.
+  assert.match(BRAIN, /const pillagerNear =/, "the brain checks for a live pillager");
+  assert.match(BRAIN, /!pillagerDone && pillagerNear/, "the last point only fires with a target in sight");
+  assert.match(BRAIN, /< 48/, "and within a sensible radius");
 });
 
 test("pillager shot: stands off a raider rather than walking into it", () => {

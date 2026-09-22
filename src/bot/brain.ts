@@ -2918,7 +2918,16 @@ export class BotBrain {
       const pillagerDone =
         earnedAim2.has("adventure/whos_the_pillager_now") ||
         earnedAim2.has("minecraft:adventure/whos_the_pillager_now");
-      if ((!aimDone2 || !betsyDone || !pillagerDone) && cooledAim) {
+      // With Take Aim and Ol' Betsy both earned, shooting an animal earns
+      // nothing. Run 780 spent thirteen archery runs on donkeys and horses
+      // because no raider was about, which is arrows and attention for no
+      // points. When the pillager point is the only one left, wait until
+      // there is a pillager to shoot at.
+      const pillagerNear = !!this.bot.nearestEntity(
+        (e) => e.name === "pillager" && e.position.distanceTo(this.bot.entity.position) < 48,
+      );
+      const onlyPillagerLeft = aimDone2 && betsyDone && !pillagerDone;
+      if ((!aimDone2 || !betsyDone || (!pillagerDone && pillagerNear)) && cooledAim) {
         const hasBow = this.bot.inventory.items().some((i) => i.name === "bow");
         const stringHeld = this.bot.inventory
           .items()
@@ -2944,7 +2953,7 @@ export class BotBrain {
           this.events.onThought("String, sticks, arrows, table. Time to loose one for the record books.");
           const result = await this.executeActionUnlessPaused("invoke_skill", {
             skill: "shoot_arrow",
-            prefer: !pillagerDone && aimDone2 && betsyDone ? "pillager" : undefined,
+            prefer: onlyPillagerLeft ? "pillager" : undefined,
           });
           this.events.onAction("shoot_arrow", result);
           this.lastAction = "shoot_arrow";

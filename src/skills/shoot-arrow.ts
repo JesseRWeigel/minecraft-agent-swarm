@@ -105,9 +105,12 @@ export const shootArrowSkill: Skill = {
     // A caller chasing the pillager point asks for one by name. Fall back to
     // an animal, because a missing raider should not waste the whole trip.
     const wantPillager = _params?.prefer === HOSTILE_TARGET;
-    const target =
-      (wantPillager ? bot.nearestEntity((e) => e.name === HOSTILE_TARGET) : null) ??
-      bot.nearestEntity((e) => TARGETS.has(e.name ?? ""));
+    // No animal fallback when a pillager was asked for. Take Aim and Ol'
+    // Betsy are earned by then, so an animal shot shows a success message and
+    // earns nothing: run 780 spent thirteen runs on donkeys and horses.
+    const target = wantPillager
+      ? bot.nearestEntity((e) => e.name === HOSTILE_TARGET)
+      : bot.nearestEntity((e) => TARGETS.has(e.name ?? ""));
     if (!target) {
       return {
         success: false,
