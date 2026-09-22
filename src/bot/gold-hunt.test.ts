@@ -13,9 +13,11 @@ test("gold hunt: fires only while the fortress is unearned and gold is short", (
   // boots. The swarm's gold comes from nether gold ore, which sits past the
   // portal the missing gold is stopping him crossing, so the loop closes on
   // itself and overworld ore is the way out of it.
-  const start = BRAIN.indexOf("the Nether trip needs 4 gold");
+  // Anchor on the override's own comment and read to the mining call, so
+  // inserting steps inside it cannot slide the window off the conditions.
+  const start = BRAIN.indexOf("THE FORTRESS IS ONE GOLD INGOT SHORT");
   assert.notStrictEqual(start, -1, "the override must exist");
-  const block = BRAIN.slice(start - 1400, start + 400);
+  const block = BRAIN.slice(start, BRAIN.indexOf('blockType: "gold_ore"', start));
   assert.match(block, /fortressStillOpen && ingotsAbout < 4/, "both conditions gate the hunt");
   assert.match(block, /lastGoldHuntMs > 900_000/, "a cooldown keeps it from eating the miner's hour");
   assert.match(block, /overworld/, "gold hunting belongs in the overworld, not past the portal");
@@ -28,8 +30,8 @@ test("gold hunt: calls the action by the name the roles actually allow", () => {
   // blockType rather than block.
   const roles = fs.readFileSync(path.join(__dirname, "role.ts"), "utf8");
   assert.match(roles, /"mine_block"/, "the roles name the action mine_block");
-  const start = BRAIN.indexOf("the Nether trip needs 4 gold");
-  const block = BRAIN.slice(start - 1500, start + 700);
+  const start = BRAIN.indexOf("THE FORTRESS IS ONE GOLD INGOT SHORT");
+  const block = BRAIN.slice(start, BRAIN.indexOf('blockType: "gold_ore"', start) + 60);
   assert.match(block, /allowedActions\.includes\("mine_block"\)/, "gate on the name the roles use");
   assert.match(block, /blockType: "gold_ore"/, "mine_block reads blockType");
 });
@@ -43,4 +45,18 @@ test("gold hunt: counts every form of gold the team can reach", () => {
   }
   assert.match(block, /gold_nugget", stashY\) \/ 9/, "nine nuggets make an ingot");
   assert.match(block, /gold_block", stashY\) \* 9/, "a block is nine ingots");
+});
+
+test("gold hunt: gets an iron pickaxe before trying to mine gold", () => {
+  // Run 776, first firing: "Can't harvest gold_ore with stone_pickaxe — it
+  // needs a iron_pickaxe". A fair refusal, and a dead end on its own, since
+  // craft_gear spends iron on armour first and only reserves three ingots for
+  // a pick when the bot carries none at all, and a stone pick counts as one.
+  const start = BRAIN.indexOf("gold needs an iron pickaxe");
+  assert.notStrictEqual(start, -1, "the pickaxe step must exist");
+  const mine = BRAIN.indexOf('blockType: "gold_ore"');
+  assert.ok(start < mine, "ask for the pick before swinging at gold ore");
+  const block = BRAIN.slice(start - 700, start + 500);
+  assert.match(block, /iron_pickaxe|diamond_pickaxe|netherite_pickaxe/, "any pick that can harvest gold counts");
+  assert.match(block, /item: "iron_pickaxe"/, "craft the pick by name");
 });

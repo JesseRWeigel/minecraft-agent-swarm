@@ -2543,6 +2543,26 @@ export class BotBrain {
       );
       if (fortressStillOpen && ingotsAbout < 4) {
         this.lastGoldHuntMs = Date.now();
+        // Gold ore needs an IRON pickaxe. Run 776's first hunt answered
+        // "Can't harvest gold_ore with stone_pickaxe — it needs a
+        // iron_pickaxe", which is a fair refusal and a dead end on its own:
+        // craft_gear spends iron on armour first and only reserves three
+        // ingots for a pick when the bot has none at all, and a stone pick
+        // counts. Ask for the pick directly, then mine on the next pass.
+        const ironPick = this.bot.inventory
+          .items()
+          .some((i) => i.name === "iron_pickaxe" || i.name === "diamond_pickaxe" || i.name === "netherite_pickaxe");
+        if (!ironPick) {
+          this.log.info(
+            "Brain",
+            `OVERRIDE: gold needs an iron pickaxe and I have none — crafting one (team gold about ${ingotsAbout})`,
+          );
+          const pickResult = await this.executeActionUnlessPaused("craft", { item: "iron_pickaxe" });
+          this.events.onAction("craft", pickResult);
+          this.lastAction = "craft";
+          this.lastResult = pickResult;
+          return;
+        }
         this.log.info(
           "Brain",
           `OVERRIDE: the Nether trip needs 4 gold and the team can reach about ${ingotsAbout} — mining gold_ore`,
