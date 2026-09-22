@@ -61,6 +61,40 @@ export async function wearGoldForPiglins(bot: Bot, tag: string, onStep?: (msg: s
           );
         }
       }
+      // Nuggets are gold too, and they are the form this swarm actually mines.
+      //
+      // Nether gold ore drops nuggets, not ingots, and Mason has been mining
+      // it on every crossing. Nine nuggets make an ingot at a table, and this
+      // preflight knew about ingots, blocks and raw gold while walking past
+      // the nuggets. Run 773 stood down nine fortress trips with "No gold to
+      // wear" on the strength of that gap.
+      if (ingots() < 4) {
+        const nuggetsHeld = () =>
+          bot.inventory
+            .items()
+            .filter((i) => i.name === "gold_nugget")
+            .reduce((n, i) => n + i.count, 0);
+        const want = (4 - ingots()) * 9;
+        if (nuggetsHeld() < want) {
+          await withdrawStash(bot, STASH_POS, "gold_nugget", want - nuggetsHeld(), 60_000).catch(() => {});
+        }
+        if (nuggetsHeld() >= 9) {
+          const mcDataLoader = (await import("minecraft-data")).default;
+          const mcData = mcDataLoader(bot.version);
+          const table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 24 });
+          const def = mcData.itemsByName["gold_ingot"];
+          const recipe = def && table ? bot.recipesFor(def.id, null, 1, table)[0] : null;
+          if (recipe && table) {
+            const batches = Math.floor(nuggetsHeld() / 9);
+            await bot.craft(recipe, batches, table).catch(() => {});
+          }
+          console.log(
+            `[${tag}] ${bot.username}: ${nuggetsHeld()} nuggets, table=${!!table}, recipe=${!!recipe} -> ingots now ${ingots()}`,
+          );
+        } else if (nuggetsHeld() > 0) {
+          console.log(`[${tag}] ${bot.username}: only ${nuggetsHeld()} gold nuggets, nine make an ingot`);
+        }
+      }
       if (ingots() >= 4) {
         onStep?.("Forging golden boots from stash gold...");
         const { craftPiece } = await import("./craft-gear.js");
