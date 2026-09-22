@@ -275,6 +275,35 @@ export const smeltOresSkill: Skill = {
           new Promise((_, rej) => setTimeout(() => rej(new Error("openFurnace timeout")), 10000)),
         ])) as Awaited<ReturnType<typeof bot.openFurnace>>;
 
+        // Make room before touching the furnace.
+        //
+        // Run 765: "[Skill] Smelt error: Error: destination full" twice, and
+        // the gear step reported "1 ingots and 3 raw iron - smelting" then
+        // "1 ingots after smelting", so the raw iron came back unsmelted and
+        // Forge went on dying with no armour. The unjam below cannot work with
+        // a full pack: takeOutput has nowhere to put the ingots, so it throws,
+        // the furnace stays jammed, and putInput then fails for the same
+        // reason. Banking a few stacks first is what the reclaim needs.
+        if (bot.inventory.emptySlotCount() < 2) {
+          console.log(
+            `[Skill] ${bot.username}: furnace work with ${bot.inventory.emptySlotCount()} free slots — banking first`,
+          );
+          if (stashPos) {
+            const { depositStash } = await import("./stash.js");
+            // Keep what this skill is here to use: the ores, the fuel and the
+            // tools. Everything else can go in the chest.
+            const keep = [
+              { name: "raw_", minCount: 64 },
+              { name: "coal", minCount: 32 },
+              { name: "pickaxe", minCount: 1 },
+              { name: "sword", minCount: 1 },
+              { name: "food", minCount: 4 },
+            ];
+            await depositStash(bot, stashPos, keep).catch(() => {});
+          }
+          console.log(`[Skill] ${bot.username}: ${bot.inventory.emptySlotCount()} free slots after banking`);
+        }
+
         // Clear jammed slots first. "destination full" killed the 10-raw-iron
         // batch in run 367: the shared village furnace held someone's old
         // output plus leftovers in the input/fuel slots, putInput threw, and
@@ -287,8 +316,12 @@ export const smeltOresSkill: Skill = {
           if (jammedInput && jammedInput.name !== batch.itemName) await furnace.takeInput();
           const jammedFuel = furnace.fuelItem();
           if (jammedFuel && !FUEL_ITEMS.includes(jammedFuel.name)) await furnace.takeFuel();
-        } catch {
-          /* best effort — the puts below report anything still stuck */
+        } catch (e) {
+          // Say why. A silent reclaim failure is indistinguishable from an
+          // empty furnace, and "destination full" here is the whole story.
+          console.log(
+            `[Skill] ${bot.username}: furnace reclaim failed (${(e as Error).message}) with ${bot.inventory.emptySlotCount()} free slots`,
+          );
         }
 
         // Put fuel first
