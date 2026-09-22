@@ -2909,7 +2909,16 @@ export class BotBrain {
       // does the shooting has had no reason to run since. Keep it running
       // while either point is open; the skill now prefers the crossbow.
       const betsyDone = earnedAim2.has("adventure/ol_betsy") || earnedAim2.has("minecraft:adventure/ol_betsy");
-      if ((!aimDone2 || !betsyDone) && cooledAim) {
+      // Who's the Pillager Now wants a pillager shot with a crossbow, and the
+      // rule stood down again the moment Ol' Betsy landed. Run 778 makes the
+      // cost of that plain: forty pillager lines at the village, Mason shot
+      // dead by one three times, bots fleeing them, and five crossbows with a
+      // hundred and ten arrows sitting in the armoury while this override
+      // fired zero times.
+      const pillagerDone =
+        earnedAim2.has("adventure/whos_the_pillager_now") ||
+        earnedAim2.has("minecraft:adventure/whos_the_pillager_now");
+      if ((!aimDone2 || !betsyDone || !pillagerDone) && cooledAim) {
         const hasBow = this.bot.inventory.items().some((i) => i.name === "bow");
         const stringHeld = this.bot.inventory
           .items()
@@ -2930,10 +2939,13 @@ export class BotBrain {
           this.lastAimMs = Date.now();
           this.log.info(
             "Brain",
-            `OVERRIDE: archery kit within reach (${aimDone2 ? "Ol' Betsy" : "Take Aim"} unearned) — shoot_arrow`,
+            `OVERRIDE: archery kit within reach (${!aimDone2 ? "Take Aim" : !betsyDone ? "Ol' Betsy" : "Who's the Pillager Now"} unearned) — shoot_arrow`,
           );
           this.events.onThought("String, sticks, arrows, table. Time to loose one for the record books.");
-          const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "shoot_arrow" });
+          const result = await this.executeActionUnlessPaused("invoke_skill", {
+            skill: "shoot_arrow",
+            prefer: !pillagerDone && aimDone2 && betsyDone ? "pillager" : undefined,
+          });
           this.events.onAction("shoot_arrow", result);
           this.lastAction = "shoot_arrow";
           this.lastResult = result;

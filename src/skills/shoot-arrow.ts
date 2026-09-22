@@ -16,6 +16,13 @@ import { baseMoves, safeGoto } from "../bot/navigation.js";
  */
 
 const TARGETS = new Set(["sheep", "chicken", "pig", "cow", "rabbit", "horse", "donkey"]);
+/**
+ * Who's the Pillager Now wants a pillager KILLED with a crossbow, so this one
+ * target is hunted rather than plinked. Run 778 had forty pillager lines at
+ * the village, Mason shot dead by one three times, and five crossbows in the
+ * armoury, so the raiders are here and the tool is banked.
+ */
+const HOSTILE_TARGET = "pillager";
 
 function count(bot: Bot, name: string): number {
   return bot.inventory
@@ -95,10 +102,23 @@ export const shootArrowSkill: Skill = {
     }
 
     // --- Target ---
-    const target = bot.nearestEntity((e) => TARGETS.has(e.name ?? ""));
+    // A caller chasing the pillager point asks for one by name. Fall back to
+    // an animal, because a missing raider should not waste the whole trip.
+    const wantPillager = _params?.prefer === HOSTILE_TARGET;
+    const target =
+      (wantPillager ? bot.nearestEntity((e) => e.name === HOSTILE_TARGET) : null) ??
+      bot.nearestEntity((e) => TARGETS.has(e.name ?? ""));
     if (!target) {
-      return { success: false, message: resumable("Bow and arrows ready — no animal in sight to shoot.") };
+      return {
+        success: false,
+        message: resumable(
+          wantPillager
+            ? "Crossbow ready — no pillager or animal in sight."
+            : "Bow and arrows ready — no animal in sight to shoot.",
+        ),
+      };
     }
+    const hunting = target.name === HOSTILE_TARGET;
     step(`Stalking a ${target.name} (${bot.entity.position.distanceTo(target.position).toFixed(0)} blocks)...`, 0.6);
     bot.pathfinder.setMovements(baseMoves(bot));
     await safeGoto(bot, new goals.GoalFollow(target, 4), 30_000).catch(() => {});
@@ -128,7 +148,12 @@ export const shootArrowSkill: Skill = {
 
     let shots = 0;
     let hit = false;
-    while (!hit && shots < 4 && target.isValid && !signal.aborted) {
+    // A hit earns Take Aim and Ol' Betsy. The pillager point needs the thing
+    // DEAD, so keep firing while it lives, within a bounded number of shots.
+    const maxShots = hunting ? 12 : 4;
+    const done = () => (hunting ? !target.isValid : hit);
+    while (!done() && shots < maxShots && !signal.aborted) {
+      if (hunting && !target.isValid) break;
       shots++;
       step(`Full draw on the ${target.name} (shot ${shots})...`, 0.7 + shots * 0.05);
       const hurtPromise = new Promise<boolean>((resolve) => {
@@ -158,10 +183,17 @@ export const shootArrowSkill: Skill = {
         bot.deactivateItem();
       }
       hit = (await hurtPromise) || !target.isValid;
-      if (!hit) await new Promise((r) => setTimeout(r, 800));
+      if (!done()) await new Promise((r) => setTimeout(r, 800));
     }
 
     console.log(`[AimDebug] ${bot.username} vs ${target.name}: shots=${shots} hit=${hit} valid=${target.isValid}`);
+    if (hunting && !target.isValid) {
+      return {
+        success: true,
+        message: `Shot the pillager down with a ${usingCrossbow ? "crossbow" : "bow"} after ${shots} shots.`,
+        stats: { shots },
+      };
+    }
     if (hit) {
       return {
         success: true,
