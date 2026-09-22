@@ -16,10 +16,11 @@ from tools.pilot.qualification import _private_new, _write, _sha, _capture_json,
 from tools.pilot.oak_worker import fixture_valid, FAILURE_CASES, score_files, endpoint_valid, fault_mode_valid
 from tools.pilot.server import _build_sandbox_argv, _validate_executable, run_owned
 from tools.pilot.scoped_trial import run_scoped, PROFILES
+from tools.pilot.oak_script import script_receipt_valid
 
 PARTICIPANT_FILES = ("action_descriptors.py", "model-action-session.mjs", "model-action-channel.mjs", "model-action-schema.mjs", "model-action-observation.mjs", "oak-participant-cli.mjs", "oak-participant.mjs", "oak_bridge_client.py", "protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs", "game_bridge.py", "game_bridge_client.py")
 OBSERVER_FILES = ("oak-fault-cli.mjs", "oak-blocked-fixture.mjs", "oak-blocked-observer-cli.mjs", "oak-observer-cli.mjs", "oak-fixture.mjs", "oak-task.mjs", "oak-inventory.mjs", "oak-score-cli.mjs", "protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
-PYTHON_FILES = ("action_descriptors.py", "oak_worker.py", "protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py", "login_identity.py", "rcon_stall.py")
+PYTHON_FILES = ("action_coordinator.py", "oak_script.py", "action_descriptors.py", "oak_worker.py", "protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py", "login_identity.py", "rcon_stall.py")
 
 
 def capture_sources(workspace):
@@ -72,9 +73,19 @@ def capture_observer_records(runtime, result):
     return matches, pins
 
 
-def validate_result(value, mode, recomputed):
+def capture_action_record(runtime, result, driver):
+    path=runtime / 'action-script.json'
+    if driver=='fixed':return not path.exists(), None
+    value,pin=_capture_json(path,1024*1024)
+    return bool(pin and isinstance(value,dict) and isinstance(result,dict) and value==result.get('action_script')),pin
+
+
+def validate_result(value, mode, recomputed, *, action_driver='fixed'):
     if not isinstance(value, dict) or type(value.get("schema_version")) is not int or value["schema_version"] != 1:
         return False
+    if action_driver not in ('fixed','scripted') or value.get('action_driver','fixed')!=action_driver:return False
+    if action_driver=='scripted' and (value.get('action_output_eof') is not True or not script_receipt_valid(value.get('action_script'),mode)):return False
+    if action_driver=='fixed' and value.get('action_script') is not None:return False
     if value.get("failure_case", "none") != "none" or value.get("injection") is not None:
         return False
     if value.get("control_mode") != mode or value.get("trial_id") != "collect-oak-log-v1" or value.get("action_id") != "collect-01":
@@ -104,11 +115,13 @@ def validate_result(value, mode, recomputed):
 
 
 def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snapshot,
-                                 tool_manifest_sha256, control_mode="forward", failure_case="none", resource_profile="game",
+                                 tool_manifest_sha256, control_mode="forward", failure_case="none", action_driver="fixed", resource_profile="game",
                                  storage_tool_root=None, storage_capacity_bytes=2 * 1024**3,
                                  bwrap_path=Path("/usr/bin/bwrap"), runner=run_owned):
     if launch is not True:
         raise ValueError("explicit launch=True required")
+    if action_driver not in ('fixed','scripted') or (action_driver=='scripted' and (control_mode not in ('forward','stationary') or failure_case!='none')):
+        raise ValueError('invalid action driver/control combination')
     if resource_profile not in PROFILES:
         raise ValueError("invalid resource profile")
     if failure_case not in FAILURE_CASES or not fault_mode_valid(failure_case, control_mode):
@@ -125,7 +138,7 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
     tools = Path(tool_snapshot).resolve(strict=True)
     storage = BoundedStorage(Path(workspace) / "storage", Path(storage_tool_root), capacity_bytes=storage_capacity_bytes)
     workspace = _private_new(workspace)
-    summary = {"schema_version": 1, "status": "failed", "control_mode": control_mode, "failure_case": failure_case,
+    summary = {"schema_version": 1, "status": "failed", "control_mode": control_mode, "failure_case": failure_case, "action_driver":action_driver,
                "tool_manifest_sha256": tool_manifest_sha256, "error": None, "resource_profile": resource_profile,
                "independent_observer_process": False,
                "claim_limit": "Fixed deterministic client in nested namespace; no model performance or arbitrary-code resource-containment claim."}
@@ -153,7 +166,7 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
         os.chmod(runtime / "server.properties", 0o600)
         summary["profile_sha256"] = _sha(runtime / "server.properties")
         _write(secret_path, (secret + "\n").encode())
-        command = [str(python), "-m", "tools.pilot.oak_worker", control_mode, failure_case]
+        command = [str(python), "-m", "tools.pilot.oak_worker", control_mode, failure_case, action_driver]
         args = _build_sandbox_argv(runtime, bwrap_path=bwrap, command=command)
         tmp_index = args.index("--tmpfs")
         args[tmp_index:tmp_index] = ["--size", str(64 * 1024**2)]
@@ -184,7 +197,9 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
         injection, injection_pin = _capture_json(runtime / "fault-injection.json", 65536)
         summary["fault_injection_record"] = injection
         summary["fault_injection_sha256"] = injection_pin
-        summary["evidence_valid"] = failure_case == "none" and not (runtime / "fault-injection.json").exists() and records_match and validate_result(result, control_mode, summary["host_score"])
+        action_record_valid,summary["action_script_sha256"] = capture_action_record(runtime,result,action_driver)
+        summary["action_script_record_valid"] = action_record_valid
+        summary["evidence_valid"] = action_record_valid and failure_case == "none" and not (runtime / "fault-injection.json").exists() and records_match and validate_result(result, control_mode, summary["host_score"],action_driver=action_driver)
         summary["independent_observer_process"] = bool(isinstance(result, dict) and result.get("independent_observer_process") is True)
         clean = process.returncode == 0 and not any((process.timed_out, process.cleanup_uncertain, process.stdout_truncated, process.stderr_truncated))
         summary["status"] = "qualified" if clean and summary["evidence_valid"] and resources["valid"] and resource_profile == "game" else "failed"

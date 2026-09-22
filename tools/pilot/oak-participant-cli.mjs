@@ -1,4 +1,5 @@
 import { createReadStream, createWriteStream, fstatSync } from "node:fs";
+import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { createParticipantPipes } from "./participant-pipes.mjs";
 import { runParticipant } from "./oak-participant.mjs";
@@ -58,17 +59,21 @@ export async function runParticipantProcess({
   output = process.stdout,
   error = process.stderr,
   openActionStreams = openDedicatedActionStreams,
-  loadMineflayer = () => import("mineflayer"),
+  loadMineflayer = () => createRequire(import.meta.url)("mineflayer"),
   run = runParticipant,
   watchdogMs = TOTAL_WATCHDOG_MS,
   hardExitOnWatchdog = false,
 } = {}) {
   let pipes, timer, actionStreams;
+  let modelMode = false,
+    stage = "arguments";
   try {
     const options = parseArguments(argv);
     if (!Number.isInteger(watchdogMs) || watchdogMs < 1 || watchdogMs > TOTAL_WATCHDOG_MS)
       throw new Error("invalid watchdog");
-    if (options.movement === "model") {
+    modelMode = options.movement === "model";
+    if (modelMode) {
+      stage = "action_pipes";
       const streams = openActionStreams();
       if (
         !streams?.input?.on ||
@@ -82,6 +87,7 @@ export async function runParticipantProcess({
       actionStreams.input.on("error", () => {});
       actionStreams.output.on("error", () => {});
     }
+    stage = "lifecycle_pipes";
     pipes = createParticipantPipes({ input, output, ...options });
     const watchdog = new Promise((_, reject) => {
       timer = setTimeout(() => {
@@ -93,8 +99,10 @@ export async function runParticipantProcess({
       }, watchdogMs);
     });
     const execution = (async () => {
+      stage = "load_dependencies";
       const mineflayer = await loadMineflayer();
       if (typeof mineflayer?.createBot !== "function") throw new Error("invalid mineflayer");
+      stage = "participant_run";
       return run({
         ...options,
         createBot: mineflayer.createBot,
@@ -105,10 +113,17 @@ export async function runParticipantProcess({
     })();
     const result = await Promise.race([execution, watchdog]);
     if (result?.schema_version !== 1 || result?.status !== "protocol_completed") throw new Error("participant failed");
+    stage = "close_lifecycle";
     await pipes.close();
     pipes = undefined;
     return 0;
-  } catch {
+  } catch (cause) {
+    if (modelMode) {
+      const code = typeof cause?.code === "string" && /^(E[A-Z0-9_]{1,40})$/.test(cause.code) ? cause.code : null;
+      try {
+        error.write(JSON.stringify({ component: "model_participant", stage, code }) + "\n");
+      } catch {}
+    }
     writeGenericFailure(error);
     return 1;
   } finally {

@@ -102,3 +102,25 @@ test("model CLI rejects lifecycle stream reuse before loading Mineflayer", async
   );
   assert.equal(loaded, false);
 });
+
+test("model startup failure emits only bounded phase and code diagnostics", async () => {
+  const error = new PassThrough();
+  let diagnostic = "";
+  error.on("data", (b) => (diagnostic += b));
+  const code = await runParticipantProcess({
+    argv: [...argv.slice(0, -1), "model"],
+    input: new PassThrough(),
+    output: new PassThrough(),
+    error,
+    openActionStreams: () => ({ input: new PassThrough(), output: new PassThrough() }),
+    loadMineflayer: async () => {
+      const e = new Error("private text");
+      e.code = "ENOENT";
+      throw e;
+    },
+  });
+  assert.equal(code, 1);
+  assert.ok(diagnostic.includes('"stage":"load_dependencies"'));
+  assert.ok(diagnostic.includes('"code":"ENOENT"'));
+  assert.equal(diagnostic.includes("private text"), false);
+});

@@ -1,9 +1,9 @@
 # Bounded model-action session: offline qualification
 
 Status: implemented and tested with bot doubles, including the participant
-lifecycle, CLI and production namespace descriptor forwarding. The outer supervisor does not yet launch this path or a model
-coordinator. No game or model-performance result
-is claimed for this interface.
+lifecycle, CLI and production namespace descriptor forwarding. The outer supervisor now launches
+[qualified scripted game controls](scripted-oak-qualification.md). No model
+coordinator, model-performance or learning result is claimed.
 
 `createModelActionSession({bot})` in `tools/pilot/model-action-session.mjs` owns an
 already connected bot. It parses each request with the strict schema, executes
@@ -69,8 +69,8 @@ must remain in place when this is integrated.
 `runModelActionChannel({input, output, session, signal, timeoutMs})` accepts dedicated
 binary readable/writable streams and a trusted `createModelActionSession` instance.
 Never attach these to the participant lifecycle streams carrying
-`ready/begin/action_finished/finalize`. The participant CLI has a dedicated descriptor entry point; the outer supervisor
-and scripted coordinator are not connected yet.
+`ready/begin/action_finished/finalize`. The participant CLI has a dedicated descriptor entry point connected to the
+outer supervisor and bounded scripted coordinator.
 
 Each request is one UTF-8 JSON object followed by LF, with at most 4,096 bytes
 before the LF. Fragmented reads are supported. The caller must wait for each
@@ -120,8 +120,8 @@ and stderr. It rejects lifecycle-stream reuse in
 its injectable interface and closes action streams when the process runner ends.
 The source manifest captures the action modules and descriptor helper with the
 participant code.
-These entry points are not an enabled model trial: the outer supervisor still
-accepts only the existing fixed controls.
+The outer supervisor supports an explicit scripted driver for collection and
+stationary controls. No inference backend is connected.
 
 ## Namespace forwarding
 
@@ -145,7 +145,7 @@ load. No Minecraft world or model is started by these tests.
 
 ## Qualification and remaining integration
 
-The complete pilot JavaScript suite passes 169 tests, including session tests for
+The complete pilot JavaScript suite passes 170 tests, including session tests for
 ordered primitives, invalid sequence, invisible/stale/distant/undiggable targets,
 concurrent cancellation, late completions, death, disconnect, action/session caps,
 finish and transcript timing. Observation tests cover metadata exclusion, invalid
@@ -157,10 +157,9 @@ A real Node subprocess exchanges observe/look/dig/move/finish over OS pipes with
 the actual session and a bot double; a lifecycle message on that channel is
 rejected with no action reply. This establishes transport behavior, not gameplay.
 
-Next connect the descriptor helper to the outer supervisor and add a bounded
-scripted host coordinator. Pass every session
-failure into host acceptance, and replay an explicit observe/look/dig/move/finish
-sequence in an isolated game. Require positive/no-action controls and a cancelled
-session whose endpoint cannot be promoted to success. Only then connect a model,
+The descriptor helper and bounded coordinator are now connected to the outer
+supervisor. Positive and stationary scripted game controls qualified. Next require
+a cancelled scripted game session whose endpoint cannot be promoted to success.
+Only then connect a model,
 freeze inference budgets and begin comparative trials. The historical intermittent
 bridge shutdown failure also remains unresolved.

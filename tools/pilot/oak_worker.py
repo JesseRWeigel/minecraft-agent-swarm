@@ -4,6 +4,9 @@ from pathlib import Path
 from tools.pilot.protected_worker import capture_process, participant_argv, write_result, wait_port, stop_server
 from tools.pilot.participant_transport import ParticipantTransport
 from tools.pilot.game_bridge import GameBridge
+from tools.pilot.action_descriptors import ActionDescriptors, spawn_action_sandbox
+from tools.pilot.action_coordinator import run_action_script, audit_action_eof
+from tools.pilot.oak_script import scripted_actions, script_receipt_valid
 
 TRIAL="collect-oak-log-v1"
 ACTION="collect-01"
@@ -105,20 +108,27 @@ def endpoint_valid(value,mode,before,terminal):
         and terminal['actorSample'].get('observations',{}).get('position')==before['actorSample'].get('observations',{}).get('position'))
 
 def main():
-    if len(sys.argv) not in (2,3) or sys.argv[1] not in ('forward','stationary','mine_only','blocked') or not fault_mode_valid(sys.argv[2] if len(sys.argv)==3 else 'none',sys.argv[1]):return 2
+    if len(sys.argv) not in (2,3,4) or sys.argv[1] not in ('forward','stationary','mine_only','blocked') or not fault_mode_valid(sys.argv[2] if len(sys.argv)>=3 else 'none',sys.argv[1]):return 2
+    driver=sys.argv[3] if len(sys.argv)==4 else 'fixed'
+    if driver not in ('fixed','scripted') or (driver=='scripted' and (sys.argv[1] not in ('forward','stationary') or (len(sys.argv)>=3 and sys.argv[2]!='none'))):return 2
     if os.readlink('/proc/self/ns/net')==Path('/observer-code/host-network-namespace').read_text().strip():raise RuntimeError('private namespace required')
-    mode=sys.argv[1];fault=sys.argv[2] if len(sys.argv)==3 else 'none';password=Path('.qualification-rcon-password').read_text().strip()
+    mode=sys.argv[1];fault=sys.argv[2] if len(sys.argv)>=3 else 'none';password=Path('.qualification-rcon-password').read_text().strip()
     result={'schema_version':1,'status':'failed','control_mode':mode,'trial_id':TRIAL,'action_id':ACTION,'failure_case':fault,'injection':None,
         'independent_observer_process':False,'network_policy':'game_only_unix_v1','game_bridge':None,'participant_returncode':None,'java_returncode':None,
         'stop_sent':False,'term_sent':False,'kill_sent':False,'participant_forced_cleanup':False,'before':None,'during':None,'terminal':None,'fixture':None,'score':None,'error':None,'stage':'server_start','action_finished_received':False}
-    server=participant=transport=bridge=None
+    result.update(action_driver=driver,action_script=None,action_output_eof=False)
+    server=participant=transport=bridge=descriptors=None
     try:
         server=subprocess.Popen(['/usr/bin/java','-Xms512M','-Xmx2G','-Djava.awt.headless=true','-jar','server.jar','--nogui'],stdin=subprocess.PIPE,close_fds=True,env={'PATH':'/usr/bin:/bin','LANG':'C.UTF-8','HOME':str(Path.cwd())})
         deadline=time.monotonic()+60
         if not (wait_port(25585,deadline,server) and wait_port(25595,deadline,server)):raise RuntimeError('server readiness')
         bridge=GameBridge(Path.cwd()/'game-bridge')
         args=participant_argv('forward' if mode in ('mine_only','blocked') else mode);args[-1]=mode;args[args.index('/participant-code/game_bridge_client.py')]='/participant-code/oak_bridge_client.py'
-        participant=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,close_fds=True,bufsize=0,env={'PATH':'/usr/bin:/bin'})
+        if driver=='scripted':
+            args[-1]='model';descriptors=ActionDescriptors.create()
+            participant=spawn_action_sandbox(args,descriptors,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,bufsize=0,env={'PATH':'/usr/bin:/bin'})
+        else:
+            participant=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,close_fds=True,bufsize=0,env={'PATH':'/usr/bin:/bin'})
         transport=ParticipantTransport(participant,trial_id=TRIAL,action_id=ACTION);transport.wait_ready()
         result['stage']='fixture';result['fixture']=observe('fixture',password,blocked=mode=='blocked')
         if not fixture_valid(result['fixture'],mode):raise RuntimeError('fixture invalid')
@@ -126,6 +136,10 @@ def main():
         if not baseline_valid(result['before']):raise RuntimeError('baseline invalid')
         result['stage']='action';result['action_started_monotonic']=time.monotonic();transport.send_begin()
         result['action_begin_sent_monotonic']=time.monotonic()
+        if driver=='scripted':
+            allowance=max(.001,20-(time.monotonic()-result['action_started_monotonic']))
+            result['action_script']=run_action_script(descriptors,scripted_actions(mode),timeout=allowance)
+            if not script_receipt_valid(result['action_script'],mode):raise RuntimeError('scripted actions failed')
         if fault=='mid_action_disconnect':
             time.sleep(.2)
             result['during']=observe('during',password)
@@ -152,8 +166,17 @@ def main():
         result['stage']='terminal';result['terminal']=observe('terminal',password,suspend_for_test=fault=='observer_timeout')
         result['score']=score_files(Path('/pilot-tools/bin/node'),Path('/observer-code'),Path.cwd())
         result['stage']='finalize';transport.send_finalize();transport.wait_exit()
+        if driver=='scripted':
+            result['action_output_audit']=audit_action_eof(descriptors)
+            result['action_output_eof']=result['action_output_audit']=={'schema_version':1,'status':'verified','error':None}
+            if result['action_output_eof'] is not True:raise RuntimeError('action output not closed cleanly')
     except Exception:result['error']='oak_qualification_failed'
     finally:
+        if result['action_script'] is not None:
+            try:write_result('action-script.json',result['action_script'])
+            except Exception:result['error']='action_record_write_failed'
+        if descriptors is not None:
+            descriptors.close_child();descriptors.close_host()
         if participant is not None:
             try:
                 if participant.poll() is None:result['participant_forced_cleanup']=True;participant.kill();participant.wait(timeout=5)
@@ -169,6 +192,7 @@ def main():
         except Exception:result['error']='server_cleanup_uncertain'
         clean=result['error'] is None and result['participant_returncode']==0 and result['java_returncode']==0 and result['stop_sent'] and not any(result[k] for k in ('term_sent','kill_sent','participant_forced_cleanup'))
         accepted=endpoint_valid(result['score'],mode,result['before'],result['terminal'])
+        if driver=='scripted':accepted=accepted and result['action_output_eof'] is True and script_receipt_valid(result['action_script'],mode)
         result['status']='qualified' if fault=='none' and clean and accepted else 'failed'
         write_result('protected-result.json',result)
     return 0 if result['status']=='qualified' else 1

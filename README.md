@@ -45,8 +45,11 @@ is preserved and unresolved. [Relay diagnostics and a strict offline action pars
 are now in place. The [bounded action executor](docs/research/model-action-session.md)
 and its dedicated pipe transport pass offline tests for ordering, deadlines,
 cancellation and subprocess round trips. Participant lifecycle gates and dedicated
-action pipes also pass production namespace isolation checks; a scripted game
-replay through this interface remains next. These are fixed-client checks, not a model benchmark.
+action pipes also pass production namespace isolation checks. A
+[seven-request scripted replay](docs/research/scripted-oak-qualification.md) now mines
+and collects an oak log through that interface in 4.047 seconds, with independent
+server verification and a stationary control using identical sources and inputs.
+These are scripted infrastructure checks; no model benchmark or learning result is claimed.
 
 ---
 

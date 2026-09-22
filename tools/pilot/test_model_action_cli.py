@@ -19,11 +19,19 @@ const code=await runParticipantProcess({argv:['--trial-id','collect-oak-log-v1',
   result=subprocess.run([sys.executable,'-c',adapter,NODE,source],input=b'',stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=5,close_fds=True)
   self.assertEqual(result.returncode,1,result.stderr)
   self.assertEqual(result.stdout,b'')
-  self.assertEqual(result.stderr,b'participant failed\n')
+  self.assertTrue(result.stderr.endswith(b'participant failed\n'))
+  self.assertIn(b'"stage":"action_pipes"',result.stderr)
 
 
  @unittest.skipUnless(NODE, "Node required")
  def test_real_node_cli_keeps_actions_and_lifecycle_on_separate_pipes(self):
+  self.exercise_cli(False)
+
+ @unittest.skipUnless(NODE, "Node required")
+ def test_scripted_coordinator_with_actual_node_session_and_lifecycle(self):
+  self.exercise_cli(True)
+
+ def exercise_cli(self,scripted):
   import json,select
   from tools.pilot.action_descriptors import ActionDescriptors,spawn_action_sandbox
   from tools.pilot.participant_transport import ParticipantTransport
@@ -39,12 +47,19 @@ const code=await runParticipantProcess({argv:['--trial-id','collect-oak-log-v1',
    child=spawn_action_sandbox([NODE,'--input-type=module','-e',source],d,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,bufsize=0)
    transport=ParticipantTransport(child,trial_id='collect-oak-log-v1',action_id='collect-01')
    transport.wait_ready();transport.send_begin()
-   os.write(d.host_write,json.dumps({'schema_version':1,'trial_id':'collect-oak-log-v1','action_id':'collect-01','sequence':1,'action':{'kind':'finish'}}).encode()+b'\n')
-   os.close(d.host_write);d.host_write=None
-   self.assertTrue(select.select([d.host_read],[],[],2)[0]);raw=os.read(d.host_read,20481)
-   self.assertEqual(json.loads(raw),{'schema_version':1,'sequence':1,'status':'finished'})
+   if scripted:
+    from tools.pilot.action_coordinator import run_action_script, audit_action_eof
+    from tools.pilot.oak_script import scripted_actions, script_receipt_valid
+    result=run_action_script(d,scripted_actions("stationary"),timeout=2)
+    self.assertTrue(script_receipt_valid(result,"stationary"),result)
+   else:
+    os.write(d.host_write,json.dumps({'schema_version':1,'trial_id':'collect-oak-log-v1','action_id':'collect-01','sequence':1,'action':{'kind':'finish'}}).encode()+b'\n')
+    os.close(d.host_write);d.host_write=None
+    self.assertTrue(select.select([d.host_read],[],[],2)[0]);raw=os.read(d.host_read,20481)
+    self.assertEqual(json.loads(raw),{'schema_version':1,'sequence':1,'status':'finished'})
    transport.wait_action_finished();transport.send_finalize();transport.wait_exit()
    self.assertEqual(child.returncode,0);self.assertEqual(transport.stderr,b'')
+   if scripted:self.assertEqual(audit_action_eof(d),{'schema_version':1,'status':'verified','error':None})
   finally:
    if child is not None and child.poll() is None:child.kill();child.wait(timeout=2)
    if transport is not None:transport.close()

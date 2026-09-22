@@ -70,7 +70,7 @@ jobs:
       - name: Qualify isolated pilot network and filesystem
         env:
           PILOT_TEST_BWRAP: /usr/bin/bwrap
-        run: python3 -m unittest tools.pilot.test_server.SandboxLauncherTests.test_real_bwrap_hides_host_clears_secret_blocks_outbound_and_writes_runtime tools.pilot.test_shared_namespace tools.pilot.test_nested_participant_namespace tools.pilot.test_protected_namespace
+        run: python3 -m unittest tools.pilot.test_server.SandboxLauncherTests.test_real_bwrap_hides_host_clears_secret_blocks_outbound_and_writes_runtime tools.pilot.test_shared_namespace tools.pilot.test_nested_participant_namespace tools.pilot.test_protected_namespace tools.pilot.test_model_dependency_bootstrap
 
   dataset-and-operations:
     runs-on: ubuntu-latest
