@@ -70,3 +70,16 @@ test("smelt ores: a different fuel is taken out before a new one goes in", () =>
   assert.notStrictEqual(mismatch, -1, "the fuel type must be compared");
   assert.ok(take > mismatch && take < put, "take the wrong fuel out before putting the right one in");
 });
+
+test("smelt ores: the surplus is banked so the team can craft from it", () => {
+  // Run 769 smelted "7x iron_ingot, 10x copper_ingot" and banked nothing, so
+  // the ingots sat in the smelter's pocket while Mason's fortress gate read
+  // "armour=1/2 gold=false" for the whole hour. craft_gear withdraws ingots
+  // from the chest by design, so the smelter has to put them there.
+  const source = fs.readFileSync(path.join(__dirname, "smelt-ores.ts"), "utf8");
+  const success = source.indexOf("Smelting done! Got:");
+  const deposit = source.lastIndexOf("depositStash(bot, stashPos", success);
+  assert.ok(deposit !== -1 && deposit < success, "the deposit must run before the success return");
+  const block = source.slice(deposit - 500, success);
+  assert.match(block, /iron_ingot", minCount: 8/, "keep a working handful and bank the rest");
+});

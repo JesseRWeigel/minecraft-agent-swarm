@@ -431,6 +431,27 @@ export const smeltOresSkill: Skill = {
       return { success: false, message: "Smelting produced nothing. Maybe ran out of fuel or ores." };
     }
 
+    // Bank the surplus, because the team crafts from the chest.
+    //
+    // Run 769 finally smelted ("Got: 7x iron_ingot, 10x copper_ingot") and
+    // banked nothing: DEPOSITS was 0 for the hour, so those ingots stayed in
+    // the smelter's pocket. Meanwhile Mason's fortress gate read "armour=1/2
+    // gold=false" all hour, and craft_gear withdraws ingots from the stash by
+    // design. A smelter that keeps its output turns a team supply into one
+    // bot's pocket money.
+    if (stashPos && !signal.aborted) {
+      const { depositStash } = await import("./stash.js");
+      const keep = [
+        { name: "iron_ingot", minCount: 8 },
+        { name: "pickaxe", minCount: 1 },
+        { name: "sword", minCount: 1 },
+        { name: "food", minCount: 4 },
+        { name: "coal", minCount: 16 },
+      ];
+      const banked = await depositStash(bot, stashPos, keep).catch((e: Error) => `deposit failed: ${e.message}`);
+      console.log(`[Skill] ${bot.username}: banking the smelt surplus -> ${String(banked).slice(0, 120)}`);
+    }
+
     return {
       success: true,
       message: `Smelting done! Got: ${results.join(", ")}. Time to upgrade your gear with craft_gear!`,
