@@ -1,7 +1,7 @@
 # First survival task: collect one oak log
 
 Status: [fixed-client gameplay qualification](oak-game-qualification.md) now passes
-mining/collection and no-action controls. Broader failure controls and model
+mining/collection, no-action, [mining-only and barrier-approach controls](oak-negative-controls.md). Broader failure controls and model
 integration remain open. This is not a registered experiment or model result.
 The fresh-world movement qualification is the preceding gate.
 

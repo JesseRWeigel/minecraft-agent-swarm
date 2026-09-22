@@ -18,7 +18,7 @@ from tools.pilot.server import _build_sandbox_argv, _validate_executable, run_ow
 from tools.pilot.scoped_trial import run_scoped, PROFILES
 
 PARTICIPANT_FILES = ("oak-participant-cli.mjs", "oak-participant.mjs", "oak_bridge_client.py", "protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs", "game_bridge.py", "game_bridge_client.py")
-OBSERVER_FILES = ("oak-observer-cli.mjs", "oak-fixture.mjs", "oak-task.mjs", "oak-inventory.mjs", "oak-score-cli.mjs", "protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
+OBSERVER_FILES = ("oak-blocked-fixture.mjs", "oak-blocked-observer-cli.mjs", "oak-observer-cli.mjs", "oak-fixture.mjs", "oak-task.mjs", "oak-inventory.mjs", "oak-score-cli.mjs", "protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
 PYTHON_FILES = ("oak_worker.py", "protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py", "login_identity.py", "rcon_stall.py")
 
 
@@ -79,7 +79,7 @@ def validate_result(value, mode, recomputed):
     if identity != {"policy": "fixed_offline_login_v1", "username": "PilotProbe",
                     "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d", "protocol": 769, "status": "admitted"}:
         return False
-    if not fixture_valid(value.get("fixture")):
+    if not fixture_valid(value.get("fixture"),mode):
         return False
     if value.get('action_finished_received') is not True: return False
     start,end=value.get('action_started_monotonic'),value.get('action_finished_monotonic')
@@ -98,7 +98,7 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
         raise ValueError("invalid resource profile")
     if failure_case not in FAILURE_CASES:
         raise ValueError("invalid fixed failure case")
-    if control_mode not in {"forward", "stationary"}:
+    if control_mode not in {"forward", "stationary", "mine_only", "blocked"}:
         raise ValueError("invalid fixed movement mode")
     if storage_tool_root is None:
         raise ValueError("explicit pinned storage tool root required")

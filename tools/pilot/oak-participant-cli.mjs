@@ -18,7 +18,7 @@ function parseArguments(argv) {
   if (
     values["--trial-id"] !== TRIAL_ID ||
     values["--action-id"] !== ACTION_ID ||
-    !["forward", "stationary"].includes(values["--movement"])
+    !["forward", "stationary", "mine_only", "blocked"].includes(values["--movement"])
   )
     throw new Error("invalid arguments");
   return { trialId: TRIAL_ID, actionId: ACTION_ID, movement: values["--movement"] };

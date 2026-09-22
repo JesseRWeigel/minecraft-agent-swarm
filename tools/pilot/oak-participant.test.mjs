@@ -128,3 +128,17 @@ test("a dig that resolves after the action timeout cannot mutate controls after 
   assert.equal(f.events.includes("forward:true"), false);
   assert.equal(f.events.length, eventCountAfterCleanup);
 });
+
+test("mine-only breaks target but does not start collection movement",async()=>{
+ const f=fixture({movement:"mine_only"});const result=await runParticipant(f.args);
+ assert.equal(result.status,"protocol_completed");assert.ok(f.events.includes("dig:oak_log"));assert.equal(f.events.includes("forward:true"),false);
+});
+test("blocked control walks toward verified bedrock without mining through it",async()=>{
+ const f=fixture({movement:"blocked"});f.bot.blockAtCursor=()=>({name:"bedrock"});f.bot.canDigBlock=()=>false;
+ const result=await runParticipant(f.args);assert.equal(result.status,"protocol_completed");assert.ok(f.events.includes("forward:true"));assert.equal(f.events.some(x=>x.startsWith("dig:")),false);
+});
+test("blocked control rejects a missing or diggable barrier",async()=>{
+ for(const block of [null,{name:"oak_log"},{name:"bedrock"}]){
+ const f=fixture({movement:"blocked"});f.bot.blockAtCursor=()=>block;f.bot.canDigBlock=()=>true;
+ assert.equal((await runParticipant(f.args)).status,"failed");assert.equal(f.events.some(x=>x.startsWith("dig:")),false);}
+});

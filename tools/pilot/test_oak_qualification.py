@@ -28,3 +28,22 @@ class OakQualificationTests(unittest.TestCase):
   from tools.pilot.oak_worker import fixture_valid
   for v in [None,{}, {'setup':None},{'setup':{'fixture':None}},{'setup':{'fixture':{'sha256':'incorrect'},'status':'configured'},'baselineVerification':{'status':'verified'}}]:
    self.assertFalse(fixture_valid(v))
+
+ def test_negative_controls_require_complete_expected_endpoints(self):
+  from copy import deepcopy
+  from tools.pilot.oak_worker import endpoint_valid
+  score={'baselineVerification':{'status':'verified'},'endpoint':{'status':'observed','gameplayQualified':False,'acquired':False}}
+  before={'actorSample':{'observations':{'position':{'x':.5,'y':200,'z':.5}}}}
+  for mode,block,z in [('mine_only','minecraft:air',.5),('blocked','minecraft:oak_log',1.7)]:
+   terminal={**deepcopy(before),'inventory':[],'targetBlock':block}
+   terminal['actorSample']['observations']['position']['z']=z
+   self.assertTrue(endpoint_valid(score,mode,before,terminal))
+   for key in ('inventory','targetBlock','actorSample'):
+    broken=deepcopy(terminal);del broken[key]
+    self.assertFalse(endpoint_valid(score,mode,before,broken))
+   broken=deepcopy(terminal);broken['inventory']=[{'id':'minecraft:oak_log','count':1,'slot':0}]
+   self.assertFalse(endpoint_valid(score,mode,before,broken))
+   broken=deepcopy(score);broken['endpoint']['acquired']=True
+   self.assertFalse(endpoint_valid(broken,mode,before,terminal))
+   broken=deepcopy(terminal);broken['actorSample']['observations']['position']['z']=.5 if mode=='blocked' else 1.7
+   self.assertFalse(endpoint_valid(score,mode,before,broken))

@@ -136,20 +136,20 @@ reproduction and useful survival tasks remain open.
 
 The fixture and both controls now [pass from a fresh checkout](clean-checkout-reproduction.md)
 with a new dependency installation and client snapshot on the same WSL host.
-Independent-host reproduction remains open. The next implementation target is
-[collecting one oak log](first-survival-task.md), with server-verified block and
-inventory evidence; that survival task is a design, not a measured result.
+Independent-host reproduction remains open. The subsequent [oak-log task](first-survival-task.md) now has fixed-client
+gameplay results below, with server-verified block and inventory evidence.
 
 ### Oak-log evaluator components
 
 The [first survival task observer and host predicate](oak-evaluator-components.md)
 now have synthetic tests for inventory parsing, block changes, false success and
-partial evidence. The full game task is not integrated yet; actual mining and
-collection controls remain next. No survival-task result is claimed.
+partial evidence. Those components are now integrated into the fixed-client gameplay path below.
 
 ### First survival-task gameplay
 
 The [oak-log runner](oak-game-qualification.md) now passes actual mining/collection
 and a no-action control with server-observed inventory and block state. An initial
 scorer failure remains preserved; final same-source controls pass after a JSON
-key-order comparison fix. This is a fixed scripted client, not a model result.
+key-order comparison fix. [Four follow-up controls](oak-negative-controls.md) now
+separate collection from mining without pickup, bedrock-barrier approach and no
+action. This is a fixed scripted client, not a model result.

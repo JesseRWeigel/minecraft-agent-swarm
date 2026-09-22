@@ -35,7 +35,9 @@ The [clean-checkout reproduction](docs/research/clean-checkout-reproduction.md)
 also passes with fresh dependencies on the same WSL host. This qualifies test
 infrastructure; it is not a model-performance result. A fixed survival client
 now also [mines and collects one oak log](docs/research/oak-game-qualification.md),
-with a server-verified outcome and a passing no-action control.
+with a server-verified outcome. [Four same-source controls](docs/research/oak-negative-controls.md)
+distinguish collection from breaking without collection, approaching a bedrock-enclosed
+target, and doing nothing. These are fixed-client checks, not a model benchmark.
 
 ---
 

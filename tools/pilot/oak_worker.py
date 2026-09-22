@@ -8,9 +8,20 @@ from tools.pilot.game_bridge import GameBridge
 TRIAL="collect-oak-log-v1"
 ACTION="collect-01"
 FIXTURE_SHA256="b8d4a036e735f449674c207c94af99be2dc40680245ceb56c4f7c2a76e91a942"
+BLOCKED_FIXTURE_SHA256="5dd6ea35b37631087390babda3044ce60fd9800b75bb150a5ec68d50a3100a39"
 FAILURE_CASES=("none",)
 
-def fixture_valid(value):
+def fixture_valid(value,mode="forward"):
+    if mode=="blocked":
+        if not isinstance(value,dict):return False
+        setup=value.get('setup');check=value.get('baselineVerification')
+        if not isinstance(setup,dict) or not isinstance(check,dict) or not isinstance(setup.get('fixture'),dict):return False
+        receipts=setup.get('commandReceipts');checks=setup.get('blockChecks')
+        parent={**value,'setup':setup.get('parentSetup')}
+        return (setup.get('status')=='configured' and setup['fixture'].get('sha256')==BLOCKED_FIXTURE_SHA256
+            and isinstance(receipts,list) and len(receipts)==5 and all(isinstance(x,dict) and x.get('outcome')=='issued' for x in receipts)
+            and isinstance(checks,list) and len(checks)==6 and all(isinstance(x,dict) and x.get('status')=='verified' for x in checks)
+            and fixture_valid(parent,'forward'))
     if not isinstance(value,dict):return False
     setup=value.get('setup');verification=value.get('baselineVerification')
     if not isinstance(setup,dict) or not isinstance(verification,dict) or not isinstance(setup.get('fixture'),dict):return False
@@ -31,8 +42,9 @@ def baseline_valid(s):
         and o.get('gameMode')==0 and o.get('health')==20 and o.get('dimension')=='minecraft:overworld'
         and o.get('position')=={'x':0.5,'y':200,'z':0.5})
 
-def observe(phase,password):
-    c=capture_process(['/pilot-tools/bin/node','--max-old-space-size=256','/observer-code/oak-observer-cli.mjs'],
+def observe(phase,password,blocked=False):
+    cli="oak-blocked-observer-cli.mjs" if blocked and phase=="fixture" else "oak-observer-cli.mjs"
+    c=capture_process(['/pilot-tools/bin/node','--max-old-space-size=256','/observer-code/'+cli],
         {'schema_version':1,'phase':phase,'trial_id':TRIAL,'action_id':ACTION,'password':password})
     for channel in ('stdout','stderr'):
         p=Path('observer-'+phase+'.'+channel)
@@ -57,13 +69,21 @@ def endpoint_valid(value,mode,before,terminal):
     if not isinstance(verification,dict) or verification.get('status')!='verified' or not isinstance(e,dict):return False
     if e.get('status')!='observed' or e.get('gameplayQualified') is not False:return False
     if mode=='forward':return e.get('acquired') is True
+    if mode in ('mine_only','blocked'):
+        if e.get('acquired') is not False or terminal.get('inventory')!=[]:return False
+        try:
+            start=before['actorSample']['observations']['position'];end=terminal['actorSample']['observations']['position']
+            if mode=='mine_only':return terminal.get('targetBlock')=='minecraft:air' and start==end
+            return (terminal.get('targetBlock')=='minecraft:oak_log' and abs(end['x']-start['x'])<0.1
+                and abs(end['y']-start['y'])<0.1 and 0.1<end['z']-start['z']<2)
+        except (KeyError,TypeError):return False
     if mode!='stationary':return False
     return (e.get('acquired') is False and terminal.get('inventory')==[] and terminal.get('targetBlock')=='minecraft:oak_log'
         and isinstance(terminal.get('actorSample'),dict) and isinstance(before.get('actorSample'),dict)
         and terminal['actorSample'].get('observations',{}).get('position')==before['actorSample'].get('observations',{}).get('position'))
 
 def main():
-    if len(sys.argv) not in (2,3) or sys.argv[1] not in ('forward','stationary') or (len(sys.argv)==3 and sys.argv[2]!='none'):return 2
+    if len(sys.argv) not in (2,3) or sys.argv[1] not in ('forward','stationary','mine_only','blocked') or (len(sys.argv)==3 and sys.argv[2]!='none'):return 2
     if os.readlink('/proc/self/ns/net')==Path('/observer-code/host-network-namespace').read_text().strip():raise RuntimeError('private namespace required')
     mode=sys.argv[1];password=Path('.qualification-rcon-password').read_text().strip()
     result={'schema_version':1,'status':'failed','control_mode':mode,'trial_id':TRIAL,'action_id':ACTION,'failure_case':'none',
@@ -75,11 +95,11 @@ def main():
         deadline=time.monotonic()+60
         if not (wait_port(25585,deadline,server) and wait_port(25595,deadline,server)):raise RuntimeError('server readiness')
         bridge=GameBridge(Path.cwd()/'game-bridge')
-        args=participant_argv(mode);args[args.index('/participant-code/game_bridge_client.py')]='/participant-code/oak_bridge_client.py'
+        args=participant_argv('forward' if mode in ('mine_only','blocked') else mode);args[-1]=mode;args[args.index('/participant-code/game_bridge_client.py')]='/participant-code/oak_bridge_client.py'
         participant=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,close_fds=True,bufsize=0,env={'PATH':'/usr/bin:/bin'})
         transport=ParticipantTransport(participant,trial_id=TRIAL,action_id=ACTION);transport.wait_ready()
-        result['stage']='fixture';result['fixture']=observe('fixture',password)
-        if not fixture_valid(result['fixture']):raise RuntimeError('fixture invalid')
+        result['stage']='fixture';result['fixture']=observe('fixture',password,blocked=mode=='blocked')
+        if not fixture_valid(result['fixture'],mode):raise RuntimeError('fixture invalid')
         result['before']=observe('before',password);result['independent_observer_process']=True
         if not baseline_valid(result['before']):raise RuntimeError('baseline invalid')
         result['stage']='action';result['action_started_monotonic']=time.monotonic();transport.send_begin();transport.wait_action_finished()

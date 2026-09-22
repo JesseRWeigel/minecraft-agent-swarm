@@ -9,7 +9,7 @@ from game_bridge import GAME_ENDPOINT, pump
 
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in {"forward", "stationary"}:
+    if len(sys.argv) != 2 or sys.argv[1] not in {"forward", "stationary", "mine_only", "blocked"}:
         return 2
     stop = threading.Event()
     outcome = {"status": "waiting"}

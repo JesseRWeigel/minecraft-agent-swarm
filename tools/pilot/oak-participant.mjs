@@ -111,7 +111,7 @@ function hasOakLog(bot) {
   );
 }
 
-async function collectOakLog(bot, sleep, now, runPhase, isCancelled) {
+async function collectOakLog(bot, sleep, now, runPhase, isCancelled, mineOnly = false) {
   const target = bot.entity.position.clone().set(0, 200, 3);
   const block = bot.blockAt(target);
   if (!block || block.name !== "oak_log") throw new Error("fixed oak log unavailable");
@@ -120,6 +120,7 @@ async function collectOakLog(bot, sleep, now, runPhase, isCancelled) {
   if (isCancelled()) throw new Error("oak action cancelled");
   await runPhase(() => bot.dig(block), "dig oak log");
   if (isCancelled()) throw new Error("oak action cancelled");
+  if (mineOnly) return;
   await runPhase(() => bot.lookAt(target.clone().set(0.5, 201.62, 10)), "look toward oak drop");
   if (isCancelled()) throw new Error("oak action cancelled");
   if (hasOakLog(bot)) return;
@@ -152,7 +153,7 @@ export async function runParticipant({
   if (typeof createBot !== "function" || typeof sendMessage !== "function" || typeof waitForCommand !== "function")
     throw new TypeError("participant adapters required");
   if (trialId !== TRIAL_ID || actionId !== ACTION_ID) throw new RangeError("fixed supervisor IDs required");
-  if (!["forward", "stationary"].includes(movement)) throw new RangeError("invalid movement");
+  if (!["forward", "stationary", "mine_only", "blocked"].includes(movement)) throw new RangeError("invalid movement");
   if (typeof sleep !== "function" || typeof nowMonotonic !== "function")
     throw new TypeError("participant clocks required");
   if (!Number.isInteger(phaseTimeoutMs) || phaseTimeoutMs < 1 || phaseTimeoutMs > PHASE_TIMEOUT_MS)
@@ -212,12 +213,21 @@ export async function runParticipant({
     if (transportFailed) throw new Error("participant transport failed");
     await runPhase(() => sendMessage(outgoing("ready")), "send ready");
     validateCommand(await runPhase(() => waitForCommand(), "wait begin"), "begin");
-    if (movement === "forward")
+    if (movement === "forward" || movement === "mine_only")
       await runPhase(
-        () => collectOakLog(bot, sleep, now, runPhase, () => cancelled),
+        () => collectOakLog(bot, sleep, now, runPhase, () => cancelled, movement === "mine_only"),
         "fixed oak action",
         ACTION_TIMEOUT_MS,
       );
+    if (movement === "blocked") {
+      await runPhase(() => bot.lookAt(bot.entity.position.clone().set(0.5, 200.5, 3.5)), "look at barrier");
+      if (cancelled) throw new Error("cancelled");
+      const barrier = bot.blockAtCursor(4.5);
+      if (!barrier || barrier.name !== "bedrock" || bot.canDigBlock(barrier)) throw new Error("barrier not verified");
+      bot.setControlState("forward", true);
+      try { await runPhase(() => sleep(1000), "blocked approach"); }
+      finally { if (!cancelled) bot.setControlState("forward", false); }
+    }
     await runPhase(() => sendMessage(outgoing("action_finished")), "send action finished");
     validateCommand(await runPhase(() => waitForCommand(), "wait finalize"), "finalize");
     protocolCompleted = true;

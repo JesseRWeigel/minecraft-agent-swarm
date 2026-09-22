@@ -83,7 +83,7 @@ result = run_oak_qualification(
     },
     tool_snapshot=client_snapshot,
     tool_manifest_sha256=client_manifest_pin,
-    control_mode="forward",  # fixed mine-and-collect client; "stationary" does nothing
+    control_mode="forward",  # also: stationary, mine_only, blocked
     storage_tool_root=helper_root,
     bwrap_path=bwrap,
 )
@@ -97,9 +97,10 @@ per-attempt server configuration/credential; publish only reviewed derivatives.
 
 ## Remaining gates
 
-One positive and one no-action control do not complete the survival-task failure
-matrix. Add actual inaccessible-target, broken-but-uncollected, injected-item,
-interrupted-action and observation-failure cases. Strengthen full arena-volume
+The [follow-up control set](oak-negative-controls.md) now includes actual
+broken-but-uncollected and bedrock-barrier approach checks plus repeated
+collection/no-action controls. This does not complete the survival-task failure
+matrix. Add injected-item, interrupted-action and observation-failure cases. Strengthen full arena-volume
 verification and qualify any model-facing action adapter before collecting model
 results. The no-action client finishes immediately; its duration is not a matched
 model-comparison budget. No GPU workload, model inference, live-world reset or

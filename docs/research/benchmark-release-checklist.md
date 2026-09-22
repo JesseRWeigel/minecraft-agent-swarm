@@ -65,8 +65,9 @@ roster. Permissions and other failure timings remain pending; the combined box s
   bounded time budget. Include an impossible/no-action control. The
   [oak-log acquisition design](first-survival-task.md) specifies the next task;
   its [integrated fixed client](oak-game-qualification.md) now passes collection
-  and no-action controls. The inaccessible-target control and remaining failure
-  matrix are still outstanding, so this gate stays open.
+  and no-action controls. [Follow-up controls](oak-negative-controls.md) now cover
+  breaking without collection and approaching a bedrock-enclosed target. The
+  remaining failure matrix stays open, so this gate is not complete.
 - [x] Supply a minimal redistributable fixture or precise fixture-generation
   recipe and expected starting-state hash. The [fresh-world recipe](fresh-fixture.md)
   has one generated archive and both controls qualified without private-world input.
