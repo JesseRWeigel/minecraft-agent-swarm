@@ -5,7 +5,8 @@ verified transient systemd user scope around the complete launched game process
 tree. It fails closed if the manager/controllers are unavailable. This covers
 the server, nested participant, game bridge and trusted observers, not the live
 swarm. Input restore and source capture occur before scope launch and are outside
-this budget. Disk/world growth is still a separate open gate.
+this budget. The current launcher also requires [bounded persistent storage](bounded-storage.md);
+the historical scope attempts below predate that integration.
 
 ## Policy and evidence
 
@@ -74,8 +75,9 @@ python3 -m unittest tools.pilot.test_scoped_trial tools.pilot.test_protected_wor
 
 The [synthetic resource probe](resource-enforcement.md) separately verifies local
 controller support. Game-sized budgets, controller events and all failures must
-remain part of any benchmark condition. Add bounded writable world storage,
-actor identity and remaining fault cases before arbitrary model-generated code.
+remain part of any benchmark condition. The current storage dependency and fresh fixed-capacity image are described in
+[bounded storage](bounded-storage.md). Complete actor identity and remaining fault
+cases before arbitrary model-generated code.
 GPU memory, inference-token budgets and per-agent fairness are not established
 by this cgroup scope. Investigate any recurring participant shutdown failure using
 the retained diagnostics before a model comparison.

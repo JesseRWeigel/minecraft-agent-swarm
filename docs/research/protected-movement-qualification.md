@@ -13,7 +13,9 @@ measured action. They must never be reported as bot-earned gameplay progress.
 The live world and swarm processes are not part of this path.
 
 `run_protected_qualification` requires explicit `launch=True`, new workspace,
-pinned archive/server inputs and a verified Node/dependency snapshot. It never
+pinned archive/server inputs, a verified Node/dependency snapshot, a working
+[whole-trial resource scope](scoped-trials.md), and explicit `storage_tool_root`
+for [bounded persistent storage](bounded-storage.md). It never
 connects to a host game server. Its outer Bubblewrap namespace has private
 networking, a copied world, Java, the trusted supervisor and observer code.
 
@@ -115,11 +117,12 @@ terminal observation is an invalid attempt, never a valid negative control.
 
 - Only the fixed immutable client is qualified here; no arbitrary generated code
   or model-driven agent is allowed by this experiment's contract.
-- Node heap limits and temporary mount sizes are not comprehensive native-memory,
-  CPU, process, world-growth or disk quotas. Model trials still need resource gates.
+- The historical results used Node heap and temporary-mount limits. The current
+  launcher separately qualifies aggregate cgroup limits and bounded storage;
+  this does not retroactively add those guarantees to older attempts.
 - The original results below used shared private networking. The current runner
   uses the [game-only bridge](game-only-network.md), with separately recorded
-  qualification. Aggregate resource limits and actor identity remain open.
+  qualification. Actor identity and the combined arbitrary-code gate remain open.
 - RCON field samples are sequential, not atomic; sample and supervisor timings
   are preserved. Process-separation claims are tied to captured source and the
   qualified namespace launch path, not remote attestation.

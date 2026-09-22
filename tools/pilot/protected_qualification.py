@@ -10,6 +10,7 @@ from pathlib import Path
 import secrets
 
 from tools.pilot import prepare, restore
+from tools.pilot.bounded_storage import BoundedStorage
 from tools.pilot.client_tools import verify_tools
 from tools.pilot.qualification import _private_new, _write, _sha, _capture_json, QUAL_PROPERTIES
 from tools.pilot.protected_worker import score, fixture_valid, FAILURE_CASES
@@ -78,6 +79,7 @@ def validate_result(value, mode):
 
 def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool_snapshot,
                                  tool_manifest_sha256, movement_mode="forward", failure_case="none", resource_profile="game",
+                                 storage_tool_root=None, storage_capacity_bytes=2 * 1024**3,
                                  bwrap_path=Path("/usr/bin/bwrap"), runner=run_owned):
     if launch is not True:
         raise ValueError("explicit launch=True required")
@@ -87,26 +89,34 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
         raise ValueError("invalid fixed failure case")
     if movement_mode not in {"forward", "stationary"}:
         raise ValueError("invalid fixed movement mode")
+    if storage_tool_root is None:
+        raise ValueError("explicit pinned storage tool root required")
     bwrap = _validate_executable(Path(bwrap_path), "bwrap", expected_name="bwrap")
     _validate_executable(Path("/usr/bin/java"), "Java", expected_name="java", allowed_root=Path("/usr/lib/jvm"))
     python = Path("/usr/bin/python3").resolve(strict=True)
     _validate_executable(python, "Python", expected_name=python.name, allowed_root=Path("/usr"))
     verify_tools(Path(tool_snapshot), tool_manifest_sha256)
     tools = Path(tool_snapshot).resolve(strict=True)
+    storage = BoundedStorage(Path(workspace) / "storage", Path(storage_tool_root), capacity_bytes=storage_capacity_bytes)
     workspace = _private_new(workspace)
     summary = {"schema_version": 1, "status": "failed", "movement_mode": movement_mode, "failure_case": failure_case,
                "tool_manifest_sha256": tool_manifest_sha256, "error": None, "resource_profile": resource_profile,
                "independent_observer_process": False,
                "claim_limit": "Fixed deterministic client in nested namespace; no model performance or arbitrary-code resource-containment claim."}
-    runtime = workspace / "runtime"
-    secret_path = runtime / ".qualification-rcon-password"
+    secret_path = None
     try:
         summary["stage"] = "capture_sources"
         summary["controller_sha256"] = prepare._capture_file(Path(__file__), "protected host controller", 1024*1024).sha256
         source_hash = capture_sources(workspace)
         summary["source_manifest_sha256"] = source_hash
+        summary["stage"] = "mount_storage"
+        runtime = storage.start() / "runtime"
+        secret_path = runtime / ".qualification-rcon-password"
         summary["stage"] = "restore"
-        manifest = restore.restore(output=runtime, **restore_kwargs)
+        bounded_restore = dict(restore_kwargs)
+        # Reserve applies inside the fixed image; host free space is checked by storage.
+        bounded_restore["reserve_bytes"] = 64 * 1024**2
+        manifest = restore.restore(output=runtime, **bounded_restore)
         runtime_hash = _sha(runtime / "runtime-manifest.json")
         restore.verify_runtime(runtime, runtime_hash)
         summary.update(runtime_manifest_sha256=runtime_hash, snapshot_sha256=manifest["snapshot_sha256"], server_jar_sha256=manifest["server_jar_sha256"])
@@ -117,6 +127,8 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
         _write(secret_path, (secret + "\n").encode())
         command = [str(python), "-m", "tools.pilot.protected_worker", movement_mode, failure_case]
         args = _build_sandbox_argv(runtime, bwrap_path=bwrap, command=command)
+        tmp_index = args.index("--tmpfs")
+        args[tmp_index:tmp_index] = ["--size", str(64 * 1024**2)]
         index = args.index("--proc")
         args[index:index] = ["--ro-bind", str(tools), "/pilot-tools",
                              "--ro-bind", str(workspace / "observer-code"), "/observer-code",
@@ -131,6 +143,8 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
         summary["process"] = process.to_dict()
         result, digest = _capture_json(runtime / "protected-result.json", 1024 * 1024)
         summary["evidence_sha256"] = digest
+        level = prepare._capture_file(runtime / "ai-world" / "level.dat", "preserved world metadata", 16 * 1024**2)
+        summary["world_level_sha256"] = level.sha256
         summary["result"] = result
         summary["evidence_valid"] = validate_result(result, movement_mode)
         summary["independent_observer_process"] = bool(isinstance(result, dict) and result.get("independent_observer_process") is True)
@@ -139,6 +153,18 @@ def run_protected_qualification(*, launch=False, workspace, restore_kwargs, tool
     except Exception:
         summary["error"] = "protected_preparation_or_launch_failed"
     finally:
-        secret_path.unlink(missing_ok=True)
+        try:
+            if secret_path is not None:
+                secret_path.unlink(missing_ok=True)
+        except OSError:
+            summary["status"] = "failed"
+            summary["error"] = "secret_cleanup_failed"
+        try:
+            summary["storage"] = storage.close()
+            if summary["storage"].get("valid") is not True:
+                summary["status"] = "failed"
+        except Exception:
+            summary["status"] = "failed"
+            summary["storage"] = {"valid": False, "cleanup_uncertain": True}
         _write(workspace / "protected-summary.json", (json.dumps(summary, indent=2, sort_keys=True) + "\n").encode())
     return summary

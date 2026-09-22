@@ -1,6 +1,6 @@
 # First benchmark release: acceptance checklist
 
-Updated 21 September 2026. This is a release gate, not a list of achieved results.
+Updated 22 September 2026. This is a release gate, not a list of achieved results.
 The first release should be a small audited experiment, not a claim that every
 Minecraft advancement is a comparable benchmark task.
 
@@ -18,16 +18,18 @@ control. Mid-action failures and internal RCON stalls remain unqualified.
 
 [Kernel resource probes](resource-enforcement.md) verify scoped memory, PID and
 CPU enforcement on WSL. [Whole-trial integration](scoped-trials.md) now has
-fixed-client controls and an OOM rejection case. Disk/world-growth limits and
-actor identity remain pending; the combined acceptance box stays open.
+fixed-client controls and an OOM rejection case. [Bounded persistent storage](bounded-storage.md)
+now caps the runtime image; game-time full-disk fault behavior and actor identity
+remain pending. The combined acceptance box stays open.
 
 ## 1. Finish the deterministic path
 
 - [ ] Complete resource/network gates around the connected protected participant,
   bounded pipes, observer process and outer worker. Fixed-client namespaces hide
   credentials/world/evidence and bound pipes, lifetime and scratch; aggregate
-  memory/PID/CPU limits now cover the launched fixed-client tree; disk/world-growth
-  bounds remain. The current
+  memory/PID/CPU limits cover the launched fixed-client tree and a fixed-capacity
+  image bounds runtime writes. Full-disk behavior during gameplay remains to
+  qualify. The current
   [game-only network bridge](game-only-network.md) has its own qualification; it
   does not constrain game-protocol actions or actor identity.
 - [x] Capture and pin the current no-respawn client and executed qualification sources.

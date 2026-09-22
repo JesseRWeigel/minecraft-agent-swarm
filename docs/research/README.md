@@ -60,8 +60,10 @@ The long-running swarm archive is useful material for failure analysis, but it i
 [Actual WSL cgroup probes](resource-enforcement.md) now verify memory, PID and CPU
 enforcement, including a child that calls `setsid()`. The
 [game launcher now applies a verified whole-trial scope](scoped-trials.md), with
-normal game controls and an OOM rejection case preserved. Disk/world growth,
-actor identity and an earlier unresolved shutdown failure remain open.
+normal game controls and an OOM rejection case preserved.
+[Bounded persistent trial storage](bounded-storage.md) adds a fixed-capacity image
+for the copied world and evidence. Actor identity, remaining combined fault cases
+and an earlier unresolved shutdown failure remain open.
 
 ### Repository boundary
 
