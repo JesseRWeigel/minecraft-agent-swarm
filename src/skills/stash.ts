@@ -973,14 +973,32 @@ export async function depositStash(
   // Group items by category
   const byCategory = new Map<string, typeof itemsToDeposit>();
   const keptNames: string[] = [];
+  const { worthBanking, isBulk } = await import("./stash-glut.js");
+  const { stashCount: bankedCount } = await import("./stash-ledger.js");
+  const glutted: string[] = [];
   for (const item of itemsToDeposit) {
     if (shouldKeep(item.name, keepItems, keptCounts, item.count, materialReserve, pickaxeKeep, foodKeep)) {
       keptNames.push(item.name);
       continue;
     }
+    // Rubble past its cap stays out of the chests. On 2026-09-22 the stash
+    // held 4,875 stacks in 178 chests against a capacity of 4,806, almost all
+    // of it cobblestone, deepslate, coal and gravel, so every deposit bounced,
+    // the expansion kept adding chests, and a withdrawal for two iron ingots
+    // reported the shelves bare because two ingots in 178 chests of gravel
+    // cannot be found.
+    if (isBulk(item.name) && !worthBanking(item.name, bankedCount(item.name, stashPos.y))) {
+      glutted.push(item.name);
+      continue;
+    }
     const cat = categorizeItem(item.name);
     if (!byCategory.has(cat)) byCategory.set(cat, []);
     byCategory.get(cat)!.push(item);
+  }
+  if (glutted.length > 0) {
+    console.log(
+      `[Stash] ${bot.username}: kept ${[...new Set(glutted)].join(", ")} out of the chests — the stash is already full of them`,
+    );
   }
 
   // For each category, find nearest chest at the right row offset and deposit
