@@ -7,7 +7,7 @@ import { performance } from "node:perf_hooks";
 // records state and does not decide whether the actor is alive or successful.
 
 const ACTOR = "PilotProbe";
-const FIELDS = ["Pos", "Dimension", "Health", "UUID", "Roster"];
+const FIELDS = ["Pos", "Dimension", "Health", "UUID", "Roster", "playerGameType"];
 const ID_PATTERN = /[A-Za-z0-9][A-Za-z0-9._-]{0,63}/;
 const MAX_RESPONSE_BYTES = 65536;
 const MAX_COORDINATE = 30_000_000;
@@ -46,6 +46,10 @@ function parseReply(field, text) {
   if (typeof text !== "string" || Buffer.byteLength(text) > MAX_RESPONSE_BYTES || !text.startsWith(prefix))
     throw new SampleFailure("invalid_response");
   const value = text.slice(prefix.length);
+  if (field === "playerGameType") {
+    if (!["0", "1", "2", "3"].includes(value)) throw new SampleFailure("invalid_response");
+    return Number(value);
+  }
   if (field === "UUID") {
     const match = value.match(/^\[I;\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\]$/);
     const expected = [-246738247, 1303722752, -1416835668, -1046535363];
@@ -196,7 +200,8 @@ export async function sampleActor({
         else if (field === "Dimension") result.observations.dimension = parsed;
         else if (field === "Health") result.observations.health = parsed;
         else if (field === "UUID") result.observations.uuid = parsed;
-        else result.observations.roster = parsed;
+        else if (field === "Roster") result.observations.roster = parsed;
+        else result.observations.gameMode = parsed;
       } catch (error) {
         window.outcome = "invalid";
         throw error;

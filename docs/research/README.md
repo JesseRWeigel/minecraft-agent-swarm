@@ -66,7 +66,9 @@ for the copied world and evidence. A [real post-action disk-full check](disk-ful
 now rejects a missing terminal record while retaining earlier evidence and a
 bounded external receipt. [Fixed actor admission and server identity checks](actor-identity.md)
 now bind the connection to the expected UUID and one-player roster, with fresh
-forward/stationary game controls. Permissions, remaining combined fault cases
+forward/stationary game controls. A [survival-mode integrity check](game-mode-qualification.md)
+now rejects a deliberate post-action creative-mode change, with both controls
+repeated. Participant-issued privileged commands, remaining combined fault cases
 and an earlier unresolved shutdown failure remain open.
 
 ### Repository boundary

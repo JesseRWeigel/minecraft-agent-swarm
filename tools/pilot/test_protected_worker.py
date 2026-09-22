@@ -12,7 +12,7 @@ from tools.pilot.protected_qualification import run_protected_qualification, val
 def sample(phase, z=0.5):
     return {"schemaVersion": 1, "status": "sampled", "source": "server_rcon", "actor": "PilotProbe", "phase": phase,
             "trialId": TRIAL, "actionId": ACTION,
-            "observations": {"position": {"x": 0.5, "y": 200, "z": z}, "dimension": "minecraft:overworld", "health": 20, "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d", "roster": ["PilotProbe"]}}
+            "observations": {"position": {"x": 0.5, "y": 200, "z": z}, "dimension": "minecraft:overworld", "health": 20, "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d", "roster": ["PilotProbe"], "gameMode": 0}}
 
 
 def outcome(mode="forward"):
@@ -86,6 +86,18 @@ class ProtectedWorkerTests(unittest.TestCase):
         row["game_bridge"].pop("identity")
         self.assertFalse(validate_result(row, "forward"))
 
+    def test_non_survival_or_missing_mode_never_scores_even_with_forged_success(self):
+        for mode in ("forward", "stationary"):
+            for phase in ("before", "terminal"):
+                for value in (None, True, False, 0.0, "0", 1, 2, 3, -1):
+                    row = outcome(mode)
+                    row[phase]["observations"]["gameMode"] = value
+                    row["score"] = {"movement_succeeded": True, "negative_control_observed": True}
+                    self.assertFalse(validate_result(row, mode), (mode, phase, value))
+            row = outcome(mode)
+            del row["terminal"]["observations"]["gameMode"]
+            self.assertFalse(validate_result(row, mode))
+
     def test_cleanup_continues_after_broken_java_stdin_and_timeout(self):
         class Stream:
             closed = False
@@ -120,7 +132,7 @@ class ProtectedWorkerTests(unittest.TestCase):
             run_protected_qualification(workspace=Path('/not-created'), restore_kwargs={}, tool_snapshot=Path('/none'), tool_manifest_sha256='a'*64)
 
     def test_fault_injection_cannot_be_accepted_even_with_successful_samples(self):
-        for case in ("death", "disconnect", "observer_timeout", "disk_full", "unknown"):
+        for case in ("death", "disconnect", "observer_timeout", "disk_full", "creative_mode", "unknown"):
             row = outcome(); row["failure_case"] = case
             self.assertFalse(validate_result(row, "forward"))
 

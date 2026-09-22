@@ -20,7 +20,7 @@ from tools.pilot.storage_fault import inject_disk_full
 
 TRIAL = "movement-fixture-v1"
 ACTION = "walk-01"
-FAILURE_CASES = ("none", "death", "disconnect", "observer_timeout", "disk_full")
+FAILURE_CASES = ("none", "death", "disconnect", "observer_timeout", "disk_full", "creative_mode")
 FIXTURE_SHA256 = "3a696ca577186c8d2f308fd07fa31d72a3c2a4d98018beb2e64afacd5b358ac7"
 
 
@@ -187,6 +187,8 @@ def valid_sample(value, phase):
         return False
     if obs.get("uuid") != "f14b12b9-4db5-3b00-ab8c-cdacc19f233d" or obs.get("roster") != ["PilotProbe"]:
         return False
+    if type(obs.get("gameMode")) is not int or obs["gameMode"] != 0:
+        return False
     point = obs.get("position", {})
     if not isinstance(point, dict):
         return False
@@ -342,7 +344,8 @@ def main():
             result["injection"] = inject_disk_full(Path.cwd(), Path("/storage-fault-receipt.json"))
             if result["injection"]["status"] != "injected":
                 raise RuntimeError("disk fault was not established")
-        command = {"death": b"kill PilotProbe\n",
+        command = {"creative_mode": b"gamemode creative PilotProbe\n",
+                   "death": b"kill PilotProbe\n",
                    "disconnect": b"kick PilotProbe Qualification disconnect\n"}.get(failure_case)
         if command is not None:
             server.stdin.write(command); server.stdin.flush()

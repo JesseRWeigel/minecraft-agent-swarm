@@ -27,6 +27,7 @@ function fixture(overrides = {}) {
     Health: "PilotProbe has the following entity data: 20f",
     UUID: "PilotProbe has the following entity data: [I; -246738247, 1303722752, -1416835668, -1046535363]",
     Roster: "There are 1 of a max of 1 players online: PilotProbe",
+    playerGameType: "PilotProbe has the following entity data: 0",
     ...overrides,
   };
   return {
@@ -62,6 +63,7 @@ test("samples only the fixed actor and query whitelist with explicit skew window
     "data get entity PilotProbe Health",
     "data get entity PilotProbe UUID",
     "list",
+    "data get entity PilotProbe playerGameType",
   ]);
   assert.deepEqual(result.observations, {
     position: { x: 1.5, y: 64, z: -2.25 },
@@ -69,6 +71,7 @@ test("samples only the fixed actor and query whitelist with explicit skew window
     health: 20,
     uuid: "f14b12b9-4db5-3b00-ab8c-cdacc19f233d",
     roster: ["PilotProbe"],
+    gameMode: 0,
   });
   assert.deepEqual(
     result.sample.queryWindows.map(({ field, outcome }) => ({ field, outcome })),
@@ -78,6 +81,7 @@ test("samples only the fixed actor and query whitelist with explicit skew window
       { field: "Health", outcome: "completed" },
       { field: "UUID", outcome: "completed" },
       { field: "Roster", outcome: "completed" },
+      { field: "playerGameType", outcome: "completed" },
     ],
   );
   for (const window of result.sample.queryWindows) {
@@ -203,7 +207,7 @@ test("fails at the exact query deadline and when final timestamp consumes the bu
     trialId: "trial-01",
     actionId: "walk-01",
     operationTimeoutMs: 20,
-    nowMonotonic: monotonicSequence([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20]),
+    nowMonotonic: monotonicSequence([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 20]),
   });
   assert.equal(finalAtDeadline.status, "failed");
   assert.equal(finalAtDeadline.errorCode, "timeout");
@@ -324,4 +328,17 @@ test("rejects invalid API inputs before querying", async () => {
   await assert.rejects(() => sampleActor({ ...valid, actionId: "x".repeat(65) }), /supervisor ID/);
   await assert.rejects(() => sampleActor({ ...valid, operationTimeoutMs: 5001 }), /operationTimeoutMs/);
   await assert.rejects(() => sampleActor({ ...valid, rcon: {} }), /rcon.send/);
+});
+
+ test("retains every valid game mode for independent scoring and rejects malformed modes", async () => {
+  for (const mode of [0, 1, 2, 3]) {
+    const result = await sampleActor({ rcon: fixture({ playerGameType: `PilotProbe has the following entity data: ${mode}` }).rcon, phase: "terminal", trialId: "trial-01", actionId: "walk-01", ...clocks() });
+    assert.equal(result.status, "sampled");
+    assert.equal(result.observations.gameMode, mode);
+  }
+  for (const mode of ["4", "-1", "0f", "00", "false", "0\n"]) {
+    const result = await sampleActor({ rcon: fixture({ playerGameType: `PilotProbe has the following entity data: ${mode}` }).rcon, phase: "terminal", trialId: "trial-01", actionId: "walk-01", ...clocks() });
+    assert.equal(result.status, "failed");
+    assert.equal(result.errorCode, "invalid_response");
+  }
 });

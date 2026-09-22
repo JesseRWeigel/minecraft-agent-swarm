@@ -67,3 +67,6 @@ Multi-agent joins, reconnects and continuous roster history are unsupported.
 Older evidence retains its original sources and is not backfilled with this
 policy. These checks establish neither model performance nor retained learning,
 cost savings or robotics transfer.
+
+A [survival-mode follow-up](game-mode-qualification.md) now rejects a trusted
+post-action switch to creative. Participant command permissions remain open.

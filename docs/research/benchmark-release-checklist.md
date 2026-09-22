@@ -42,7 +42,9 @@ roster. Permissions and other failure timings remain pending; the combined box s
 - [ ] Verify actor roster, identity, permissions, and joins/reconnects. An offline
   login username alone is not an identity boundary against arbitrary code. Fixed
   login name/UUID admission, one-use transport and server UUID/roster snapshots
-  are qualified; permission escalation and adversarial game behavior remain open.
+  are qualified. [Survival-mode scoring](game-mode-qualification.md) rejects a
+  trusted post-action creative-mode injection; participant-issued command denial,
+  permission escalation and adversarial game behavior remain open.
 - [ ] Demonstrate that participant-written success claims cannot affect scoring,
   and that an observer failure cannot count as an observed negative control.
 
