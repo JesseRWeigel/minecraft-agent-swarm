@@ -30,6 +30,30 @@ The current 20-second scripted session and transport deadlines cannot support th
 
 Treat exhausted budgets and invalid output as failed attempts. Do not repair a model request for free. If one retry is permitted, give every condition the same rule and charge its tokens and latency. Record actual provider usage when available, and report missing usage explicitly rather than substituting tokenizer estimates without a label.
 
+## Offline budget accounting implemented
+
+`tools/pilot/inference_budget.py` now supplies a synchronous ledger for these
+proposed caps. Create it at the begun episode boundary. `begin(input_tokens,
+output_limit=256)` reserves a call and output tokens before dispatch and returns
+the allowed wall timeout. Input counts must come from the pinned trusted tokenizer.
+`finish(actual_output_tokens, outcome="completed")` records elapsed time and usage;
+use `None` for unavailable usage, and `failed` or `cancelled` for those outcomes.
+
+Only a completed, on-time call with known valid usage refunds unused reserved
+output tokens. Errors, cancellations and missing usage keep the full reservation.
+Overlap, malformed accounting, backwards clocks and exhausted limits permanently
+close the ledger to further calls. Malformed finish records retain elapsed time
+and the reservation without inventing usage. Call records are immutable. Exact
+budget boundaries are allowed; dispatch after exhaustion is rejected.
+
+This is accounting, not a provider adapter or a cancellation mechanism. Its clock,
+input counts and provider usage are trusted inputs, never model-generated facts.
+The future adapter must enforce the returned timeout, request output limits,
+perform cancellation and preserve raw provider usage separately. No money or
+energy cost is estimated here. The new caps are not wired into the game runtime;
+the existing 20-second scripted session remains unchanged. A passing ledger test
+does not qualify the proposed 120-second model episode or freeze the study.
+
 ## Freeze a machine-readable run manifest
 
 Before the first actual pilot, fill and hash:
