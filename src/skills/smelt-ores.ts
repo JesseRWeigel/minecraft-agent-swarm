@@ -1,3 +1,4 @@
+import type { Block } from "prismarine-block";
 import type { Bot } from "mineflayer";
 import type { Skill, SkillResult } from "./types.js";
 import { Vec3 } from "vec3";
@@ -154,7 +155,11 @@ export const smeltOresSkill: Skill = {
       maxDistance: 32,
     });
 
-    if (!furnaceBlock) {
+    // Craft a furnace from pack cobblestone and stand it beside the bot.
+    // Returns the failure to hand back, or null once a furnace is within
+    // reach. Used when no furnace is near and again when the one that is
+    // near cannot be walked to.
+    const placeFurnaceHere = async (): Promise<Block | { success: false; message: string }> => {
       const cobble = countItem(bot, "cobblestone");
       if (cobble < 8) {
         return {
@@ -221,10 +226,17 @@ export const smeltOresSkill: Skill = {
         }
       }
 
-      furnaceBlock = bot.findBlock({ matching: (b) => b.name === "furnace", maxDistance: 8 });
-      if (!furnaceBlock) {
+      const placed = bot.findBlock({ matching: (b) => b.name === "furnace", maxDistance: 8 });
+      if (!placed) {
         return { success: false, message: "Couldn't place furnace. Try in a flatter area." };
       }
+      return placed;
+    };
+
+    if (!furnaceBlock) {
+      const placed = await placeFurnaceHere();
+      if (!("position" in placed)) return placed;
+      furnaceBlock = placed;
     }
 
     // --- Step 4: Navigate to furnace --- (verify arrival: "try anyway" from
@@ -241,6 +253,27 @@ export const smeltOresSkill: Skill = {
         /* distance check decides whether to walk again */
       }
       if (bot.entity.position.distanceTo(furnaceBlock.position) <= 4) break;
+    }
+
+    // Run 788: Forge walked toward a furnace twelve blocks away five times,
+    // read "phantom arrival, no route from here" each time, and the batch
+    // loop below found nothing within eight blocks and broke without a word,
+    // so the skill answered "Smelting produced nothing" with three raw iron
+    // aboard. Say it, and stand a furnace here when the pack can afford one.
+    if (bot.entity.position.distanceTo(furnaceBlock.position) > 4) {
+      const gap = bot.entity.position.distanceTo(furnaceBlock.position).toFixed(0);
+      const at = `${furnaceBlock.position.x},${furnaceBlock.position.y},${furnaceBlock.position.z}`;
+      console.log(
+        `[Skill] ${bot.username}: furnace at ${at} is ${gap} blocks away and two walks did not reach it — placing one here`,
+      );
+      const placed = await placeFurnaceHere();
+      if (!("position" in placed)) {
+        return {
+          success: false,
+          message: `The furnace at ${at} is ${gap} blocks away and no route reaches it. ${placed.message}`,
+        };
+      }
+      furnaceBlock = placed;
     }
 
     // --- Step 5: Smelt each batch ---
@@ -280,7 +313,12 @@ export const smeltOresSkill: Skill = {
           matching: (b) => b.name === "furnace" || b.name === "lit_furnace",
           maxDistance: 8,
         });
-        if (!furnaceBlock) break;
+        if (!furnaceBlock) {
+          console.log(
+            `[Skill] ${bot.username}: no furnace within 8 blocks when the batch started — giving up on this load`,
+          );
+          break;
+        }
 
         // openFurnace blocks forever if the furnace GUI never opens (block not
         // truly reachable/loaded) — this hung smelt_ores to the 240s watchdog

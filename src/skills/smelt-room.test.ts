@@ -83,3 +83,21 @@ test("smelt ores: the surplus is banked so the team can craft from it", () => {
   const block = source.slice(deposit - 500, success);
   assert.match(block, /iron_ingot", minCount: 8/, "keep a working handful and bank the rest");
 });
+
+test("smelt ores: an unreachable furnace is named and replaced, never a silent break", () => {
+  // Run 788: Forge walked toward a furnace twelve blocks away five times,
+  // read "phantom arrival, no route from here" each time, and the batch loop
+  // found nothing within eight blocks and broke without a word, so the skill
+  // answered "Smelting produced nothing" with three raw iron aboard.
+  const src = fs.readFileSync(path.join(__dirname, "smelt-ores.ts"), "utf8");
+  const approach = src.indexOf("--- Step 4: Navigate to furnace");
+  const batches = src.indexOf("--- Step 5: Smelt each batch");
+  assert.ok(approach > 0 && batches > approach);
+  const between = src.slice(approach, batches);
+  assert.match(between, /two walks did not reach it/, "the gap is logged before anything else happens");
+  assert.match(between, /await placeFurnaceHere\(\)/, "a furnace goes down here when the one found cannot be reached");
+  assert.match(between, /no route reaches it/, "the failure names the furnace and the gap");
+  const loop = src.slice(batches);
+  assert.doesNotMatch(loop, /if \(!furnaceBlock\) break;/, "the batch loop must not break silently");
+  assert.match(loop, /no furnace within 8 blocks when the batch started/, "the batch loop says why it gave up");
+});
