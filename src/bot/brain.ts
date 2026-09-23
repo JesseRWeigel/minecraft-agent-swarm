@@ -4278,6 +4278,19 @@ export class BotBrain {
    *  memories held veins forty to ninety blocks off in unloaded chunks. */
   private async walkToRememberedOre(match: string): Promise<boolean> {
     const me = this.bot.entity.position;
+    // Run 805: eight walks to the remembered iron at 254,63,-408 and not one
+    // ore mined, because Atlas had dug that vein out at 14:24Z and the memory
+    // still pointed at it. Standing at a remembered spot with nothing in
+    // sight means the vein is gone: forget it, in every bot's memory, and
+    // look for the next one.
+    let forgotten = 0;
+    for (const st of getAllMemoryStores()) {
+      const near = st.getNearestOre(match, me.x, me.z, 16);
+      if (near) forgotten += st.forgetOreNear(match, near.x, near.z, 16);
+    }
+    if (forgotten > 0) {
+      this.log.info("Brain", `Forgot ${forgotten} remembered ${match} spot(s) here: nothing left to dig`);
+    }
     const known = getAllMemoryStores()
       .map((st) => st.getNearestOre(match, me.x, me.z, 200))
       .filter((o): o is NonNullable<typeof o> => !!o)
@@ -4294,6 +4307,20 @@ export class BotBrain {
     this.events.onAction("go_to", walk);
     this.lastAction = "go_to";
     this.lastResult = walk;
+    // Run 805: every walk arrived ("Arrived at 254, 65, -408") and the mine
+    // ran five minutes later from the village, 95 blocks away, so the vein
+    // was never dug. Dig it now, while standing on it.
+    const after = this.bot.entity.position;
+    if (Math.hypot(after.x - known.x, after.z - known.z) <= 24) {
+      const dug = await this.executeActionUnlessPaused("mine_block", {
+        blockType: match,
+        protectPos: this.roleConfig.stashPos,
+      });
+      this.events.onAction("mine_block", dug);
+      this.lastAction = "mine_block";
+      this.lastResult = dug;
+      this.log.info("Brain", `At the remembered ${match}: ${String(dug).slice(0, 100)}`);
+    }
     return true;
   }
 

@@ -343,6 +343,18 @@ export class BotMemoryStore {
     return best;
   }
 
+  /** Drop remembered ore of a type within `radius` blocks of a point: the
+   *  vein was dug out or was never there. Returns how many were dropped. */
+  forgetOreNear(match: string, x: number, z: number, radius = 16): number {
+    const before = this.memory.oreDiscoveries.length;
+    this.memory.oreDiscoveries = this.memory.oreDiscoveries.filter(
+      (o) => !(o.type.includes(match) && Math.hypot(o.x - x, o.z - z) <= radius),
+    );
+    const dropped = before - this.memory.oreDiscoveries.length;
+    if (dropped > 0) this.save();
+    return dropped;
+  }
+
   recordOre(oreType: string, x: number, y: number, z: number): void {
     const existing = this.memory.oreDiscoveries.find(
       (o) => o.type === oreType && Math.abs(o.x - x) < 5 && Math.abs(o.z - z) < 5,

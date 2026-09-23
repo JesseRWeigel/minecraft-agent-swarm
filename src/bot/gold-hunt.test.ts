@@ -186,3 +186,38 @@ test("mine_block: gold is searched to the edge of the loaded chunks and the radi
     "the iron step reads the new wording",
   );
 });
+
+test("remembered ore: a vein the bot stands at with nothing in sight is forgotten", () => {
+  // Run 805: eight walks to the remembered iron at 254,63,-408 and not one
+  // ore mined, because that vein had been dug out at 14:24Z.
+  const helper = BRAIN.slice(
+    BRAIN.indexOf("private async walkToRememberedOre"),
+    BRAIN.indexOf("private async executeActionUnlessPaused"),
+  );
+  assert.match(helper, /getNearestOre\(match, me\.x, me\.z, 16\)/, "a spot within 16 blocks counts as visited");
+  assert.match(helper, /forgetOreNear\(match, near\.x, near\.z, 16\)/, "it is dropped from every memory");
+  const forgetAt = helper.indexOf("forgetOreNear");
+  const lookupAt = helper.indexOf("getNearestOre(match, me.x, me.z, 200)");
+  assert.ok(forgetAt < lookupAt, "forgetting happens before the next vein is chosen");
+  const mem = fs.readFileSync(path.join(__dirname, "memory.ts"), "utf8");
+  assert.match(
+    mem,
+    /forgetOreNear\(match: string, x: number, z: number, radius = 16\): number/,
+    "the store can forget",
+  );
+});
+
+test("remembered ore: the vein is dug in the same pass as the walk", () => {
+  // Run 805: every walk arrived ("Arrived at 254, 65, -408") and the mine ran
+  // five minutes later from the village, 95 blocks away, so the vein was
+  // never dug.
+  const helper = BRAIN.slice(
+    BRAIN.indexOf("private async walkToRememberedOre"),
+    BRAIN.indexOf("private async executeActionUnlessPaused"),
+  );
+  const walkAt = helper.indexOf('"go_to", { x: known.x, y: known.y, z: known.z }');
+  const digAt = helper.indexOf("blockType: match,");
+  assert.ok(walkAt > 0 && digAt > walkAt, "the vein is dug right after the walk");
+  assert.match(helper, /<= 24\) \{/, "only when the walk actually arrived");
+  assert.match(helper, /At the remembered \$\{match\}:/, "the dig result is logged");
+});
