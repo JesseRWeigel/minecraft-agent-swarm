@@ -245,7 +245,16 @@ export async function armourUpForNether(bot: Bot, tag: string, onStep?: (msg: st
   }
 
   // Armour without a weapon still loses the fight: he had none all run.
-  if (!bot.inventory.items().some((i) => i.name.endsWith("_sword"))) {
+  // Run 808: two trips crossed with sword=false and the second was killed by
+  // a wither skeleton 38 blocks from the bricks. Both blades need a stick,
+  // the swarm had none and no wood in the stash, while the stash ledger held
+  // 385 stone swords and an iron one. Take a finished sword before crafting.
+  const hasSword = () => bot.inventory.items().some((i) => i.name.endsWith("_sword"));
+  for (const blade of ["diamond_sword", "iron_sword", "stone_sword"]) {
+    if (hasSword()) break;
+    await withdrawStash(bot, STASH_POS, blade, 1, 45_000).catch(() => {});
+  }
+  if (!hasSword()) {
     onStep?.("Forging a sword for the crossing...");
     for (const blade of ["iron_sword", "stone_sword"]) {
       const made = await craftPiece(bot, mcData, blade, []).catch(() => false);
