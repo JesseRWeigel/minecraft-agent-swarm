@@ -290,6 +290,7 @@ export class BotBrain {
   }
   /** Cooldown for the gold hunt that unblocks the Nether crossing. */
   private lastGoldHuntMs = 0;
+  private lastGoldDressMs = 0;
   private lastWaxOffMs = 0;
   private lastHoneyMs = 0;
   private lastToolReturnMs = 0;
@@ -2633,6 +2634,39 @@ export class BotBrain {
       const armourFort = this.wornArmorCount();
       const goldWorn = [5, 6, 7, 8].some((i) => this.bot.inventory.slots[i]?.name.startsWith("golden_"));
       const armouredEnough = armourFort >= 2 || (goldWorn && armourFort >= 1);
+      // Run 807: the stash held six gold ingots and the gate read
+      // "armour=0/2 gold=false" all evening. Golden boots are gold and a
+      // piece at once, so they pass this gate by themselves, but the only
+      // code that forges them is the trip's own preflight, which runs after
+      // the gate. Put them on here, at the stash, before asking.
+      if (
+        !fortDone &&
+        !goldWorn &&
+        !armouredEnough &&
+        nearStashFort &&
+        this.roleConfig.allowedSkills.includes("find_fortress") &&
+        Date.now() - this.lastGoldDressMs > 600_000
+      ) {
+        const { stashCount } = await import("../skills/stash-ledger.js");
+        const spY = this.roleConfig.stashPos?.y;
+        const goldBanked = stashCount("gold_ingot", spY) + stashCount("gold_block", spY) * 9;
+        if (goldBanked >= 4 || hasGoldPiece(this.bot)) {
+          this.lastGoldDressMs = Date.now();
+          this.log.info(
+            "Brain",
+            `OVERRIDE: the fortress gate wants gold worn and the stash holds ${goldBanked} ingots — forging golden boots`,
+          );
+          this.events.onThought("Gold boots first. The piglins won't bother me in those.");
+          const { wearGoldForPiglins } = await import("../skills/piglin-gold.js");
+          const on = await wearGoldForPiglins(this.bot, "GoldDress", (m) => this.log.info("Brain", m)).catch(
+            () => false,
+          );
+          this.log.info("Brain", `[GoldDress] ${on ? "golden boots on" : "no gold piece on after the attempt"}`);
+          this.lastAction = "craft_gear";
+          this.lastResult = on ? "Wearing golden boots for the fortress trip." : "Could not forge golden boots.";
+          return;
+        }
+      }
       if (!fortDone && cooledFort && todFort < 11000 && nearStashFort && armouredEnough && fitForNether) {
         this.lastFortressMs = Date.now();
         this.log.info(
