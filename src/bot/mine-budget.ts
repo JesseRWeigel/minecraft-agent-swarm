@@ -27,3 +27,19 @@ export function travelBudgetMs(distance: number): number {
   if (!Number.isFinite(distance) || distance <= 0) return MIN_TRAVEL_MS;
   return Math.min(MAX_TRAVEL_MS, Math.max(MIN_TRAVEL_MS, Math.round(distance * MS_PER_BLOCK)));
 }
+
+// Runs 788 and 789: gold ore sits 50 to 70 blocks under the village and every
+// walk to it ended "stopped 32 blocks short", "stopped 49 blocks short" or
+// timed out, because one leg of at most sixty seconds cannot tunnel ninety
+// blocks of stone. A leg that ends closer than it began is worth another,
+// up to this many and this long in all, which still leaves room for the
+// look-at retry and the dig inside the 150 second action watchdog.
+export const DEEP_TRAVEL_MS = 110_000;
+export const MAX_TRAVEL_LEGS = 4;
+export const LOOKAT_RETRY_MS = 15_000;
+
+/** True when a walk leg closed the gap enough to deserve another. */
+export function legWorthContinuing(gapBefore: number, gapAfter: number, minGain = 4): boolean {
+  if (!Number.isFinite(gapBefore) || !Number.isFinite(gapAfter)) return false;
+  return gapBefore - gapAfter >= minGain;
+}

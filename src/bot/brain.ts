@@ -2730,6 +2730,10 @@ export class BotBrain {
         this.events.onAction("mine_block", result);
         this.lastAction = "mine_block";
         this.lastResult = result;
+        // A walk that ended short still dug most of the way there. Run 789:
+        // "stopped 49 blocks short" of ore at 295,8,-292, and fifteen minutes
+        // later the bot was back on the surface starting over.
+        if (/stopped \d+ blocks short/.test(String(result))) this.lastGoldHuntMs = Date.now() - 600_000;
         return;
       }
     }

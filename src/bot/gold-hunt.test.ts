@@ -134,3 +134,12 @@ test("gold hunt: a supply step that delivered earns a quicker next pass", () => 
     "five minutes, not fifteen",
   );
 });
+
+test("gold hunt: a walk that ended short earns a quicker next pass", () => {
+  // Run 789: "stopped 49 blocks short" of ore at 295,8,-292, then fifteen
+  // minutes of wandering before the next try started over from the surface.
+  const mine = BRAIN.indexOf('blockType: "gold_ore"');
+  const block = BRAIN.slice(mine, mine + 900);
+  assert.match(block, /stopped \\d\+ blocks short/, "the short-walk result is recognised");
+  assert.match(block, /lastGoldHuntMs = Date\.now\(\) - 600_000/, "five minutes until the next pass");
+});

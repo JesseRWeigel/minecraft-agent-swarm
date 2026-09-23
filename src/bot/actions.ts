@@ -19,7 +19,7 @@ import { Vec3 } from "vec3";
 import { isHostile } from "./perception.js";
 import { bedExplodesHere, BED_EXPLODES_MESSAGE } from "./bed-safety.js";
 import { withinDigReach, distanceToBlock } from "./dig-reach.js";
-import { travelBudgetMs } from "./mine-budget.js";
+import { travelBudgetMs, DEEP_TRAVEL_MS, MAX_TRAVEL_LEGS, LOOKAT_RETRY_MS, legWorthContinuing } from "./mine-budget.js";
 import { canHarvest, harvestAdvice } from "./tool-tier.js";
 import { tooHighForFurniture, furnitureRefusal } from "./place-guard.js";
 import { getGeneratedSkillNames, skillRegistry } from "../skills/registry.js";
@@ -921,16 +921,47 @@ async function mineBlock(
   // an order of magnitude, and the result was 39 navigation timeouts and 28 dig
   // timeouts against 8 iron mined in one session. See mine-budget.ts.
   const travelMs = travelBudgetMs(bot.entity.position.distanceTo(block.position));
-  await safeGoto(bot, new goals.GoalNear(block.position.x, block.position.y, block.position.z, 2), travelMs);
+  const reachNow = () => distanceToBlock(bot.entity.position, block.position);
+  // Runs 788 and 789: gold ore 50 to 70 blocks under the village, and every
+  // walk to it ended "stopped 32 blocks short" or timed out, because one leg
+  // of at most sixty seconds cannot tunnel ninety blocks of stone. An ore
+  // walk that ends closer than it began gets another leg, up to the deep
+  // budget; a leg that gains nothing keeps the old single-walk outcome.
+  const deadline = Date.now() + (isOre ? DEEP_TRAVEL_MS : travelMs);
+  const maxLegs = isOre ? MAX_TRAVEL_LEGS : 1;
+  let gapBefore = reachNow();
+  for (let leg = 1; leg <= maxLegs; leg++) {
+    const legMs = Math.min(travelMs, deadline - Date.now());
+    if (legMs < 5_000) break;
+    let walkError: Error | null = null;
+    await safeGoto(bot, new goals.GoalNear(block.position.x, block.position.y, block.position.z, 2), legMs).catch(
+      (e: Error) => {
+        walkError = e;
+      },
+    );
+    if (withinDigReach(bot.entity.position, block.position)) break;
+    const gapAfter = reachNow();
+    if (!legWorthContinuing(gapBefore, gapAfter)) {
+      if (walkError && leg === 1) throw walkError;
+      break;
+    }
+    console.log(
+      `[Mine] ${bot.username}: leg ${leg} closed ${gapBefore.toFixed(0)} to ${gapAfter.toFixed(0)} blocks from ${block.name}; walking on`,
+    );
+    gapBefore = gapAfter;
+  }
   // A walk can resolve without arriving. The pathfinder reports the goal
   // reached, the nav diagnostic calls it a phantom arrival, and the bot is
   // still far away; the dig that follows then hangs for the full twelve
   // seconds and tells the brain only "dig timeout". Run 763 lost six of
   // twenty-five mine_block calls that way and the swarm banked no iron.
-  const reachNow = () => distanceToBlock(bot.entity.position, block.position);
   if (!withinDigReach(bot.entity.position, block.position)) {
     // One more try at a goal that exists to put the block in reach.
-    await safeGoto(bot, new goals.GoalLookAtBlock(block.position, bot.world), Math.round(travelMs / 2)).catch(() => {});
+    await safeGoto(
+      bot,
+      new goals.GoalLookAtBlock(block.position, bot.world),
+      Math.min(Math.round(travelMs / 2), LOOKAT_RETRY_MS),
+    ).catch(() => {});
   }
   if (!withinDigReach(bot.entity.position, block.position)) {
     return `Walked toward ${block.name} at ${block.position.x},${block.position.y},${block.position.z} and stopped ${reachNow().toFixed(0)} blocks short, out of reach. Try a closer target or clear the way first.`;
