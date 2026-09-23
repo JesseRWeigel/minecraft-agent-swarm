@@ -133,7 +133,14 @@ export async function marchToward(
   target: { x: number; z: number; y?: number },
   budgetMs: number,
   signal: AbortSignal,
-  o: { label: string; progress: (gap: number) => number; step: (m: string, p: number) => void; stop: () => boolean },
+  o: {
+    label: string;
+    progress: (gap: number) => number;
+    step: (m: string, p: number) => void;
+    stop: () => boolean;
+    /** Runs before every hop; the fortress march fights off what is biting. */
+    beforeHop?: () => Promise<void>;
+  },
 ): Promise<number> {
   const gap = () => Math.hypot(bot.entity.position.x - target.x, bot.entity.position.z - target.z);
   const until = Date.now() + budgetMs;
@@ -299,6 +306,8 @@ export async function marchToward(
     ];
     for (const [len, slant, budget] of tries) {
       if (signal.aborted || Date.now() >= until) break;
+      if (o.beforeHop) await o.beforeHop();
+      if (signal.aborted || !bot.entity) break;
       const reach = Math.min(len, g);
       const wx = Math.round(px + Math.cos(bearing + slant) * reach);
       const wz = Math.round(pz + Math.sin(bearing + slant) * reach);

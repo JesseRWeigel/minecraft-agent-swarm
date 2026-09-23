@@ -139,3 +139,23 @@ test("find_fortress: a downed blaze is reported as killed or gone, with the floo
   assert.match(hunt, /drops within 32/, "the floor is listed after a downed blaze");
   assert.match(hunt, /fate === "killed"/, "a kill sends the bot to where the blaze died");
 });
+
+test("find_fortress: the march fends off between hops, and an enderman only when it is biting", () => {
+  // Runs 797 and 798: three marches ended "slain by Enderman" with no line
+  // before the death, and one ended "slain by Magma Cube" on the ledge ten
+  // blocks from the bricks, because the fend-off only ran on the walk to the
+  // middle and the foe list left endermen alone at any range.
+  const src = fs.readFileSync(path.join(__dirname, "find-fortress.ts"), "utf8");
+  const marches = src.split("await marchToward(bot").length - 1;
+  const hops = src.split("beforeHop: async () => {").length - 1;
+  assert.equal(hops, marches, "every march passes a beforeHop fend-off");
+  const fend = src.slice(src.indexOf("async function fendOff"), src.indexOf("async function huntBlazes"));
+  assert.match(
+    fend,
+    /e\.name === "enderman" && d <= 3\.5 && bitten\(\)/,
+    "endermen count only at arm's reach while hurt",
+  );
+  assert.match(src, /watchHurt\(bot\);/, "the hurt watch is armed when the trip starts");
+  const bastion = fs.readFileSync(path.join(__dirname, "loot-bastion.ts"), "utf8");
+  assert.match(bastion, /if \(o\.beforeHop\) await o\.beforeHop\(\);/, "marchToward runs the hook before each hop");
+});

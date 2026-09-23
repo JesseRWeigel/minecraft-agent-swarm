@@ -113,15 +113,39 @@ const FORTRESS_FOES = new Set(["wither_skeleton", "blaze", "skeleton", "hoglin",
  *  middle of the fortress, while the skill held a sword and never swung it,
  *  and every death there drops the golden boots, the armour and the gold.
  *  Returns how many foes were engaged. */
+// When the bot last lost health, so a neutral mob standing on top of it can
+// be told from one passing by. Runs 797 and 798: three marches ended "slain
+// by Enderman" with no line before the death, because endermen are neutral
+// until looked at, the walk looks where it goes, and the foe list left them
+// alone while they hit for seven a swing.
+const lastHurtAt = new WeakMap<Bot, number>();
+function watchHurt(bot: Bot): void {
+  if (lastHurtAt.has(bot)) return;
+  lastHurtAt.set(bot, 0);
+  let last = bot.health;
+  bot.on("health", () => {
+    if (bot.health < last) lastHurtAt.set(bot, Date.now());
+    last = bot.health;
+  });
+}
+
 async function fendOff(bot: Bot, signal: AbortSignal, radius = 6, budgetMs = 20_000): Promise<number> {
   let engaged = 0;
+  const bitten = () => Date.now() - (lastHurtAt.get(bot) ?? 0) < 4_000;
   const until = Date.now() + budgetMs;
   const sword = bot.inventory.items().find((i) => i.name.endsWith("_sword"));
   if (sword && bot.heldItem?.name !== sword.name) await bot.equip(sword, "hand").catch(() => {});
   while (Date.now() < until && !signal.aborted && bot.entity) {
     const me = bot.entity.position;
     const foe = Object.values(bot.entities)
-      .filter((e) => e.isValid && FORTRESS_FOES.has(e.name ?? "") && e.position.distanceTo(me) <= radius)
+      .filter((e) => {
+        if (!e.isValid) return false;
+        const d = e.position.distanceTo(me);
+        if (FORTRESS_FOES.has(e.name ?? "")) return d <= radius;
+        // An enderman within arm's reach while health is dropping is the one
+        // hitting us; one further off is left alone so it stays neutral.
+        return e.name === "enderman" && d <= 3.5 && bitten();
+      })
       .sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0];
     if (!foe) break;
     engaged++;
@@ -360,6 +384,7 @@ export const findFortressSkill: Skill = {
   },
 
   async execute(bot, _params, signal, onProgress): Promise<SkillResult> {
+    watchHurt(bot);
     const step = (message: string, progress: number) =>
       onProgress({ skillName: "find_fortress", phase: "Hunt", progress, message, active: true });
     const resumable = (msg: string) => `${msg} invoke_skill {"skill":"find_fortress"} again to continue.`;
@@ -442,6 +467,9 @@ export const findFortressSkill: Skill = {
         `[Fortress] ${bot.username}: marching to the banked sighting at ${sighting.x},${sighting.y},${sighting.z} (${Math.round(gapTo())} away)`,
       );
       const reached = await marchToward(bot, sighting, 360_000, signal, {
+        beforeHop: async () => {
+          await fendOff(bot, signal);
+        },
         label: "Marching to the sighted bricks",
         progress: () => 0.4,
         step,
@@ -498,6 +526,9 @@ export const findFortressSkill: Skill = {
       // bricks sit up to 128 blocks off. March in hops like the bastion raid.
       const brickGap = () => Math.hypot(bot.entity.position.x - seen.x, bot.entity.position.z - seen.z);
       await marchToward(bot, { x: seen.x, y: seen.y, z: seen.z }, 240_000, signal, {
+        beforeHop: async () => {
+          await fendOff(bot, signal);
+        },
         label: "Walking to the bricks",
         progress: () => 0.75,
         step,
