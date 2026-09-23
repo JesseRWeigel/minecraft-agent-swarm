@@ -82,3 +82,21 @@ test("find_fortress: hunts blazes once inside, and the brain keeps sending it un
   const gate = brain.slice(brain.indexOf("const fortDone ="), brain.indexOf("const fortDone =") + 400);
   assert.match(gate, /obtain_blaze_rod/, "the trip stands down only once a rod is earned too");
 });
+
+test("find_fortress: fights off wither skeletons on the walk in and during the hunt", () => {
+  // Runs 791 and 792: two trips in a row ended "slain by Wither Skeleton"
+  // near (492, 54, 40) on the ninety second walk to the middle, sword in
+  // hand and never swung, and each death dropped the boots and the gold.
+  const src = fs.readFileSync(path.join(__dirname, "find-fortress.ts"), "utf8");
+  const fend = src.indexOf("async function fendOff");
+  assert.ok(fend > 0, "the fend-off helper exists");
+  const foes = src.indexOf("const FORTRESS_FOES");
+  assert.ok(foes > 0 && foes < fend, "the foe list sits above the helper");
+  assert.match(src.slice(foes, fend), /wither_skeleton/, "wither skeletons are on the list");
+  const middle = src.indexOf("walking to the middle at");
+  const nearBrick = src.indexOf("const nearBrick", middle);
+  assert.match(src.slice(middle, nearBrick), /await fendOff\(bot, signal\)/, "the walk to the middle fends off first");
+  assert.doesNotMatch(src.slice(middle, nearBrick), /90_000, 12_000/, "no more single ninety second blind walk");
+  const hunt = src.slice(src.indexOf("async function huntBlazes"), src.indexOf("function inNether"));
+  assert.match(hunt, /await fendOff\(bot, signal\)/, "the hunt loop fends off each pass");
+});

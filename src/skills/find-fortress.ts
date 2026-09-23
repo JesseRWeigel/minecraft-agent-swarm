@@ -102,6 +102,51 @@ function logApproachGap(bot: Bot, target: { x: number; y: number; z: number }): 
   }
 }
 
+const FORTRESS_FOES = new Set(["wither_skeleton", "blaze", "skeleton", "zombified_piglin", "hoglin", "magma_cube"]);
+
+/** Fight anything from FORTRESS_FOES that stands within `radius` before the
+ *  walk goes on. Runs 791 and 792: two trips in a row ended "slain by Wither
+ *  Skeleton" within a few blocks of (492, 54, 40) during the walk to the
+ *  middle of the fortress, while the skill held a sword and never swung it,
+ *  and every death there drops the golden boots, the armour and the gold.
+ *  Returns how many foes were engaged. */
+async function fendOff(bot: Bot, signal: AbortSignal, radius = 6, budgetMs = 20_000): Promise<number> {
+  let engaged = 0;
+  const until = Date.now() + budgetMs;
+  const sword = bot.inventory.items().find((i) => i.name.endsWith("_sword"));
+  if (sword && bot.heldItem?.name !== sword.name) await bot.equip(sword, "hand").catch(() => {});
+  while (Date.now() < until && !signal.aborted && bot.entity) {
+    const me = bot.entity.position;
+    const foe = Object.values(bot.entities)
+      .filter((e) => e.isValid && FORTRESS_FOES.has(e.name ?? "") && e.position.distanceTo(me) <= radius)
+      .sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0];
+    if (!foe) break;
+    engaged++;
+    console.log(
+      `[Fortress] ${bot.username}: ${foe.name} ${foe.position.distanceTo(me).toFixed(1)} away — fighting it off first`,
+    );
+    const fightUntil = Math.min(until, Date.now() + 12_000);
+    const pvp = (bot as unknown as { swordpvp?: { attack: (e: unknown) => void; stop: () => void } }).swordpvp;
+    if (pvp) pvp.attack(foe);
+    while (foe.isValid && Date.now() < fightUntil && !signal.aborted && bot.entity) {
+      const gap = foe.position.distanceTo(bot.entity.position);
+      if (!pvp) {
+        if (gap <= 3.2) {
+          await bot.lookAt(foe.position.offset(0, 1.2, 0), true).catch(() => {});
+          bot.attack(foe);
+        } else {
+          await safeGoto(bot, new goals.GoalNear(foe.position.x, foe.position.y, foe.position.z, 2), 4_000).catch(
+            () => {},
+          );
+        }
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    if (pvp) pvp.stop();
+  }
+  return engaged;
+}
+
 /** Fight blazes within reach of the fortress bricks and pick up their rods.
  *  Bounded to four minutes and six blazes; returns the rods held afterwards. */
 async function huntBlazes(
@@ -119,6 +164,8 @@ async function huntBlazes(
   const sword = bot.inventory.items().find((i) => i.name.endsWith("_sword"));
   if (sword) await bot.equip(sword, "hand").catch(() => {});
   while (Date.now() < deadline && !signal.aborted && fought < 6 && bot.entity) {
+    await fendOff(bot, signal);
+    if (!bot.entity) break;
     const me = bot.entity.position;
     const blaze = Object.values(bot.entities)
       .filter((e) => e.name === "blaze" && e.isValid && e.position.distanceTo(me) < 40)
@@ -332,7 +379,14 @@ export const findFortressSkill: Skill = {
         console.log(
           `[Fortress] ${bot.username}: ${cluster.length} bricks in view, walking to the middle at ${inner.x},${inner.y},${inner.z}`,
         );
-        await safeGoto(bot, new goals.GoalNear(inner.x, inner.y + 1, inner.z, 2), 90_000, 12_000).catch(() => {});
+        // Walk in short legs and fight off what stands in the way between
+        // them, because the whole walk used to run blind for ninety seconds.
+        const middleUntil = Date.now() + 90_000;
+        while (Date.now() < middleUntil && !signal.aborted && bot.entity) {
+          await fendOff(bot, signal);
+          if (!bot.entity || bot.entity.position.distanceTo(new Vec3(inner.x, inner.y + 1, inner.z)) <= 3) break;
+          await safeGoto(bot, new goals.GoalNear(inner.x, inner.y + 1, inner.z, 2), 15_000, 12_000).catch(() => {});
+        }
       }
       const nearBrick = bot.findBlock({ matching: (b) => b.name === "nether_bricks", maxDistance: 4 });
       entered = !!nearBrick;
