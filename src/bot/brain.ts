@@ -2715,6 +2715,12 @@ export class BotBrain {
             this.lastAction = "mine_block";
             this.lastResult = ironResult;
             if (/^Mined \d+x/.test(String(ironResult))) quickerNextPass();
+            // Run 802: three bots answered "No iron_ore found nearby" from the
+            // village all hour while the ledger's only iron sat in a chest at
+            // y=4 that holds cobblestone. Walk to a vein the team remembers.
+            if (/No iron_ore found nearby/.test(String(ironResult)) && (await this.walkToRememberedOre("iron_ore"))) {
+              quickerNextPass();
+            }
             return;
           }
           // Sticks are the other half of the recipe, and the craft action
@@ -2767,22 +2773,7 @@ export class BotBrain {
         // at 370,18,-344 and 392,-25,-320, forty and ninety blocks off. The
         // block search only sees loaded chunks. Walk to the vein it knows.
         if (/No gold_ore found nearby/.test(String(result))) {
-          const me = this.bot.entity.position;
-          const known = getAllMemoryStores()
-            .map((st) => st.getNearestOre("gold_ore", me.x, me.z, 200))
-            .filter((o): o is NonNullable<typeof o> => !!o)
-            .sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
-          if (known) {
-            this.log.info(
-              "Brain",
-              `OVERRIDE: no gold ore in sight, walking to the remembered ${known.type} at ${known.x},${known.y},${known.z} (${Math.hypot(known.x - me.x, known.z - me.z).toFixed(0)} away)`,
-            );
-            const walk = await this.executeActionUnlessPaused("go_to", { x: known.x, y: known.y, z: known.z });
-            this.events.onAction("go_to", walk);
-            this.lastAction = "go_to";
-            this.lastResult = walk;
-            this.lastGoldHuntMs = Date.now() - 780_000;
-          }
+          if (await this.walkToRememberedOre("gold_ore")) this.lastGoldHuntMs = Date.now() - 780_000;
         }
         return;
       }
@@ -4275,6 +4266,32 @@ export class BotBrain {
       }
       throw error;
     }
+  }
+
+  /** When the block search finds no ore of `match`, walk to the nearest vein
+   *  the team remembers within 200 blocks, at its height. Returns true when a
+   *  walk was made. Runs 801 and 802: the miners answered "No gold_ore found
+   *  nearby" and "No iron_ore found nearby" from the village while their own
+   *  memories held veins forty to ninety blocks off in unloaded chunks. */
+  private async walkToRememberedOre(match: string): Promise<boolean> {
+    const me = this.bot.entity.position;
+    const known = getAllMemoryStores()
+      .map((st) => st.getNearestOre(match, me.x, me.z, 200))
+      .filter((o): o is NonNullable<typeof o> => !!o)
+      .sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
+    if (!known) {
+      this.log.info("Brain", `No ${match} in sight and none remembered within 200 blocks`);
+      return false;
+    }
+    this.log.info(
+      "Brain",
+      `OVERRIDE: no ${match} in sight, walking to the remembered ${known.type} at ${known.x},${known.y},${known.z} (${Math.hypot(known.x - me.x, known.z - me.z).toFixed(0)} away)`,
+    );
+    const walk = await this.executeActionUnlessPaused("go_to", { x: known.x, y: known.y, z: known.z });
+    this.events.onAction("go_to", walk);
+    this.lastAction = "go_to";
+    this.lastResult = walk;
+    return true;
   }
 
   private async executeActionUnlessPaused(
