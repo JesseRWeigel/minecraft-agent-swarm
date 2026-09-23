@@ -2613,8 +2613,13 @@ export class BotBrain {
         stashCount("raw_gold", stashY) +
         stashCount("gold_block", stashY) * 9;
       const earnedGold = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+      // Run 800: A Terrible Fortress landed at 02:56Z and this hunt read it
+      // as done, so no gold was dug all morning while the trip still needs
+      // golden boots for the blaze rod. The trip runs until Into Fire, and
+      // so does the hunt that feeds it.
       const fortressStillOpen = !(
-        earnedGold.has("nether/find_fortress") || earnedGold.has("minecraft:nether/find_fortress")
+        (earnedGold.has("nether/find_fortress") || earnedGold.has("minecraft:nether/find_fortress")) &&
+        (earnedGold.has("nether/obtain_blaze_rod") || earnedGold.has("minecraft:nether/obtain_blaze_rod"))
       );
       if (fortressStillOpen && ingotsAbout < 4) {
         this.lastGoldHuntMs = Date.now();
