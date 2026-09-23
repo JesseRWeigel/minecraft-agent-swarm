@@ -4438,6 +4438,28 @@ export class BotBrain {
       );
       return this.finishActionCapture(capture, "blocked", "role_denied", gateMsg);
     }
+    // The same gate for a skill named through invoke_skill. Run 799: Atlas
+    // lost find_fortress from his role at 08:01Z and still ran it four times
+    // by naming it in invoke_skill, drawing the last three gold ingots and a
+    // crossbow from the stash each time and failing on gold, so Mason's own
+    // trip read gold=false all hour. Only skills some role owns are gated;
+    // generated skills stay open to everyone.
+    if (decision.action === "invoke_skill" && this.roleConfig.allowedSkills.length > 0) {
+      const wanted = String(decision.params?.skill ?? "");
+      const ownedByARole = BOT_ROSTER.some((r) => r.allowedSkills.includes(wanted));
+      if (wanted && ownedByARole && !this.roleConfig.allowedSkills.includes(wanted)) {
+        const gateMsg = `Skill "${wanted}" is not in ${this.roleConfig.name}'s kit. Use: ${this.roleConfig.allowedSkills.join(", ")}`;
+        this.log.debug("Brain", `GATED: ${gateMsg}`);
+        this.events.onAction(decision.action, gateMsg);
+        this.lastResult = gateMsg;
+        this.blockAction(
+          `skill:${wanted}`,
+          `Not in YOUR toolkit — use: ${this.roleConfig.allowedSkills.join(", ")}`,
+          BotBrain.FAILURE_TTL_STRUCTURAL_MS,
+        );
+        return this.finishActionCapture(capture, "blocked", "role_denied", gateMsg);
+      }
+    }
 
     // ── Blacklist check ──
     this.purgeExpiredFailures();

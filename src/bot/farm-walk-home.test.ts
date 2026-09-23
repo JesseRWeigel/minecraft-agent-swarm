@@ -33,3 +33,19 @@ test("roles: Atlas no longer lists find_fortress", () => {
   const atlas = roles.slice(roles.indexOf('name: "Atlas"'), roles.indexOf('name: "Flora"'));
   assert.doesNotMatch(atlas, /"find_fortress"/, "Atlas drew a crossbow and arrows for trips he could not make");
 });
+
+test("skill gate: invoke_skill cannot name a skill another role owns", () => {
+  // Run 799: Atlas lost find_fortress from his role and still ran it four
+  // times through invoke_skill, draining the last gold and a crossbow each time.
+  const start = BRAIN.indexOf('decision.action === "invoke_skill" && this.roleConfig.allowedSkills.length > 0');
+  assert.notStrictEqual(start, -1, "the skill gate exists");
+  const block = BRAIN.slice(start, start + 1400);
+  assert.match(
+    block,
+    /BOT_ROSTER\.some\(\(r\) => r\.allowedSkills\.includes\(wanted\)\)/,
+    "only role-owned skills are gated",
+  );
+  assert.match(block, /!this\.roleConfig\.allowedSkills\.includes\(wanted\)/, "the bot's own list still passes");
+  assert.match(block, /is not in \$\{this\.roleConfig\.name\}'s kit/, "the message names the role");
+  assert.match(block, /"role_denied"/, "it is captured like the action gate");
+});
