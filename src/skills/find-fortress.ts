@@ -111,7 +111,13 @@ export const findFortressSkill: Skill = {
   description:
     "Cross the nether portal and sweep for a nether fortress (nether bricks). Walking into one earns A Terrible Fortress and unlocks the blaze-rod chain. Records the location for later trips.",
   params: {},
-  timeoutMs: 480_000,
+  // Run 790, 01:54Z: the trip spent 309 seconds at the stash and the portal
+  // (armour check, packing stone, golden boots, crossing) and then marched
+  // 504 to 203 blocks out in ninety seconds, the fastest leg of the study,
+  // when the 480 second budget ran out and the executor aborted it with the
+  // bricks 203 blocks away. The march below is allowed 360 seconds of its
+  // own, so the whole trip needs the preflight plus that plus a sweep.
+  timeoutMs: 900_000,
 
   estimateMaterials(): Record<string, number> {
     return {};

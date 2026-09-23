@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { pickSighting, addSighting, recordApproach, dropSighting, parseBank } from "./fortress-bank.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const FROM = { x: 30, z: -35 }; // the Nether portal exit
 const REACHED = { x: 535, y: 52, z: -17, seenAt: "2026-09-19T20:24:00Z", by: "Mason", bestGap: 84 };
@@ -43,4 +48,18 @@ test("bank: reads the old single-sighting file as well as the list", () => {
   assert.strictEqual(parseBank({ x: 490, y: 51, z: 37, seenAt: "x", by: "Mason" }).length, 1);
   assert.strictEqual(parseBank({ sightings: [REACHED, STALLED] }).length, 2);
   assert.strictEqual(parseBank({ droppedAt: "2026-09-20T00:00:00Z" }).length, 0, "an old tombstone holds nothing");
+});
+
+test("find_fortress: the skill budget covers the preflight and a full march", () => {
+  // Run 790, 01:54Z: 309 seconds at the stash and the portal, then a march
+  // from 504 to 203 blocks out in ninety seconds, cut off by the 480 second
+  // skill budget with the bricks 203 blocks away.
+  const src = fs.readFileSync(path.join(__dirname, "find-fortress.ts"), "utf8");
+  const budget = Number(src.match(/timeoutMs: (\d+)_000/)?.[1]);
+  const march = Number(src.match(/marchToward\(bot, sighting, (\d+)_000/)?.[1]);
+  assert.ok(budget && march, "both numbers are readable");
+  assert.ok(
+    budget >= 300 + march + 120,
+    `budget ${budget}s must fit a 5 minute preflight, the ${march}s march and a sweep`,
+  );
 });
