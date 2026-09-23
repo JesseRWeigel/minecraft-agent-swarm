@@ -63,3 +63,22 @@ test("find_fortress: the skill budget covers the preflight and a full march", ()
     `budget ${budget}s must fit a 5 minute preflight, the ${march}s march and a sweep`,
   );
 });
+
+test("find_fortress: hunts blazes once inside, and the brain keeps sending it until a rod is earned", () => {
+  // Run 791, 02:56Z: A Terrible Fortress landed with Mason among four
+  // hundred bricks and a wither skeleton killed him four seconds later.
+  // Nothing in the swarm hunted a blaze, so the brewing chain had no path.
+  const src = fs.readFileSync(path.join(__dirname, "find-fortress.ts"), "utf8");
+  const entered = src.indexOf("entered = !!nearBrick;");
+  const abort = src.indexOf("if (signal.aborted) {", entered);
+  assert.ok(entered > 0 && abort > entered);
+  assert.match(src.slice(entered, abort), /await huntBlazes\(bot, signal, step\)/, "the hunt runs after entering");
+  const hunt = src.slice(src.indexOf("async function huntBlazes"), src.indexOf("function inNether"));
+  assert.match(hunt, /e\.name === "blaze"/, "it looks for blazes");
+  assert.match(hunt, /bot\.attack\(blaze\)/, "it swings at them");
+  assert.match(hunt, /blaze_rod/, "it counts and collects rods");
+  assert.match(hunt, /240_000/, "the hunt is bounded");
+  const brain = fs.readFileSync(path.join(__dirname, "..", "bot", "brain.ts"), "utf8");
+  const gate = brain.slice(brain.indexOf("const fortDone ="), brain.indexOf("const fortDone =") + 400);
+  assert.match(gate, /obtain_blaze_rod/, "the trip stands down only once a rod is earned too");
+});

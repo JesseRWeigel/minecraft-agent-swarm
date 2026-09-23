@@ -102,6 +102,67 @@ function logApproachGap(bot: Bot, target: { x: number; y: number; z: number }): 
   }
 }
 
+/** Fight blazes within reach of the fortress bricks and pick up their rods.
+ *  Bounded to four minutes and six blazes; returns the rods held afterwards. */
+async function huntBlazes(
+  bot: Bot,
+  signal: AbortSignal,
+  step: (message: string, progress: number) => void,
+): Promise<number> {
+  const rodsHeld = () =>
+    bot.inventory
+      .items()
+      .filter((i) => i.name === "blaze_rod")
+      .reduce((n, i) => n + i.count, 0);
+  const deadline = Date.now() + 240_000;
+  let fought = 0;
+  const sword = bot.inventory.items().find((i) => i.name.endsWith("_sword"));
+  if (sword) await bot.equip(sword, "hand").catch(() => {});
+  while (Date.now() < deadline && !signal.aborted && fought < 6 && bot.entity) {
+    const me = bot.entity.position;
+    const blaze = Object.values(bot.entities)
+      .filter((e) => e.name === "blaze" && e.isValid && e.position.distanceTo(me) < 40)
+      .sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0];
+    if (!blaze) {
+      // Rods on the floor count as much as a blaze in the air.
+      const drop = Object.values(bot.entities).find(
+        (e) =>
+          e.name === "item" && e.position.distanceTo(me) < 12 && /blaze_rod/.test(JSON.stringify(e.metadata ?? "")),
+      );
+      if (drop) {
+        await safeGoto(bot, new goals.GoalNear(drop.position.x, drop.position.y, drop.position.z, 1), 15_000).catch(
+          () => {},
+        );
+        continue;
+      }
+      step(`In the fortress, no blaze within 40 blocks, holding ${rodsHeld()} rods...`, 0.85);
+      await new Promise((r) => setTimeout(r, 3000));
+      continue;
+    }
+    fought++;
+    step(`Fighting blaze ${fought} at ${blaze.position.floored()}...`, 0.85);
+    console.log(
+      `[Fortress] ${bot.username}: blaze ${fought} at ${blaze.position.floored()}, ${blaze.position.distanceTo(me).toFixed(0)} away`,
+    );
+    const fightUntil = Date.now() + 30_000;
+    while (blaze.isValid && Date.now() < fightUntil && !signal.aborted) {
+      const gap = blaze.position.distanceTo(bot.entity.position);
+      if (gap > 3.5) {
+        await safeGoto(bot, new goals.GoalNear(blaze.position.x, blaze.position.y, blaze.position.z, 2), 6_000).catch(
+          () => {},
+        );
+      } else {
+        await bot.lookAt(blaze.position.offset(0, 1, 0), true).catch(() => {});
+        bot.attack(blaze);
+        await new Promise((r) => setTimeout(r, 600));
+      }
+    }
+    // Let the rod drop and land before looking for it.
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  return rodsHeld();
+}
+
 function inNether(bot: Bot): boolean {
   return String(bot.game.dimension).includes("nether");
 }
@@ -278,6 +339,14 @@ export const findFortressSkill: Skill = {
       if (!entered) logApproachGap(bot, seen);
       const p = bot.entity.position.floored();
       console.log(`[FortressDebug] ${bot.username}: bricks=${seen} stoodAt=${p.x},${p.y},${p.z} entered=${entered}`);
+      // Run 791, 02:56Z: A Terrible Fortress landed with Mason among four
+      // hundred bricks, and a wither skeleton killed him four seconds later.
+      // The next point behind that door is a blaze rod, and nothing in the
+      // swarm hunted one, so the trip now does while it is inside.
+      if (entered && !signal.aborted) {
+        const rods = await huntBlazes(bot, signal, step);
+        console.log(`[Fortress] ${bot.username}: blaze hunt done, holding ${rods} blaze rods`);
+      }
     }
 
     // --- Always walk home ---

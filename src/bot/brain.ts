@@ -2516,7 +2516,11 @@ export class BotBrain {
       this.roleConfig.allowedSkills.includes("find_fortress")
     ) {
       const earnedFort = readTeamEarned(BOT_ROSTER.map((b) => b.name));
-      const fortDone = earnedFort.has("nether/find_fortress") || earnedFort.has("minecraft:nether/find_fortress");
+      // The trip keeps running after the fortress point: Into Fire wants a
+      // blaze rod from inside it, and the skill hunts blazes once it is in.
+      const fortDone =
+        (earnedFort.has("nether/find_fortress") || earnedFort.has("minecraft:nether/find_fortress")) &&
+        (earnedFort.has("nether/obtain_blaze_rod") || earnedFort.has("minecraft:nether/obtain_blaze_rod"));
       // 45min: the reachable disk from this portal is exhausted, so frequent
       // sweeps just tax Mason with deaths for no new coverage. One occasional
       // lottery ticket (accidental explore advancements, a stray fortress
@@ -2558,7 +2562,10 @@ export class BotBrain {
       const armouredEnough = armourFort >= 2 || (goldWorn && armourFort >= 1);
       if (!fortDone && cooledFort && todFort < 11000 && nearStashFort && armouredEnough && fitForNether) {
         this.lastFortressMs = Date.now();
-        this.log.info("Brain", "OVERRIDE: the brewing branch waits on a fortress — running find_fortress");
+        this.log.info(
+          "Brain",
+          "OVERRIDE: the brewing branch waits on a fortress and a blaze rod — running find_fortress",
+        );
         this.events.onThought("Somewhere out in that red haze stands a fortress. Today I go look.");
         const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "find_fortress" });
         this.events.onAction("find_fortress", result);
