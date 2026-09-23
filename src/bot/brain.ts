@@ -312,6 +312,7 @@ export class BotBrain {
   private lastFortressMs = 0;
   private lastFortressGateLogMs = 0;
   private lastNetherGoldBankMs = 0;
+  private lastGoldHomeMs = 0;
   private lastGoldGateLogMs = 0;
   private lastPortalRelightMs = 0;
   private lastNetherReturnMs = 0;
@@ -2126,6 +2127,62 @@ export class BotBrain {
     // ferries out there and mines fresh ground instead of shafting the dead
     // base. Long cooldown — it is a full round-trip — and only while short on
     // iron, since the whole point is to restart the iron→armour supply.
+    // GOLD GOES HOME BEFORE ANYTHING ELSE. Run 806: Forge dug a gold vein
+    // at 17:32Z, smelted the team's fourth ingot at 17:43Z with three in his
+    // pack, and the very next decision ferried him to the frontier. The bank
+    // rule below only fires at the stash and after the ferry and the dive
+    // have had their turn, so the gold never arrived and the fortress gate
+    // read gold=false all evening. While the trip is short of gold, a bot
+    // holding any walks it home and banks it first.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.bot.username !== "Mason" &&
+      this.roleConfig.stashPos &&
+      /overworld/.test(String(this.bot.game.dimension)) &&
+      Date.now() - this.lastGoldHomeMs > 300_000
+    ) {
+      const goldHeldHome = this.bot.inventory
+        .items()
+        .filter((i) => i.name === "gold_ingot" || i.name === "raw_gold" || i.name === "gold_block")
+        .reduce((n, i) => n + i.count, 0);
+      const spHome = this.roleConfig.stashPos;
+      const earnedHome = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+      const rodDone = earnedHome.has("nether/obtain_blaze_rod") || earnedHome.has("minecraft:nether/obtain_blaze_rod");
+      const bankedGold =
+        stashCount("gold_ingot", spHome.y) + stashCount("raw_gold", spHome.y) + stashCount("gold_block", spHome.y) * 9;
+      if (goldHeldHome >= 1 && !rodDone && bankedGold < 4) {
+        this.lastGoldHomeMs = Date.now();
+        const gapHome = Math.hypot(this.bot.entity.position.x - spHome.x, this.bot.entity.position.z - spHome.z);
+        if (gapHome < 40 && this.bot.entity.position.y >= spHome.y - 8) {
+          this.log.info(
+            "Brain",
+            `OVERRIDE: banking ${goldHeldHome} gold for the Nether trip (stash holds ${bankedGold})`,
+          );
+          const result = await this.executeActionUnlessPaused("deposit_stash", {
+            stashPos: spHome,
+            keepItems: this.roleConfig.keepItems,
+            materialReserve: 0,
+            canMine: true,
+          });
+          this.events.onAction("deposit_stash", result);
+          this.lastAction = "deposit_stash";
+          this.lastResult = result;
+        } else {
+          this.log.info(
+            "Brain",
+            `OVERRIDE: carrying ${goldHeldHome} gold the trip needs (stash holds ${bankedGold}) — walking it home from ${gapHome.toFixed(0)} blocks out`,
+          );
+          this.events.onThought("This gold is Mason's ticket. Home first.");
+          const walk = await this.executeActionUnlessPaused("go_to", { x: spHome.x, y: spHome.y, z: spHome.z });
+          this.events.onAction("go_to", walk);
+          this.lastAction = "go_to";
+          this.lastResult = walk;
+        }
+        return;
+      }
+    }
+
     if (
       config.bot.allowStrategyOverrides &&
       !isSkillRunning(this.bot) &&

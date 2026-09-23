@@ -221,3 +221,18 @@ test("remembered ore: the vein is dug in the same pass as the walk", () => {
   assert.match(helper, /<= 24\) \{/, "only when the walk actually arrived");
   assert.match(helper, /At the remembered \$\{match\}:/, "the dig result is logged");
 });
+
+test("gold goes home before the ferry and the dive while the trip is short", () => {
+  // Run 806: Forge smelted the team's fourth ingot with three in his pack
+  // and the next decision ferried him to the frontier; the bank rule sat
+  // after the ferry and the dive and only fired at the stash.
+  const home = BRAIN.indexOf("GOLD GOES HOME BEFORE ANYTHING ELSE");
+  const ferry = BRAIN.indexOf("ferrying to the frontier for fresh ore");
+  const dive = BRAIN.indexOf("diving to diamond depth");
+  assert.ok(home > 0 && home < ferry && home < dive, "the gold-home block sits before the ferry and the dive");
+  const block = BRAIN.slice(home, home + 3200);
+  assert.match(block, /goldHeldHome >= 1 && !rodDone && bankedGold < 4/, "any gold counts while the trip is short");
+  assert.match(block, /walking it home from/, "far from the stash it walks home");
+  assert.match(block, /banking \$\{goldHeldHome\} gold for the Nether trip/, "at the stash it banks");
+  assert.match(block, /this\.bot\.username !== "Mason"/, "the crosser keeps his gold");
+});
