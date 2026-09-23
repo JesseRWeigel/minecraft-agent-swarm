@@ -12,7 +12,9 @@ Run two development attempts with the same frozen model, prompt and arena. Prese
 
 ## Proposed budgets to qualify before use
 
-These are proposed caps, not implemented runtime guarantees:
+These are proposed episode caps. The standalone ledger and fake-server-tested
+provider adapter implement accounting and client transport bounds; the complete
+game runtime does not yet enforce this combined episode contract:
 
 | Resource | Initial proposed cap |
 | --- | --- |
@@ -46,10 +48,12 @@ close the ledger to further calls. Malformed finish records retain elapsed time
 and the reservation without inventing usage. Call records are immutable. Exact
 budget boundaries are allowed; dispatch after exhaustion is rejected.
 
-This is accounting, not a provider adapter or a cancellation mechanism. Its clock,
-input counts and provider usage are trusted inputs, never model-generated facts.
-The future adapter must enforce the returned timeout, request output limits,
-perform cancellation and preserve raw provider usage separately. No money or
+The ledger itself is accounting. The [bounded Ollama adapter](ollama-adapter.md)
+now enforces client transport deadlines and cancellation, requests output limits,
+and charges this ledger. Its fake-server tests do not qualify a real backend or
+prove GPU cancellation. Clock, input counts and provider usage are trusted inputs,
+never model-generated facts. Protected raw transcript preservation remains to be
+integrated with the coordinator. No money or
 energy cost is estimated here. The new caps are not wired into the game runtime;
 the existing 20-second scripted session remains unchanged. A passing ledger test
 does not qualify the proposed 120-second model episode or freeze the study.
@@ -93,7 +97,7 @@ A reproducible dataset of goals, advisory observations, chosen actions, failures
 ## Next implementation order
 
 1. Characterize the remaining bridge shutdown issue without changing failure criteria.
-2. Add a bounded model-provider adapter and budget ledger; test with a local stub before inference.
+2. Integrate the implemented bounded adapter and budget ledger with the protected coordinator; test the complete loop with a local stub before inference.
 3. Align and qualify all deadlines for the proposed pilot, then freeze concrete model/prompt/runtime identities.
 4. Coordinate a logged GPU window and execute the two development attempts.
 5. Design and freeze the broader held-out learning experiment from the development findings.

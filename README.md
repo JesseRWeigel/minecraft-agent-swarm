@@ -55,6 +55,10 @@ The research harness also [rejects a deadline-limited scripted dig](docs/researc
 
 A [socket-shutdown correction](docs/research/socket-close-qualification.md) now waits for clean network closure; real TCP regressions and a collection trial pass. The initial stationary attempt stopped at storage setup; a same-source retry now passes, with the failed attempt retained. The [first model pilot](docs/research/first-model-pilot-protocol.md) remains a protocol draft.
 
+The [bounded local model adapter](docs/research/ollama-adapter.md) now passes
+fake-server tests for timeouts, cancellation and token accounting. Connecting it
+to the protected game coordinator and qualifying a pinned model remain ahead.
+
 ---
 
 ## Architecture
