@@ -1,4 +1,6 @@
 import mineflayer from "mineflayer";
+import { STASH_POS } from "./role.js";
+import { bedTooFarFromHome } from "./bed-safety.js";
 import { installPhysicsEpsilon } from "./physics-epsilon.js";
 import { Vec3 } from "vec3";
 import pathfinderPkg from "mineflayer-pathfinder";
@@ -394,7 +396,18 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
       const clustered = bed
         ? recentDeathSpots.filter((d) => Math.hypot(d.x - bed.position.x, d.z - bed.position.z) <= 16).length
         : 0;
-      if (bed && clustered < 3) {
+      // A bed far from the village is a bad respawn point whatever the death
+      // count: it keeps the bot out there with the night mobs and away from
+      // its work. Runs 803 and 804, Forge at the plains village bed 650
+      // blocks east, sixteen deaths in two hours.
+      const home = roleConfig.stashPos ?? STASH_POS;
+      const farBed = !!bed && bedTooFarFromHome(bed.position, home);
+      if (bed && farBed) {
+        console.log(
+          `[Bot] ${roleConfig.name} respawned at a bed ${Math.round(Math.hypot(bed.position.x - home.x, bed.position.z - home.z))} blocks from the village at ${bed.position} — breaking it so the next respawn is home`,
+        );
+      }
+      if (bed && clustered < 3 && !farBed) {
         console.log(
           `[Bot] ${roleConfig.name} death loop but only ${clustered} of the recent deaths were near the bed at ${bed.position} — keeping it`,
         );

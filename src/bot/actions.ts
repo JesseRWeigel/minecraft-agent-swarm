@@ -17,7 +17,7 @@ import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
 import { Vec3 } from "vec3";
 import { isHostile } from "./perception.js";
-import { bedExplodesHere, BED_EXPLODES_MESSAGE } from "./bed-safety.js";
+import { bedExplodesHere, BED_EXPLODES_MESSAGE, bedTooFarFromHome, bedTooFarMessage } from "./bed-safety.js";
 import { withinDigReach, distanceToBlock } from "./dig-reach.js";
 import { travelBudgetMs, DEEP_TRAVEL_MS, MAX_TRAVEL_LEGS, LOOKAT_RETRY_MS, legWorthContinuing } from "./mine-budget.js";
 import { canHarvest, harvestAdvice } from "./tool-tier.js";
@@ -2302,6 +2302,9 @@ async function sleepInBed(bot: Bot): Promise<string> {
       if (dist > 4.5) {
         nearestMiss = Math.min(nearestMiss, dist);
         continue;
+      }
+      if (bedTooFarFromHome(target.position, STASH_POS)) {
+        return bedTooFarMessage(Math.hypot(target.position.x - STASH_POS.x, target.position.z - STASH_POS.z));
       }
       await bot.lookAt(target.position.offset(0.5, 0.5, 0.5), true).catch(() => {});
       await bot.sleep(target);

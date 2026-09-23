@@ -28,3 +28,23 @@ export function bedExplodesHere(dimension: string | undefined | null): boolean {
 /** What to tell a bot that asked to sleep somewhere a bed would explode. */
 export const BED_EXPLODES_MESSAGE =
   "A bed explodes here. Beds only work in the overworld, so go back through the portal before sleeping.";
+
+/** How far from the village a bed may be and still set the respawn point.
+ *  Runs 803 and 804: Forge slept in a bed at the plains village 650 blocks
+ *  east during a trade trip, the sleep failed but the click set his spawn,
+ *  and every death after that put him back among the village's night mobs:
+ *  sixteen deaths in two hours at 534..615,-441..-495, an iron pickaxe lost
+ *  each time, and never home to mine the gold the fortress trip waits on. */
+export const BED_HOME_RADIUS = 150;
+
+export function bedTooFarFromHome(
+  bed: { x: number; z: number },
+  home: { x: number; z: number } | undefined,
+  radius = BED_HOME_RADIUS,
+): boolean {
+  if (!home) return false;
+  return Math.hypot(bed.x - home.x, bed.z - home.z) > radius;
+}
+
+export const bedTooFarMessage = (dist: number) =>
+  `Not sleeping here: this bed is ${Math.round(dist)} blocks from the village, and using it would move the respawn point out there. Sleep at the village bed.`;
