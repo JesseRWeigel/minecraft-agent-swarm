@@ -115,3 +115,15 @@ test("find_fortress: packs a crossbow and shoots blazes from a stand-off", () =>
   assert.match(hunt, /gap > 16/, "it stands off rather than walking into the fireballs");
   assert.match(hunt, /"entityHurt"/, "a hit is read from the hurt event");
 });
+
+test("find_fortress: leaves zombified piglins alone and reads rod drops through the item accessor", () => {
+  // Run 794: "zombified_piglin 5.2 away — fighting it off first" on the walk
+  // in, and a blaze down after ten bolts with no rod picked up because the
+  // drop search read raw metadata.
+  const src = fs.readFileSync(path.join(__dirname, "find-fortress.ts"), "utf8");
+  const foes = src.slice(src.indexOf("const FORTRESS_FOES"), src.indexOf("async function fendOff"));
+  assert.doesNotMatch(foes, /zombified_piglin"/, "zombified piglins are neutral until struck");
+  assert.match(src, /getDroppedItem\?\.\(\)/, "rod drops are read through getDroppedItem");
+  assert.match(src, /blaze rod on the floor at/, "a downed blaze is followed by a rod sweep");
+  assert.match(src, /shot \$\{shots\} at blaze/, "every shot logs its range");
+});

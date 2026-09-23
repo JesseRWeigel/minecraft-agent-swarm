@@ -102,7 +102,10 @@ function logApproachGap(bot: Bot, target: { x: number; y: number; z: number }): 
   }
 }
 
-const FORTRESS_FOES = new Set(["wither_skeleton", "blaze", "skeleton", "zombified_piglin", "hoglin", "magma_cube"]);
+// Zombified piglins are neutral until struck and then come as a pack. Run
+// 794's third trip read "zombified_piglin 5.2 away — fighting it off first"
+// twice on the walk in, which is a fight the bot cannot win. Leave them be.
+const FORTRESS_FOES = new Set(["wither_skeleton", "blaze", "skeleton", "hoglin", "magma_cube"]);
 
 /** Fight anything from FORTRESS_FOES that stands within `radius` before the
  *  walk goes on. Runs 791 and 792: two trips in a row ended "slain by Wither
@@ -145,6 +148,20 @@ async function fendOff(bot: Bot, signal: AbortSignal, radius = 6, budgetMs = 20_
     if (pvp) pvp.stop();
   }
   return engaged;
+}
+
+/** The nearest dropped blaze rod within `radius`, read through the entity's
+ *  dropped-item accessor rather than raw metadata. */
+function nearestRodDrop(bot: Bot, radius: number): { position: Vec3 } | undefined {
+  const me = bot.entity?.position;
+  if (!me) return undefined;
+  return Object.values(bot.entities)
+    .filter((e) => {
+      if (e.name !== "item" || !e.isValid || e.position.distanceTo(me) > radius) return false;
+      const item = (e as unknown as { getDroppedItem?: () => { name?: string } | null }).getDroppedItem?.();
+      return item?.name === "blaze_rod";
+    })
+    .sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0];
 }
 
 /** Fight blazes within reach of the fortress bricks and pick up their rods.
@@ -215,10 +232,7 @@ async function huntBlazes(
       .sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0];
     if (!blaze) {
       // Rods on the floor count as much as a blaze in the air.
-      const drop = Object.values(bot.entities).find(
-        (e) =>
-          e.name === "item" && e.position.distanceTo(me) < 12 && /blaze_rod/.test(JSON.stringify(e.metadata ?? "")),
-      );
+      const drop = nearestRodDrop(bot, 24);
       if (drop) {
         await safeGoto(bot, new goals.GoalNear(drop.position.x, drop.position.y, drop.position.z, 1), 15_000).catch(
           () => {},
@@ -250,7 +264,12 @@ async function huntBlazes(
           continue;
         }
         shots++;
-        if (await shootOnce(blaze)) hits++;
+        const before = arrows();
+        const hitNow = await shootOnce(blaze);
+        if (hitNow) hits++;
+        console.log(
+          `[Fortress] ${bot.username}: shot ${shots} at blaze ${gap.toFixed(1)} away (dy ${(blaze.position.y - bot.entity.position.y).toFixed(1)}): ${hitNow ? "hit" : "no hit seen"}, arrows ${before} -> ${arrows()}`,
+        );
         continue;
       }
       if (gap > 3.5) {
@@ -266,6 +285,21 @@ async function huntBlazes(
     console.log(
       `[Fortress] ${bot.username}: blaze ${fought} ${blaze.isValid ? "still up" : "down"} after ${shots} shots (${hits} hits), health ${bot.health.toFixed(0)}, arrows ${arrows()}`,
     );
+    // Run 794, 05:39Z: a blaze went down after ten bolts and the rod was
+    // never picked up, because the old search read the item name out of raw
+    // metadata and found nothing. Sweep for the rod before the next blaze.
+    if (!blaze.isValid) {
+      const sweepUntil = Date.now() + 20_000;
+      while (Date.now() < sweepUntil && !signal.aborted && bot.entity) {
+        const rod = nearestRodDrop(bot, 24);
+        if (!rod) break;
+        console.log(`[Fortress] ${bot.username}: blaze rod on the floor at ${rod.position.floored()}, fetching it`);
+        await safeGoto(bot, new goals.GoalNear(rod.position.x, rod.position.y, rod.position.z, 1), 12_000).catch(
+          () => {},
+        );
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    }
     // Let the rod drop and land before looking for it.
     await new Promise((r) => setTimeout(r, 1500));
   }
