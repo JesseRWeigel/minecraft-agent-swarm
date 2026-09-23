@@ -925,7 +925,7 @@ const TABLE_REACH = 4.5;
  * stood 8 blocks from one and the craft window never opened), craft and
  * place a new table from pocket planks beside the bot.
  */
-async function reachTable(bot: Bot): Promise<Block | null> {
+async function reachTable(bot: Bot, stashPos?: { x: number; y: number; z: number }): Promise<Block | null> {
   const near = () =>
     bot
       .findBlocks({ matching: (b) => b.name === "crafting_table", maxDistance: 48, count: 6 })
@@ -955,6 +955,17 @@ async function reachTable(bot: Bot): Promise<Block | null> {
     .items()
     .filter((i) => i.name.endsWith("_planks"))
     .reduce((s, i) => s + i.count, 0);
+  if (!bot.inventory.items().some((i) => i.name === "crafting_table") && stashPos) {
+    // Run 797: every table within 48 blocks of the farm read "unreachable"
+    // (11 to 21 blocks, twelve times in the hour), the pack held no planks,
+    // and the bake was skipped with six wheat in hand while the stash held
+    // 1,010 crafting tables. Take one and stand it here.
+    const { withdrawStash } = await import("./stash.js");
+    const got = await withdrawStash(bot, stashPos, "crafting_table", 1, 45_000).catch((e: Error) => e.message);
+    console.log(
+      `[FarmDebug] ${bot.username}: no reachable table — asked the stash for one: ${String(got).slice(0, 60)}`,
+    );
+  }
   if (!bot.inventory.items().some((i) => i.name === "crafting_table")) {
     if (planks < 4) {
       console.log(`[FarmDebug] ${bot.username}: no reachable table and only ${planks} planks to make one`);
@@ -1019,9 +1030,9 @@ async function bakeBread(
   const count = Math.floor(wheat / 3);
 
   // Bread is a 3-wide recipe → requires a crafting table.
-  const table = await reachTable(bot);
+  const table = await reachTable(bot, stashPos);
   if (!table || !table.position) {
-    lastBakeProblem = `no reachable crafting table near ${bot.entity.position.floored()} and no planks to place one`;
+    lastBakeProblem = `no reachable crafting table near ${bot.entity.position.floored()}, none in the stash and no planks to place one`;
     console.log(`[FarmDebug] ${bot.username}: bake skipped — ${lastBakeProblem}`);
     return 0;
   }
