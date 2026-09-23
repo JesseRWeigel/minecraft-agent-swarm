@@ -427,8 +427,18 @@ export const findFortressSkill: Skill = {
         step("Fetching a crossbow for the blazes...", 0.045);
         await withdrawStash(bot, STASH_POS, "crossbow", 1, 45_000).catch(() => {});
       }
-      if (held("arrow") < 16) await withdrawStash(bot, STASH_POS, "arrow", 24, 45_000).catch(() => {});
-      console.log(`[Fortress] ${bot.username}: ranged kit -> crossbow=${held("crossbow")} arrows=${held("arrow")}`);
+      // Run 809: Mason reached the fortress at 23:4xZ with a crossbow and no
+      // arrows and died at sword range to blazes, while the ledger held 58
+      // arrows in two chests updated that hour. The withdraw's answer was
+      // thrown away, so say it, and try once more when the first walk fails.
+      const arrowNotes: string[] = [];
+      for (let attempt = 0; attempt < 2 && held("arrow") < 16; attempt++) {
+        const r = await withdrawStash(bot, STASH_POS, "arrow", 24, 45_000).catch((e) => String(e?.message ?? e));
+        arrowNotes.push(String(r).slice(0, 80));
+      }
+      console.log(
+        `[Fortress] ${bot.username}: ranged kit -> crossbow=${held("crossbow")} arrows=${held("arrow")}${arrowNotes.length ? ` (arrow withdraw: ${arrowNotes.join(" | ")})` : ""}`,
+      );
       if (!(await wearGoldForPiglins(bot, "Fortress", (m) => step(m, 0.05)))) {
         return {
           success: false,
