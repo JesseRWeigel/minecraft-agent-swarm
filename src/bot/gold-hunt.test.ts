@@ -146,3 +146,16 @@ test("gold hunt: a walk that ended short earns a quicker next pass", () => {
   assert.match(block, /stopped \\d\+ blocks short/, "the short-walk result is recognised");
   assert.match(block, /lastGoldHuntMs = Date\.now\(\) - 600_000/, "five minutes until the next pass");
 });
+
+test("gold hunt: walks to a remembered gold vein when none is in sight", () => {
+  // Run 801: five hunts answered "No gold_ore found nearby" from y=25 while
+  // the miner's memory held veins forty and ninety blocks off.
+  const mine = BRAIN.indexOf('blockType: "gold_ore"');
+  const block = BRAIN.slice(mine, mine + 2200);
+  assert.match(block, /No gold_ore found nearby/, "the empty search result is recognised");
+  assert.match(block, /getNearestOre\("gold_ore", me\.x, me\.z, 200\)/, "memory is asked for a vein");
+  assert.match(block, /"go_to", \{ x: known\.x, y: known\.y, z: known\.z \}/, "the bot walks to it with its height");
+  assert.match(block, /lastGoldHuntMs = Date\.now\(\) - 780_000/, "the mine follows within two minutes");
+  const mem = fs.readFileSync(path.join(__dirname, "memory.ts"), "utf8");
+  assert.match(mem, /getNearestOre\(match: string, x: number, z: number, radius = 200\)/, "the getter exists");
+});

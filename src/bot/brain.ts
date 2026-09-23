@@ -2762,6 +2762,28 @@ export class BotBrain {
         // "stopped 49 blocks short" of ore at 295,8,-292, and fifteen minutes
         // later the bot was back on the surface starting over.
         if (/stopped \d+ blocks short/.test(String(result))) this.lastGoldHuntMs = Date.now() - 600_000;
+        // Run 801: five hunts in an hour answered "No gold_ore found nearby"
+        // from the miner's spot at y=25, while his own memory held gold veins
+        // at 370,18,-344 and 392,-25,-320, forty and ninety blocks off. The
+        // block search only sees loaded chunks. Walk to the vein it knows.
+        if (/No gold_ore found nearby/.test(String(result))) {
+          const me = this.bot.entity.position;
+          const known = getAllMemoryStores()
+            .map((st) => st.getNearestOre("gold_ore", me.x, me.z, 200))
+            .filter((o): o is NonNullable<typeof o> => !!o)
+            .sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
+          if (known) {
+            this.log.info(
+              "Brain",
+              `OVERRIDE: no gold ore in sight, walking to the remembered ${known.type} at ${known.x},${known.y},${known.z} (${Math.hypot(known.x - me.x, known.z - me.z).toFixed(0)} away)`,
+            );
+            const walk = await this.executeActionUnlessPaused("go_to", { x: known.x, y: known.y, z: known.z });
+            this.events.onAction("go_to", walk);
+            this.lastAction = "go_to";
+            this.lastResult = walk;
+            this.lastGoldHuntMs = Date.now() - 780_000;
+          }
+        }
         return;
       }
     }
