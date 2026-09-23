@@ -1,0 +1,560 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-23",
+  "scope": "Socket-close correction: real collection passed; fresh stationary attempt failed before game launch",
+  "model_calls": 0,
+  "live_swarm_changed": false,
+  "same_source_manifest_for_both_attempts": true,
+  "snapshot_sha256": "fc652947f614a3fe38c757a4d461def6dc6bed0ba8d2868d2174a6a8d11e37ed",
+  "server_jar_sha256": "8b264f7b7187fe247dfc2ca4eb43ab677e38469e2f2e7de702bf3840512b8c11",
+  "tool_manifest_sha256": "37f38ff1b4fb39bc210b8772b609dfaaf7cc11522d04562a637ef2034a0fde26",
+  "attempts": [
+    {
+      "attempt": "attempt-001",
+      "status": "qualified",
+      "control_mode": "forward",
+      "action_driver": "scripted",
+      "worker_stage": "finalize",
+      "worker_error": null,
+      "source_manifest_sha256": "01c2a5aadf3c87653e045d49b74258e4c7224c76a85903f4222a5f62f31c57aa",
+      "controller_sha256": "0846864645d2020a7f6bdcab7066c23efafa06bd1e9f0f2c585ba18adccc292e",
+      "summary_sha256": "2f5e9ca5e9cbc7c364f8411d3100639a6520e37f2e0e00ad69c0b8c92b3fa086",
+      "storage_image_sha256": "556c34688f68425fa454f6d5c23a4ff4f8a0ecb3cd52c71aa313c2632dc3f926",
+      "source_manifest_file_sha256": "26d1853d5e177a4400040ae2ca8d7da8fff7af8b634d2f21db1e9c491513b37a",
+      "action_script_sha256": "bc483b8a9cec6ee9c4a7e83a5f9541bcaff9857a62c3ef9167df0cc07a84e134",
+      "verified_preserved_files": {
+        "protected-result.json": "20faed2f65f79988670ee8c9fd2f2c76f72eb9caaeed6f9ab2cb1fe4255677f2",
+        "participant-diagnostics.json": "d5301acc5c997efeaf847be95b59ae18e2b6be2fe423beb7912be7b9422a45fd",
+        "ai-world/level.dat": "7eb04b6df81c566681737f7ba645da7262934446bfd8b1a1d009d6aff81746cf",
+        "observer-fixture.json": "dad687c25e6a0b0048c3b1a0d33c4d0d9caa7337cb570efac5b1d45d60d97f32",
+        "observer-before.json": "cee8b2d53d1f82f48b79da34ca623b079a0d062d8a1f9c0384c3acf04a1a5468",
+        "observer-terminal.json": "59277302d8774bdc81e5d3b64458ffc989c9edba957509f7cc2abde0c54ca197",
+        "action-script.json": "bc483b8a9cec6ee9c4a7e83a5f9541bcaff9857a62c3ef9167df0cc07a84e134"
+      },
+      "action_trace": [
+        {
+          "request": {
+            "action": {
+              "kind": "observe"
+            },
+            "action_id": "collect-01",
+            "schema_version": 1,
+            "sequence": 1,
+            "trial_id": "collect-oak-log-v1"
+          },
+          "reply": {
+            "observation": {
+              "health": 20,
+              "inventory": [],
+              "pitch": 0,
+              "position": {
+                "x": 0.5,
+                "y": 200,
+                "z": 0.5
+              },
+              "schema_version": 1,
+              "source": "participant_bot",
+              "visibleBlocks": [],
+              "yaw": 3.141592653589793
+            },
+            "schema_version": 1,
+            "sequence": 1,
+            "status": "completed"
+          },
+          "start_ms": 0.0,
+          "end_ms": 2.863488
+        },
+        {
+          "request": {
+            "action": {
+              "kind": "look",
+              "pitch": -0.35730868300810004,
+              "yaw": 3.141592653589793
+            },
+            "action_id": "collect-01",
+            "schema_version": 1,
+            "sequence": 2,
+            "trial_id": "collect-oak-log-v1"
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 2,
+            "status": "completed"
+          },
+          "start_ms": 2.885618,
+          "end_ms": 3.4408
+        },
+        {
+          "request": {
+            "action": {
+              "kind": "dig",
+              "x": 0,
+              "y": 200,
+              "z": 3
+            },
+            "action_id": "collect-01",
+            "schema_version": 1,
+            "sequence": 3,
+            "trial_id": "collect-oak-log-v1"
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 3,
+            "status": "completed"
+          },
+          "start_ms": 3.454002,
+          "end_ms": 3048.582197
+        },
+        {
+          "request": {
+            "action": {
+              "kind": "look",
+              "pitch": 0,
+              "yaw": 3.141592653589793
+            },
+            "action_id": "collect-01",
+            "schema_version": 1,
+            "sequence": 4,
+            "trial_id": "collect-oak-log-v1"
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 4,
+            "status": "completed"
+          },
+          "start_ms": 3048.609453,
+          "end_ms": 3049.072441
+        },
+        {
+          "request": {
+            "action": {
+              "direction": "forward",
+              "kind": "move",
+              "ticks": 20
+            },
+            "action_id": "collect-01",
+            "schema_version": 1,
+            "sequence": 5,
+            "trial_id": "collect-oak-log-v1"
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 5,
+            "status": "completed"
+          },
+          "start_ms": 3049.08495,
+          "end_ms": 4049.355784
+        },
+        {
+          "request": {
+            "action": {
+              "kind": "observe"
+            },
+            "action_id": "collect-01",
+            "schema_version": 1,
+            "sequence": 6,
+            "trial_id": "collect-oak-log-v1"
+          },
+          "reply": {
+            "observation": {
+              "health": 20,
+              "inventory": [
+                {
+                  "count": 1,
+                  "name": "oak_log",
+                  "slot": 36
+                }
+              ],
+              "pitch": 0,
+              "position": {
+                "x": 0.5,
+                "y": 200,
+                "z": 4.5575822619581805
+              },
+              "schema_version": 1,
+              "source": "participant_bot",
+              "visibleBlocks": [],
+              "yaw": 3.141592653589793
+            },
+            "schema_version": 1,
+            "sequence": 6,
+            "status": "completed"
+          },
+          "start_ms": 4049.378301,
+          "end_ms": 4049.906336
+        },
+        {
+          "request": {
+            "action": {
+              "kind": "finish"
+            },
+            "action_id": "collect-01",
+            "schema_version": 1,
+            "sequence": 7,
+            "trial_id": "collect-oak-log-v1"
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 7,
+            "status": "finished"
+          },
+          "start_ms": 4049.919022,
+          "end_ms": 4050.290328
+        }
+      ],
+      "action_duration_seconds": 4.05029,
+      "host_score": {
+        "baselineVerification": {
+          "status": "verified"
+        },
+        "endpoint": {
+          "acquired": true,
+          "gameplayQualified": false,
+          "status": "observed"
+        }
+      },
+      "before": {
+        "actionId": "collect-01",
+        "actorSample": {
+          "actionId": "collect-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "gameMode": 0,
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 0.5
+            },
+            "roster": [
+              "PilotProbe"
+            ],
+            "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d"
+          },
+          "phase": "before",
+          "sample": {
+            "durationMs": 5.399961000000005,
+            "finishedAtUtc": "2026-09-23T14:06:08.850Z",
+            "finishedMonotonicMs": 103.289051,
+            "queryWindows": [
+              {
+                "durationMs": 1.1403640000000053,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-23T14:06:08.846Z",
+                "finishedMonotonicMs": 99.114028,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-23T14:06:08.845Z",
+                "startedMonotonicMs": 97.973664
+              },
+              {
+                "durationMs": 0.6822640000000035,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-23T14:06:08.847Z",
+                "finishedMonotonicMs": 100.151469,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-23T14:06:08.847Z",
+                "startedMonotonicMs": 99.469205
+              },
+              {
+                "durationMs": 0.6307620000000043,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-23T14:06:08.848Z",
+                "finishedMonotonicMs": 100.823372,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-23T14:06:08.847Z",
+                "startedMonotonicMs": 100.19261
+              },
+              {
+                "durationMs": 0.628586999999996,
+                "field": "UUID",
+                "finishedAtUtc": "2026-09-23T14:06:08.849Z",
+                "finishedMonotonicMs": 101.508068,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-23T14:06:08.848Z",
+                "startedMonotonicMs": 100.879481
+              },
+              {
+                "durationMs": 0.9224010000000078,
+                "field": "Roster",
+                "finishedAtUtc": "2026-09-23T14:06:08.850Z",
+                "finishedMonotonicMs": 102.516165,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-23T14:06:08.849Z",
+                "startedMonotonicMs": 101.593764
+              },
+              {
+                "durationMs": 0.7440840000000009,
+                "field": "playerGameType",
+                "finishedAtUtc": "2026-09-23T14:06:08.850Z",
+                "finishedMonotonicMs": 103.272215,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-23T14:06:08.850Z",
+                "startedMonotonicMs": 102.528131
+              }
+            ],
+            "startedAtUtc": "2026-09-23T14:06:08.845Z",
+            "startedMonotonicMs": 97.88909
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "collect-oak-log-v1"
+        },
+        "inventory": [],
+        "phase": "before",
+        "queries": [
+          {
+            "command": "data get entity PilotProbe Inventory",
+            "field": "inventory",
+            "finishedAtUtc": "2026-09-23T14:06:08.852Z",
+            "finishedMonotonicMs": 104.513593,
+            "outcome": "completed",
+            "reply": "PilotProbe has the following entity data: []",
+            "startedAtUtc": "2026-09-23T14:06:08.850Z",
+            "startedMonotonicMs": 103.301025
+          },
+          {
+            "command": "execute in minecraft:overworld if block 0 200 3 minecraft:oak_log",
+            "field": "log",
+            "finishedAtUtc": "2026-09-23T14:06:08.852Z",
+            "finishedMonotonicMs": 105.359789,
+            "outcome": "completed",
+            "reply": "Test passed",
+            "startedAtUtc": "2026-09-23T14:06:08.852Z",
+            "startedMonotonicMs": 104.664426
+          },
+          {
+            "command": "execute in minecraft:overworld if block 0 200 3 minecraft:air",
+            "field": "air",
+            "finishedAtUtc": "2026-09-23T14:06:08.853Z",
+            "finishedMonotonicMs": 106.147164,
+            "outcome": "completed",
+            "reply": "Test failed",
+            "startedAtUtc": "2026-09-23T14:06:08.852Z",
+            "startedMonotonicMs": 105.422505
+          }
+        ],
+        "sample": {
+          "finishedAtUtc": "2026-09-23T14:06:08.853Z",
+          "finishedMonotonicMs": 106.222102,
+          "startedAtUtc": "2026-09-23T14:06:08.843Z",
+          "startedMonotonicMs": 95.415324
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "targetBlock": "minecraft:oak_log",
+        "taskId": "collect-oak-log-v1",
+        "taskSha256": "6805042703b1c9099a5edbc5a39c640d55a908ce99469ca2ab27e95270b11d24",
+        "trialId": "collect-oak-log-v1"
+      },
+      "terminal": {
+        "actionId": "collect-01",
+        "actorSample": {
+          "actionId": "collect-01",
+          "actor": "PilotProbe",
+          "observations": {
+            "dimension": "minecraft:overworld",
+            "gameMode": 0,
+            "health": 20,
+            "position": {
+              "x": 0.5,
+              "y": 200,
+              "z": 4.813426939524739
+            },
+            "roster": [
+              "PilotProbe"
+            ],
+            "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d"
+          },
+          "phase": "terminal",
+          "sample": {
+            "durationMs": 5.374223000000001,
+            "finishedAtUtc": "2026-09-23T14:06:13.338Z",
+            "finishedMonotonicMs": 58.628839,
+            "queryWindows": [
+              {
+                "durationMs": 1.5245719999999992,
+                "field": "Pos",
+                "finishedAtUtc": "2026-09-23T14:06:13.334Z",
+                "finishedMonotonicMs": 54.835218,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-23T14:06:13.333Z",
+                "startedMonotonicMs": 53.310646
+              },
+              {
+                "durationMs": 0.745432000000001,
+                "field": "Dimension",
+                "finishedAtUtc": "2026-09-23T14:06:13.336Z",
+                "finishedMonotonicMs": 55.938912,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-23T14:06:13.335Z",
+                "startedMonotonicMs": 55.19348
+              },
+              {
+                "durationMs": 0.9305589999999953,
+                "field": "Health",
+                "finishedAtUtc": "2026-09-23T14:06:13.337Z",
+                "finishedMonotonicMs": 56.913985,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-23T14:06:13.336Z",
+                "startedMonotonicMs": 55.983426
+              },
+              {
+                "durationMs": 0.5098699999999994,
+                "field": "UUID",
+                "finishedAtUtc": "2026-09-23T14:06:13.337Z",
+                "finishedMonotonicMs": 57.489854,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-23T14:06:13.337Z",
+                "startedMonotonicMs": 56.979984
+              },
+              {
+                "durationMs": 0.5989550000000037,
+                "field": "Roster",
+                "finishedAtUtc": "2026-09-23T14:06:13.338Z",
+                "finishedMonotonicMs": 58.176881,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-23T14:06:13.337Z",
+                "startedMonotonicMs": 57.577926
+              },
+              {
+                "durationMs": 0.4266420000000011,
+                "field": "playerGameType",
+                "finishedAtUtc": "2026-09-23T14:06:13.338Z",
+                "finishedMonotonicMs": 58.615586,
+                "outcome": "completed",
+                "sent": true,
+                "startedAtUtc": "2026-09-23T14:06:13.338Z",
+                "startedMonotonicMs": 58.188944
+              }
+            ],
+            "startedAtUtc": "2026-09-23T14:06:13.333Z",
+            "startedMonotonicMs": 53.254616
+          },
+          "schemaVersion": 1,
+          "source": "server_rcon",
+          "status": "sampled",
+          "trialId": "collect-oak-log-v1"
+        },
+        "inventory": [
+          {
+            "count": 1,
+            "id": "minecraft:oak_log",
+            "slot": 0
+          }
+        ],
+        "phase": "terminal",
+        "queries": [
+          {
+            "command": "data get entity PilotProbe Inventory",
+            "field": "inventory",
+            "finishedAtUtc": "2026-09-23T14:06:13.339Z",
+            "finishedMonotonicMs": 59.426215,
+            "outcome": "completed",
+            "reply": "PilotProbe has the following entity data: [{count: 1, Slot: 0b, id: \"minecraft:oak_log\"}]",
+            "startedAtUtc": "2026-09-23T14:06:13.338Z",
+            "startedMonotonicMs": 58.639521
+          },
+          {
+            "command": "execute in minecraft:overworld if block 0 200 3 minecraft:oak_log",
+            "field": "log",
+            "finishedAtUtc": "2026-09-23T14:06:13.340Z",
+            "finishedMonotonicMs": 60.147375,
+            "outcome": "completed",
+            "reply": "Test failed",
+            "startedAtUtc": "2026-09-23T14:06:13.339Z",
+            "startedMonotonicMs": 59.677496
+          },
+          {
+            "command": "execute in minecraft:overworld if block 0 200 3 minecraft:air",
+            "field": "air",
+            "finishedAtUtc": "2026-09-23T14:06:13.340Z",
+            "finishedMonotonicMs": 60.41945,
+            "outcome": "completed",
+            "reply": "Test passed",
+            "startedAtUtc": "2026-09-23T14:06:13.340Z",
+            "startedMonotonicMs": 60.181006
+          }
+        ],
+        "sample": {
+          "finishedAtUtc": "2026-09-23T14:06:13.340Z",
+          "finishedMonotonicMs": 60.445427,
+          "startedAtUtc": "2026-09-23T14:06:13.331Z",
+          "startedMonotonicMs": 50.846635
+        },
+        "schemaVersion": 1,
+        "source": "server_rcon",
+        "status": "sampled",
+        "targetBlock": "minecraft:air",
+        "taskId": "collect-oak-log-v1",
+        "taskSha256": "6805042703b1c9099a5edbc5a39c640d55a908ce99469ca2ab27e95270b11d24",
+        "trialId": "collect-oak-log-v1"
+      },
+      "lifecycle": {
+        "participant_returncode": 0,
+        "java_returncode": 0,
+        "action_finished_received": true,
+        "action_output_eof": true,
+        "action_output_audit": {
+          "error": null,
+          "schema_version": 1,
+          "status": "verified"
+        },
+        "participant_forced_cleanup": false,
+        "stop_sent": true,
+        "term_sent": false,
+        "kill_sent": false,
+        "game_bridge": {
+          "connections": 1,
+          "identity": {
+            "policy": "fixed_offline_login_v1",
+            "protocol": 769,
+            "status": "admitted",
+            "username": "PilotProbe",
+            "uuid": "f14b12b9-4db5-3b00-ab8c-cdacc19f233d"
+          },
+          "left_to_right": 1176,
+          "right_to_left": 47515,
+          "status": "completed"
+        }
+      },
+      "storage_closed_and_verified": true,
+      "resource_scope_valid": true,
+      "cleanup_confirmed": true
+    },
+    {
+      "attempt": "attempt-002",
+      "status": "failed",
+      "control_mode": "stationary",
+      "stage": "mount_storage",
+      "error": "protected_preparation_or_launch_failed",
+      "source_manifest_sha256": "01c2a5aadf3c87653e045d49b74258e4c7224c76a85903f4222a5f62f31c57aa",
+      "controller_sha256": "0846864645d2020a7f6bdcab7066c23efafa06bd1e9f0f2c585ba18adccc292e",
+      "summary_sha256": "a30d7ba654339622eedc023b6640dfc40c0169bf12aa02b4c62afcc8e4703f02",
+      "storage_image_sha256": "1b176732b0e4aa86838ae69f0e5fc5c191174f66467e7398e4f1694d454b837e",
+      "storage_helper_returncode": 3,
+      "cleanup_uncertain": false,
+      "game_launched": false,
+      "host_score": null
+    }
+  ],
+  "limits": [
+    "Deterministic scripts, no model inference or learning results.",
+    "One qualified collection trial; stationary game control failed at storage mount before launch. No statistical bridge reliability estimate.",
+    "Socket regressions reproduce premature destruction, but historical game failure remains unattributed.",
+    "Protected movement participant passed socket regressions; this game batch exercised the oak model-facing participant."
+  ]
+}

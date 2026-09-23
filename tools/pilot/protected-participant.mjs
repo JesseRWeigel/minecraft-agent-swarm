@@ -36,18 +36,45 @@ function destroySocket(bot) {
 }
 
 async function disposeBot(bot, timeoutMs) {
-  if (!bot) return;
+  if (!bot) return true;
+  const detach = [];
   try {
-    try {
-      bot.on?.("error", () => {});
-    } catch {}
-    try {
-      bot.setControlState?.("forward", false);
-    } catch {}
-    try {
-      if (timeoutMs > 0) await bounded(() => bot.quit?.("participant protocol complete"), timeoutMs, "bot quit");
-    } catch {}
+    bot.on?.("error", () => {});
+    bot.setControlState?.("forward", false);
+    // quit() in the pinned protocol is void: await actual network close instead.
+    // Plain socket doubles have no event API; production net.Socket instances do.
+    const sockets = [...new Set([bot.socket, bot._client?.socket])].filter((socket) => socket?.once && socket?.off);
+    const closed = sockets.map(
+      (socket) =>
+        new Promise((resolve) => {
+          const clean = () => !socket.errored && socket.readableEnded === true && socket.writableFinished === true;
+          if (socket.closed) {
+            resolve(clean());
+            return;
+          }
+          const onClose = (hadError) => resolve(!hadError && clean());
+          const onError = () => resolve(false);
+          socket.once("close", onClose);
+          socket.once("error", onError);
+          detach.push(() => {
+            socket.off("close", onClose);
+            socket.off("error", onError);
+          });
+        }),
+    );
+    if (!(timeoutMs > 0)) return false;
+    return await bounded(
+      async () => {
+        await bot.quit?.("participant protocol complete");
+        return (await Promise.all(closed)).every(Boolean);
+      },
+      timeoutMs,
+      "bot close",
+    );
+  } catch {
+    return false;
   } finally {
+    for (const remove of detach) remove();
     destroySocket(bot);
   }
 }
@@ -229,7 +256,8 @@ export async function runParticipant({
     try {
       cleanupRemaining = Math.min(1000, remaining());
     } catch {}
-    await disposeBot(bot, cleanupRemaining);
+    const cleanClose = await disposeBot(bot, cleanupRemaining);
+    if (!cleanClose) result = { schema_version: 1, status: "failed" };
   }
   try {
     if (now() >= deadline) return { schema_version: 1, status: "failed" };

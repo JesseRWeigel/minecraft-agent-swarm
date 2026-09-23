@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { test } from "node:test";
+import net from "node:net";
+import { once } from "node:events";
 import { runParticipant } from "./protected-participant.mjs";
 
 function command(type, extra = {}) {
@@ -345,17 +347,79 @@ test("permission probe sends only fixed commands after begin and waits before co
   f.bot.chat = (text) => f.events.push(`chat:${text}`);
   const result = await runParticipant({ ...f.args, commandProbe: "permissions" });
   assert.equal(result.status, "protocol_completed");
-  assert.deepEqual(f.events.filter(x => x.startsWith("chat:")), ["chat:/op PilotProbe", "chat:/gamemode creative"]);
+  assert.deepEqual(
+    f.events.filter((x) => x.startsWith("chat:")),
+    ["chat:/op PilotProbe", "chat:/gamemode creative"],
+  );
   assert.ok(f.events.indexOf("receive:begin") < f.events.indexOf("chat:/op PilotProbe"));
   assert.ok(f.events.indexOf("chat:/gamemode creative") < f.events.indexOf("send:action_finished"));
-  assert.equal(f.events.filter(x => x === "action:wait").length, 3);
+  assert.equal(f.events.filter((x) => x === "action:wait").length, 3);
   assert.equal(f.events.includes("forward:true"), false);
 });
 
 test("rejects arbitrary probes or probe movement before bot creation", async () => {
   const f = fixture();
-  for (const options of [{commandProbe: "arbitrary"}, {commandProbe: "permissions", movement: "forward"}]) {
-    await assert.rejects(() => runParticipant({...f.args, ...options}), /probe/);
+  for (const options of [{ commandProbe: "arbitrary" }, { commandProbe: "permissions", movement: "forward" }]) {
+    await assert.rejects(() => runParticipant({ ...f.args, ...options }), /probe/);
   }
   assert.equal(f.events.includes("create"), false);
+});
+
+async function socketFixture(replyAfterEnd) {
+  let peer;
+  const server = net.createServer({ allowHalfOpen: true }, (socket) => {
+    peer = socket;
+    socket.on("error", () => {});
+    socket.resume();
+    socket.on("end", () => {
+      if (replyAfterEnd) setTimeout(() => socket.end("final-server-bytes"), 30);
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const client = net.createConnection(server.address().port, "127.0.0.1");
+  await once(client, "connect");
+  let received = "";
+  client.on("data", (data) => {
+    received += data.toString();
+  });
+  client.on("error", () => {});
+  const f = fixture({ movement: "stationary" });
+  f.bot._client.socket = client;
+  f.bot.quit = () => {
+    client.end();
+  }; // Real protocol end returns void.
+  return {
+    f,
+    client,
+    received: () => received,
+    close: async () => {
+      client.destroy();
+      peer?.destroy();
+      await new Promise((resolve) => server.close(resolve));
+    },
+  };
+}
+
+test("void quit drains delayed peer bytes before successful cleanup", async () => {
+  const io = await socketFixture(true);
+  try {
+    const result = await runParticipant(io.f.args);
+    assert.equal(result.status, "protocol_completed");
+    assert.equal(io.received(), "final-server-bytes");
+    assert.equal(io.client.closed, true);
+  } finally {
+    await io.close();
+  }
+});
+
+test("peer that never closes cannot produce protocol success", async () => {
+  const io = await socketFixture(false);
+  try {
+    const result = await runParticipant({ ...io.f.args, totalTimeoutMs: 100 });
+    assert.equal(result.status, "failed");
+    assert.equal(io.client.destroyed, true);
+  } finally {
+    await io.close();
+  }
 });

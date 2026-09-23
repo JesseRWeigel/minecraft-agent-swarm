@@ -53,6 +53,8 @@ These are scripted infrastructure checks; no model benchmark or learning result 
 
 The research harness also [rejects a deadline-limited scripted dig](docs/research/scripted-deadline-qualification.md), preserving its partial transcript and passing fresh collection/stationary controls. These are scripted infrastructure checks, not model-learning results.
 
+A [socket-shutdown correction](docs/research/socket-close-qualification.md) now waits for clean network closure; real TCP regressions and a collection trial pass. The fresh stationary attempt stopped at storage setup. The [first model pilot](docs/research/first-model-pilot-protocol.md) remains a protocol draft.
+
 ---
 
 ## Architecture

@@ -4,7 +4,8 @@ Status: the strict parser, [bounded action session and dedicated pipe channel](m
 are implemented and tested offline, including the participant lifecycle, real
 subprocess pipes and production namespace descriptor forwarding. The outer supervisor now coordinates
 [qualified scripted collection and stationary controls](scripted-oak-qualification.md).
-Interrupted scripted-game qualification and model experiments remain planned. The deterministic
+A [deadline-limited scripted interruption](scripted-deadline-qualification.md) is also verified.
+Model experiments remain planned in the [first-pilot draft](first-model-pilot-protocol.md). The deterministic
 [oak controls](oak-game-qualification.md), [fault checks](oak-fault-qualification.md)
 and [interruption check](oak-interruption-qualification.md) establish the current
 starting point. Do not keep adding unrelated fault cases before building this
