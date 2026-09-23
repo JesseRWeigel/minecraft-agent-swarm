@@ -163,7 +163,50 @@ async function huntBlazes(
   let fought = 0;
   const sword = bot.inventory.items().find((i) => i.name.endsWith("_sword"));
   if (sword) await bot.equip(sword, "hand").catch(() => {});
+  const crossbow = () => bot.inventory.items().find((i) => i.name === "crossbow");
+  const arrows = () =>
+    bot.inventory
+      .items()
+      .filter((i) => i.name === "arrow")
+      .reduce((n, i) => n + i.count, 0);
+  // One loaded crossbow shot at a blaze; the load-and-fire sequence is the
+  // one shoot_arrow uses. Resolves true when the blaze was hurt.
+  const shootOnce = async (blaze: { position: Vec3; height?: number; id: number }): Promise<boolean> => {
+    const xb = crossbow();
+    if (!xb) return false;
+    if (bot.heldItem?.name !== "crossbow") await bot.equip(xb, "hand").catch(() => {});
+    const aim = () => bot.lookAt(blaze.position.offset(0, (blaze.height ?? 1.8) * 0.7, 0), true).catch(() => {});
+    const hurt = new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => {
+        bot.removeListener("entityHurt" as never, onHurt as never);
+        resolve(false);
+      }, 4_000);
+      const onHurt = (e: { id: number }) => {
+        if (e.id === blaze.id) {
+          clearTimeout(timer);
+          bot.removeListener("entityHurt" as never, onHurt as never);
+          resolve(true);
+        }
+      };
+      bot.on("entityHurt" as never, onHurt as never);
+    });
+    await aim();
+    bot.activateItem();
+    await new Promise((r) => setTimeout(r, 1_500));
+    bot.deactivateItem();
+    await new Promise((r) => setTimeout(r, 300));
+    await aim();
+    bot.activateItem();
+    await new Promise((r) => setTimeout(r, 250));
+    bot.deactivateItem();
+    return hurt;
+  };
   while (Date.now() < deadline && !signal.aborted && fought < 6 && bot.entity) {
+    // A blaze fight at half health is a death in the Nether with no way home.
+    if (bot.health < 8) {
+      console.log(`[Fortress] ${bot.username}: health ${bot.health.toFixed(0)}, ending the blaze hunt`);
+      break;
+    }
     await fendOff(bot, signal);
     if (!bot.entity) break;
     const me = bot.entity.position;
@@ -191,9 +234,25 @@ async function huntBlazes(
     console.log(
       `[Fortress] ${bot.username}: blaze ${fought} at ${blaze.position.floored()}, ${blaze.position.distanceTo(me).toFixed(0)} away`,
     );
-    const fightUntil = Date.now() + 30_000;
-    while (blaze.isValid && Date.now() < fightUntil && !signal.aborted) {
+    const fightUntil = Date.now() + 45_000;
+    let shots = 0;
+    let hits = 0;
+    while (blaze.isValid && Date.now() < fightUntil && !signal.aborted && bot.entity && bot.health >= 8) {
       const gap = blaze.position.distanceTo(bot.entity.position);
+      if (crossbow() && arrows() > 0) {
+        // Stand off between six and sixteen blocks and shoot.
+        if (gap > 16) {
+          await safeGoto(
+            bot,
+            new goals.GoalNear(blaze.position.x, blaze.position.y, blaze.position.z, 10),
+            8_000,
+          ).catch(() => {});
+          continue;
+        }
+        shots++;
+        if (await shootOnce(blaze)) hits++;
+        continue;
+      }
       if (gap > 3.5) {
         await safeGoto(bot, new goals.GoalNear(blaze.position.x, blaze.position.y, blaze.position.z, 2), 6_000).catch(
           () => {},
@@ -204,6 +263,9 @@ async function huntBlazes(
         await new Promise((r) => setTimeout(r, 600));
       }
     }
+    console.log(
+      `[Fortress] ${bot.username}: blaze ${fought} ${blaze.isValid ? "still up" : "down"} after ${shots} shots (${hits} hits), health ${bot.health.toFixed(0)}, arrows ${arrows()}`,
+    );
     // Let the rod drop and land before looking for it.
     await new Promise((r) => setTimeout(r, 1500));
   }
@@ -259,6 +321,23 @@ export const findFortressSkill: Skill = {
       // Hoglins ignore gold, and three of them killed Mason in one hour
       // while he crossed in boots and nothing else. Put a set on first.
       await armourUpForNether(bot, "Fortress", (m) => step(m, 0.04)).catch(() => 0);
+      // Run 793, 04:2xZ: the first blaze hunt walked Mason toward a blaze
+      // eight blocks off with a sword and its fireballs killed him two blocks
+      // below the walkway. A blaze hovers and burns; the armoury holds four
+      // crossbows and seventy arrows. Pack them.
+      const held = (name: string) =>
+        bot.inventory
+          .items()
+          .filter((i) => i.name === name)
+          .reduce((n, i) => n + i.count, 0);
+      const { STASH_POS } = await import("../bot/role.js");
+      const { withdrawStash } = await import("./stash.js");
+      if (held("crossbow") < 1) {
+        step("Fetching a crossbow for the blazes...", 0.045);
+        await withdrawStash(bot, STASH_POS, "crossbow", 1, 45_000).catch(() => {});
+      }
+      if (held("arrow") < 16) await withdrawStash(bot, STASH_POS, "arrow", 24, 45_000).catch(() => {});
+      console.log(`[Fortress] ${bot.username}: ranged kit -> crossbow=${held("crossbow")} arrows=${held("arrow")}`);
       if (!(await wearGoldForPiglins(bot, "Fortress", (m) => step(m, 0.05)))) {
         return {
           success: false,
