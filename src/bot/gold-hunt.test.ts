@@ -152,7 +152,7 @@ test("gold hunt: walks to a remembered gold vein when none is in sight", () => {
   // the miner's memory held veins forty and ninety blocks off.
   const mine = BRAIN.indexOf('blockType: "gold_ore"');
   const block = BRAIN.slice(mine, mine + 2200);
-  assert.match(block, /No gold_ore found nearby/, "the empty search result is recognised");
+  assert.match(block, /No gold_ore found \(nearby\|within\)/, "the empty search result is recognised in both wordings");
   assert.match(block, /walkToRememberedOre\("gold_ore"\)/, "memory is asked for a vein");
   assert.match(block, /lastGoldHuntMs = Date\.now\(\) - 780_000/, "the mine follows within two minutes");
   const helper = BRAIN.slice(
@@ -170,4 +170,19 @@ test("gold hunt: walks to a remembered gold vein when none is in sight", () => {
   );
   const mem = fs.readFileSync(path.join(__dirname, "memory.ts"), "utf8");
   assert.match(mem, /getNearestOre\(match: string, x: number, z: number, radius = 200\)/, "the getter exists");
+});
+
+test("mine_block: gold is searched to the edge of the loaded chunks and the radius is reported", () => {
+  // Runs 801 to 803: eight gold hunts from the village answered "No gold_ore
+  // found nearby" at 64 blocks while a deepslate vein sat 100 blocks off.
+  const actions = fs.readFileSync(path.join(__dirname, "actions.ts"), "utf8");
+  assert.match(actions, /const searchRadius = \/gold\/\.test\(blockType\) \? 128 : isOre \? 64 : 32;/, "gold gets 128");
+  assert.match(actions, /maxDistance: searchRadius,/, "the search uses it");
+  assert.match(actions, /No \$\{blockType\} found within \$\{searchRadius\} blocks/, "the message names the radius");
+  const iron = BRAIN.indexOf('blockType: "iron_ore"');
+  assert.match(
+    BRAIN.slice(iron, iron + 900),
+    /No iron_ore found \(nearby\|within\)/,
+    "the iron step reads the new wording",
+  );
 });

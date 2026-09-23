@@ -870,6 +870,12 @@ async function mineBlock(
   // other bots fell into the pits and got stuck.
   const PROTECT_RADIUS = 12;
   const { match, isOre } = blockMatcher(blockType);
+  // Gold lies at y 32 and below, most of it near y -16, forty to ninety
+  // blocks under the village. Runs 801 to 803: eight gold hunts from the
+  // village answered "No gold_ore found nearby" at the 64-block radius while
+  // a deepslate vein sat 100 blocks off at y -25. The search for gold reaches
+  // as far as the loaded chunks allow.
+  const searchRadius = /gold/.test(blockType) ? 128 : isOre ? 64 : 32;
   const protectedAt = (pos: Vec3) => {
     if (!protectPos) return false;
     const dx = pos.x - protectPos.x;
@@ -885,15 +891,15 @@ async function mineBlock(
   const search = (harvestableOnly: boolean) =>
     bot.findBlock({
       matching: (b) => match(b.name),
-      maxDistance: isOre ? 64 : 32,
+      maxDistance: searchRadius,
       useExtraInfo: (b) => !protectedAt(b.position) && (!harvestableOnly || canHarvest(b.name, held)),
     });
   const block = search(true) ?? search(false);
 
   if (!block)
     return protectPos
-      ? `No ${blockType} found nearby (the ${PROTECT_RADIUS}-block zone around The Stash is protected — mine elsewhere).`
-      : `No ${blockType} found nearby.`;
+      ? `No ${blockType} found within ${searchRadius} blocks (the ${PROTECT_RADIUS}-block zone around The Stash is protected — mine elsewhere).`
+      : `No ${blockType} found within ${searchRadius} blocks.`;
 
   // Refuse a dig the tool cannot finish, BEFORE walking up to 64 blocks to it.
   //

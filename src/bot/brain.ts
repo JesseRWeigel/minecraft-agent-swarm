@@ -2718,7 +2718,10 @@ export class BotBrain {
             // Run 802: three bots answered "No iron_ore found nearby" from the
             // village all hour while the ledger's only iron sat in a chest at
             // y=4 that holds cobblestone. Walk to a vein the team remembers.
-            if (/No iron_ore found nearby/.test(String(ironResult)) && (await this.walkToRememberedOre("iron_ore"))) {
+            if (
+              /No iron_ore found (nearby|within)/.test(String(ironResult)) &&
+              (await this.walkToRememberedOre("iron_ore"))
+            ) {
               quickerNextPass();
             }
             return;
@@ -2772,7 +2775,7 @@ export class BotBrain {
         // from the miner's spot at y=25, while his own memory held gold veins
         // at 370,18,-344 and 392,-25,-320, forty and ninety blocks off. The
         // block search only sees loaded chunks. Walk to the vein it knows.
-        if (/No gold_ore found nearby/.test(String(result))) {
+        if (/No gold_ore found (nearby|within)/.test(String(result))) {
           if (await this.walkToRememberedOre("gold_ore")) this.lastGoldHuntMs = Date.now() - 780_000;
         }
         return;
