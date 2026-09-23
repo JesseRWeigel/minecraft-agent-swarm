@@ -109,7 +109,11 @@ export const ATLAS_CONFIG: BotRoleConfig = {
   // Ore discoveries at X=254-550 confirm this zone is explorable and away from the bare highland.
   safeSpawn: { x: 280, y: 0, z: -320 },
   allowedActions: ["explore", "go_to", "gather_wood", "mine_block", "chat", "eat", "sleep", "flee", "attack"],
-  allowedSkills: ["find_fortress", "craft_gear", "go_fishing"],
+  // find_fortress left this list on 2026-09-23: Atlas ran it four times in
+  // one hour through the model, drew a crossbow and 24 arrows from the
+  // armoury each time, and failed on gold every time. Mason is the bot the
+  // trip is built around.
+  allowedSkills: ["craft_gear", "go_fishing"],
   keepItems: [
     { name: "_log", minCount: 3 },
     { name: "stick", minCount: 4 },

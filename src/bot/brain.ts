@@ -1949,7 +1949,23 @@ export class BotBrain {
       // The walk-home reflex brings a far bot back; the farm waits for it.
       const farmGap = Math.hypot(this.bot.entity.position.x - FARM_SITE.x, this.bot.entity.position.z - FARM_SITE.z);
       if (cooledDown && farmGap > 120) {
-        this.log.info("Brain", `Farm override skipped: ${Math.round(farmGap)} blocks from the farm site`);
+        // Run 796: Flora spent the hour 300 blocks from the farm site at 4/20
+        // hunger while the stash held no bread and 1,664 wheat seeds. This
+        // branch only logged the gap, and the hunt override then scouted 300
+        // blocks for animals the land no longer has. A farmer that far off
+        // walks home, and the next pass comes in ninety seconds so the walk
+        // continues rather than waiting out the harvest cooldown.
+        this.lastFarmOverrideMs = Date.now() - cooldownMs + 90_000;
+        this.log.info(
+          "Brain",
+          `OVERRIDE: ${Math.round(farmGap)} blocks from the farm site with hunger ${this.bot.food}/20 — walking back to the farm`,
+        );
+        this.events.onThought("The fields are a long way off. Back to them.");
+        const walk = await this.executeActionUnlessPaused("go_to", { x: FARM_SITE.x, y: FARM_SITE.y, z: FARM_SITE.z });
+        this.events.onAction("go_to", walk);
+        this.lastAction = "go_to";
+        this.lastResult = walk;
+        return;
       } else if (cooledDown) {
         this.lastFarmOverrideMs = Date.now();
         this.log.info(
@@ -3590,7 +3606,13 @@ export class BotBrain {
       // a safe kill (run 535: Atlas, Flora and Forge at 1 to 3 hearts with 0
       // food through the night while the override waited for daylight).
       const animalInView = !this.bot.time.isDay && !!nearestFoodAnimal(this.bot);
-      if (this.bot.food <= 8 && !hasEdible && cooled && (this.bot.time.isDay || animalInView)) {
+      // The farmer's answer to hunger is the farm, and the farm override
+      // above walks her there when she is far from it; a 300-block scout for
+      // animals in between only takes her further away.
+      const farmerFarFromFarm =
+        this.roleConfig.allowedSkills.includes("build_farm") &&
+        Math.hypot(this.bot.entity.position.x - FARM_SITE.x, this.bot.entity.position.z - FARM_SITE.z) > 120;
+      if (this.bot.food <= 8 && !hasEdible && cooled && !farmerFarFromFarm && (this.bot.time.isDay || animalInView)) {
         this.lastHuntFoodOverrideMs = Date.now();
         this.log.info("Brain", `OVERRIDE: hunger ${this.bot.food}/20 with nothing edible aboard — hunting for food`);
         this.events.onThought("Nothing to eat and my stomach is empty. Time to find an animal.");
