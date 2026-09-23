@@ -251,6 +251,19 @@ async function huntBlazes(
     const fightUntil = Date.now() + 45_000;
     let shots = 0;
     let hits = 0;
+    // Run 795: two blazes went "down" (2 hits of 5, then 1 of 2) and no rod
+    // was ever seen on the floor. "Down" only means the entity stopped being
+    // valid, which a kill and a despawn both do. Record which, and where.
+    let fate = "still up";
+    let lastSeen = blaze.position.clone();
+    const onDead = (e: { id: number }) => {
+      if (e.id === blaze.id) fate = "killed";
+    };
+    const onGone = (e: { id: number }) => {
+      if (e.id === blaze.id && fate === "still up") fate = "gone";
+    };
+    bot.on("entityDead" as never, onDead as never);
+    bot.on("entityGone" as never, onGone as never);
     while (blaze.isValid && Date.now() < fightUntil && !signal.aborted && bot.entity && bot.health >= 8) {
       const gap = blaze.position.distanceTo(bot.entity.position);
       if (crossbow() && arrows() > 0) {
@@ -282,9 +295,28 @@ async function huntBlazes(
         await new Promise((r) => setTimeout(r, 600));
       }
     }
+    bot.removeListener("entityDead" as never, onDead as never);
+    bot.removeListener("entityGone" as never, onGone as never);
+    if (blaze.isValid) lastSeen = blaze.position.clone();
     console.log(
-      `[Fortress] ${bot.username}: blaze ${fought} ${blaze.isValid ? "still up" : "down"} after ${shots} shots (${hits} hits), health ${bot.health.toFixed(0)}, arrows ${arrows()}`,
+      `[Fortress] ${bot.username}: blaze ${fought} ${blaze.isValid ? "still up" : fate} after ${shots} shots (${hits} hits), last seen ${lastSeen.floored()}, health ${bot.health.toFixed(0)}, arrows ${arrows()}`,
     );
+    if (!blaze.isValid && bot.entity) {
+      // Everything lying on the floor within 32 blocks, named through the
+      // item accessor, so a rod that is there and unread shows up as unread.
+      const me = bot.entity.position;
+      const drops = Object.values(bot.entities)
+        .filter((e) => e.name === "item" && e.isValid && e.position.distanceTo(me) <= 32)
+        .map((e) => {
+          const item = (e as unknown as { getDroppedItem?: () => { name?: string } | null }).getDroppedItem?.();
+          return `${item?.name ?? "unread"}@${e.position.distanceTo(me).toFixed(0)}`;
+        });
+      console.log(`[Fortress] ${bot.username}: ${drops.length} drops within 32: ${drops.join(" ") || "none"}`);
+      if (fate === "killed" && lastSeen.distanceTo(me) <= 20 && !nearestRodDrop(bot, 24)) {
+        // Rods land where the blaze died; walk there before giving up.
+        await safeGoto(bot, new goals.GoalNear(lastSeen.x, lastSeen.y, lastSeen.z, 2), 12_000).catch(() => {});
+      }
+    }
     // Run 794, 05:39Z: a blaze went down after ten bolts and the rod was
     // never picked up, because the old search read the item name out of raw
     // metadata and found nothing. Sweep for the rod before the next blaze.

@@ -127,3 +127,15 @@ test("find_fortress: leaves zombified piglins alone and reads rod drops through 
   assert.match(src, /blaze rod on the floor at/, "a downed blaze is followed by a rod sweep");
   assert.match(src, /shot \$\{shots\} at blaze/, "every shot logs its range");
 });
+
+test("find_fortress: a downed blaze is reported as killed or gone, with the floor listed", () => {
+  // Run 795: two blazes went "down" with hits seen and no rod on the floor.
+  // Down covered both a kill and a despawn, so the log now says which and
+  // names every drop within 32 blocks before the sweep.
+  const src = fs.readFileSync(path.join(__dirname, "find-fortress.ts"), "utf8");
+  const hunt = src.slice(src.indexOf("async function huntBlazes"), src.indexOf("function inNether"));
+  assert.match(hunt, /"entityDead"/, "a kill is read from entityDead");
+  assert.match(hunt, /"entityGone"/, "a despawn is read from entityGone");
+  assert.match(hunt, /drops within 32/, "the floor is listed after a downed blaze");
+  assert.match(hunt, /fate === "killed"/, "a kill sends the bot to where the blaze died");
+});
