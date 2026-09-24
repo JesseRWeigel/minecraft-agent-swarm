@@ -135,11 +135,19 @@ async function fendOff(bot: Bot, signal: AbortSignal, radius = 6, budgetMs = 20_
   const until = Date.now() + budgetMs;
   const sword = bot.inventory.items().find((i) => i.name.endsWith("_sword"));
   if (sword && bot.heldItem?.name !== sword.name) await bot.equip(sword, "hand").catch(() => {});
+  // Run 817: Mason walked in at 12:1xZ with a crossbow and 24 arrows, this
+  // guard met a blaze 3.5 blocks off, chased it with the sword and he was
+  // "burned to a crisp while fighting Blaze". With ranged kit aboard, a
+  // blaze belongs to the hunt, which shoots from where he stands.
+  const ranged =
+    bot.inventory.items().some((i) => i.name === "crossbow") &&
+    bot.inventory.items().some((i) => i.name === "arrow");
   while (Date.now() < until && !signal.aborted && bot.entity) {
     const me = bot.entity.position;
     const foe = Object.values(bot.entities)
       .filter((e) => {
         if (!e.isValid) return false;
+        if (ranged && e.name === "blaze") return false;
         const d = e.position.distanceTo(me);
         if (FORTRESS_FOES.has(e.name ?? "")) return d <= radius;
         // An enderman within arm's reach while health is dropping is the one
