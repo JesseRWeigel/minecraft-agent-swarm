@@ -506,6 +506,27 @@ export class BotBrain {
    * pure death tax (Mason logged 8 deaths and 0 loot in one run doing exactly
    * that). Zero means do not depart.
    */
+  /**
+   * Is the blaze-rod supply finished? Run 818: Into Fire landed at 13:26Z
+   * with one rod banked, and the trip, the gold hunt and the gold walk all
+   * read that advancement as the end of the job. Local Brewery needs two
+   * rods (one for the stand, one ground into powder for fuel), so the
+   * supply runs until the team holds two or a potion has been brewed.
+   */
+  private rodSupplyDone(earned: Set<string>): boolean {
+    if (earned.has("nether/brew_potion") || earned.has("minecraft:nether/brew_potion")) return true;
+    if (!(earned.has("nether/obtain_blaze_rod") || earned.has("minecraft:nether/obtain_blaze_rod"))) return false;
+    const held = (n: string) =>
+      this.bot.inventory
+        .items()
+        .filter((i) => i.name === n)
+        .reduce((c, i) => c + i.count, 0);
+    const spY = this.roleConfig.stashPos?.y;
+    const rods = held("blaze_rod") + stashCount("blaze_rod", spY);
+    const powder = held("blaze_powder") + stashCount("blaze_powder", spY);
+    return rods + Math.floor(powder / 2) >= 2;
+  }
+
   private wornArmorCount(): number {
     return [5, 6, 7, 8].filter((i) => this.bot.inventory.slots[i]).length;
   }
@@ -2149,7 +2170,7 @@ export class BotBrain {
         .reduce((n, i) => n + i.count, 0);
       const spHome = this.roleConfig.stashPos;
       const earnedHome = readTeamEarned(BOT_ROSTER.map((b) => b.name));
-      const rodDone = earnedHome.has("nether/obtain_blaze_rod") || earnedHome.has("minecraft:nether/obtain_blaze_rod");
+      const rodDone = this.rodSupplyDone(earnedHome);
       const bankedGold =
         stashCount("gold_ingot", spHome.y) + stashCount("raw_gold", spHome.y) + stashCount("gold_block", spHome.y) * 9;
       if (goldHeldHome >= 1 && !rodDone && bankedGold < 4) {
@@ -2612,7 +2633,7 @@ export class BotBrain {
       // blaze rod from inside it, and the skill hunts blazes once it is in.
       const fortDone =
         (earnedFort.has("nether/find_fortress") || earnedFort.has("minecraft:nether/find_fortress")) &&
-        (earnedFort.has("nether/obtain_blaze_rod") || earnedFort.has("minecraft:nether/obtain_blaze_rod"));
+        this.rodSupplyDone(earnedFort);
       // 45min: the reachable disk from this portal is exhausted, so frequent
       // sweeps just tax Mason with deaths for no new coverage. One occasional
       // lottery ticket (accidental explore advancements, a stray fortress
@@ -2728,7 +2749,7 @@ export class BotBrain {
       // so does the hunt that feeds it.
       const fortressStillOpen = !(
         (earnedGold.has("nether/find_fortress") || earnedGold.has("minecraft:nether/find_fortress")) &&
-        (earnedGold.has("nether/obtain_blaze_rod") || earnedGold.has("minecraft:nether/obtain_blaze_rod"))
+        this.rodSupplyDone(earnedGold)
       );
       if (fortressStillOpen && ingotsAbout < 4) {
         this.lastGoldHuntMs = Date.now();

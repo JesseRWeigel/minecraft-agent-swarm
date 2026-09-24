@@ -80,7 +80,7 @@ test("find_fortress: hunts blazes once inside, and the brain keeps sending it un
   assert.match(hunt, /240_000/, "the hunt is bounded");
   const brain = fs.readFileSync(path.join(__dirname, "..", "bot", "brain.ts"), "utf8");
   const gate = brain.slice(brain.indexOf("const fortDone ="), brain.indexOf("const fortDone =") + 400);
-  assert.match(gate, /obtain_blaze_rod/, "the trip stands down only once a rod is earned too");
+  assert.match(gate, /rodSupplyDone/, "the trip stands down only once the team holds two rods or has brewed");
 });
 
 test("find_fortress: fights off wither skeletons on the walk in and during the hunt", () => {

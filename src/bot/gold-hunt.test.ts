@@ -21,7 +21,7 @@ test("gold hunt: fires only while the fortress is unearned and gold is short", (
   assert.match(block, /fortressStillOpen && ingotsAbout < 4/, "both conditions gate the hunt");
   // Run 800: the fortress point landed and the hunt stood down while the
   // trip still needed boots for the blaze rod; no gold was dug all morning.
-  assert.match(block, /obtain_blaze_rod/, "the hunt runs until the blaze rod is earned too");
+  assert.match(block, /rodSupplyDone/, "the hunt runs until the rod supply for brewing is in");
   assert.match(block, /lastGoldHuntMs > 900_000/, "a cooldown keeps it from eating the miner's hour");
   assert.match(block, /overworld/, "gold hunting belongs in the overworld, not past the portal");
 });
