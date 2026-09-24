@@ -564,6 +564,7 @@ export const stripMineSkill: Skill = {
       }
     }
 
+    let wetTurns = 0;
     for (let step = 0; step < TUNNEL_LENGTH && !signal.aborted; step++) {
       if (softExpired()) {
         console.log(`[Skill] strip_mine soft deadline at step ${step} — ending tunnel with cargo aboard`);
@@ -573,6 +574,7 @@ export const stripMineSkill: Skill = {
 
       // Dig 2 blocks ahead: foot level and head level
       const targets = [pos.offset(forward.x, 0, forward.z), pos.offset(forward.x, 1, forward.z)];
+      let turnedThisStep = false;
 
       for (const t of targets) {
         const b = bot.blockAt(t);
@@ -585,6 +587,26 @@ export const stripMineSkill: Skill = {
           };
         }
         if (b.name === "lava" || b.name === "water") {
+          // Runs 810-812: fourteen tunnels ended "hit water" under the
+          // village, where the aquifers sit, and the swarm mined four iron
+          // ore in four hours. Turn to a dry side and keep cutting, twice
+          // per tunnel, before giving the tunnel up.
+          const side = [new Vec3(forward.z, 0, forward.x), new Vec3(-forward.z, 0, -forward.x)].find((d) => {
+            const wetAt = (v: Vec3) => {
+              const c = bot.blockAt(v);
+              return !c || c.name === "water" || c.name === "lava";
+            };
+            return !wetAt(pos.offset(d.x, 0, d.z)) && !wetAt(pos.offset(d.x, 1, d.z));
+          });
+          if (side && wetTurns < 2) {
+            wetTurns++;
+            console.log(
+              `[Skill] strip_mine ${b.name} ahead at step ${step}; turning ${dirName(side)} (${wetTurns}/2)`,
+            );
+            forward = side;
+            turnedThisStep = true;
+            break;
+          }
           // Skipping the wet cell used to leave the walk-forward step to
           // wade straight into it — Forge ended the night swimming in his
           // own flooded tunnel one block from iron ore. A breached fluid
@@ -618,6 +640,8 @@ export const stripMineSkill: Skill = {
           /* skip */
         }
       }
+
+      if (turnedThisStep) continue;
 
       // Mine any ore exposed in the surrounding walls/floor/ceiling. The old
       // tunnel only checked the 2 blocks dead ahead, so it walked straight past
