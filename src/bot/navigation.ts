@@ -1373,6 +1373,8 @@ const lastDrownPos = new WeakMap<Bot, Vec3>();
 const lastShoreGap = new WeakMap<Bot, number>();
 
 const lastSwimYieldLog = new WeakMap<Bot, number>();
+const lastRoofedSwim = new WeakMap<Bot, { pos: Vec3; t: number }>();
+
 type BlockLookup = (v: Vec3) => { name: string; boundingBox: string } | null;
 
 /** A solid block over any column the player's 0.6-wide head touches, or null. */
@@ -1798,12 +1800,24 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     // with open water or air overhead.
     const roofBlock = roofOverHitbox(bot.entity.position, (v) => bot.blockAt(v));
     const roofed = !!roofBlock;
-    if (roofed && !swimTarget) {
+    // Run 813: Mason swam level toward a shore four blocks west under a
+    // stone roof, stopped against a wall at x=329.7 and drowned pressing
+    // into it. A roofed swim that moved under half a block since the last
+    // pass has a blocked heading; take the open column instead.
+    const prevRoof = lastRoofedSwim.get(bot);
+    const stalledUnderRoof =
+      roofed &&
+      !!prevRoof &&
+      Date.now() - prevRoof.t < 6000 &&
+      prevRoof.pos.distanceTo(bot.entity.position) < 0.5;
+    if (roofed) lastRoofedSwim.set(bot, { pos: bot.entity.position.clone(), t: Date.now() });
+    else lastRoofedSwim.delete(bot);
+    if (roofed && (!swimTarget || stalledUnderRoof)) {
       const open = openHeadroomNeighbour(bot.entity.position, (v) => bot.blockAt(v));
       if (open) {
         swimTarget = open;
         console.log(
-          `[Drown] ${bot.username} pinned under ${roofBlock.name} with no shore — sliding toward open water at ${open.floored()}`,
+          `[Drown] ${bot.username} pinned under ${roofBlock.name} ${stalledUnderRoof ? "and stalled on its heading" : "with no shore"} — sliding toward open water at ${open.floored()}`,
         );
       }
     }
