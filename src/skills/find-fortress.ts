@@ -586,7 +586,20 @@ export const findFortressSkill: Skill = {
       // first brick seen is its outer edge. Walk on to the brick nearest the
       // middle of the cluster in view.
       const cluster = bot.findBlocks({ matching: (b) => b.name === "nether_bricks", maxDistance: 48, count: 400 });
-      if (cluster.length > 8 && !signal.aborted) {
+      // Run 822: that advancement is banked, and the middle is where the
+      // last three arrivals died (wither skeletons twice at 493.7,54,39.4,
+      // a skeleton at 490.3,53,36.5). With the fortress point earned, the
+      // blaze hunt starts from the first bricks underfoot instead.
+      const { readTeamEarned } = await import("../bot/advancement-progress.js");
+      const { BOT_ROSTER } = await import("../bot/role.js");
+      const fortressEarned = (() => {
+        const e = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+        return e.has("nether/find_fortress") || e.has("minecraft:nether/find_fortress");
+      })();
+      if (fortressEarned) {
+        console.log(`[Fortress] ${bot.username}: ${cluster.length} bricks in view; fortress point banked, hunting from the edge`);
+      }
+      if (cluster.length > 8 && !signal.aborted && !fortressEarned) {
         const cx = cluster.reduce((n, v) => n + v.x, 0) / cluster.length;
         const cz = cluster.reduce((n, v) => n + v.z, 0) / cluster.length;
         const cy = cluster.reduce((n, v) => n + v.y, 0) / cluster.length;
