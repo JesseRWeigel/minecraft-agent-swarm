@@ -1715,8 +1715,17 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
         const keys = ["forward", "back", "left", "right", "jump", "sprint"]
           .filter((k) => bot.getControlState(k as "forward"))
           .join("+");
+        // Runs 809-811: every frozen drowning sat at y=N.20 with vel.y -0.01
+        // and jump held, so the head ends exactly at the next block's floor
+        // and something stops the rise. Physics runs (this fires on
+        // physicsTick). Record what the collider sees overhead and what the
+        // simulation itself thinks, before patching anything.
+        const lid = bot.blockAt(e.position.offset(0, 2.05, 0));
+        const lidShapes = (lid as unknown as { shapes?: unknown[] } | null)?.shapes?.length ?? -1;
+        const ent = e as unknown as { isInWater?: boolean; isCollidedVertically?: boolean };
+        const phys = `lid=${lid?.name ?? "?"}/shapes${lidShapes} inWater=${ent.isInWater} collV=${ent.isCollidedVertically}`;
         console.log(
-          `[DrownTrace] ${bot.username} t=${ticks} air=${bot.oxygenLevel} pos=${e.position.x.toFixed(2)},${e.position.y.toFixed(2)},${e.position.z.toFixed(2)} vel=${e.velocity.x.toFixed(2)},${e.velocity.y.toFixed(2)},${e.velocity.z.toFixed(2)} keys=${keys || "none"} ground=${e.onGround} feet=${b(0)} head=${b(1)} eye=${bot.blockAt(e.position.offset(0, (e as { eyeHeight?: number }).eyeHeight ?? 1.62, 0))?.name ?? "?"} above=${b(2)} yaw=${e.yaw.toFixed(2)} pitch=${e.pitch.toFixed(2)} shore=${target ? `${target.x},${target.y},${target.z}` : "none"} goal=${bot.pathfinder.goal ? "set" : "none"}`,
+          `[DrownTrace] ${bot.username} t=${ticks} air=${bot.oxygenLevel} pos=${e.position.x.toFixed(2)},${e.position.y.toFixed(2)},${e.position.z.toFixed(2)} vel=${e.velocity.x.toFixed(2)},${e.velocity.y.toFixed(2)},${e.velocity.z.toFixed(2)} keys=${keys || "none"} ground=${e.onGround} feet=${b(0)} head=${b(1)} eye=${bot.blockAt(e.position.offset(0, (e as { eyeHeight?: number }).eyeHeight ?? 1.62, 0))?.name ?? "?"} above=${b(2)} yaw=${e.yaw.toFixed(2)} pitch=${e.pitch.toFixed(2)} shore=${target ? `${target.x},${target.y},${target.z}` : "none"} goal=${bot.pathfinder.goal ? "set" : "none"} ${phys}`,
         );
       }
       if (ticks >= 60) {
