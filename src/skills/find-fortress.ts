@@ -194,6 +194,22 @@ async function drawAndFire(
   return hurt;
 }
 
+
+/** The first solid block between the bot's eye and `target`, or null when the line is clear. */
+function blockInLine(bot: Bot, target: Vec3): { name: string; position: Vec3 } | null {
+  const eye = bot.entity.position.offset(0, 1.62, 0);
+  const delta = target.minus(eye);
+  const dist = delta.norm();
+  if (dist < 1) return null;
+  const hit = (
+    bot.world as unknown as {
+      raycast: (from: Vec3, dir: Vec3, range: number) => { name: string; position: Vec3; boundingBox?: string } | null;
+    }
+  ).raycast(eye, delta.scaled(1 / dist), dist - 0.3);
+  if (!hit || hit.boundingBox === "empty") return null;
+  return hit;
+}
+
 async function fendOff(bot: Bot, signal: AbortSignal, radius = 6, budgetMs = 20_000): Promise<number> {
   let engaged = 0;
   const bitten = () => Date.now() - (lastHurtAt.get(bot) ?? 0) < 4_000;
@@ -337,6 +353,7 @@ async function huntBlazes(
     const fightUntil = Date.now() + 45_000;
     let shots = 0;
     let hits = 0;
+    let blockedLooks = 0;
     // Run 795: two blazes went "down" (2 hits of 5, then 1 of 2) and no rod
     // was ever seen on the floor. "Down" only means the entity stopped being
     // valid, which a kill and a despawn both do. Record which, and where.
@@ -362,6 +379,27 @@ async function huntBlazes(
             bot,
             new goals.GoalNear(blaze.position.x, blaze.position.y, blaze.position.z, 10),
             8_000,
+          ).catch(() => {});
+          continue;
+        }
+        // Run 826: thirty bolts at three blazes all at (495, 53, 42), 5 to 8
+        // blocks off and 3 above, every one "arrows 24 -> 24" with the load
+        // confirmed: each bolt stuck in a wall a block or two away and was
+        // picked straight back up. Check the line first; when a block sits
+        // in it, step toward the blaze and look again, three times.
+        const wall = blockInLine(bot, blaze.position.offset(0, (blaze.height ?? 1.8) * 0.6, 0));
+        if (wall) {
+          blockedLooks++;
+          if (blockedLooks === 1 || blockedLooks % 3 === 0) {
+            console.log(
+              `[Fortress] ${bot.username}: no line to blaze ${fought} (${wall.name} at ${wall.position.x},${wall.position.y},${wall.position.z}); stepping (${blockedLooks}/3)`,
+            );
+          }
+          if (blockedLooks > 3) break;
+          await safeGoto(
+            bot,
+            new goals.GoalNear(blaze.position.x, blaze.position.y, blaze.position.z, Math.max(3, gap - 3)),
+            6_000,
           ).catch(() => {});
           continue;
         }
