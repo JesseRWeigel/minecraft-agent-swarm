@@ -2154,22 +2154,39 @@ export class BotBrain {
         stashCount("gold_ingot", spHome.y) + stashCount("raw_gold", spHome.y) + stashCount("gold_block", spHome.y) * 9;
       if (goldHeldHome >= 1 && !rodDone && bankedGold < 4) {
         this.lastGoldHomeMs = Date.now();
-        const gapHome = Math.hypot(this.bot.entity.position.x - spHome.x, this.bot.entity.position.z - spHome.z);
-        if (gapHome < 40 && this.bot.entity.position.y >= spHome.y - 8) {
+        const atHome = () =>
+          Math.hypot(this.bot.entity.position.x - spHome.x, this.bot.entity.position.z - spHome.z) < 40 &&
+          this.bot.entity.position.y >= spHome.y - 8;
+        // Run 816: the one bank attempt at 11:10Z failed "The goal was
+        // changed before it could be completed!", and every later pass found
+        // Forge 53 to 129 blocks out, walked him home and returned, so other
+        // rules walked him off again before the next pass could bank. Seven
+        // ingots rode around for an hour while the gate read gold=false.
+        // Walk and bank in the same pass, and retry a deposit a goal change
+        // interrupted.
+        const bank = async () => {
           this.log.info(
             "Brain",
             `OVERRIDE: banking ${goldHeldHome} gold for the Nether trip (stash holds ${bankedGold})`,
           );
-          const result = await this.executeActionUnlessPaused("deposit_stash", {
-            stashPos: spHome,
-            keepItems: this.roleConfig.keepItems,
-            materialReserve: 0,
-            canMine: true,
-          });
+          let result = "";
+          for (let attempt = 0; attempt < 2; attempt++) {
+            result = await this.executeActionUnlessPaused("deposit_stash", {
+              stashPos: spHome,
+              keepItems: this.roleConfig.keepItems,
+              materialReserve: 0,
+              canMine: true,
+            });
+            if (!/goal was changed/i.test(result)) break;
+          }
           this.events.onAction("deposit_stash", result);
           this.lastAction = "deposit_stash";
           this.lastResult = result;
+        };
+        if (atHome()) {
+          await bank();
         } else {
+          const gapHome = Math.hypot(this.bot.entity.position.x - spHome.x, this.bot.entity.position.z - spHome.z);
           this.log.info(
             "Brain",
             `OVERRIDE: carrying ${goldHeldHome} gold the trip needs (stash holds ${bankedGold}) — walking it home from ${gapHome.toFixed(0)} blocks out`,
@@ -2179,6 +2196,7 @@ export class BotBrain {
           this.events.onAction("go_to", walk);
           this.lastAction = "go_to";
           this.lastResult = walk;
+          if (atHome()) await bank();
         }
         return;
       }

@@ -230,7 +230,7 @@ test("gold goes home before the ferry and the dive while the trip is short", () 
   const ferry = BRAIN.indexOf("ferrying to the frontier for fresh ore");
   const dive = BRAIN.indexOf("diving to diamond depth");
   assert.ok(home > 0 && home < ferry && home < dive, "the gold-home block sits before the ferry and the dive");
-  const block = BRAIN.slice(home, home + 3200);
+  const block = BRAIN.slice(home, home + 5000);
   assert.match(block, /goldHeldHome >= 1 && !rodDone && bankedGold < 4/, "any gold counts while the trip is short");
   assert.match(block, /walking it home from/, "far from the stash it walks home");
   assert.match(block, /banking \$\{goldHeldHome\} gold for the Nether trip/, "at the stash it banks");
