@@ -129,6 +129,38 @@ function watchHurt(bot: Bot): void {
   });
 }
 
+/** One loaded crossbow shot at a mob; resolves true when it was hurt. */
+async function crossbowShot(bot: Bot, blaze: { position: Vec3; height?: number; id: number }): Promise<boolean> {
+  const xb = bot.inventory.items().find((i) => i.name === "crossbow");
+  if (!xb) return false;
+  if (bot.heldItem?.name !== "crossbow") await bot.equip(xb, "hand").catch(() => {});
+  const aim = () => bot.lookAt(blaze.position.offset(0, (blaze.height ?? 1.8) * 0.7, 0), true).catch(() => {});
+  const hurt = new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => {
+      bot.removeListener("entityHurt" as never, onHurt as never);
+      resolve(false);
+    }, 4_000);
+    const onHurt = (e: { id: number }) => {
+      if (e.id === blaze.id) {
+        clearTimeout(timer);
+        bot.removeListener("entityHurt" as never, onHurt as never);
+        resolve(true);
+      }
+    };
+    bot.on("entityHurt" as never, onHurt as never);
+  });
+  await aim();
+  bot.activateItem();
+  await new Promise((r) => setTimeout(r, 1_500));
+  bot.deactivateItem();
+  await new Promise((r) => setTimeout(r, 300));
+  await aim();
+  bot.activateItem();
+  await new Promise((r) => setTimeout(r, 250));
+  bot.deactivateItem();
+  return hurt;
+}
+
 async function fendOff(bot: Bot, signal: AbortSignal, radius = 6, budgetMs = 20_000): Promise<number> {
   let engaged = 0;
   const bitten = () => Date.now() - (lastHurtAt.get(bot) ?? 0) < 4_000;
@@ -149,6 +181,10 @@ async function fendOff(bot: Bot, signal: AbortSignal, radius = 6, budgetMs = 20_
         if (!e.isValid) return false;
         if (ranged && e.name === "blaze") return false;
         const d = e.position.distanceTo(me);
+        // Run 821: two trips reached the bricks and died to wither
+        // skeletons first noticed at 5.3 blocks and fought with the sword.
+        // With a crossbow they are spotted at 14 and shot as they close.
+        if (ranged && (e.name === "wither_skeleton" || e.name === "skeleton")) return d <= 14;
         if (FORTRESS_FOES.has(e.name ?? "")) return d <= radius;
         // An enderman within arm's reach while health is dropping is the one
         // hitting us; one further off is left alone so it stays neutral.
@@ -161,6 +197,20 @@ async function fendOff(bot: Bot, signal: AbortSignal, radius = 6, budgetMs = 20_
       `[Fortress] ${bot.username}: ${foe.name} ${foe.position.distanceTo(me).toFixed(1)} away — fighting it off first`,
     );
     const fightUntil = Math.min(until, Date.now() + 12_000);
+    if (ranged && (foe.name === "wither_skeleton" || foe.name === "skeleton")) {
+      let shots = 0;
+      let hits = 0;
+      while (foe.isValid && Date.now() < fightUntil && !signal.aborted && bot.entity) {
+        if (foe.position.distanceTo(bot.entity.position) <= 3.5) break;
+        shots++;
+        if (await crossbowShot(bot, foe as unknown as { position: Vec3; height?: number; id: number })) hits++;
+      }
+      console.log(
+        `[Fortress] ${bot.username}: shot ${foe.name} ${shots}x (${hits} hits), ${foe.isValid ? `still up at ${foe.position.distanceTo(bot.entity.position).toFixed(1)}` : "down"}`,
+      );
+      if (sword && bot.heldItem?.name !== sword.name) await bot.equip(sword, "hand").catch(() => {});
+      if (!foe.isValid) continue;
+    }
     const pvp = (bot as unknown as { swordpvp?: { attack: (e: unknown) => void; stop: () => void } }).swordpvp;
     if (pvp) pvp.attack(foe);
     while (foe.isValid && Date.now() < fightUntil && !signal.aborted && bot.entity) {
@@ -220,36 +270,7 @@ async function huntBlazes(
       .reduce((n, i) => n + i.count, 0);
   // One loaded crossbow shot at a blaze; the load-and-fire sequence is the
   // one shoot_arrow uses. Resolves true when the blaze was hurt.
-  const shootOnce = async (blaze: { position: Vec3; height?: number; id: number }): Promise<boolean> => {
-    const xb = crossbow();
-    if (!xb) return false;
-    if (bot.heldItem?.name !== "crossbow") await bot.equip(xb, "hand").catch(() => {});
-    const aim = () => bot.lookAt(blaze.position.offset(0, (blaze.height ?? 1.8) * 0.7, 0), true).catch(() => {});
-    const hurt = new Promise<boolean>((resolve) => {
-      const timer = setTimeout(() => {
-        bot.removeListener("entityHurt" as never, onHurt as never);
-        resolve(false);
-      }, 4_000);
-      const onHurt = (e: { id: number }) => {
-        if (e.id === blaze.id) {
-          clearTimeout(timer);
-          bot.removeListener("entityHurt" as never, onHurt as never);
-          resolve(true);
-        }
-      };
-      bot.on("entityHurt" as never, onHurt as never);
-    });
-    await aim();
-    bot.activateItem();
-    await new Promise((r) => setTimeout(r, 1_500));
-    bot.deactivateItem();
-    await new Promise((r) => setTimeout(r, 300));
-    await aim();
-    bot.activateItem();
-    await new Promise((r) => setTimeout(r, 250));
-    bot.deactivateItem();
-    return hurt;
-  };
+  const shootOnce = (blaze: { position: Vec3; height?: number; id: number }) => crossbowShot(bot, blaze);
   while (Date.now() < deadline && !signal.aborted && fought < 6 && bot.entity) {
     // A blaze fight at half health is a death in the Nether with no way home.
     if (bot.health < 8) {
