@@ -4411,6 +4411,21 @@ export class BotBrain {
       this.lastAction = "mine_block";
       this.lastResult = dug;
       this.log.info("Brain", `At the remembered ${match}: ${String(dug).slice(0, 100)}`);
+      // Run 814: three walks to 254,63,-408 each ended "dig timeout" with
+      // no iron in that column at all (RCON: air and dirt), and the forget
+      // above only runs when a walk starts beside the spot, which these
+      // never do. Standing here with no such ore within eight blocks after
+      // a dig that mined nothing means the memory is stale.
+      const mined = /^Mined|Got:/i.test(String(dug));
+      const oreHere = this.bot.findBlock({ matching: (b) => b.name.includes(match), maxDistance: 8 });
+      if (!mined && !oreHere) {
+        let stale = 0;
+        for (const st of getAllMemoryStores()) stale += st.forgetOreNear(match, known.x, known.z, 16);
+        this.log.info(
+          "Brain",
+          `Forgot ${stale} remembered ${match} spot(s) at ${known.x},${known.y},${known.z}: arrived, dug nothing, none within 8`,
+        );
+      }
     }
     return true;
   }
