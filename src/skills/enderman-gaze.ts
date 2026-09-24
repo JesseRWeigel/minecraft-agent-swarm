@@ -35,12 +35,29 @@ export function gazeProvokes(eye: Vec3, yaw: number, pitch: number, feet: Vec3, 
   return dot > 1 - (0.025 * margin) / d;
 }
 
+const pausedUntil = new WeakMap<Bot, number>();
+
+/**
+ * Hand the view to an aimed shot for `ms`. Run 825: the guard saw an
+ * enderman 33 blocks off, forced the pitch down every tick, and seven
+ * crossbow bolts went into the floor at Mason's feet and were picked
+ * straight back up ("arrows 22 -> 22"). Aiming wins for the length of a shot.
+ */
+export function pauseGaze(bot: Bot, ms: number): void {
+  pausedUntil.set(bot, Date.now() + ms);
+}
+
+export function resumeGaze(bot: Bot): void {
+  pausedUntil.delete(bot);
+}
+
 /** Look down while an enderman's eyes sit near the view. Returns an uninstaller. */
 export function installEndermanGazeGuard(bot: Bot, tag: string): () => void {
   let lastLog = 0;
   const onTick = () => {
     const e = bot.entity;
     if (!e) return;
+    if ((pausedUntil.get(bot) ?? 0) > Date.now()) return;
     const eye = e.position.offset(0, 1.62, 0);
     for (const m of Object.values(bot.entities)) {
       if (m.name !== "enderman" || !m.isValid) continue;

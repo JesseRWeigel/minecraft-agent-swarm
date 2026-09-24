@@ -133,6 +133,20 @@ function watchHurt(bot: Bot): void {
 async function crossbowShot(bot: Bot, blaze: { position: Vec3; height?: number; id: number }): Promise<boolean> {
   const xb = bot.inventory.items().find((i) => i.name === "crossbow");
   if (!xb) return false;
+  const { pauseGaze, resumeGaze } = await import("./enderman-gaze.js");
+  pauseGaze(bot, 6_000);
+  try {
+    return await drawAndFire(bot, xb, blaze);
+  } finally {
+    resumeGaze(bot);
+  }
+}
+
+async function drawAndFire(
+  bot: Bot,
+  xb: NonNullable<ReturnType<Bot["inventory"]["items"]>[number]>,
+  blaze: { position: Vec3; height?: number; id: number },
+): Promise<boolean> {
   if (bot.heldItem?.name !== "crossbow") await bot.equip(xb, "hand").catch(() => {});
   const aim = () => bot.lookAt(blaze.position.offset(0, (blaze.height ?? 1.8) * 0.7, 0), true).catch(() => {});
   const hurt = new Promise<boolean>((resolve) => {
