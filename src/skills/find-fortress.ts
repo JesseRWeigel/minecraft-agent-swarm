@@ -149,11 +149,30 @@ async function crossbowShot(bot: Bot, blaze: { position: Vec3; height?: number; 
     };
     bot.on("entityHurt" as never, onHurt as never);
   });
+  // Run 823: ten pulls at one blaze left the arrow count at 24, so no bolt
+  // ever loaded (a crossbow takes its arrow when the 1.25 s draw completes).
+  // Count arrows across the load; when none went in, draw again for longer.
+  const arrowCount = () =>
+    bot.inventory
+      .items()
+      .filter((i) => i.name === "arrow")
+      .reduce((n, i) => n + i.count, 0);
+  const beforeLoad = arrowCount();
   await aim();
   bot.activateItem();
   await new Promise((r) => setTimeout(r, 1_500));
   bot.deactivateItem();
   await new Promise((r) => setTimeout(r, 300));
+  if (arrowCount() === beforeLoad) {
+    await aim();
+    bot.activateItem();
+    await new Promise((r) => setTimeout(r, 2_000));
+    bot.deactivateItem();
+    await new Promise((r) => setTimeout(r, 300));
+    console.log(
+      `[Crossbow] ${bot.username}: first draw loaded nothing; second draw ${arrowCount() < beforeLoad ? "loaded" : "loaded nothing"} (arrows ${beforeLoad} -> ${arrowCount()})`,
+    );
+  }
   await aim();
   bot.activateItem();
   await new Promise((r) => setTimeout(r, 250));
