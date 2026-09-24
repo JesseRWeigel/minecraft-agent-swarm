@@ -504,7 +504,13 @@ export const findFortressSkill: Skill = {
         };
       }
       step("Stepping through the portal...", 0.1);
-      const portal = bot.findBlock({ matching: (b) => b.name === "nether_portal", maxDistance: 64 });
+      let portal = bot.findBlock({ matching: (b) => b.name === "nether_portal", maxDistance: 64 });
+      if (!portal) {
+        const { relightNearbyFrame } = await import("./nether-portal.js");
+        if (await relightNearbyFrame(bot)) {
+          portal = bot.findBlock({ matching: (b) => b.name === "nether_portal", maxDistance: 64 });
+        }
+      }
       if (!portal)
         return { success: false, message: resumable("No portal within 64 blocks — walk to the village first.") };
       const { crossPortal } = await import("./nether-portal.js");

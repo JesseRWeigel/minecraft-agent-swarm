@@ -1437,3 +1437,76 @@ export const returnFromNetherSkill: Skill = {
     return { success, message };
   },
 };
+
+type PortalLookup = (x: number, y: number, z: number) => string | undefined;
+
+/**
+ * Is obsidian block `o` the bottom-left of a complete, empty portal frame?
+ * Returns the bottom interior cell to ignite above, or null. Interior is 2
+ * wide along `axis` and 3 tall; corners are not required.
+ */
+export function frameInteriorAt(
+  o: { x: number; y: number; z: number },
+  axis: "x" | "z",
+  at: PortalLookup,
+): { x: number; y: number; z: number } | null {
+  const ax = axis === "x" ? 1 : 0;
+  const az = axis === "z" ? 1 : 0;
+  const obs = (i: number, dy: number) => at(o.x + ax * i, o.y + dy, o.z + az * i) === "obsidian";
+  const open = (i: number, dy: number) => {
+    const n = at(o.x + ax * i, o.y + dy, o.z + az * i);
+    return n === "air" || n === "cave_air" || n === "fire";
+  };
+  if (!obs(0, 0) || !obs(1, 0) || !obs(0, 4) || !obs(1, 4)) return null;
+  for (let dy = 1; dy <= 3; dy++) {
+    if (!obs(-1, dy) || !obs(2, dy)) return null;
+    if (!open(0, dy) || !open(1, dy)) return null;
+  }
+  return { x: o.x, y: o.y + 1, z: o.z };
+}
+
+/**
+ * Run 824: every fortress trip this hour ended "No portal within 64
+ * blocks" beside the village portal, whose 4x5 obsidian frame at
+ * 292..295, 70..74, -310 stood complete and unlit. Find such a frame near
+ * the bot and light it with flint and steel.
+ */
+export async function relightNearbyFrame(bot: Bot): Promise<boolean> {
+  const at: PortalLookup = (x, y, z) => bot.blockAt(new Vec3(x, y, z))?.name;
+  const obsidian = bot.findBlocks({ matching: (b) => b.name === "obsidian", maxDistance: 48, count: 256 });
+  let base: { x: number; y: number; z: number } | null = null;
+  let frameBlock: Vec3 | null = null;
+  for (const o of obsidian) {
+    for (const axis of ["x", "z"] as const) {
+      const inside = frameInteriorAt(o, axis, at);
+      if (inside) {
+        base = inside;
+        frameBlock = o;
+        break;
+      }
+    }
+    if (base) break;
+  }
+  if (!base || !frameBlock) {
+    console.log(`[Portal] ${bot.username}: no lit portal and no complete unlit frame within 48`);
+    return false;
+  }
+  console.log(`[Portal] ${bot.username}: unlit frame at ${frameBlock.x},${frameBlock.y},${frameBlock.z}; relighting`);
+  if (!bot.inventory.items().some((i) => i.name === "flint_and_steel")) {
+    const { craftFlintAndSteel } = await import("./flint-and-steel.js");
+    const r = await craftFlintAndSteel(bot, 120_000).catch((e) => String(e));
+    console.log(`[Portal] ${bot.username}: igniter: ${r}`);
+  }
+  const igniter = bot.inventory.items().find((i) => i.name === "flint_and_steel");
+  if (!igniter) return false;
+  const { goals: g } = (await import("mineflayer-pathfinder")).default;
+  const { safeGoto } = await import("../bot/navigation.js");
+  await safeGoto(bot, new g.GoalNear(base.x, base.y, base.z, 3), 30_000).catch(() => {});
+  await bot.equip(igniter, "hand").catch(() => {});
+  const floor = bot.blockAt(frameBlock);
+  if (floor) await bot.activateBlock(floor).catch(() => {});
+  await new Promise((r) => setTimeout(r, 800));
+  const lit = at(base.x, base.y, base.z) === "nether_portal";
+  console.log(`[Portal] ${bot.username}: relight ${lit ? "lit" : "did not light"}`);
+  return lit;
+}
