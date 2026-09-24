@@ -646,3 +646,19 @@ export const findFortressSkill: Skill = {
     return { success: false, message: resumable("No fortress on this heading — next firing sweeps the next one.") };
   },
 };
+
+// Run 820: five marches in a row were "slain by Enderman" along one
+// corridor of the route. Keep the view off every enderman's eyes for the
+// whole trip; the guard runs on physicsTick after the pathfinder's look.
+{
+  const innerExecute = findFortressSkill.execute.bind(findFortressSkill);
+  findFortressSkill.execute = async (bot, params, signal, onProgress) => {
+    const { installEndermanGazeGuard } = await import("./enderman-gaze.js");
+    const unguard = installEndermanGazeGuard(bot, "fortress trip");
+    try {
+      return await innerExecute(bot, params, signal, onProgress);
+    } finally {
+      unguard();
+    }
+  };
+}
