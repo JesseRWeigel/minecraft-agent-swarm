@@ -303,6 +303,9 @@ export const MASON_CONFIG: BotRoleConfig = {
     // the doorway. The skill self-supplies its bucket and igniter.
     "build_nether_portal",
     "find_fortress",
+    // Run 818 banked the first blaze rod; the crosser who brings rods home
+    // also brews at the stash for Local Brewery.
+    "brew_potion",
     "loot_bastion",
     "setup_enchanting",
 

@@ -291,6 +291,7 @@ export class BotBrain {
   /** Cooldown for the gold hunt that unblocks the Nether crossing. */
   private lastGoldHuntMs = 0;
   private lastGoldDressMs = 0;
+  private lastBrewMs = 0;
   private lastWaxOffMs = 0;
   private lastHoneyMs = 0;
   private lastToolReturnMs = 0;
@@ -2716,6 +2717,45 @@ export class BotBrain {
         const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "find_fortress" });
         this.events.onAction("find_fortress", result);
         this.lastAction = "find_fortress";
+        this.lastResult = result;
+        return;
+      }
+    }
+
+    // LOCAL BREWERY. Run 818 banked the first blaze rod. With two rods (one
+    // for the stand, one ground into fuel), sugar and bottles at the stash,
+    // the brewer builds a stand and brews a Mundane Potion.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.roleConfig.allowedSkills.includes("brew_potion") &&
+      this.roleConfig.stashPos &&
+      /overworld/.test(String(this.bot.game.dimension)) &&
+      Date.now() - this.lastBrewMs > 900_000
+    ) {
+      const earnedBrew = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+      const brewed = earnedBrew.has("nether/brew_potion") || earnedBrew.has("minecraft:nether/brew_potion");
+      const spB = this.roleConfig.stashPos;
+      const nearB = Math.hypot(this.bot.entity.position.x - spB.x, this.bot.entity.position.z - spB.z) < 40;
+      const heldB = (n: string) =>
+        this.bot.inventory
+          .items()
+          .filter((i) => i.name === n)
+          .reduce((c, i) => c + i.count, 0);
+      const rodsB = heldB("blaze_rod") + stashCount("blaze_rod", spB.y);
+      const powderB = heldB("blaze_powder") + stashCount("blaze_powder", spB.y);
+      const standB = !!this.bot.findBlock({ matching: (b) => b.name === "brewing_stand", maxDistance: 24 });
+      const enoughRods = rodsB >= 2 || (rodsB >= 1 && (powderB > 0 || standB));
+      if (!brewed && nearB && enoughRods) {
+        this.lastBrewMs = Date.now();
+        this.log.info(
+          "Brain",
+          `OVERRIDE: ${rodsB} blaze rod(s) and ${powderB} powder in reach — running brew_potion for Local Brewery`,
+        );
+        this.events.onThought("Two rods home. Time to build a brewing stand.");
+        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "brew_potion" });
+        this.events.onAction("brew_potion", result);
+        this.lastAction = "brew_potion";
         this.lastResult = result;
         return;
       }
