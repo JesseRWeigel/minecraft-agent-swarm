@@ -1373,6 +1373,52 @@ const lastDrownPos = new WeakMap<Bot, Vec3>();
 const lastShoreGap = new WeakMap<Bot, number>();
 
 const lastSwimYieldLog = new WeakMap<Bot, number>();
+type BlockLookup = (v: Vec3) => { name: string; boundingBox: string } | null;
+
+/** A solid block over any column the player's 0.6-wide head touches, or null. */
+export function roofOverHitbox(pos: Vec3, blockAt: BlockLookup): { name: string } | null {
+  const y = Math.floor(pos.y + 2);
+  const seen = new Set<string>();
+  for (const dx of [-0.3, 0.3]) {
+    for (const dz of [-0.3, 0.3]) {
+      const x = Math.floor(pos.x + dx);
+      const z = Math.floor(pos.z + dz);
+      const key = `${x},${z}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const b = blockAt(new Vec3(x, y, z));
+      if (b && b.boundingBox === "block") return b;
+    }
+  }
+  return null;
+}
+
+/**
+ * The first of the four neighbour columns a pinned swimmer can move into
+ * and rise from: feet and head cells passable, and the cell above the head
+ * water or air. Resolves to the neighbour's feet cell, or null.
+ */
+export function openHeadroomNeighbour(pos: Vec3, blockAt: BlockLookup): Vec3 | null {
+  const fx = Math.floor(pos.x);
+  const fy = Math.floor(pos.y);
+  const fz = Math.floor(pos.z);
+  const passable = (b: { name: string; boundingBox: string } | null) =>
+    !!b && b.boundingBox !== "block" && b.name !== "lava" && b.name !== "flowing_lava";
+  const open = (b: { name: string; boundingBox: string } | null) => !!b && (b.name === "water" || b.name === "air");
+  for (const [dx, dz] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ]) {
+    const feet = blockAt(new Vec3(fx + dx, fy, fz + dz));
+    const head = blockAt(new Vec3(fx + dx, fy + 1, fz + dz));
+    const lid = blockAt(new Vec3(fx + dx, fy + 2, fz + dz));
+    if (passable(feet) && passable(head) && open(lid)) return new Vec3(fx + dx, fy, fz + dz);
+  }
+  return null;
+}
+
 export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   if (!headUnderWater(bot)) {
     lastAirPos.set(bot, bot.entity.position.clone());
@@ -1737,14 +1783,30 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   }
 
   try {
-    const swimTarget = swimTo ?? shore?.position ?? null;
+    let swimTarget = swimTo ?? shore?.position ?? null;
     // Run 665: Blade and Forge drowned pressing forward+jump into a stone
     // ceiling for fifty ticks, looking steeply at an air point 4 blocks up
     // (Blade) or 22 blocks down (Forge). Under a roof, look level so the
     // keys carry the bot sideways out from under it, and let it sink toward
     // an air point that is well below instead of holding jump into the rock.
-    const roofBlock = bot.blockAt(bot.entity.position.offset(0, 2, 0));
-    const roofed = !!roofBlock && roofBlock.boundingBox === "block";
+    // Run 812: Forge drowned at (336.7, 44.2, -332.3) holding jump for
+    // eleven traces under andesite ("lid=andesite/shapes1 collV=true") with
+    // no shore to swim level toward, and Flora's frozen drowning sat under an
+    // overhang in the next column over, which a centre-only test misses: the
+    // hitbox is 0.6 wide. Read the roof over every column the head touches,
+    // and when nothing else gives a heading, slide toward a neighbour column
+    // with open water or air overhead.
+    const roofBlock = roofOverHitbox(bot.entity.position, (v) => bot.blockAt(v));
+    const roofed = !!roofBlock;
+    if (roofed && !swimTarget) {
+      const open = openHeadroomNeighbour(bot.entity.position, (v) => bot.blockAt(v));
+      if (open) {
+        swimTarget = open;
+        console.log(
+          `[Drown] ${bot.username} pinned under ${roofBlock.name} with no shore — sliding toward open water at ${open.floored()}`,
+        );
+      }
+    }
     const dyTarget = swimTarget ? swimTarget.y - bot.entity.position.y : 0;
     const wantJump = !(roofed && dyTarget < -3);
     bot.setControlState("jump", wantJump); // swim upward toward the surface for air
