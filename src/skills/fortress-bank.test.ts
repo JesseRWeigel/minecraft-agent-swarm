@@ -112,7 +112,7 @@ test("find_fortress: packs a crossbow and shoots blazes from a stand-off", () =>
   const hunt = src.slice(src.indexOf("async function huntBlazes"), src.indexOf("function inNether"));
   assert.match(hunt, /shootOnce\(blaze\)/, "the hunt shoots");
   assert.match(hunt, /bot\.health < 8/, "a health floor ends the hunt");
-  assert.match(hunt, /gap > 16/, "it stands off rather than walking into the fireballs");
+  assert.match(hunt, /gap > 24/, "it stands off rather than walking into the fireballs");
   assert.match(hunt, /"entityHurt"/, "a hit is read from the hurt event");
 });
 

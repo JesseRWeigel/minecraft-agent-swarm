@@ -291,8 +291,11 @@ async function huntBlazes(
     while (blaze.isValid && Date.now() < fightUntil && !signal.aborted && bot.entity && bot.health >= 8) {
       const gap = blaze.position.distanceTo(bot.entity.position);
       if (crossbow() && arrows() > 0) {
-        // Stand off between six and sixteen blocks and shoot.
-        if (gap > 16) {
+        // Stand off and shoot. Run 810: the first blaze was 20 blocks off,
+        // the walk to sixteen went over a bridge edge into lava, and no bolt
+        // was fired. A crossbow reaches well past twenty, so shoot from where
+        // he stands and only close in on a blaze further out than that.
+        if (gap > 24) {
           await safeGoto(
             bot,
             new goals.GoalNear(blaze.position.x, blaze.position.y, blaze.position.z, 10),
@@ -399,6 +402,11 @@ export const findFortressSkill: Skill = {
     // Nether ledge into lava at the same spot two days running. Two is a
     // stair, four is a cliff over lava.
     (sweepMoves as unknown as { maxDropDown: number }).maxDropDown = 2;
+    // Run 810: Mason left a fortress bridge edge at 0.33 blocks a tick with
+    // no key held and fell 22 blocks into lava, seconds into a blaze fight.
+    // A sprinting bot carries past the node the planner stopped on, and the
+    // bridges have no rails. Walk the whole trip.
+    (sweepMoves as unknown as { allowSprinting: boolean }).allowSprinting = false;
     bot.pathfinder.setMovements(sweepMoves);
 
     // --- Cross over (proven routine) ---
