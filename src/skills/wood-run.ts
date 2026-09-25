@@ -66,8 +66,18 @@ export async function scanTrees(bot: Bot, radius = 128, keep = 5): Promise<numbe
     .sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))
     .slice(0, keep);
   if (!trees.length) return 0;
-  const { recordOre } = await import("../bot/memory.js");
-  for (const t of trees) recordOre("standing_tree", t.x, t.y, t.z);
+  // Run 837: the module-level recordOre writes to an unregistered
+  // "memory.json" store that getAllMemoryStores never reads, so wood_run
+  // answered "none remembered" with two sightings on disk. Write to this
+  // bot's own registered store.
+  const { getBotMemoryStore } = await import("../bot/memory-registry.js");
+  const store = getBotMemoryStore(bot);
+  if (store) {
+    for (const t of trees) store.recordOre("standing_tree", t.x, t.y, t.z);
+  } else {
+    const { recordOre } = await import("../bot/memory.js");
+    for (const t of trees) recordOre("standing_tree", t.x, t.y, t.z);
+  }
   return trees.length;
 }
 
