@@ -50,6 +50,11 @@ const NEVER_RETIRE = new Set([
   "mine_frontier",
   "wax_copper",
   "escape_to_surface",
+  // Run 840: wood_run retired at 0/9 while its answers were "no standing
+  // tree in sight", a fact about the world, just as the first tree landed in
+  // memory. brew_potion waits on a second blaze rod the same way.
+  "wood_run",
+  "brew_potion",
 ]);
 
 const CACHE_TTL_MS = 60_000;
