@@ -2866,6 +2866,31 @@ export class BotBrain {
               if (held("iron_ingot") > ingotsHeldNow) quickerNextPass();
               return;
             }
+            // Run 828: Mason and Atlas each logged "2 ingots and no raw
+            // iron ... mining iron_ore first" every ten minutes for an hour:
+            // four ingots split across two pockets, and a pickaxe costs
+            // three. The withdraw above pools whatever is banked, so a bot
+            // left short banks its ingots here and the next pass, its own
+            // or a teammate's, collects enough to craft.
+            const nearPool =
+              Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 40;
+            if (ingotsHeldNow >= 1 && nearPool) {
+              this.log.info(
+                "Brain",
+                `OVERRIDE: ${ingotsHeldNow} ingots for a pickaxe that costs 3 — banking them so a teammate's pass can pool them`,
+              );
+              const pooled = await this.executeActionUnlessPaused("deposit_stash", {
+                stashPos: sp,
+                keepItems: this.roleConfig.keepItems,
+                materialReserve: 0,
+                canMine: true,
+              });
+              this.events.onAction("deposit_stash", pooled);
+              this.lastAction = "deposit_stash";
+              this.lastResult = pooled;
+              quickerNextPass();
+              return;
+            }
             // Run 787: no iron anywhere. The one chest the ledger credited
             // with iron sits at y=4, sixty-six blocks under the stash, and it
             // holds cobblestone now. Three bots each asked for the makings,
