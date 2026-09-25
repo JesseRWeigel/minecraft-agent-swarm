@@ -846,6 +846,18 @@ export function blockMatcher(blockType: string): { match: (name: string) => bool
  *  150s action watchdog fires. mine_block was the top residual watchdog trip
  *  (8 in 11h) from exactly this; stopDigging + reject lets it fail fast. */
 async function digSafe(bot: Bot, block: import("prismarine-block").Block): Promise<void> {
+  // Run 829: Forge's two gold digs with an iron pickaxe both ended "dig
+  // timeout" at (307, 59, -330), below the water line. Digging in water is
+  // five times slower and off the ground five times again, so a 0.75 s block
+  // needs about 19 s. Size the budget from mineflayer's own estimate, which
+  // counts the tool, water and footing, and say it when it runs out.
+  let estimateMs = 0;
+  try {
+    estimateMs = bot.digTime(block);
+  } catch {
+    /* unknown block state: keep the floor */
+  }
+  const budgetMs = Math.min(60_000, Math.max(12_000, estimateMs * 1.5 + 2_000));
   await Promise.race([
     bot.dig(block),
     new Promise<void>((_, rej) =>
@@ -855,8 +867,13 @@ async function digSafe(bot: Bot, block: import("prismarine-block").Block): Promi
         } catch {
           /* wasn't digging */
         }
-        rej(new Error("dig timeout"));
-      }, 12000),
+        const e = bot.entity as unknown as { isInWater?: boolean; onGround?: boolean };
+        rej(
+          new Error(
+            `dig timeout (${block.name}, estimate ${(estimateMs / 1000).toFixed(1)}s, budget ${(budgetMs / 1000).toFixed(0)}s, inWater=${e.isInWater} onGround=${e.onGround})`,
+          ),
+        );
+      }, budgetMs),
     ),
   ]);
 }
