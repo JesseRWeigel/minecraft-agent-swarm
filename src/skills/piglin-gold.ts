@@ -46,6 +46,20 @@ export async function wearGoldForPiglins(bot: Bot, tag: string, onStep?: (msg: s
           .filter((i) => i.name === "gold_ingot")
           .reduce((n, i) => n + i.count, 0);
       if (ingots() < 4) await withdrawStash(bot, STASH_POS, "gold_ingot", 4 - ingots(), 60_000).catch(() => {});
+      // Run 832: the stash held one ingot, two raw gold and a nugget, and
+      // nothing counted or smelted the raw gold for the boots. Smelt it here
+      // the way the armour step smelts raw iron.
+      if (ingots() < 4) {
+        await withdrawStash(bot, STASH_POS, "raw_gold", 4 - ingots(), 60_000).catch(() => {});
+        if (bot.inventory.items().some((i) => i.name === "raw_gold")) {
+          onStep?.("Smelting raw gold for the boots...");
+          const { smeltOresSkill } = await import("./smelt-ores.js");
+          await smeltOresSkill
+            .execute(bot, { stashPos: STASH_POS }, new AbortController().signal, () => {})
+            .catch(() => ({}));
+          console.log(`[${tag}] ${bot.username}: smelted raw gold for the boots (ingots now ${ingots()})`);
+        }
+      }
       // Run 711: both Nether trips stood down for sixteen hours with "only 0
       // gold ingots reachable", while a gold_block from the bastion chest sat
       // in the stash. One block is nine ingots at a crafting table.

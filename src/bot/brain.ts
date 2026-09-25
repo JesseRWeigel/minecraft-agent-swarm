@@ -2696,7 +2696,8 @@ export class BotBrain {
       ) {
         const { stashCount } = await import("../skills/stash-ledger.js");
         const spY = this.roleConfig.stashPos?.y;
-        const goldBanked = stashCount("gold_ingot", spY) + stashCount("gold_block", spY) * 9;
+        const goldBanked =
+          stashCount("gold_ingot", spY) + stashCount("raw_gold", spY) + stashCount("gold_block", spY) * 9;
         if (goldBanked >= 4 || hasGoldPiece(this.bot)) {
           this.lastGoldDressMs = Date.now();
           this.log.info(
