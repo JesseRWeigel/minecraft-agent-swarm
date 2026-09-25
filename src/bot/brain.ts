@@ -292,6 +292,7 @@ export class BotBrain {
   private lastGoldHuntMs = 0;
   private lastGoldDressMs = 0;
   private lastBrewMs = 0;
+  private lastWoodRunMs = 0;
   private lastWaxOffMs = 0;
   private lastHoneyMs = 0;
   private lastToolReturnMs = 0;
@@ -2731,6 +2732,38 @@ export class BotBrain {
         const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "find_fortress" });
         this.events.onAction("find_fortress", result);
         this.lastAction = "find_fortress";
+        this.lastResult = result;
+        return;
+      }
+    }
+
+    // WOOD RUN. Run 835: six logs in three runs, no sticks for days, so no
+    // pickaxes, swords, arrows or a shield for the fortress trips. When the
+    // team's wood is low, the explorer walks to a standing tree in sight.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.roleConfig.allowedSkills.includes("wood_run") &&
+      this.roleConfig.stashPos &&
+      /overworld/.test(String(this.bot.game.dimension)) &&
+      Date.now() - this.lastWoodRunMs > 1_800_000
+    ) {
+      const spW = this.roleConfig.stashPos;
+      const woodHeld = this.bot.inventory
+        .items()
+        .filter((i) => /_log$|_planks$|^stick$/.test(i.name))
+        .reduce((n, i) => n + i.count, 0);
+      const woodBanked = stashCount("_log", spW.y) + stashCount("_planks", spW.y) + stashCount("stick", spW.y);
+      if (woodHeld + woodBanked < 16) {
+        this.lastWoodRunMs = Date.now();
+        this.log.info(
+          "Brain",
+          `OVERRIDE: the team holds ${woodHeld + woodBanked} wood (logs, planks, sticks) — running wood_run to a standing tree`,
+        );
+        this.events.onThought("No wood anywhere. There are trees out east; time to go chop.");
+        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "wood_run" });
+        this.events.onAction("wood_run", result);
+        this.lastAction = "wood_run";
         this.lastResult = result;
         return;
       }

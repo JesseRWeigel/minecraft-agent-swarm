@@ -113,7 +113,8 @@ export const ATLAS_CONFIG: BotRoleConfig = {
   // one hour through the model, drew a crossbow and 24 arrows from the
   // armoury each time, and failed on gold every time. Mason is the bot the
   // trip is built around.
-  allowedSkills: ["craft_gear", "go_fishing"],
+  // wood_run (2026-09-25): the explorer fetches wood from standing trees in sight.
+  allowedSkills: ["craft_gear", "go_fishing", "wood_run"],
   keepItems: [
     { name: "_log", minCount: 3 },
     { name: "stick", minCount: 4 },
