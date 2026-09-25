@@ -31,3 +31,13 @@ test("a trunk on dirt with no leaves near the top is no tree", () => {
   const w = world({ "0,63,0": "dirt", "0,64,0": "spruce_log", "0,65,0": "spruce_log" });
   assert.equal(isStandingTree(0, 64, 0, w), false);
 });
+
+test("run 838: a trunk on sand with leaves at the top is a standing tree", () => {
+  const w = world({ "0,63,0": "sand", "0,64,0": "oak_log", "0,65,0": "oak_log", "1,66,0": "oak_leaves" });
+  assert.equal(isStandingTree(0, 64, 0, w), true);
+});
+
+test("a trunk over water is no tree", () => {
+  const w = world({ "0,63,0": "water", "0,64,0": "oak_log", "1,65,0": "oak_leaves" });
+  assert.equal(isStandingTree(0, 64, 0, w), false);
+});

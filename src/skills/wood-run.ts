@@ -29,6 +29,8 @@ const NATURAL_GROUND = new Set([
 
 type Lookup = (x: number, y: number, z: number) => string | undefined;
 
+const NOT_GROUND = new Set(["air", "cave_air", "void_air", "water", "lava", "flowing_water", "flowing_lava"]);
+
 /**
  * Is the log at (x, y, z) part of a standing tree? Walk down the log column
  * to its base, which must sit on natural ground, and up to its top, which
@@ -38,7 +40,11 @@ export function isStandingTree(x: number, y: number, z: number, at: Lookup): boo
   const isLog = (n?: string) => !!n && (LOG_TYPES as readonly string[]).includes(n);
   let base = y;
   while (isLog(at(x, base - 1, z)) && y - base < 30) base--;
-  if (!NATURAL_GROUND.has(at(x, base - 1, z) ?? "")) return false;
+  // Run 838: 256 logs in sight and none passed with the ground limited to a
+  // list of soils. The base only has to stand on something solid: house
+  // beams float over air and cave timber has no leaves, and both still fail.
+  const under = at(x, base - 1, z) ?? "";
+  if (!NATURAL_GROUND.has(under) && (under === "" || NOT_GROUND.has(under) || under.endsWith("_log"))) return false;
   let top = y;
   while (isLog(at(x, top + 1, z)) && top - y < 30) top++;
   for (let dy = -1; dy <= 3; dy++) {
@@ -107,6 +113,14 @@ export const woodRunSkill: Skill = {
       .filter((p) => isStandingTree(p.x, p.y, p.z, at))
       .sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z));
     console.log(`[Wood] ${bot.username}: ${logs.length} logs in sight, ${trees.length} in standing trees`);
+    if (logs.length && !trees.length) {
+      const sample = logs.slice(0, 4).map((p) => {
+        let base = p.y;
+        while ((at(p.x, base - 1, p.z) ?? "").endsWith("_log") && p.y - base < 30) base--;
+        return `(${p.x},${p.y},${p.z}) base ${base} on ${at(p.x, base - 1, p.z)}`;
+      });
+      console.log(`[Wood] ${bot.username}: rejected samples ${sample.join(" ")}`);
+    }
     let t = trees[0] as { x: number; y: number; z: number } | undefined;
     let remembered = false;
     if (!t) {
