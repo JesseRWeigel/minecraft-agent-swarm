@@ -549,6 +549,18 @@ export class BotBrain {
     }, 20_000);
     armorTimer.unref?.();
 
+    // Tree memory on its own timer. Run 839: zero standing_tree sightings in
+    // an hour, because the scan sat in the decision pass behind early returns
+    // and bots spend most of their time inside skills. Scan every three
+    // minutes regardless of skill state, like the armour pass above.
+    const treeTimer = setInterval(() => {
+      if (this.paused || !/overworld/.test(String(this.bot.game?.dimension))) return;
+      import("../skills/wood-run.js")
+        .then(({ scanTrees }) => scanTrees(this.bot))
+        .catch(() => 0);
+    }, 180_000);
+    treeTimer.unref?.();
+
     // 0a. Ghast-fireball deflect — a FAST tick handler, not a brain override.
     // The old override was gated on !isSkillRunning and the fortress hunters
     // are perpetually mid-skill, so it fired ZERO times while ghasts killed
@@ -2736,14 +2748,6 @@ export class BotBrain {
         this.lastResult = result;
         return;
       }
-    }
-
-    // Tree memory: every bot notes the standing trees it can see, so the
-    // explorer at the village can walk to trees outside its own view.
-    if (/overworld/.test(String(this.bot.game.dimension)) && Date.now() - this.lastTreeScanMs > 180_000) {
-      this.lastTreeScanMs = Date.now();
-      const { scanTrees } = await import("../skills/wood-run.js");
-      await scanTrees(this.bot).catch(() => 0);
     }
 
     // WOOD RUN. Run 835: six logs in three runs, no sticks for days, so no
