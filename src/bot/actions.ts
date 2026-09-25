@@ -986,6 +986,23 @@ async function mineBlock(
       Math.min(Math.round(travelMs / 2), LOOKAT_RETRY_MS),
     ).catch(() => {});
   }
+  // Run 831: gold ore at (296, 8, -292) sits sixty blocks under the village,
+  // and every walk stopped 48 to 55 blocks short: the planner will not dig
+  // that deep in one route. When the ore is well below, stand on the column
+  // beside it and dig straight down to its level (descend.ts checks each
+  // block below for lava, water and open air first), then reach again.
+  if (!withinDigReach(bot.entity.position, block.position) && block.position.y < bot.entity.position.y - 10) {
+    const side = block.position.offset(1, 0, 0);
+    await safeGoto(bot, new goals.GoalNearXZ(side.x, side.z, 1), 30_000).catch(() => {});
+    const { digDownTo } = await import("../skills/descend.js");
+    const shaft = await digDownTo(bot, block.position.y, 80, 80_000).catch((e: Error) => e.message);
+    console.log(
+      `[Mine] ${bot.username}: shaft beside ${block.name} at ${block.position.x},${block.position.y},${block.position.z}: ${String(shaft).slice(0, 100)} (now y=${bot.entity.position.y.toFixed(0)})`,
+    );
+    if (!withinDigReach(bot.entity.position, block.position)) {
+      await safeGoto(bot, new goals.GoalLookAtBlock(block.position, bot.world), 10_000).catch(() => {});
+    }
+  }
   if (!withinDigReach(bot.entity.position, block.position)) {
     return `Walked toward ${block.name} at ${block.position.x},${block.position.y},${block.position.z} and stopped ${reachNow().toFixed(0)} blocks short, out of reach. Try a closer target or clear the way first.`;
   }
