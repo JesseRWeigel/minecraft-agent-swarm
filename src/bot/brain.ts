@@ -1405,8 +1405,15 @@ export class BotBrain {
     ) {
       const slept = await this.executeActionUnlessPaused("sleep", {});
       this.log.info("Brain", `Night reflex: sleep → ${slept}`);
-      if (/zzz|sleeping/i.test(slept)) return; // in bed — skip the LLM turn
-      if (/not sleeping|monsters nearby|occupied/i.test(slept)) this.lastSleepRefusedMs = Date.now();
+      // Run 830: "Sleep failed: bot is not sleeping" matched /sleeping/ as a
+      // success, so a refused bed skipped the turn and never set the 45 s
+      // back-off: 12 to 30 refusals per bot an hour, 78% idle, and Forge's
+      // gold hunt never got a turn. Read the refusal first.
+      if (/failed|not sleeping|monsters nearby|occupied|can't|cannot/i.test(slept)) {
+        this.lastSleepRefusedMs = Date.now();
+      } else if (/zzz|sleeping/i.test(slept)) {
+        return; // in bed — skip the LLM turn
+      }
       // Sleep failed (no bed, hostiles nearby) — fall through to normal planning.
     }
 
