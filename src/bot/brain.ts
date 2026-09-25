@@ -4066,7 +4066,25 @@ export class BotBrain {
           .items()
           .filter((i) => i.name === "leather")
           .reduce((n, i) => n + i.count, 0) + (ledgerKnown() ? stashCount("leather", this.roleConfig.stashPos?.y) : 0);
-      if (((hasPick && (ironReachable >= 4 || leatherReachable >= 4)) || noSword) && cooledArmor) {
+      // Run 834: craft_gear timed out fifteen times in an hour (240 s each)
+      // on bots sent only for a sword. The swarm has no sticks or wood, and
+      // the stash holds 372 stone swords. When the sword is the only reason,
+      // take one from the chest instead of crafting.
+      const armourAffordable = hasPick && (ironReachable >= 4 || leatherReachable >= 4);
+      if (noSword && !armourAffordable && cooledArmor && this.roleConfig.stashPos) {
+        this.lastArmorCraftMs = Date.now();
+        const { withdrawStash } = await import("../skills/stash.js");
+        let got = "";
+        for (const blade of ["iron_sword", "stone_sword"]) {
+          got = await withdrawStash(this.bot, this.roleConfig.stashPos, blade, 1, 45_000).catch((e: Error) => e.message);
+          if (this.bot.inventory.items().some((i) => i.name.endsWith("_sword"))) break;
+        }
+        this.log.info("Brain", `OVERRIDE: no sword — took one from the stash: ${String(got).slice(0, 60)}`);
+        this.lastAction = "withdraw_sword";
+        this.lastResult = got;
+        return;
+      }
+      if (armourAffordable && cooledArmor) {
         this.lastArmorCraftMs = Date.now();
         this.log.info("Brain", "OVERRIDE: unarmoured with a pick in hand — running craft_gear to forge armour");
         this.events.onThought("A pick in hand but nothing on my back. Time to forge some armour.");
