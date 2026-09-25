@@ -293,6 +293,7 @@ export class BotBrain {
   private lastGoldDressMs = 0;
   private lastBrewMs = 0;
   private lastWoodRunMs = 0;
+  private lastTreeScanMs = 0;
   private lastWaxOffMs = 0;
   private lastHoneyMs = 0;
   private lastToolReturnMs = 0;
@@ -2735,6 +2736,14 @@ export class BotBrain {
         this.lastResult = result;
         return;
       }
+    }
+
+    // Tree memory: every bot notes the standing trees it can see, so the
+    // explorer at the village can walk to trees outside its own view.
+    if (/overworld/.test(String(this.bot.game.dimension)) && Date.now() - this.lastTreeScanMs > 180_000) {
+      this.lastTreeScanMs = Date.now();
+      const { scanTrees } = await import("../skills/wood-run.js");
+      await scanTrees(this.bot).catch(() => 0);
     }
 
     // WOOD RUN. Run 835: six logs in three runs, no sticks for days, so no

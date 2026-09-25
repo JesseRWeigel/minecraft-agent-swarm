@@ -51,6 +51,26 @@ export function isStandingTree(x: number, y: number, z: number, at: Lookup): boo
   return false;
 }
 
+/**
+ * Record the standing trees this bot can see, so a teammate at the village,
+ * whose loaded chunks do not reach them, can walk there. Run 836: both wood
+ * runs from the village saw one to three logs and no tree, while bots further
+ * east had seen trees 170 to 220 blocks out.
+ */
+export async function scanTrees(bot: Bot, radius = 128, keep = 5): Promise<number> {
+  const at: Lookup = (x, y, z) => bot.blockAt(new Vec3(x, y, z))?.name;
+  const me = bot.entity.position;
+  const trees = bot
+    .findBlocks({ matching: (b) => (LOG_TYPES as readonly string[]).includes(b.name), maxDistance: radius, count: 96 })
+    .filter((p) => isStandingTree(p.x, p.y, p.z, at))
+    .sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))
+    .slice(0, keep);
+  if (!trees.length) return 0;
+  const { recordOre } = await import("../bot/memory.js");
+  for (const t of trees) recordOre("standing_tree", t.x, t.y, t.z);
+  return trees.length;
+}
+
 export const woodRunSkill: Skill = {
   name: "wood_run",
   description:
@@ -77,8 +97,19 @@ export const woodRunSkill: Skill = {
       .filter((p) => isStandingTree(p.x, p.y, p.z, at))
       .sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z));
     console.log(`[Wood] ${bot.username}: ${logs.length} logs in sight, ${trees.length} in standing trees`);
-    if (!trees.length) return { success: false, message: "No standing tree in sight within 250 blocks." };
-    const t = trees[0];
+    let t = trees[0] as { x: number; y: number; z: number } | undefined;
+    let remembered = false;
+    if (!t) {
+      const { getAllMemoryStores } = await import("../bot/memory-registry.js");
+      const known = getAllMemoryStores()
+        .map((st) => st.getNearestOre("standing_tree", me.x, me.z, 400))
+        .filter((o): o is NonNullable<typeof o> => !!o)
+        .sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
+      if (!known) return { success: false, message: "No standing tree in sight or remembered within 400 blocks." };
+      t = { x: known.x, y: known.y, z: known.z };
+      remembered = true;
+      console.log(`[Wood] ${bot.username}: none in sight; walking to a remembered tree at ${t.x},${t.y},${t.z}`);
+    }
     const far = Math.hypot(t.x - me.x, t.z - me.z);
     step(`Walking to a tree at ${t.x},${t.y},${t.z} (${far.toFixed(0)} blocks)...`, 0.1);
     console.log(`[Wood] ${bot.username}: marching to the tree at ${t.x},${t.y},${t.z} (${far.toFixed(0)} away)`);
@@ -91,6 +122,13 @@ export const woodRunSkill: Skill = {
     }).catch(() => Infinity);
     console.log(`[Wood] ${bot.username}: arrived within ${Number(gap).toFixed(0)} of the tree`);
     if (signal.aborted) return { success: false, message: "Wood run aborted." };
+    if (remembered && (await scanTrees(bot, 24)) === 0) {
+      const { getAllMemoryStores } = await import("../bot/memory-registry.js");
+      let gone = 0;
+      for (const st of getAllMemoryStores()) gone += st.forgetOreNear("standing_tree", t.x, t.z, 16);
+      console.log(`[Wood] ${bot.username}: no standing tree here any more; forgot ${gone} remembered spot(s)`);
+      return { success: false, message: `The remembered tree at ${t.x},${t.z} is gone.` };
+    }
     const before = bot.inventory
       .items()
       .filter((i) => (LOG_TYPES as readonly string[]).includes(i.name))
