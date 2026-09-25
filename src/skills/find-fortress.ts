@@ -195,6 +195,9 @@ async function drawAndFire(
 }
 
 
+/** Blocks a bot places as scaffold; cheap to dig out of a firing line. */
+const CHEAP_BLOCKS = new Set(["cobblestone", "netherrack", "dirt", "cobbled_deepslate"]);
+
 /** The first solid block between the bot's eye and `target`, or null when the line is clear. */
 function blockInLine(bot: Bot, target: Vec3): { name: string; position: Vec3 } | null {
   const eye = bot.entity.position.offset(0, 1.62, 0);
@@ -309,6 +312,7 @@ async function huntBlazes(
       .reduce((n, i) => n + i.count, 0);
   const deadline = Date.now() + 240_000;
   let fought = 0;
+  const unreachable = new Set<number>();
   const sword = bot.inventory.items().find((i) => i.name.endsWith("_sword"));
   if (sword) await bot.equip(sword, "hand").catch(() => {});
   const crossbow = () => bot.inventory.items().find((i) => i.name === "crossbow");
@@ -330,7 +334,7 @@ async function huntBlazes(
     if (!bot.entity) break;
     const me = bot.entity.position;
     const blaze = Object.values(bot.entities)
-      .filter((e) => e.name === "blaze" && e.isValid && e.position.distanceTo(me) < 40)
+      .filter((e) => e.name === "blaze" && e.isValid && !unreachable.has(e.id) && e.position.distanceTo(me) < 40)
       .sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0];
     if (!blaze) {
       // Rods on the floor count as much as a blaze in the air.
@@ -354,6 +358,7 @@ async function huntBlazes(
     let shots = 0;
     let hits = 0;
     let blockedLooks = 0;
+    let digsThisBlaze = 0;
     // Run 795: two blazes went "down" (2 hits of 5, then 1 of 2) and no rod
     // was ever seen on the floor. "Down" only means the entity stopped being
     // valid, which a kill and a despawn both do. Record which, and where.
@@ -388,6 +393,28 @@ async function huntBlazes(
         // picked straight back up. Check the line first; when a block sits
         // in it, step toward the blaze and look again, three times.
         const wall = blockInLine(bot, blaze.position.offset(0, (blaze.height ?? 1.8) * 0.6, 0));
+        // Run 827: the line to a blaze 3 blocks off ran through cobblestone
+        // at 489,54,39 and 488,53,38: Mason's own scaffold from earlier
+        // climbs, which no fortress is built of. Dig a cheap placed block
+        // that is within reach out of the line, then shoot.
+        if (
+          wall &&
+          CHEAP_BLOCKS.has(wall.name) &&
+          digsThisBlaze < 4 &&
+          bot.entity.position.offset(0, 1.62, 0).distanceTo(wall.position.offset(0.5, 0.5, 0.5)) <= 4.5
+        ) {
+          digsThisBlaze++;
+          const blockNow = bot.blockAt(wall.position);
+          console.log(
+            `[Fortress] ${bot.username}: digging ${wall.name} at ${wall.position.x},${wall.position.y},${wall.position.z} out of the line to blaze ${fought}`,
+          );
+          if (blockNow) {
+            const pick = bot.inventory.items().find((i) => i.name.endsWith("_pickaxe"));
+            if (pick) await bot.equip(pick, "hand").catch(() => {});
+            await bot.dig(blockNow, true).catch(() => {});
+          }
+          continue;
+        }
         if (wall) {
           blockedLooks++;
           if (blockedLooks === 1 || blockedLooks % 3 === 0) {
@@ -395,7 +422,11 @@ async function huntBlazes(
               `[Fortress] ${bot.username}: no line to blaze ${fought} (${wall.name} at ${wall.position.x},${wall.position.y},${wall.position.z}); stepping (${blockedLooks}/3)`,
             );
           }
-          if (blockedLooks > 3) break;
+          if (blockedLooks > 3) {
+            // Run 827 counted one walled-in blaze as blazes 1 to 6.
+            unreachable.add(blaze.id);
+            break;
+          }
           await safeGoto(
             bot,
             new goals.GoalNear(blaze.position.x, blaze.position.y, blaze.position.z, Math.max(3, gap - 3)),
