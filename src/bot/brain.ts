@@ -2715,7 +2715,13 @@ export class BotBrain {
           return;
         }
       }
-      if (!fortDone && cooledFort && todFort < 11000 && nearStashFort && armouredEnough && fitForNether) {
+      // Run 833: at 12:30Z Mason read health 20, food 19, gold worn, and
+      // the gate refused him for the dark alone. Daylight guards the walk to
+      // the portal, and the village portal is five blocks from the stash;
+      // the Nether has no night. Beside a lit portal the hour does not matter.
+      const portalBeside = !!this.bot.findBlock({ matching: (b) => b.name === "nether_portal", maxDistance: 24 });
+      const dayOrPortal = todFort < 11000 || portalBeside;
+      if (!fortDone && cooledFort && dayOrPortal && nearStashFort && armouredEnough && fitForNether) {
         this.lastFortressMs = Date.now();
         this.log.info(
           "Brain",
