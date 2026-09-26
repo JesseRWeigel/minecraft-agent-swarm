@@ -151,7 +151,20 @@ export const woodRunSkill: Skill = {
     }).catch(() => Infinity);
     console.log(`[Wood] ${bot.username}: arrived within ${Number(gap).toFixed(0)} of the tree`);
     if (signal.aborted) return { success: false, message: "Wood run aborted." };
-    if (remembered && (await scanTrees(bot, 24)) === 0) {
+    // Run 843: the march covered 300 blocks and stopped 98 short, and this
+    // check then forgot a tree it never reached. Only judge a remembered tree
+    // gone from beside it; short of it, walk another leg first.
+    const gapNow = () => Math.hypot(bot.entity.position.x - t!.x, bot.entity.position.z - t!.z);
+    if (gapNow() > 24 && !signal.aborted) {
+      await marchToward(bot, { x: t.x, z: t.z }, 180_000, signal, {
+        label: "Walking to the trees",
+        progress: () => 0.5,
+        step,
+        stop: () => gapNow() <= 8,
+      }).catch(() => Infinity);
+      console.log(`[Wood] ${bot.username}: second leg ended ${gapNow().toFixed(0)} from the tree`);
+    }
+    if (remembered && gapNow() <= 24 && (await scanTrees(bot, 24)) === 0) {
       const { getAllMemoryStores } = await import("../bot/memory-registry.js");
       let gone = 0;
       for (const st of getAllMemoryStores()) gone += st.forgetOreNear("standing_tree", t.x, t.z, 16);
