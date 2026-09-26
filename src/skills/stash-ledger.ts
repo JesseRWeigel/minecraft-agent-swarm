@@ -147,6 +147,10 @@ export function forgetChest(pos: { x: number; y: number; z: number }): boolean {
  * and the eat action rightly refused them.
  */
 export function stashItemMatches(name: string, matchName: string): boolean {
+  // Run 848: the pantry asked for "cod" at health 1, the withdraw took a fish
+  // bucket, and the meal after it found "No food in inventory!". A food
+  // request never means the bucket the fish rides in.
+  if (name.endsWith("_bucket") && !matchName.includes("bucket")) return false;
   return name.includes(matchName) && !name.startsWith("poisonous_");
 }
 
