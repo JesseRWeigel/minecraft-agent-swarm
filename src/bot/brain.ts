@@ -1570,7 +1570,12 @@ export class BotBrain {
       // Pit, water hole and chronic need a failing walk streak: a hillside
       // notch at y=81 read as a pit for Atlas every ninety seconds (run 547),
       // each time costing a turn for an escape that returned at once.
-      if ((buried && (pickless || walledIn)) || ((pit || waterTrap || chronic) && walledIn)) {
+      // Run 849: a village house roof seals all nine columns, so a pickless
+      // bot indoors at y=71 read as buried and dug out 12 times in an hour,
+      // twice ending in a fatal drop. Near the surface a bot is only trapped
+      // when its walks fail; pickless alone counts deep underground.
+      const trapped = f.y < 55 ? pickless || walledIn : walledIn;
+      if ((buried && trapped) || ((pit || waterTrap || chronic) && walledIn)) {
         this.lastEscapeMs = Date.now();
         this.navFailStreak = 0;
         this.log.info(
