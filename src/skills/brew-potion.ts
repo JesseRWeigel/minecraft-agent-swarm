@@ -70,6 +70,11 @@ async function craftOne(bot: Bot, want: string, table: ReturnType<Bot["findBlock
   }
 }
 
+/** Can a bottle reach this water? Its top face must be open air. */
+export function openToSky(above: string | undefined): boolean {
+  return above === "air" || above === "cave_air";
+}
+
 export const brewPotionSkill: Skill = {
   name: "brew_potion",
   description:
@@ -141,10 +146,15 @@ export const brewPotionSkill: Skill = {
     let water: ReturnType<Bot["findBlock"]> = null;
     if (count(bot, "glass_bottle") > 0) {
       step("Filling bottles at the water...", 0.45);
-      water = bot.findBlock({
-        matching: (b) => b.name === "water" && (b.metadata ?? 0) === 0,
-        maxDistance: 32,
-      });
+      // Run 847: both waters Mason chose were covered, (252, 62, -319) under
+      // stone and (303, 54, -315) in a cave, so the fill ray met rock first.
+      // A probe filled 8 of 8 bottles at an open source. Take open water only.
+      water =
+        bot
+          .findBlocks({ matching: (b) => b.name === "water" && (b.metadata ?? 0) === 0, maxDistance: 32, count: 64 })
+          .filter((p) => openToSky(bot.blockAt(p.offset(0, 1, 0))?.name))
+          .map((p) => bot.blockAt(p))
+          .find((b) => !!b) ?? null;
       if (water) {
         await safeGoto(bot, new goals.GoalNear(water.position.x, water.position.y + 1, water.position.z, 3), 25_000).catch(
           () => {},
