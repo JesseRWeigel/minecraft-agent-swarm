@@ -179,26 +179,37 @@ export const brewPotionSkill: Skill = {
       const item = bot.inventory.items().find((i) => i.name === "brewing_stand");
       if (item) {
         await bot.equip(item, "hand").catch(() => {});
+        // Run 846: the first placement tried six cells beside the stash and
+        // all six were chests, torches or rough ground. Try every air cell on
+        // a solid top face within three blocks, nearest first, skipping the
+        // cells the bot itself stands in.
         const pos = bot.entity.position.floored();
-        for (const [dx, dz] of [
-          [1, 0],
-          [-1, 0],
-          [0, 1],
-          [0, -1],
-          [2, 0],
-          [0, 2],
-        ] as const) {
-          const below = bot.blockAt(new Vec3(pos.x + dx, pos.y - 1, pos.z + dz));
-          const target = bot.blockAt(new Vec3(pos.x + dx, pos.y, pos.z + dz));
-          if (below && below.boundingBox === "block" && target && target.name === "air") {
-            try {
-              await bot.placeBlock(below, new Vec3(0, 1, 0));
-              break;
-            } catch {
-              continue;
+        const spots: Vec3[] = [];
+        for (let dx = -3; dx <= 3; dx++) {
+          for (let dz = -3; dz <= 3; dz++) {
+            for (let dy = -1; dy <= 1; dy++) {
+              if (dx === 0 && dz === 0) continue;
+              spots.push(new Vec3(pos.x + dx, pos.y + dy, pos.z + dz));
             }
           }
         }
+        spots.sort((a, b) => a.distanceTo(pos) - b.distanceTo(pos));
+        let tried = 0;
+        for (const t of spots) {
+          const target = bot.blockAt(t);
+          const below = bot.blockAt(t.offset(0, -1, 0));
+          if (!target || target.name !== "air" || !below || below.boundingBox !== "block") continue;
+          if (/chest|furnace|table|bed|door|torch/.test(below.name)) continue;
+          tried++;
+          try {
+            await bot.placeBlock(below, new Vec3(0, 1, 0));
+            if (placedStand()) break;
+          } catch {
+            /* next spot */
+          }
+          if (tried >= 8) break;
+        }
+        console.log(`[Brew] ${bot.username}: stand placement tried ${tried} spot(s) -> ${placedStand() ? "placed" : "none took"}`);
       }
       stand = placedStand();
       if (!stand) return { success: false, message: "Couldn't place the brewing stand here." };
