@@ -6,6 +6,7 @@ import pkg from "mineflayer-pathfinder";
 const { goals } = pkg;
 import { Vec3 } from "vec3";
 import { baseMoves } from "../bot/navigation.js";
+import { stashCount } from "./stash-ledger.js";
 
 /** Tool tiers from best to worst. */
 const TIERS = [
@@ -130,10 +131,15 @@ export const craftGearSkill: Skill = {
         .reduce((s, i) => s + i.count, 0);
       // Tools need ~9 ingots, a full iron armor set needs 24 — withdraw enough
       // for both so the bot can armor up in one trip.
-      if (ironIngots < 33) {
+      // Run 850: craft_gear timed out 21 of 33 times before it reached the
+      // pickaxe. The ledger's iron sits in the chest at (285, 4, -313), 66
+      // blocks under the stash, so each withdrawal scanned every stash chest
+      // for its full budget. Ask only for what the stash level holds.
+      const ingotsBanked = stashCount("iron_ingot", stashPos.y);
+      if (ironIngots < 33 && ingotsBanked > 0) {
         const { withdrawStash } = await import("./stash.js");
         try {
-          await withdrawStash(bot, stashPos, "iron_ingot", 33 - ironIngots);
+          await withdrawStash(bot, stashPos, "iron_ingot", Math.min(33 - ironIngots, ingotsBanked));
         } catch {
           /* none in stash — craft whatever tier we can */
         }
@@ -152,7 +158,11 @@ export const craftGearSkill: Skill = {
           .items()
           .filter((i) => i.name === "iron_ingot")
           .reduce((s, i) => s + i.count, 0);
-      if (ingotsHeld() < 4 && !signal.aborted) {
+      const rawBanked = stashCount("raw_iron", stashPos.y);
+      if (ingotsHeld() < 4 && rawBanked === 0) {
+        console.log(`[GearDebug] armour: ${ingotsHeld()} ingots, no raw iron banked at the stash level; skipping the smelt`);
+      }
+      if (ingotsHeld() < 4 && rawBanked > 0 && !signal.aborted) {
         const { withdrawStash } = await import("./stash.js");
         // Say what the withdrawal did, always.
         //
@@ -161,7 +171,7 @@ export const craftGearSkill: Skill = {
         // held six raw iron. A branch that only speaks on success cannot tell
         // "the stash had none" from "the walk failed" from "it never ran",
         // and that ambiguity has already cost three cycles on the furnace.
-        const raw = await withdrawStash(bot, stashPos, "raw_iron", 8).catch(
+        const raw = await withdrawStash(bot, stashPos, "raw_iron", Math.min(8, rawBanked)).catch(
           (e: Error) => `withdraw threw: ${e.message}`,
         );
         const rawHeld = bot.inventory
