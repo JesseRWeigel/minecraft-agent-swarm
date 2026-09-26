@@ -92,7 +92,9 @@ export const woodRunSkill: Skill = {
   description:
     "Walk to the nearest standing tree in sight (up to 250 blocks) and chop logs there. Use when the team has no wood and nearby logs cannot be reached.",
   params: {},
-  timeoutMs: 420_000,
+  // Run 841: the first run marched toward trees 330 blocks east and the
+  // 240 s march ended 107 short. The forest is far; give the walk room.
+  timeoutMs: 600_000,
 
   estimateMaterials() {
     return {};
@@ -138,7 +140,7 @@ export const woodRunSkill: Skill = {
     step(`Walking to a tree at ${t.x},${t.y},${t.z} (${far.toFixed(0)} blocks)...`, 0.1);
     console.log(`[Wood] ${bot.username}: marching to the tree at ${t.x},${t.y},${t.z} (${far.toFixed(0)} away)`);
     const { marchToward } = await import("./loot-bastion.js");
-    const gap = await marchToward(bot, { x: t.x, y: t.y, z: t.z }, 240_000, signal, {
+    const gap = await marchToward(bot, { x: t.x, y: t.y, z: t.z }, 360_000, signal, {
       label: "Walking to the trees",
       progress: () => 0.4,
       step,
