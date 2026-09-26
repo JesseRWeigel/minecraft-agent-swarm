@@ -134,9 +134,10 @@ export const brewPotionSkill: Skill = {
     }
 
     // Fill empty bottles at a still water block.
+    let water: ReturnType<Bot["findBlock"]> = null;
     if (count(bot, "glass_bottle") > 0) {
       step("Filling bottles at the water...", 0.45);
-      const water = bot.findBlock({
+      water = bot.findBlock({
         matching: (b) => b.name === "water" && (b.metadata ?? 0) === 0,
         maxDistance: 32,
       });
@@ -153,7 +154,16 @@ export const brewPotionSkill: Skill = {
           await new Promise((r) => setTimeout(r, 500));
         }
       }
-      console.log(`[Brew] ${bot.username}: bottles filled -> potion ${count(bot, "potion")}, empty ${count(bot, "glass_bottle")}`);
+      console.log(
+        `[Brew] ${bot.username}: water ${water ? `at ${water.position} (${water.position.distanceTo(bot.entity.position).toFixed(1)} away)` : "not found within 32"}; bottles filled -> potion ${count(bot, "potion")}, empty ${count(bot, "glass_bottle")}`,
+      );
+    }
+    // Run 844: the first brew with two rods in reach stopped here, three
+    // bottles and none filled, while the stash held three potions. Take those
+    // before giving up; a water bottle is what sugar brews from.
+    if (count(bot, "potion") === 0) {
+      await take("potion", 3);
+      console.log(`[Brew] ${bot.username}: took banked potions instead -> ${count(bot, "potion")}`);
     }
     if (count(bot, "potion") === 0) return { success: false, message: "No water bottles: couldn't fill any." };
 
