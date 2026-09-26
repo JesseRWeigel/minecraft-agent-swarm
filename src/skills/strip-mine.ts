@@ -526,6 +526,25 @@ export const stripMineSkill: Skill = {
       console.log(`[Skill] strip_mine descended to Y=${bot.entity.position.y.toFixed(0)}`);
     }
 
+    // Run 851: Forge started at y=-23 in a flooded cave, the climb to y=15
+    // failed, and the tunnel ran at y=-17 anyway: 20 steps, a bridge over
+    // open cave at every one, 0 ore, then a zombie and a skeleton. A tunnel
+    // far off the iron band is a walk through a cave. Climb out instead.
+    const offBand = Math.abs(bot.entity.position.y - targetY);
+    if (offBand > 12 && !signal.aborted) {
+      const endY = bot.entity.position.y.toFixed(0);
+      console.log(`[Skill] strip_mine still ${offBand.toFixed(0)} off iron depth at y=${endY}; climbing out`);
+      const { escapeToSurfaceSkill } = await import("./escape-to-surface.js");
+      const up = await escapeToSurfaceSkill.execute(bot, {}, signal, onProgress).catch((e: Error) => ({
+        success: false,
+        message: e.message,
+      }));
+      return {
+        success: false,
+        message: `Could not reach iron depth (y=${targetY}) from y=${endY}. ${up.message}`,
+      };
+    }
+
     // --- Phase 2: Horizontal mining tunnel ---
     // Coordinates in the report: three "fresh rock" hours produced zero ore
     // and tunnels that dug 20 of a possible 80 blocks — mostly air. WHERE
