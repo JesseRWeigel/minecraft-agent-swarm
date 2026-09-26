@@ -99,6 +99,42 @@ function scanStanding(bot: Bot, at: Lookup, radius: number): Vec3[] {
     .sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z));
 }
 
+/**
+ * Walk east (where the forests seen so far stand) until a standing tree
+ * comes into view or the walk ends, then record what is in sight.
+ * Run 852: every remembered "tree" was village timber and got forgotten,
+ * the stash held no wood at all, and craft_gear stood at one stick. The
+ * forests seen so far lie east, 170 to 330 blocks out, at (461, 108, -214)
+ * and (494, 88, -412).
+ */
+async function scoutEast(
+  bot: Bot,
+  at: Lookup,
+  signal: AbortSignal,
+  step: (m: string, p: number) => void,
+): Promise<Vec3 | undefined> {
+  const { marchToward } = await import("./loot-bastion.js");
+  const me = bot.entity.position;
+  const scout = { x: Math.round(me.x + SCOUT_EAST), z: Math.round(me.z) };
+  console.log(`[Wood] ${bot.username}: no tree in sight or remembered; scouting east to ${scout.x},${scout.z}`);
+  step("Scouting east for trees...", 0.1);
+  await marchToward(bot, scout, 300_000, signal, {
+    label: "Scouting for trees",
+    progress: () => 0.3,
+    step,
+    stop: () =>
+      Math.hypot(bot.entity.position.x - scout.x, bot.entity.position.z - scout.z) <= 8 ||
+      scanStanding(bot, at, 64).length > 0,
+  }).catch(() => Infinity);
+  if (signal.aborted) return undefined;
+  const t = scanStanding(bot, at, 128)[0];
+  console.log(
+    `[Wood] ${bot.username}: scout ended at ${bot.entity.position.floored()}; ${t ? `tree at ${t.x},${t.y},${t.z}` : "still no tree"}`,
+  );
+  if (t) await scanTrees(bot).catch(() => 0);
+  return t;
+}
+
 export const woodRunSkill: Skill = {
   name: "wood_run",
   description:
@@ -148,28 +184,10 @@ export const woodRunSkill: Skill = {
         remembered = true;
         console.log(`[Wood] ${bot.username}: none in sight; walking to a remembered tree at ${t.x},${t.y},${t.z}`);
       } else {
-        // Run 852: every remembered "tree" was village timber and got
-        // forgotten, the stash held no wood at all, and craft_gear stood at
-        // one stick. The forests seen so far lie east, 170 to 330 blocks
-        // out, at (461, 108, -214) and (494, 88, -412). Scout that way and
-        // look again from there.
-        const { marchToward } = await import("./loot-bastion.js");
-        const scout = { x: Math.round(me.x + SCOUT_EAST), z: Math.round(me.z) };
-        console.log(`[Wood] ${bot.username}: no tree in sight or remembered; scouting east to ${scout.x},${scout.z}`);
-        step(`Scouting east for trees...`, 0.1);
-        await marchToward(bot, scout, 300_000, signal, {
-          label: "Scouting for trees",
-          progress: () => 0.3,
-          step,
-          stop: () =>
-            Math.hypot(bot.entity.position.x - scout.x, bot.entity.position.z - scout.z) <= 8 ||
-            scanStanding(bot, at, 64).length > 0,
-        }).catch(() => Infinity);
+        const found = await scoutEast(bot, at, signal, step);
         if (signal.aborted) return { success: false, message: "Wood run aborted." };
-        t = scanStanding(bot, at, 128)[0];
-        console.log(`[Wood] ${bot.username}: scout ended at ${bot.entity.position.floored()}; ${t ? `tree at ${t.x},${t.y},${t.z}` : "still no tree"}`);
-        if (!t) return { success: false, message: "Scouted east and still saw no standing tree." };
-        await scanTrees(bot).catch(() => 0);
+        if (!found) return { success: false, message: "Scouted east and still saw no standing tree." };
+        t = found;
       }
     }
     const far = Math.hypot(t.x - me.x, t.z - me.z);
@@ -205,7 +223,19 @@ export const woodRunSkill: Skill = {
       let gone = 0;
       for (const st of getAllMemoryStores()) gone += st.forgetOreNear("standing_tree", t.x, t.z, 16);
       console.log(`[Wood] ${bot.username}: no standing tree here any more; forgot ${gone} remembered spot(s)`);
-      return { success: false, message: `The remembered tree at ${t.x},${t.z} is gone.` };
+      // Run 853: the last remembered "tree" was more village timber at
+      // (230, 68, -297), and the run ended there with the scout never tried.
+      const found = await scoutEast(bot, at, signal, step);
+      if (signal.aborted) return { success: false, message: "Wood run aborted." };
+      if (!found) return { success: false, message: `The remembered tree at ${t.x},${t.z} is gone and the scout east saw none.` };
+      const found2 = found;
+      await marchToward(bot, { x: found2.x, z: found2.z }, 180_000, signal, {
+        label: "Walking to the trees",
+        progress: () => 0.6,
+        step,
+        stop: () => Math.hypot(bot.entity.position.x - found2.x, bot.entity.position.z - found2.z) <= 8,
+      }).catch(() => Infinity);
+      if (signal.aborted) return { success: false, message: "Wood run aborted." };
     }
     const before = bot.inventory
       .items()
