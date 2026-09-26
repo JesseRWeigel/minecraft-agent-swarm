@@ -2805,7 +2805,12 @@ export class BotBrain {
       const rodsB = heldB("blaze_rod") + stashCount("blaze_rod", spB.y);
       const powderB = heldB("blaze_powder") + stashCount("blaze_powder", spB.y);
       const standB = !!this.bot.findBlock({ matching: (b) => b.name === "brewing_stand", maxDistance: 24 });
-      const enoughRods = rodsB >= 2 || (rodsB >= 1 && (powderB > 0 || standB));
+      // Run 845: the first brew turned both rods into a stand and two powder,
+      // failed on the bottles, and banked them; counting rods alone never
+      // fired again. A stand and powder in reach are the same thing.
+      const standBanked = heldB("brewing_stand") + stashCount("brewing_stand", spB.y) > 0;
+      const enoughRods =
+        rodsB >= 2 || (rodsB >= 1 && (powderB > 0 || standB)) || ((standB || standBanked) && powderB > 0);
       if (!brewed && nearB && enoughRods) {
         this.lastBrewMs = Date.now();
         this.log.info(

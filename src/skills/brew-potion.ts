@@ -93,7 +93,11 @@ export const brewPotionSkill: Skill = {
 
     step("Gathering rods, stone, sugar and bottles from the stash...", 0.1);
     const placedStand = () => bot.findBlock({ matching: (b) => b.name === "brewing_stand", maxDistance: 24 });
-    await take("blaze_rod", placedStand() ? 1 : 2);
+    // Banked parts from an earlier attempt come first.
+    if (!placedStand()) await take("brewing_stand", 1);
+    await take("blaze_powder", 1);
+    const rodsNeeded = (placedStand() || count(bot, "brewing_stand") > 0 ? 0 : 1) + (count(bot, "blaze_powder") > 0 ? 0 : 1);
+    if (rodsNeeded > 0) await take("blaze_rod", rodsNeeded);
     await take("cobblestone", 3);
     await take("sugar_cane", 1);
     await take("glass_bottle", 3);
