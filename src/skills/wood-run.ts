@@ -140,7 +140,10 @@ export const woodRunSkill: Skill = {
     step(`Walking to a tree at ${t.x},${t.y},${t.z} (${far.toFixed(0)} blocks)...`, 0.1);
     console.log(`[Wood] ${bot.username}: marching to the tree at ${t.x},${t.y},${t.z} (${far.toFixed(0)} away)`);
     const { marchToward } = await import("./loot-bastion.js");
-    const gap = await marchToward(bot, { x: t.x, y: t.y, z: t.z }, 360_000, signal, {
+    // Run 842: with the tree's y (103) given, the march read Atlas at y=70 as
+    // "tooLow" and spent its legs climbing to a perch among the village
+    // chests, gaining nothing. Trees stand on the surface; march on x and z.
+    const gap = await marchToward(bot, { x: t.x, z: t.z }, 360_000, signal, {
       label: "Walking to the trees",
       progress: () => 0.4,
       step,
