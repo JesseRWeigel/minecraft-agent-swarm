@@ -1101,6 +1101,22 @@ export async function shedJunk(bot: Bot, minFree = 2, allowBulk = false): Promis
       tossed++;
     }
   }
+  // Run 860: Forge came up from a y=14 tunnel carrying 260 coal in five
+  // slots while the stash refused coal as a glut; the pack filled and ore
+  // had nowhere to go. One stack is all the fuel a smelt run needs. Drop
+  // the other stacks once the junk is gone and the pack is still short.
+  if (bot.inventory.emptySlotCount() < minFree) {
+    const coal = bot.inventory
+      .items()
+      .filter((it) => it.name === "coal")
+      .sort((x, y) => y.count - x.count);
+    for (const it of coal.slice(1)) {
+      if (bot.inventory.emptySlotCount() >= minFree) break;
+      await bot.toss(it.type, null, it.count).catch(() => {});
+      tossed++;
+      console.log(`[Pocket] ${bot.username} dropped ${it.count} spare coal (one stack kept)`);
+    }
+  }
   if (allowBulk && bot.inventory.emptySlotCount() < minFree) {
     const bulk = bot.inventory
       .items()
