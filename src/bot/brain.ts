@@ -2793,6 +2793,18 @@ export class BotBrain {
           "Brain",
           `[ArmourIron] no chest or leg armour, team iron ${ingots} ingots + ${raw} raw: walking to remembered iron`,
         );
+        // Run 865: Atlas and Mason reached the iron and answered "Can't
+        // harvest iron_ore with nothing": the march digs its way over the
+        // hills and wore out their one stone pick. The stash holds two
+        // hundred of them; carry two spares.
+        const picksHeld = this.bot.inventory.items().filter((i) => i.name.endsWith("_pickaxe")).length;
+        if (picksHeld < 3 && stashCount("stone_pickaxe", spA.y) > 0) {
+          const { withdrawStash } = await import("../skills/stash.js");
+          const r = await withdrawStash(this.bot, spA, "stone_pickaxe", 3 - picksHeld, 60_000).catch(
+            (e: Error) => e.message,
+          );
+          this.log.info("Brain", `[ArmourIron] spare picks: ${String(r).slice(0, 60)}`);
+        }
         if (await this.walkToRememberedOre("iron_ore", 400)) return;
       }
     }
