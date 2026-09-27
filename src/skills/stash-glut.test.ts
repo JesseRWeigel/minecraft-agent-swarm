@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { worthBanking, isBulk, BULK_CAP } from "./stash-glut.js";
+import { shouldKeep } from "./stash.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -36,4 +37,11 @@ test("stash glut: the deposit path consults the cap before banking", () => {
   assert.notStrictEqual(check, -1, "the deposit loop must consult the cap");
   assert.ok(keep < check && check < group, "after the keep list, before the item is grouped for a chest");
   assert.match(source, /kept .* out of the chests/, "and say what it left out");
+});
+
+test("run 859: a 17-plank stack is banked while a small stack makes the floor", () => {
+  assert.equal(shouldKeep("oak_planks", [], new Map(), 17), false);
+  assert.equal(shouldKeep("oak_planks", [], new Map(), 6), true);
+  assert.equal(shouldKeep("stick", [], new Map(), 5), true);
+  assert.equal(shouldKeep("stick", [], new Map(), 20), false);
 });

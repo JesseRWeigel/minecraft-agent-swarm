@@ -739,9 +739,13 @@ export function shouldKeep(
   // had just deposited (GearDebug: planks=0, "No new tools crafted" while
   // materials sat everywhere). Eight planks = a table plus a stick batch;
   // eight sticks covers two tools. Any *_planks counts toward the one floor.
+  // Run 859: a stack decides as a whole, so Atlas's single stack of 17 planks
+  // stayed in pocket under a floor of 8 through five deposits while the
+  // stash held no wood. A stack that alone would take the pocket past 16
+  // goes to the stash; small stacks still make the floor.
   if (itemName.endsWith("_planks")) {
     const kept = currentCounts.get("__planks") ?? 0;
-    if (kept < 8) {
+    if (kept < 8 && kept + itemCount <= 16) {
       currentCounts.set("__planks", kept + itemCount);
       return true;
     }
@@ -749,7 +753,7 @@ export function shouldKeep(
   }
   if (itemName === "stick") {
     const kept = currentCounts.get("__sticks") ?? 0;
-    if (kept < 8) {
+    if (kept < 8 && kept + itemCount <= 16) {
       currentCounts.set("__sticks", kept + itemCount);
       return true;
     }
