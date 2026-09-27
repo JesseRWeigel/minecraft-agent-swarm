@@ -2380,8 +2380,16 @@ export class BotBrain {
         !!spMine &&
         this.pantryAboard() >= 12 &&
         Math.hypot(this.bot.entity.position.x - spMine.x, this.bot.entity.position.z - spMine.z) > 120;
+      // Run 868: Forge ran this 21 times in two hours and died eleven times,
+      // four of them at night between x=513 and 587, where strip_mine's
+      // 110-block surface hike from his spawn at 428,80,-322 lands. Start a
+      // trip from the surface in daylight only; a bot already underground
+      // keeps mining.
+      const todM = this.bot.time?.timeOfDay ?? 0;
+      const nightOnSurface = todM >= 12500 && todM <= 23500 && this.bot.entity.position.y > 55;
       if (
         (!hasIron || wantsDive || pickless) &&
+        !nightOnSurface &&
         !carryingDiamondForSmith &&
         cooledDown &&
         fitDive &&
