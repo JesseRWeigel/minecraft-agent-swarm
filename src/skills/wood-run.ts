@@ -92,6 +92,16 @@ export async function scanTrees(bot: Bot, radius = 128, keep = 5): Promise<numbe
 /** How far east a scout walks when no tree is in sight or remembered. */
 const SCOUT_EAST = 200;
 
+/**
+ * Standing trees within `dy` of the bot's height, nearest first. Run 857:
+ * the scout stopped for a tree at (457, 110, -646) while Atlas stood at
+ * y=61 below it; a trunk 49 blocks up a mountain is in sight and out of reach.
+ */
+function scanLevel(bot: Bot, at: Lookup, radius: number, dy = 12): Vec3[] {
+  const y = bot.entity.position.y;
+  return scanStanding(bot, at, radius).filter((p) => Math.abs(p.y - y) <= dy);
+}
+
 /** Standing trees in sight, nearest first. */
 function scanStanding(bot: Bot, at: Lookup, radius: number): Vec3[] {
   const me = bot.entity.position;
@@ -126,10 +136,10 @@ async function scoutEast(
     step,
     stop: () =>
       Math.hypot(bot.entity.position.x - scout.x, bot.entity.position.z - scout.z) <= 8 ||
-      scanStanding(bot, at, 64).length > 0,
+      scanLevel(bot, at, 64).length > 0,
   }).catch(() => Infinity);
   if (signal.aborted) return undefined;
-  const t = scanStanding(bot, at, 128)[0];
+  const t = scanLevel(bot, at, 128)[0];
   console.log(
     `[Wood] ${bot.username}: scout ended at ${bot.entity.position.floored()}; ${t ? `tree at ${t.x},${t.y},${t.z}` : "still no tree"}`,
   );
@@ -148,7 +158,7 @@ async function chopStanding(bot: Bot, at: Lookup, signal: AbortSignal): Promise<
   const { safeGoto, baseMoves, collectNearbyDrops } = await import("../bot/navigation.js");
   const isLog = (n?: string) => !!n && (LOG_TYPES as readonly string[]).includes(n);
   let chopped = 0;
-  for (const top of scanStanding(bot, at, 32).slice(0, 4)) {
+  for (const top of scanLevel(bot, at, 32).slice(0, 4)) {
     if (signal.aborted || chopped >= 16) break;
     let base = top.clone();
     while (isLog(at(base.x, base.y - 1, base.z)) && top.y - base.y < 30) base = base.offset(0, -1, 0);
