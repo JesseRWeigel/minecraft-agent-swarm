@@ -142,7 +142,8 @@ export const woodRunSkill: Skill = {
   params: {},
   // Run 841: the first run marched toward trees 330 blocks east and the
   // 240 s march ended 107 short. The forest is far; give the walk room.
-  timeoutMs: 600_000,
+  // Run 854: the pick craft (90 s) and the re-pick march (90 s) come on top.
+  timeoutMs: 900_000,
 
   estimateMaterials() {
     return {};
@@ -189,6 +190,18 @@ export const woodRunSkill: Skill = {
         if (!found) return { success: false, message: "Scouted east and still saw no standing tree." };
         t = found;
       }
+    }
+    // Run 854: the march stalled 43 short of the forest against a stone
+    // rise, with picks=0, so it could not cut through, and the run came home
+    // with the same 3 logs. Arm first; craft_gear turns held logs into a
+    // wooden pick at the village table.
+    if (!bot.inventory.items().some((i) => i.name.endsWith("_pickaxe")) && !signal.aborted) {
+      const { craftGearSkill } = await import("./craft-gear.js");
+      const armed = await craftGearSkill
+        .execute(bot, { deadlineMs: 90_000 }, signal, () => {})
+        .catch((e: Error) => ({ success: false, message: e.message }));
+      const pick = bot.inventory.items().find((i) => i.name.endsWith("_pickaxe"))?.name ?? "none";
+      console.log(`[Wood] ${bot.username}: pickless before the march; craft_gear -> ${armed.message.slice(0, 60)} (pick ${pick})`);
     }
     const far = Math.hypot(t.x - me.x, t.z - me.z);
     step(`Walking to a tree at ${t.x},${t.y},${t.z} (${far.toFixed(0)} blocks)...`, 0.1);
