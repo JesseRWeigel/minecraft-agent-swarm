@@ -3744,6 +3744,38 @@ export class BotBrain {
       const cooledDown = Date.now() - this.lastSmeltOverrideMs > 300_000;
       if (rawMetal >= 1 && cooledDown) {
         this.lastSmeltOverrideMs = Date.now();
+        // Run 867: the surface-iron trips mined eleven ore 250 blocks out and
+        // this override then ran smelt_ores on the spot: "Couldn't craft a
+        // furnace. Need 8 cobblestone and a crafting table" four times, while
+        // Atlas died six times with the ore aboard. Far from home with no
+        // furnace in reach and nothing to build one, carry the ore home first.
+        const spS = this.roleConfig.stashPos;
+        const here = this.bot.entity.position;
+        const farHome = !!spS && Math.hypot(here.x - spS.x, here.z - spS.z) > 64;
+        const furnaceNear = !!this.bot.findBlock({ matching: (b) => b.name === "furnace", maxDistance: 32 });
+        const cobble = this.bot.inventory
+          .items()
+          .filter((i) => i.name === "cobblestone" || i.name === "cobbled_deepslate")
+          .reduce((s, i) => s + i.count, 0);
+        const hasTable = this.bot.inventory.items().some((i) => i.name === "crafting_table");
+        if (farHome && !furnaceNear && !(cobble >= 8 && hasTable) && spS) {
+          this.log.info("Brain", `OVERRIDE: ${rawMetal} raw metal aboard, no furnace near — carrying it home to smelt`);
+          const { marchToward } = await import("../skills/loot-bastion.js");
+          const ac = new AbortController();
+          const gap = await marchToward(this.bot, { x: spS.x, z: spS.z }, 300_000, ac.signal, {
+            label: "Carrying ore home",
+            progress: () => 0.5,
+            step: () => {},
+            stop: () =>
+              Math.hypot(this.bot.entity.position.x - spS.x, this.bot.entity.position.z - spS.z) <= 24 ||
+              this.bot.health < 6,
+          }).catch(() => Infinity);
+          this.log.info("Brain", `Ore march home ended ${Number(gap).toFixed(0)} out`);
+          this.lastSmeltOverrideMs = Date.now() - 300_000;
+          this.lastAction = "go_to";
+          this.lastResult = `Carried ${rawMetal} raw metal toward the stash`;
+          return;
+        }
         this.log.info("Brain", `OVERRIDE: ${rawMetal} raw metal aboard — running smelt_ores`);
         this.events.onThought("Raw ore does nothing in a pocket. To the furnace!");
         // stashPos unlocks the skill's fuel withdrawal — without it the whole
