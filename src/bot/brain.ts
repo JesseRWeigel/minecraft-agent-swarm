@@ -2781,7 +2781,13 @@ export class BotBrain {
       const bare = !this.bot.inventory.slots[6] && !this.bot.inventory.slots[7];
       const ingots = count("iron_ingot") + stashCount("iron_ingot", spA.y);
       const raw = count("raw_iron") + stashCount("raw_iron", spA.y);
-      if (pickOk && bare && ingots < 4 && raw < 4) {
+      // Run 864: three marches reached the iron and mined six ore, and Forge
+      // died three times around it (skeletons, a creeper) in the dark with
+      // the raw iron in his pack. Go only with most of a day ahead: a round
+      // trip of 500 blocks takes several minutes of game time.
+      const tod = this.bot.time?.timeOfDay ?? 0;
+      const daylightLeft = tod < 8000;
+      if (pickOk && bare && ingots < 4 && raw < 4 && daylightLeft) {
         this.lastArmourIronMs = Date.now();
         this.log.info(
           "Brain",
