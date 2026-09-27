@@ -2772,6 +2772,25 @@ export class BotBrain {
         .filter((i) => /_log$|_planks$|^stick$/.test(i.name))
         .reduce((n, i) => n + i.count, 0);
       const woodBanked = stashCount("_log", spW.y) + stashCount("_planks", spW.y) + stashCount("stick", spW.y);
+      // Run 858: Atlas carried 17 planks, 5 sticks and 7 logs from his runs
+      // while the stash held none; the rule read 29 and stood down, craft_gear
+      // came up short for the others and Mason tried gather_wood 25 times.
+      // Bank the haul when home.
+      const nearStashW = Math.hypot(this.bot.entity.position.x - spW.x, this.bot.entity.position.z - spW.z) < 48;
+      if (woodBanked < 16 && woodHeld >= 16 && nearStashW) {
+        this.lastWoodRunMs = Date.now() - 1_500_000;
+        this.log.info("Brain", `OVERRIDE: carrying ${woodHeld} wood with ${woodBanked} banked — banking it for the team`);
+        const { depositStash } = await import("../skills/stash.js");
+        const r = await depositStash(this.bot, spW, []).catch((e: Error) => e.message);
+        const left = this.bot.inventory
+          .items()
+          .filter((i) => /_log$|_planks$|^stick$/.test(i.name))
+          .reduce((n, i) => n + i.count, 0);
+        console.log(`[Wood] ${this.bot.username}: banked wood -> ${String(r).slice(0, 80)}; holding ${left} now`);
+        this.lastAction = "deposit_stash";
+        this.lastResult = String(r);
+        return;
+      }
       if (woodHeld + woodBanked < 16) {
         this.lastWoodRunMs = Date.now();
         this.log.info(
