@@ -293,6 +293,7 @@ export class BotBrain {
   private lastGoldDressMs = 0;
   private lastBrewMs = 0;
   private lastWoodRunMs = 0;
+  private lastArmourIronMs = 0;
   private lastTreeScanMs = 0;
   private lastWaxOffMs = 0;
   private lastHoneyMs = 0;
@@ -2755,6 +2756,41 @@ export class BotBrain {
       }
     }
 
+    // ARMOUR IRON. Runs 860-861: the armour step read "0 ingots" 23 times,
+    // y=15 tunnels brought home about one raw iron each, and the swarm died
+    // twelve times an hour in boots. Atlas has seen iron on the mountain
+    // surface 300-400 blocks out (441,84,-615; 523,103,-641), past the
+    // 200-block reach of the remembered-ore walk. A miner with a stone pick
+    // or better and no chest or leg armour goes to the nearest remembered
+    // iron when the team holds too little to forge a piece.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.roleConfig.allowedActions.includes("mine_block") &&
+      this.roleConfig.stashPos &&
+      /overworld/.test(String(this.bot.game.dimension)) &&
+      Date.now() - this.lastArmourIronMs > 1_200_000
+    ) {
+      const spA = this.roleConfig.stashPos;
+      const count = (n: string) =>
+        this.bot.inventory
+          .items()
+          .filter((i) => i.name === n)
+          .reduce((s, i) => s + i.count, 0);
+      const pickOk = this.bot.inventory.items().some((i) => /^(stone|iron|diamond|netherite)_pickaxe$/.test(i.name));
+      const bare = !this.bot.inventory.slots[6] && !this.bot.inventory.slots[7];
+      const ingots = count("iron_ingot") + stashCount("iron_ingot", spA.y);
+      const raw = count("raw_iron") + stashCount("raw_iron", spA.y);
+      if (pickOk && bare && ingots < 4 && raw < 4) {
+        this.lastArmourIronMs = Date.now();
+        this.log.info(
+          "Brain",
+          `[ArmourIron] no chest or leg armour, team iron ${ingots} ingots + ${raw} raw: walking to remembered iron`,
+        );
+        if (await this.walkToRememberedOre("iron_ore", 400)) return;
+      }
+    }
+
     // WOOD RUN. Run 835: six logs in three runs, no sticks for days, so no
     // pickaxes, swords, arrows or a shield for the fortress trips. When the
     // team's wood is low, the explorer walks to a standing tree in sight.
@@ -4578,7 +4614,7 @@ export class BotBrain {
    *  walk was made. Runs 801 and 802: the miners answered "No gold_ore found
    *  nearby" and "No iron_ore found nearby" from the village while their own
    *  memories held veins forty to ninety blocks off in unloaded chunks. */
-  private async walkToRememberedOre(match: string): Promise<boolean> {
+  private async walkToRememberedOre(match: string, radius = 200): Promise<boolean> {
     const me = this.bot.entity.position;
     // Run 805: eight walks to the remembered iron at 254,63,-408 and not one
     // ore mined, because Atlas had dug that vein out at 14:24Z and the memory
@@ -4594,11 +4630,11 @@ export class BotBrain {
       this.log.info("Brain", `Forgot ${forgotten} remembered ${match} spot(s) here: nothing left to dig`);
     }
     const known = getAllMemoryStores()
-      .map((st) => st.getNearestOre(match, me.x, me.z, 200))
+      .map((st) => st.getNearestOre(match, me.x, me.z, radius))
       .filter((o): o is NonNullable<typeof o> => !!o)
       .sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
     if (!known) {
-      this.log.info("Brain", `No ${match} in sight and none remembered within 200 blocks`);
+      this.log.info("Brain", `No ${match} in sight and none remembered within ${radius} blocks`);
       return false;
     }
     this.log.info(

@@ -159,7 +159,8 @@ test("gold hunt: walks to a remembered gold vein when none is in sight", () => {
     BRAIN.indexOf("private async walkToRememberedOre"),
     BRAIN.indexOf("private async executeActionUnlessPaused"),
   );
-  assert.match(helper, /getNearestOre\(match, me\.x, me\.z, 200\)/, "the helper reads every bot's memory");
+  assert.match(helper, /getNearestOre\(match, me\.x, me\.z, radius\)/, "the helper reads every bot's memory");
+  assert.match(helper, /walkToRememberedOre\(match: string, radius = 200\)/, "200 blocks unless the caller asks further");
   assert.match(helper, /"go_to", \{ x: known\.x, y: known\.y, z: known\.z \}/, "the bot walks to it with its height");
   // Run 802: the iron step answered "No iron_ore found nearby" all hour too.
   const iron = BRAIN.indexOf('blockType: "iron_ore"');
@@ -197,7 +198,7 @@ test("remembered ore: a vein the bot stands at with nothing in sight is forgotte
   assert.match(helper, /getNearestOre\(match, me\.x, me\.z, 16\)/, "a spot within 16 blocks counts as visited");
   assert.match(helper, /forgetOreNear\(match, near\.x, near\.z, 16\)/, "it is dropped from every memory");
   const forgetAt = helper.indexOf("forgetOreNear");
-  const lookupAt = helper.indexOf("getNearestOre(match, me.x, me.z, 200)");
+  const lookupAt = helper.indexOf("getNearestOre(match, me.x, me.z, radius)");
   assert.ok(forgetAt < lookupAt, "forgetting happens before the next vein is chosen");
   const mem = fs.readFileSync(path.join(__dirname, "memory.ts"), "utf8");
   assert.match(
