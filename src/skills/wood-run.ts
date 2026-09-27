@@ -2,6 +2,8 @@ import type { Bot } from "mineflayer";
 import type { Skill, SkillResult } from "./types.js";
 import { Vec3 } from "vec3";
 import { LOG_TYPES } from "./materials.js";
+import pkg from "mineflayer-pathfinder";
+const { goals } = pkg;
 
 /**
  * wood_run: walk to a standing tree the bot can see and chop there.
@@ -133,6 +135,59 @@ async function scoutEast(
   );
   if (t) await scanTrees(bot).catch(() => 0);
   return t;
+}
+
+/**
+ * Chop standing trees this skill has already confirmed. Run 856: at the east
+ * forest gather_wood saw 64 candidates and dropped all 64 as floating, since
+ * the nearest logs there are branches of big trees with air beneath, while
+ * the standing-tree scan counted 41 trunks. Walk to each trunk's base and
+ * fell it upward.
+ */
+async function chopStanding(bot: Bot, at: Lookup, signal: AbortSignal): Promise<number> {
+  const { safeGoto, baseMoves, collectNearbyDrops } = await import("../bot/navigation.js");
+  const isLog = (n?: string) => !!n && (LOG_TYPES as readonly string[]).includes(n);
+  let chopped = 0;
+  for (const top of scanStanding(bot, at, 32).slice(0, 4)) {
+    if (signal.aborted || chopped >= 16) break;
+    let base = top.clone();
+    while (isLog(at(base.x, base.y - 1, base.z)) && top.y - base.y < 30) base = base.offset(0, -1, 0);
+    const moves = baseMoves(bot);
+    moves.canDig = true;
+    moves.allowParkour = false;
+    bot.pathfinder.setMovements(moves);
+    try {
+      await safeGoto(bot, new goals.GoalNear(base.x, base.y, base.z, 2), 30_000, 10_000);
+    } catch (e) {
+      console.log(`[Wood] ${bot.username}: walk to the trunk at ${base} failed: ${(e as Error).message.slice(0, 80)}`);
+      continue;
+    }
+    let felled = 0;
+    for (let y = base.y; y < base.y + 12 && !signal.aborted; y++) {
+      const b = bot.blockAt(new Vec3(base.x, y, base.z));
+      if (!b || !isLog(b.name)) break;
+      if (bot.entity.position.distanceTo(b.position.offset(0.5, 0.5, 0.5)) > 4.5) break;
+      const axe = bot.inventory.items().find((i) => i.name.endsWith("_axe"));
+      if (axe) await bot.equip(axe, "hand").catch(() => {});
+      const ok = await Promise.race([
+        bot.dig(b).then(() => true),
+        new Promise<boolean>((r) => setTimeout(() => r(false), 12_000)),
+      ]).catch(() => false);
+      if (!ok) {
+        try {
+          bot.stopDigging();
+        } catch {
+          /* not digging */
+        }
+        break;
+      }
+      felled++;
+    }
+    await collectNearbyDrops(bot, 8, 8000).catch(() => {});
+    console.log(`[Wood] ${bot.username}: felled ${felled} log(s) from the trunk at ${base}`);
+    chopped += felled;
+  }
+  return chopped;
 }
 
 export const woodRunSkill: Skill = {
@@ -273,8 +328,12 @@ export const woodRunSkill: Skill = {
       .filter((i) => (LOG_TYPES as readonly string[]).includes(i.name))
       .reduce((n, i) => n + i.count, 0);
     step("Chopping...", 0.7);
-    const { executeAction } = await import("../bot/actions.js");
-    const chopped = await executeAction(bot, "gather_wood", { count: 16 }).catch((e: Error) => e.message);
+    const felled = await chopStanding(bot, at, signal).catch(() => 0);
+    let chopped = `Felled ${felled} log(s) from standing trunks.`;
+    if (felled === 0 && !signal.aborted) {
+      const { executeAction } = await import("../bot/actions.js");
+      chopped = await executeAction(bot, "gather_wood", { count: 16 }).catch((e: Error) => e.message);
+    }
     const after = bot.inventory
       .items()
       .filter((i) => (LOG_TYPES as readonly string[]).includes(i.name))
