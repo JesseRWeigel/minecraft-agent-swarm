@@ -497,8 +497,10 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
         // is the real fallback either way.
         try {
           await safeGoto(bot, new goals.GoalNear(basePos.x, basePos.y, basePos.z, 3), 30000, 12000);
-        } catch {
-          /* fall through to the dig-enabled retry */
+        } catch (e) {
+          // Run 855: four approaches at the east forest failed from 14 blocks
+          // on level ground and the reason was swallowed here. Say it.
+          console.log(`[GatherDebug] clean approach to ${basePos} failed: ${(e as Error).message.slice(0, 100)}`);
         }
         // Young regrown trees sit inside ground-level leaf bushes that the
         // no-dig movement can't push through — at the regrown forest EVERY
@@ -512,7 +514,12 @@ async function gatherWood(bot: Bot, count: number): Promise<string> {
           bushMoves.maxDropDown = 3;
           bushMoves.allowParkour = false;
           bot.pathfinder.setMovements(bushMoves);
-          await safeGoto(bot, new goals.GoalNear(basePos.x, basePos.y, basePos.z, 2), 20000, 8000);
+          await safeGoto(bot, new goals.GoalNear(basePos.x, basePos.y, basePos.z, 2), 20000, 8000).catch((e: Error) => {
+            console.log(
+              `[GatherDebug] dig approach to ${basePos} failed: ${e.message.slice(0, 100)} (bot ${bot.entity.position.floored()})`,
+            );
+            throw e;
+          });
         }
         await digSafe(bot, log);
         gathered++;
