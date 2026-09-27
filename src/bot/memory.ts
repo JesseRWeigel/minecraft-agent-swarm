@@ -329,11 +329,11 @@ export class BotMemoryStore {
 
   /** Nearest remembered ore of a type (name contains `match`) within `radius`
    *  blocks on the XZ plane, or null. */
-  getNearestOre(match: string, x: number, z: number, radius = 200): OreDiscovery | null {
+  getNearestOre(match: string, x: number, z: number, radius = 200, minY = -Infinity): OreDiscovery | null {
     let best: OreDiscovery | null = null;
     let bestDist = radius;
     for (const o of this.memory.oreDiscoveries) {
-      if (!o.type.includes(match)) continue;
+      if (!o.type.includes(match) || o.y < minY) continue;
       const dist = Math.hypot(o.x - x, o.z - z);
       if (dist < bestDist) {
         bestDist = dist;

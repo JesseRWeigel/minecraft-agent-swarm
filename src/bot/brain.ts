@@ -2805,7 +2805,10 @@ export class BotBrain {
           );
           this.log.info("Brain", `[ArmourIron] spare picks: ${String(r).slice(0, 60)}`);
         }
-        if (await this.walkToRememberedOre("iron_ore", 400)) return;
+        // Run 866: the pool now also holds iron seen through cave walls, such
+        // as 415,35,-317 inside the rock, and the walk stopped 20 short of
+        // it. This trip is for the mountain-surface iron: y 60 and up.
+        if (await this.walkToRememberedOre("iron_ore", 400, 60)) return;
       }
     }
 
@@ -4634,7 +4637,7 @@ export class BotBrain {
    *  walk was made. Runs 801 and 802: the miners answered "No gold_ore found
    *  nearby" and "No iron_ore found nearby" from the village while their own
    *  memories held veins forty to ninety blocks off in unloaded chunks. */
-  private async walkToRememberedOre(match: string, radius = 200): Promise<boolean> {
+  private async walkToRememberedOre(match: string, radius = 200, minY = -Infinity): Promise<boolean> {
     const me = this.bot.entity.position;
     // Run 805: eight walks to the remembered iron at 254,63,-408 and not one
     // ore mined, because Atlas had dug that vein out at 14:24Z and the memory
@@ -4650,7 +4653,7 @@ export class BotBrain {
       this.log.info("Brain", `Forgot ${forgotten} remembered ${match} spot(s) here: nothing left to dig`);
     }
     const known = getAllMemoryStores()
-      .map((st) => st.getNearestOre(match, me.x, me.z, radius))
+      .map((st) => st.getNearestOre(match, me.x, me.z, radius, minY))
       .filter((o): o is NonNullable<typeof o> => !!o)
       .sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
     if (!known) {
