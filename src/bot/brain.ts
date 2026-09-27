@@ -2813,7 +2813,9 @@ export class BotBrain {
       // came up short for the others and Mason tried gather_wood 25 times.
       // Bank the haul when home.
       const nearStashW = Math.hypot(this.bot.entity.position.x - spW.x, this.bot.entity.position.z - spW.z) < 48;
-      if (woodBanked < 16 && woodHeld >= 16 && nearStashW) {
+      // Run 862: the deposit keeps a crafting floor, so Atlas came back to
+      // exactly 16 and re-fired this rule four times for 1-4 items each.
+      if (woodBanked < 16 && woodHeld >= 24 && nearStashW) {
         this.lastWoodRunMs = Date.now() - 1_500_000;
         this.log.info("Brain", `OVERRIDE: carrying ${woodHeld} wood with ${woodBanked} banked — banking it for the team`);
         const { depositStash } = await import("../skills/stash.js");

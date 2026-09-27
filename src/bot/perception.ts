@@ -14,6 +14,7 @@ import { recordNest } from "./nests.js";
 import type { Bot } from "mineflayer";
 import type { Entity } from "prismarine-entity";
 import { recordOre } from "./memory.js";
+import { getBotMemoryStore } from "./memory-registry.js";
 import { miningReachLine, bestPickaxeName } from "./mining-reach.js";
 import { undergroundNote } from "./underground.js";
 
@@ -251,7 +252,14 @@ function getNearbyBlockTypes(bot: Bot): string[] {
         if (block && NOTABLE_BLOCKS.has(block.name)) {
           found.add(block.name);
           if (block.name.includes("ore")) {
-            recordOre(block.name, pos.x + dx, pos.y + dy, pos.z + dz);
+            // Run 862: three bots asked for remembered iron within 400 and
+            // got "none remembered" eight times, while Atlas had logged iron
+            // at (441, 84, -615) and more. Sightings went to the module
+            // store "memory.json", which getAllMemoryStores never reads
+            // (the wood_run tree bug of run 837 again). Record per bot.
+            const store = getBotMemoryStore(bot);
+            if (store) store.recordOre(block.name, pos.x + dx, pos.y + dy, pos.z + dz);
+            else recordOre(block.name, pos.x + dx, pos.y + dy, pos.z + dz);
           }
         }
       }
