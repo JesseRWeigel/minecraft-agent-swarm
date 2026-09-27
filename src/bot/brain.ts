@@ -4643,6 +4643,23 @@ export class BotBrain {
       "Brain",
       `OVERRIDE: no ${match} in sight, walking to the remembered ${known.type} at ${known.x},${known.y},${known.z} (${Math.hypot(known.x - me.x, known.z - me.z).toFixed(0)} away)`,
     );
+    // Run 863: the 400-block reach found surface iron at 555,116,-276, and
+    // go_to refused every walk ("That's 267 blocks away — too far!"). March
+    // the long legs on x and z the way the wood run does, then finish with
+    // an ordinary walk.
+    if (Math.hypot(known.x - me.x, known.z - me.z) > 150) {
+      const { marchToward } = await import("../skills/loot-bastion.js");
+      const ac = new AbortController();
+      const gap = await marchToward(this.bot, { x: known.x, z: known.z }, 360_000, ac.signal, {
+        label: `Marching to remembered ${match}`,
+        progress: () => 0.5,
+        step: () => {},
+        stop: () =>
+          Math.hypot(this.bot.entity.position.x - known.x, this.bot.entity.position.z - known.z) <= 24 ||
+          this.bot.health < 6,
+      }).catch(() => Infinity);
+      this.log.info("Brain", `March toward the remembered ${match} ended ${Number(gap).toFixed(0)} out`);
+    }
     const walk = await this.executeActionUnlessPaused("go_to", { x: known.x, y: known.y, z: known.z });
     this.events.onAction("go_to", walk);
     this.lastAction = "go_to";
