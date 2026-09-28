@@ -158,7 +158,17 @@ async function chopStanding(bot: Bot, at: Lookup, signal: AbortSignal): Promise<
   const { safeGoto, baseMoves, collectNearbyDrops } = await import("../bot/navigation.js");
   const isLog = (n?: string) => !!n && (LOG_TYPES as readonly string[]).includes(n);
   let chopped = 0;
-  for (const top of scanLevel(bot, at, 32).slice(0, 4)) {
+  // Resume run 2026-09-28T14:20: the four "trees" were one trunk at
+  // (646, 89..92, -307); the first pass felled 3, the rest found it gone.
+  // One pass per trunk column.
+  const seen = new Set<string>();
+  const trunks = scanLevel(bot, at, 32).filter((p) => {
+    const k = `${p.x},${p.z}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  for (const top of trunks.slice(0, 4)) {
     if (signal.aborted || chopped >= 16) break;
     let base = top.clone();
     while (isLog(at(base.x, base.y - 1, base.z)) && top.y - base.y < 30) base = base.offset(0, -1, 0);
