@@ -71,6 +71,9 @@ export const glowSignSkill: Skill = {
     step("Gathering an ink sac, planks and a stick...", 0.1);
     if (count(bot, "glow_ink_sac") === 0) await take("glow_ink_sac", 1);
     const signHeld = () => bot.inventory.items().find((i) => i.name.endsWith("_sign") && !i.name.includes("hanging"));
+    // Run 872: the first run crafted three signs and failed to place them;
+    // the second found no planks and no sign aboard (banked). Take one back.
+    if (!signHeld()) await take("_sign", 1);
     if (!signHeld()) {
       if (!plankKindFor(bot.inventory.items())) await take("planks", 6);
       if (!plankKindFor(bot.inventory.items())) {
