@@ -118,20 +118,32 @@ export const glowSignSkill: Skill = {
     for (let dx = -3; dx <= 3; dx++)
       for (let dz = -3; dz <= 3; dz++)
         for (let dy = -1; dy <= 1; dy++) if (dx || dz) spots.push(pos.offset(dx, dy, dz));
+    // Run 872: Mason tried eight spots and none took; a probe placed on the
+    // nearest and timed out ("blockUpdate did not fire") on spots further
+    // off. Keep to arm's reach from the eyes.
+    const eye = bot.entity.position.offset(0, 1.62, 0);
     spots.sort((a, b) => a.distanceTo(pos) - b.distanceTo(pos));
+    const inReach = (v: Vec3) => eye.distanceTo(v.offset(0.5, 0.5, 0.5)) <= 4.2;
     let placed: ReturnType<Bot["blockAt"]> = null;
     let tries = 0;
     for (const t of spots) {
       if (tries >= 8 || signal.aborted) break;
       const target = bot.blockAt(t);
       const below = bot.blockAt(t.offset(0, -1, 0));
-      if (!target || !/air$/.test(target.name) || !below || below.boundingBox !== "block" || SKIP_TOPS.test(below.name))
+      if (
+        !target ||
+        !/air$/.test(target.name) ||
+        !below ||
+        below.boundingBox !== "block" ||
+        SKIP_TOPS.test(below.name) ||
+        !inReach(t)
+      )
         continue;
       tries++;
       try {
         await bot.placeBlock(below, new Vec3(0, 1, 0));
-      } catch {
-        /* placeBlock often rejects on the sign editor; check the world */
+      } catch (e) {
+        if (tries === 1) console.log(`[Sign] ${bot.username}: place at ${t} -> ${(e as Error).message.slice(0, 80)}`);
       }
       await new Promise((r) => setTimeout(r, 400));
       const now = bot.blockAt(t);
@@ -149,6 +161,15 @@ export const glowSignSkill: Skill = {
     } catch {
       /* no window */
     }
+    // Glow ink only takes on a sign with writing on it (1.20+: the applicator
+    // needs a message on the side it is used on). A probe's ink stayed at 2
+    // on a blank sign. Write a word first.
+    try {
+      bot.updateSign(placed, "Glow");
+    } catch {
+      /* the next check reports it */
+    }
+    await new Promise((r) => setTimeout(r, 600));
     step("Making the sign glow...", 0.85);
     const ink = bot.inventory.items().find((i) => i.name === "glow_ink_sac");
     if (!ink) return { success: false, message: "The ink sac went missing." };
