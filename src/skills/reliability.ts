@@ -55,6 +55,7 @@ const NEVER_RETIRE = new Set([
   // memory. brew_potion waits on a second blaze rod the same way.
   "wood_run",
   "brew_potion",
+  "glow_sign",
 ]);
 
 const CACHE_TTL_MS = 60_000;

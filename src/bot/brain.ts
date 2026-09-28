@@ -294,6 +294,7 @@ export class BotBrain {
   private lastBrewMs = 0;
   private lastWoodRunMs = 0;
   private lastArmourIronMs = 0;
+  private lastGlowSignMs = 0;
   private lastTreeScanMs = 0;
   private lastWaxOffMs = 0;
   private lastHoneyMs = 0;
@@ -2868,6 +2869,33 @@ export class BotBrain {
         const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "wood_run" });
         this.events.onAction("wood_run", result);
         this.lastAction = "wood_run";
+        this.lastResult = result;
+        return;
+      }
+    }
+
+    // GLOW AND BEHOLD. Advancements sat at 41 from 2026-09-26 to 09-28 with
+    // forty glow ink sacs in the stash; a sign and one sac earn it.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.roleConfig.allowedSkills.includes("glow_sign") &&
+      this.roleConfig.stashPos &&
+      /overworld/.test(String(this.bot.game.dimension)) &&
+      Date.now() - this.lastGlowSignMs > 900_000
+    ) {
+      const earnedG = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+      const glowed = earnedG.has("husbandry/make_a_sign_glow") || earnedG.has("minecraft:husbandry/make_a_sign_glow");
+      const spG = this.roleConfig.stashPos;
+      const nearG = Math.hypot(this.bot.entity.position.x - spG.x, this.bot.entity.position.z - spG.z) < 40;
+      const inkG =
+        this.bot.inventory.items().some((i) => i.name === "glow_ink_sac") || stashCount("glow_ink_sac", spG.y) > 0;
+      if (!glowed && nearG && inkG) {
+        this.lastGlowSignMs = Date.now();
+        this.log.info("Brain", "OVERRIDE: glow ink in the stash — running glow_sign for Glow and Behold!");
+        const result = await this.executeActionUnlessPaused("invoke_skill", { skill: "glow_sign" });
+        this.events.onAction("glow_sign", result);
+        this.lastAction = "glow_sign";
         this.lastResult = result;
         return;
       }

@@ -307,6 +307,7 @@ export const MASON_CONFIG: BotRoleConfig = {
     // Run 818 banked the first blaze rod; the crosser who brings rods home
     // also brews at the stash for Local Brewery.
     "brew_potion",
+    "glow_sign",
     "loot_bastion",
     "setup_enchanting",
 
