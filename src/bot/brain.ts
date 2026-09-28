@@ -4708,6 +4708,10 @@ export class BotBrain {
     // go_to refused every walk ("That's 267 blocks away — too far!"). March
     // the long legs on x and z the way the wood run does, then finish with
     // an ordinary walk.
+    const nightfall = () => {
+      const tod = this.bot.time?.timeOfDay ?? 0;
+      return tod >= 12500 && tod <= 23500;
+    };
     if (Math.hypot(known.x - me.x, known.z - me.z) > 150) {
       const { marchToward } = await import("../skills/loot-bastion.js");
       const ac = new AbortController();
@@ -4717,9 +4721,19 @@ export class BotBrain {
         step: () => {},
         stop: () =>
           Math.hypot(this.bot.entity.position.x - known.x, this.bot.entity.position.z - known.z) <= 24 ||
-          this.bot.health < 6,
+          this.bot.health < 6 ||
+          nightfall(),
       }).catch(() => Infinity);
       this.log.info("Brain", `March toward the remembered ${match} ended ${Number(gap).toFixed(0)} out`);
+      // Run 869: sixteen deaths in an hour, Atlas's all out east around the
+      // iron after dark with the ore aboard. The trip starts in daylight; if
+      // night falls on the way, turn back and let the walk-home rule run.
+      if (nightfall() && Math.hypot(this.bot.entity.position.x - known.x, this.bot.entity.position.z - known.z) > 24) {
+        this.log.info("Brain", `Night fell on the way to the remembered ${match}; turning back`);
+        this.lastAction = "go_to";
+        this.lastResult = `Night fell on the way to ${match}`;
+        return true;
+      }
     }
     const walk = await this.executeActionUnlessPaused("go_to", { x: known.x, y: known.y, z: known.z });
     this.events.onAction("go_to", walk);
