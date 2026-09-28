@@ -736,8 +736,16 @@ export const stripMineSkill: Skill = {
             ].includes(i.name),
           );
         const ref = bot.blockAt(pos.offset(0, -1, 0));
+        // Run 870: Forge died four times in an hour falling 29 to 42 blocks
+        // from bridge blocks over caves at y=15, 0 and 7. A one-block dip is
+        // worth a bridge; a cave is not. Measure the drop and stop the
+        // tunnel over anything deeper than three.
+        let drop = 0;
+        while (drop < 8 && bot.blockAt(targetPos.offset(0, -1 - drop, 0))?.boundingBox !== "block") drop++;
+        const shallow = drop <= 3;
+        if (!shallow) console.log(`[Skill] strip_mine: a drop of ${drop}+ under step ${step}; not bridging a cave`);
         let bridged = false;
-        if (filler && ref && ref.boundingBox === "block" && under && /air$/.test(under.name)) {
+        if (shallow && filler && ref && ref.boundingBox === "block" && under && /air$/.test(under.name)) {
           try {
             await bot.equip(filler, "hand");
             await bot.placeBlock(ref, new Vec3(forward.x, 0, forward.z));
