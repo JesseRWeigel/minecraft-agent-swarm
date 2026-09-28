@@ -2859,7 +2859,11 @@ export class BotBrain {
         this.lastResult = String(r);
         return;
       }
-      if (woodHeld + woodBanked < 16) {
+      // Run 873: Atlas held 12 planks and 8 sticks (his crafting floor), so
+      // held+banked read 20 and the run never started, while the stash held
+      // none and Mason's sign craft failed "Need 6 planks" every 15 minutes.
+      // Go by what the team can withdraw; the haul (logs) gets banked above.
+      if (woodBanked < 16 && woodHeld < 40) {
         this.lastWoodRunMs = Date.now();
         this.log.info(
           "Brain",
