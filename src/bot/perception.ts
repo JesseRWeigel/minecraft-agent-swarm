@@ -214,6 +214,9 @@ export function isPassive(entity: Entity): boolean {
 }
 
 const NOTABLE_BLOCKS = new Set([
+  // Zombie Doctor needs a fermented spider eye, and that needs a brown
+  // mushroom; none had been seen in six runs of logs (2026-09-29).
+  "brown_mushroom",
   "diamond_ore",
   "deepslate_diamond_ore",
   "iron_ore",
@@ -251,7 +254,7 @@ function getNearbyBlockTypes(bot: Bot): string[] {
         }
         if (block && NOTABLE_BLOCKS.has(block.name)) {
           found.add(block.name);
-          if (block.name.includes("ore")) {
+          if (block.name.includes("ore") || block.name === "brown_mushroom") {
             // Run 862: three bots asked for remembered iron within 400 and
             // got "none remembered" eight times, while Atlas had logged iron
             // at (441, 84, -615) and more. Sightings went to the module
