@@ -2907,6 +2907,18 @@ export class BotBrain {
       const cured = earnedZ.has("story/cure_zombie_villager") || earnedZ.has("minecraft:story/cure_zombie_villager");
       const spM = this.roleConfig.stashPos;
       const held = this.bot.inventory.items().some((i) => i.name === "brown_mushroom");
+      // Run 880: Atlas picked the mushroom 510 blocks out and carried it; the
+      // brewer needs it in the stash. Bank it once home.
+      const homeM = Math.hypot(this.bot.entity.position.x - spM.x, this.bot.entity.position.z - spM.z) < 40;
+      if (!cured && held && homeM && stashCount("brown_mushroom", spM.y) === 0) {
+        this.lastMushroomMs = Date.now() - 1_500_000;
+        const { depositStash } = await import("../skills/stash.js");
+        const r = await depositStash(this.bot, spM, []).catch((e: Error) => e.message);
+        this.log.info("Brain", `[Mushroom] banked the brown mushroom: ${String(r).slice(0, 80)}`);
+        this.lastAction = "deposit_stash";
+        this.lastResult = String(r);
+        return;
+      }
       if (!cured && !held && stashCount("brown_mushroom", spM.y) === 0) {
         this.lastMushroomMs = Date.now();
         this.log.info("Brain", "[Mushroom] no brown mushroom held or banked: walking to a remembered one");
