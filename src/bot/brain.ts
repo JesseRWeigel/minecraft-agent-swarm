@@ -295,6 +295,7 @@ export class BotBrain {
   private lastWoodRunMs = 0;
   private lastArmourIronMs = 0;
   private lastGlowSignMs = 0;
+  private lastMushroomMs = 0;
   private lastTreeScanMs = 0;
   private lastWaxOffMs = 0;
   private lastHoneyMs = 0;
@@ -2886,6 +2887,30 @@ export class BotBrain {
         this.lastAction = "wood_run";
         this.lastResult = result;
         return;
+      }
+    }
+
+    // MUSHROOM FETCH. Zombie Doctor needs a splash of Weakness, and the only
+    // Weakness is a fermented spider eye, which needs a brown mushroom. The
+    // swarm saw its first one at 360,66,-826 on 2026-09-29. The explorer
+    // walks to a remembered mushroom in daylight and picks it.
+    if (
+      config.bot.allowStrategyOverrides &&
+      !isSkillRunning(this.bot) &&
+      this.roleConfig.allowedSkills.includes("wood_run") &&
+      this.roleConfig.stashPos &&
+      /overworld/.test(String(this.bot.game.dimension)) &&
+      Date.now() - this.lastMushroomMs > 1_800_000 &&
+      (this.bot.time?.timeOfDay ?? 0) < 8000
+    ) {
+      const earnedZ = readTeamEarned(BOT_ROSTER.map((b) => b.name));
+      const cured = earnedZ.has("story/cure_zombie_villager") || earnedZ.has("minecraft:story/cure_zombie_villager");
+      const spM = this.roleConfig.stashPos;
+      const held = this.bot.inventory.items().some((i) => i.name === "brown_mushroom");
+      if (!cured && !held && stashCount("brown_mushroom", spM.y) === 0) {
+        this.lastMushroomMs = Date.now();
+        this.log.info("Brain", "[Mushroom] no brown mushroom held or banked: walking to a remembered one");
+        if (await this.walkToRememberedOre("brown_mushroom", 700)) return;
       }
     }
 
