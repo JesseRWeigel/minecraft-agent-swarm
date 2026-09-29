@@ -68,7 +68,7 @@ const capFailures = new Map<string, { n: number; at: number }>();
 
 /** Exactly what the eat action will consume. */
 const EDIBLE = new Set<string>(FOOD_PRIORITY);
-import { getAllMemoryStores } from "./memory-registry.js";
+import { getAllMemoryStores, getBotMemoryStore } from "./memory-registry.js";
 import { updateBulletin, formatTeamBulletin } from "./bulletin.js";
 import { createLogger } from "../util/logger.js";
 import { recordAction, recordSkillResult, checkInventoryMilestones } from "./scoreboard.js";
@@ -560,6 +560,17 @@ export class BotBrain {
       import("../skills/wood-run.js")
         .then(({ scanTrees }) => scanTrees(this.bot))
         .catch(() => 0);
+      // Brown mushrooms for Zombie Doctor's fermented spider eye. The
+      // perception scan samples every second block and recorded none in two
+      // hours (2026-09-29); a full search finds a lone mushroom.
+      try {
+        const found = this.bot.findBlocks({ matching: (b) => b.name === "brown_mushroom", maxDistance: 48, count: 3 });
+        const st = getBotMemoryStore(this.bot);
+        for (const p of found) st?.recordOre("brown_mushroom", p.x, p.y, p.z);
+        if (found.length) console.log(`[Mushroom] ${this.bot.username}: ${found.length} brown mushroom(s) in sight, nearest ${found[0]}`);
+      } catch {
+        /* chunk not loaded */
+      }
     }, 180_000);
     treeTimer.unref?.();
 
