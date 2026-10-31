@@ -161,7 +161,7 @@ filter as viewer messages, and other players' command-shaped messages are ignore
 git clone https://github.com/JesseRWeigel/minecraft-agent-swarm.git
 cd minecraft-agent-swarm
 npm install
-pip install -r requirements.txt   # for neural server
+pip install -r requirements-neural.txt   # for neural server
 ```
 
 ### Configure
