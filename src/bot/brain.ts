@@ -558,9 +558,7 @@ export class BotBrain {
     // minutes regardless of skill state, like the armour pass above.
     const treeTimer = setInterval(() => {
       if (this.paused || !/overworld/.test(String(this.bot.game?.dimension))) return;
-      import("../skills/wood-run.js")
-        .then(({ scanTrees }) => scanTrees(this.bot))
-        .catch(() => 0);
+      import("../skills/wood-run.js").then(({ scanTrees }) => scanTrees(this.bot)).catch(() => 0);
       // Brown mushrooms for Zombie Doctor's fermented spider eye. The
       // perception scan samples every second block and recorded none in two
       // hours (2026-09-29); a full search finds a lone mushroom.
@@ -568,7 +566,10 @@ export class BotBrain {
         const found = this.bot.findBlocks({ matching: (b) => b.name === "brown_mushroom", maxDistance: 48, count: 3 });
         const st = getBotMemoryStore(this.bot);
         for (const p of found) st?.recordOre("brown_mushroom", p.x, p.y, p.z);
-        if (found.length) console.log(`[Mushroom] ${this.bot.username}: ${found.length} brown mushroom(s) in sight, nearest ${found[0]}`);
+        if (found.length)
+          console.log(
+            `[Mushroom] ${this.bot.username}: ${found.length} brown mushroom(s) in sight, nearest ${found[0]}`,
+          );
       } catch {
         /* chunk not loaded */
       }
@@ -2859,7 +2860,10 @@ export class BotBrain {
       // exactly 16 and re-fired this rule four times for 1-4 items each.
       if (woodBanked < 16 && woodHeld >= 24 && nearStashW) {
         this.lastWoodRunMs = Date.now() - 1_500_000;
-        this.log.info("Brain", `OVERRIDE: carrying ${woodHeld} wood with ${woodBanked} banked — banking it for the team`);
+        this.log.info(
+          "Brain",
+          `OVERRIDE: carrying ${woodHeld} wood with ${woodBanked} banked — banking it for the team`,
+        );
         const { depositStash } = await import("../skills/stash.js");
         const r = await depositStash(this.bot, spW, []).catch((e: Error) => e.message);
         const left = this.bot.inventory
@@ -3108,8 +3112,7 @@ export class BotBrain {
             // three. The withdraw above pools whatever is banked, so a bot
             // left short banks its ingots here and the next pass, its own
             // or a teammate's, collects enough to craft.
-            const nearPool =
-              Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 40;
+            const nearPool = Math.hypot(this.bot.entity.position.x - sp.x, this.bot.entity.position.z - sp.z) < 40;
             if (ingotsHeldNow >= 1 && nearPool) {
               this.log.info(
                 "Brain",
@@ -4330,7 +4333,9 @@ export class BotBrain {
         const { withdrawStash } = await import("../skills/stash.js");
         let got = "";
         for (const blade of ["iron_sword", "stone_sword"]) {
-          got = await withdrawStash(this.bot, this.roleConfig.stashPos, blade, 1, 45_000).catch((e: Error) => e.message);
+          got = await withdrawStash(this.bot, this.roleConfig.stashPos, blade, 1, 45_000).catch(
+            (e: Error) => e.message,
+          );
           if (this.bot.inventory.items().some((i) => i.name.endsWith("_sword"))) break;
         }
         this.log.info("Brain", `OVERRIDE: no sword — took one from the stash: ${String(got).slice(0, 60)}`);
