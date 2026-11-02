@@ -276,7 +276,9 @@ export const woodRunSkill: Skill = {
         .execute(bot, { deadlineMs: 90_000 }, signal, () => {})
         .catch((e: Error) => ({ success: false, message: e.message }));
       const pick = bot.inventory.items().find((i) => i.name.endsWith("_pickaxe"))?.name ?? "none";
-      console.log(`[Wood] ${bot.username}: pickless before the march; craft_gear -> ${armed.message.slice(0, 60)} (pick ${pick})`);
+      console.log(
+        `[Wood] ${bot.username}: pickless before the march; craft_gear -> ${armed.message.slice(0, 60)} (pick ${pick})`,
+      );
     }
     const far = Math.hypot(t.x - me.x, t.z - me.z);
     step(`Walking to a tree at ${t.x},${t.y},${t.z} (${far.toFixed(0)} blocks)...`, 0.1);
@@ -315,7 +317,9 @@ export const woodRunSkill: Skill = {
       if (near) {
         t = { x: near.x, y: near.y, z: near.z };
         remembered = false;
-        console.log(`[Wood] ${bot.username}: the tree is out of reach; switching to ${t.x},${t.y},${t.z} (${gapNow().toFixed(0)} away)`);
+        console.log(
+          `[Wood] ${bot.username}: the tree is out of reach; switching to ${t.x},${t.y},${t.z} (${gapNow().toFixed(0)} away)`,
+        );
         await marchToward(bot, { x: t.x, z: t.z }, 90_000, signal, {
           label: "Walking to the trees",
           progress: () => 0.6,
@@ -333,7 +337,8 @@ export const woodRunSkill: Skill = {
       // (230, 68, -297), and the run ended there with the scout never tried.
       const found = await scoutEast(bot, at, signal, step);
       if (signal.aborted) return { success: false, message: "Wood run aborted." };
-      if (!found) return { success: false, message: `The remembered tree at ${t.x},${t.z} is gone and the scout east saw none.` };
+      if (!found)
+        return { success: false, message: `The remembered tree at ${t.x},${t.z} is gone and the scout east saw none.` };
       const found2 = found;
       await marchToward(bot, { x: found2.x, z: found2.z }, 180_000, signal, {
         label: "Walking to the trees",

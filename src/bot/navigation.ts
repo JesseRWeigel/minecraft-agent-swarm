@@ -1822,10 +1822,7 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     // pass has a blocked heading; take the open column instead.
     const prevRoof = lastRoofedSwim.get(bot);
     const stalledUnderRoof =
-      roofed &&
-      !!prevRoof &&
-      Date.now() - prevRoof.t < 6000 &&
-      prevRoof.pos.distanceTo(bot.entity.position) < 0.5;
+      roofed && !!prevRoof && Date.now() - prevRoof.t < 6000 && prevRoof.pos.distanceTo(bot.entity.position) < 0.5;
     if (roofed) lastRoofedSwim.set(bot, { pos: bot.entity.position.clone(), t: Date.now() });
     else lastRoofedSwim.delete(bot);
     if (roofed && (!swimTarget || stalledUnderRoof)) {

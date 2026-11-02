@@ -101,7 +101,8 @@ export const brewPotionSkill: Skill = {
     // Banked parts from an earlier attempt come first.
     if (!placedStand()) await take("brewing_stand", 1);
     await take("blaze_powder", 1);
-    const rodsNeeded = (placedStand() || count(bot, "brewing_stand") > 0 ? 0 : 1) + (count(bot, "blaze_powder") > 0 ? 0 : 1);
+    const rodsNeeded =
+      (placedStand() || count(bot, "brewing_stand") > 0 ? 0 : 1) + (count(bot, "blaze_powder") > 0 ? 0 : 1);
     if (rodsNeeded > 0) await take("blaze_rod", rodsNeeded);
     await take("cobblestone", 3);
     await take("sugar_cane", 1);
@@ -156,9 +157,11 @@ export const brewPotionSkill: Skill = {
           .map((p) => bot.blockAt(p))
           .find((b) => !!b) ?? null;
       if (water) {
-        await safeGoto(bot, new goals.GoalNear(water.position.x, water.position.y + 1, water.position.z, 3), 25_000).catch(
-          () => {},
-        );
+        await safeGoto(
+          bot,
+          new goals.GoalNear(water.position.x, water.position.y + 1, water.position.z, 3),
+          25_000,
+        ).catch(() => {});
         for (let i = 0; i < 3 && count(bot, "glass_bottle") > 0 && !signal.aborted; i++) {
           const bottle = bot.inventory.items().find((it) => it.name === "glass_bottle");
           if (!bottle) break;
@@ -219,7 +222,9 @@ export const brewPotionSkill: Skill = {
           }
           if (tried >= 8) break;
         }
-        console.log(`[Brew] ${bot.username}: stand placement tried ${tried} spot(s) -> ${placedStand() ? "placed" : "none took"}`);
+        console.log(
+          `[Brew] ${bot.username}: stand placement tried ${tried} spot(s) -> ${placedStand() ? "placed" : "none took"}`,
+        );
       }
       stand = placedStand();
       if (!stand) return { success: false, message: "Couldn't place the brewing stand here." };

@@ -160,7 +160,9 @@ export const craftGearSkill: Skill = {
           .reduce((s, i) => s + i.count, 0);
       const rawBanked = stashCount("raw_iron", stashPos.y);
       if (ingotsHeld() < 4 && rawBanked === 0) {
-        console.log(`[GearDebug] armour: ${ingotsHeld()} ingots, no raw iron banked at the stash level; skipping the smelt`);
+        console.log(
+          `[GearDebug] armour: ${ingotsHeld()} ingots, no raw iron banked at the stash level; skipping the smelt`,
+        );
       }
       if (ingotsHeld() < 4 && rawBanked > 0 && !signal.aborted) {
         const { withdrawStash } = await import("./stash.js");
