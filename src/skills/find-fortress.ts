@@ -194,7 +194,6 @@ async function drawAndFire(
   return hurt;
 }
 
-
 /** Blocks a bot places as scaffold; cheap to dig out of a firing line. */
 const CHEAP_BLOCKS = new Set(["cobblestone", "netherrack", "dirt", "cobbled_deepslate"]);
 
@@ -224,8 +223,7 @@ async function fendOff(bot: Bot, signal: AbortSignal, radius = 6, budgetMs = 20_
   // "burned to a crisp while fighting Blaze". With ranged kit aboard, a
   // blaze belongs to the hunt, which shoots from where he stands.
   const ranged =
-    bot.inventory.items().some((i) => i.name === "crossbow") &&
-    bot.inventory.items().some((i) => i.name === "arrow");
+    bot.inventory.items().some((i) => i.name === "crossbow") && bot.inventory.items().some((i) => i.name === "arrow");
   while (Date.now() < until && !signal.aborted && bot.entity) {
     const me = bot.entity.position;
     const foe = Object.values(bot.entities)
@@ -705,7 +703,9 @@ export const findFortressSkill: Skill = {
         return e.has("nether/find_fortress") || e.has("minecraft:nether/find_fortress");
       })();
       if (fortressEarned) {
-        console.log(`[Fortress] ${bot.username}: ${cluster.length} bricks in view; fortress point banked, hunting from the edge`);
+        console.log(
+          `[Fortress] ${bot.username}: ${cluster.length} bricks in view; fortress point banked, hunting from the edge`,
+        );
       }
       if (cluster.length > 8 && !signal.aborted && !fortressEarned) {
         const cx = cluster.reduce((n, v) => n + v.x, 0) / cluster.length;

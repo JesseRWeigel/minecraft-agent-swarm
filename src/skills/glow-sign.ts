@@ -155,7 +155,9 @@ export const glowSignSkill: Skill = {
         break;
       }
     }
-    console.log(`[Sign] ${bot.username}: sign placement tried ${tries} spot(s) -> ${placed ? `placed at ${placed.position}` : "none took"}`);
+    console.log(
+      `[Sign] ${bot.username}: sign placement tried ${tries} spot(s) -> ${placed ? `placed at ${placed.position}` : "none took"}`,
+    );
     if (!placed) return { success: false, message: "Couldn't place the sign here." };
 
     // Close the editor the server opens on placement, then apply the ink.
