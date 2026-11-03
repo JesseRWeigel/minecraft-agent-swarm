@@ -619,9 +619,7 @@ export const stripMineSkill: Skill = {
           });
           if (side && wetTurns < 2) {
             wetTurns++;
-            console.log(
-              `[Skill] strip_mine ${b.name} ahead at step ${step}; turning ${dirName(side)} (${wetTurns}/2)`,
-            );
+            console.log(`[Skill] strip_mine ${b.name} ahead at step ${step}; turning ${dirName(side)} (${wetTurns}/2)`);
             forward = side;
             turnedThisStep = true;
             break;

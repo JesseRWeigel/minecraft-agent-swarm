@@ -160,7 +160,11 @@ test("gold hunt: walks to a remembered gold vein when none is in sight", () => {
     BRAIN.indexOf("private async executeActionUnlessPaused"),
   );
   assert.match(helper, /getNearestOre\(match, me\.x, me\.z, radius, minY\)/, "the helper reads every bot's memory");
-  assert.match(helper, /walkToRememberedOre\(match: string, radius = 200, minY = -Infinity\)/, "200 blocks unless the caller asks further");
+  assert.match(
+    helper,
+    /walkToRememberedOre\(match: string, radius = 200, minY = -Infinity\)/,
+    "200 blocks unless the caller asks further",
+  );
   assert.match(helper, /"go_to", \{ x: known\.x, y: known\.y, z: known\.z \}/, "the bot walks to it with its height");
   // Run 802: the iron step answered "No iron_ore found nearby" all hour too.
   const iron = BRAIN.indexOf('blockType: "iron_ore"');
@@ -170,7 +174,11 @@ test("gold hunt: walks to a remembered gold vein when none is in sight", () => {
     "the iron step walks to a remembered vein as well",
   );
   const mem = fs.readFileSync(path.join(__dirname, "memory.ts"), "utf8");
-  assert.match(mem, /getNearestOre\(match: string, x: number, z: number, radius = 200, minY = -Infinity\)/, "the getter exists");
+  assert.match(
+    mem,
+    /getNearestOre\(match: string, x: number, z: number, radius = 200, minY = -Infinity\)/,
+    "the getter exists",
+  );
 });
 
 test("mine_block: gold is searched to the edge of the loaded chunks and the radius is reported", () => {
