@@ -1,6 +1,6 @@
 # Isolated Paper 26.3 test (Ubuntu/WSL2)
 
-This is an **experimental ViaBackwards bridge**, not native 26.3 protocol support. Never point these commands at an existing server or world. Paper 26.3 needs Java 25; this repository needs Node.js 22 or newer. The heuristic Python combat server uses the standard library on Python 3.10+; Python 3.14 with optional VPT/MineStudio has not been qualified.
+This is an **experimental ViaBackwards bridge**, not native 26.3 protocol support. Never point these commands at an existing server or world. Paper 26.3 needs Java 25; this repository needs Node.js 22.13+ within the 22.x release line. The heuristic Python combat server uses the standard library on Python 3.10+; Python 3.14 with optional VPT/MineStudio has not been qualified.
 
 ```bash
 node --version

@@ -150,7 +150,7 @@ filter as viewer messages, and other players' command-shaped messages are ignore
 
 ### Requirements
 
-- Node.js 22+
+- Node.js 22.13+ within the 22.x release line
 - [Ollama](https://ollama.ai) with `gpt-oss:20b` pulled (one MoE model serves all decision types — chosen by A/B trial over qwen3.6 and nemotron-3-nano for structured-output quality and speed)
 - Minecraft Java Edition server (1.21.4 natively, or Paper 26.3 with the bridge below) with 5+ player slots
 - Python 3.10+ for the optional neural combat server. The default heuristic uses only the standard library; the optional VPT/MineStudio stack has not been qualified on Python 3.14.
@@ -292,7 +292,7 @@ The bots will:
 4. Start Mission Control dashboard at `http://localhost:3010`
 5. Begin autonomous decision loops
 
-> **Survival mode:** Leave `ALLOW_INTERVENTIONS=false` (the default) and do not give bot accounts OP. This disables the existing gamerule, teleport, effect, and `/give` intervention paths. The preconfigured role locations and some task heuristics still reflect the original author's world; adapt them to your isolated world before expecting fully autonomous survival progression. `ALLOW_INTERVENTIONS=true` is a cheat-enabled demo mode and requires operator permissions for those commands.
+> **Survival mode:** Leave `ALLOW_INTERVENTIONS=false` (the default) and do not give bot accounts OP. This disables the existing gamerule, teleport, effect, and `/give` intervention paths. It does not reset existing world gamerules: `keepInventory` and `doMobSpawning` retain the administrator's configured values. The preconfigured role locations and some task heuristics still reflect the original author's world; adapt them to your isolated world before expecting fully autonomous survival progression. `ALLOW_INTERVENTIONS=true` is a cheat-enabled demo mode and requires operator permissions for those commands.
 
 ### Paper 26.3 compatibility (experimental bridge)
 
