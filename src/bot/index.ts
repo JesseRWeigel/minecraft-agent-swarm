@@ -1,4 +1,5 @@
 import mineflayer from "mineflayer";
+import { applyStartupGamerules } from "./startup-gamerules.js";
 import { STASH_POS } from "./role.js";
 import { bedTooFarFromHome } from "./bed-safety.js";
 import { installPhysicsEpsilon } from "./physics-epsilon.js";
@@ -844,12 +845,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
       (bot as unknown as { physicsEnabled: boolean }).physicsEnabled = true;
       console.log(`[Respawn] ${roleConfig.name} chunk wait failed: ${(e as Error).message}`);
     }
-    if (roleConfig.username === "Atlas" && config.bot.allowInterventions) {
-      bot.chat("/gamerule keepInventory true");
-      await new Promise((r) => setTimeout(r, 500));
-      bot.chat("/gamerule doMobSpawning true");
-      await new Promise((r) => setTimeout(r, 500));
-    }
+    await applyStartupGamerules(bot, roleConfig.username, config.bot.allowInterventions);
     runSpawnSafety().catch((e) => console.warn("[Bot] Spawn safety error:", e));
 
     // Camp breaker: after 3+ deaths inside 5 minutes, the first move on

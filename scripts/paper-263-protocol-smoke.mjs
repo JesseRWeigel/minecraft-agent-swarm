@@ -1,6 +1,7 @@
 // Protocol-only smoke against an operator-owned, isolated Paper test server.
 // Does not run the AI, gather resources, craft, or mutate blocks.
 import mineflayer from "mineflayer";
+import { waitForSmokeStop } from "./paper-smoke-timer.mjs";
 
 const count = Number(process.env.BOT_COUNT || 1);
 const seconds = Number(process.env.SMOKE_SECONDS || 120);
@@ -77,7 +78,7 @@ for (let i = 0; i < count; i++) {
   await new Promise((resolve) => setTimeout(resolve, 1500));
 }
 
-await Promise.race([new Promise((resolve) => setTimeout(resolve, seconds * 1000)), earlyFailure]);
+await waitForSmokeStop(seconds * 1000, earlyFailure);
 for (const bot of bots) {
   const result = bot._swarmSmokeResult();
   console.log(JSON.stringify(result));
