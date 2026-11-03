@@ -3,6 +3,9 @@
   "version": "2.0.0",
   "description": "A self-improving swarm of local-LLM agents that mine, smelt, build, farm, and fight their way through Minecraft as a coordinated team. Built on mineflayer + Ollama.",
   "type": "module",
+  "engines": {
+    "node": ">=22.13.0 <23"
+  },
   "main": "dist/index.js",
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts && node scripts/copy-generated-worker.mjs",
@@ -35,8 +38,9 @@
     "canvas": "^3.2.1",
     "dotenv": "^16.4.0",
     "express": "^5.2.1",
-    "minecraft-data": "^3.110.2",
-    "mineflayer": "^4.34.0",
+    "minecraft-data": "^3.117.0",
+    "minecraft-protocol": "^1.68.0",
+    "mineflayer": "https://codeload.github.com/PrismarineJS/mineflayer/tar.gz/7b4bb8d2b56be9cdb832474af873acd37e609746",
     "mineflayer-auto-eat": "^5.0.3",
     "mineflayer-collectblock": "^1.4.1",
     "mineflayer-pathfinder": "^2.4.5",

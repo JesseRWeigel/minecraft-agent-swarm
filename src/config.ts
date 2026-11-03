@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { resolveMinecraftProtocolVersion } from "./minecraft-compat.js";
 
 export type LLMProvider = "ollama" | "openai";
 
@@ -45,6 +46,11 @@ export const config = {
     port: parseInt(process.env.MC_PORT || "25565"),
     username: process.env.MC_USERNAME || "AIBot",
     version: process.env.MC_VERSION || "1.21.4",
+    protocolVersion: resolveMinecraftProtocolVersion(
+      process.env.MC_VERSION || "1.21.4",
+      process.env.MC_PROTOCOL_VERSION,
+      process.env.MC_VIABACKWARDS === "true",
+    ),
     auth: (process.env.MC_AUTH || "offline") as "offline" | "microsoft",
   },
   ollama: ollamaConfig,

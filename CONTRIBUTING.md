@@ -6,7 +6,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22.13+ within the 22.x release line (CI verifies Node.js 22)
 - [Ollama](https://ollama.ai) with `qwen3.6:35b-a3b` pulled (or any compatible model)
 - A Minecraft Java Edition server (1.21.4) — [Aternos](https://aternos.org) works for testing
 - Python 3.10+ (only needed for neural combat features)

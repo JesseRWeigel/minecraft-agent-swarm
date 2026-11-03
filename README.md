@@ -150,18 +150,18 @@ filter as viewer messages, and other players' command-shaped messages are ignore
 
 ### Requirements
 
-- Node.js 20+
+- Node.js 22.13+ within the 22.x release line
 - [Ollama](https://ollama.ai) with `gpt-oss:20b` pulled (one MoE model serves all decision types — chosen by A/B trial over qwen3.6 and nemotron-3-nano for structured-output quality and speed)
-- Minecraft Java Edition server (1.21.4) with 5+ player slots
-- Python 3.10+ (for neural combat server)
+- Minecraft Java Edition server (1.21.4 natively, or Paper 26.3 with the bridge below) with 5+ player slots
+- Python 3.10+ for the optional neural combat server. The default heuristic uses only the standard library; the optional VPT/MineStudio stack has not been qualified on Python 3.14.
 
 ### Install
 
 ```bash
 git clone https://github.com/JesseRWeigel/minecraft-agent-swarm.git
 cd minecraft-agent-swarm
-npm install
-pip install -r requirements-neural.txt   # for neural server
+npm ci
+# Optional VPT policy only: python3 -m pip install -r requirements-neural.txt
 ```
 
 ### Configure
@@ -292,7 +292,26 @@ The bots will:
 4. Start Mission Control dashboard at `http://localhost:3010`
 5. Begin autonomous decision loops
 
-> **Note:** All bot usernames must be operators on the server (e.g. `/op Atlas`, `/op Flora`, etc.) so they can set gamerules and use teleport-based spawn safety.
+> **Survival mode:** Leave `ALLOW_INTERVENTIONS=false` (the default) and do not give bot accounts OP. This disables the existing gamerule, teleport, effect, and `/give` intervention paths. It does not reset existing world gamerules: `keepInventory` and `doMobSpawning` retain the administrator's configured values. The preconfigured role locations and some task heuristics still reflect the original author's world; adapt them to your isolated world before expecting fully autonomous survival progression. `ALLOW_INTERVENTIONS=true` is a cheat-enabled demo mode and requires operator permissions for those commands.
+
+### Paper 26.3 compatibility (experimental bridge)
+
+As of October 2026, published PrismarineJS protocol/data packages expose client protocol 26.1, **not native 26.3**. The pinned Mineflayer upstream commit includes [the `client_tick_end` fix](https://github.com/PrismarineJS/mineflayer/pull/4137) missing from npm 4.39.0; no extra packet patch is installed here. On an **isolated Paper 26.3 test server**, install matching ViaVersion and ViaBackwards releases that accept a 26.1 client, then set:
+
+```env
+MC_VERSION=26.3
+MC_PROTOCOL_VERSION=26.1
+MC_VIABACKWARDS=true
+ALLOW_INTERVENTIONS=false
+```
+
+`MC_VERSION` describes the server, while Mineflayer sends the explicitly selected 26.1 client protocol. Startup fails if the bridge is omitted or the installed protocol/data dependencies cannot support that client version. This does not prove that 26.3-specific blocks, recipes, entities, or mechanics work; translation and real-server survival behavior require separate tests. Keep this bridge off production until those tests pass. Native 26.3 should replace the bridge when upstream PrismarineJS supports it.
+
+See [the isolated Paper 26.3 test procedure](docs/paper-26.3-test.md) for pinned downloads, single-bot and five-bot protocol smokes, and the separate manual survival acceptance sequence.
+
+For Ubuntu/WSL2, use Node.js 22, `npm ci`, and `python3 neural_server.py` for the optional standard-library combat policy. Use a separate Paper world in offline mode only on a loopback-restricted test server, or use distinct Microsoft-authenticated bot accounts for an online-mode server. Begin with `ENABLE_MULTI_BOT=false` and `BOT_COUNT=1`; observe login, five minutes connected, walking, mining, pickup, crafting, and placing. Then set `ENABLE_MULTI_BOT=true` and `BOT_COUNT=5` and check all five identities, shared chest interactions, logs, and server console. Bounded integration checks have passed on native 1.21.4 and the Paper 26.3 bridge using real createBot/plugin startup and action handlers: five role configurations, movement, log mining and pickup, crafting, placement, seeded shared storage, and reconnecting the same identity. The decision loop was disabled; this does not verify full npm-start orchestration, LLM-selected cooperation, automatic restart policy, or long-duration survival. See the test guide for the exact boundary.
+
+The unauthenticated Mission Control, viewer, and overlay HTTP services listen on their configured ports; keep them firewalled to the test host. `npm audit` still reports transitive findings; review them before any public deployment.
 
 > **Tip:** With `online-mode=false` you can join the world yourself — Direct Connect to `localhost:25565` with any username and watch the bots up close (`/gamemode spectator` for free-flight).
 
