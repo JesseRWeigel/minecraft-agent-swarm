@@ -28,3 +28,18 @@ test("only opted-in Atlas sends the two existing demo gamerules", async () => {
   await applyStartupGamerules(bot, "Atlas", true);
   assert.deepEqual(sent, ["/gamerule keepInventory true", "/gamerule doMobSpawning true"]);
 });
+
+test("opted-in Paper 26.3 uses the renamed server gamerules", async () => {
+  const sent: string[] = [];
+  await applyStartupGamerules(
+    {
+      chat: (message) => {
+        sent.push(message);
+      },
+    },
+    "Atlas",
+    true,
+    "26.3",
+  );
+  assert.deepEqual(sent, ["/gamerule minecraft:keep_inventory true", "/gamerule minecraft:spawn_mobs true"]);
+});

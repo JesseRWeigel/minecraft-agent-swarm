@@ -845,7 +845,7 @@ export async function createBot(events: BrainEvents, roleConfig: BotRoleConfig =
       (bot as unknown as { physicsEnabled: boolean }).physicsEnabled = true;
       console.log(`[Respawn] ${roleConfig.name} chunk wait failed: ${(e as Error).message}`);
     }
-    await applyStartupGamerules(bot, roleConfig.username, config.bot.allowInterventions);
+    await applyStartupGamerules(bot, roleConfig.username, config.bot.allowInterventions, config.mc.version);
     runSpawnSafety().catch((e) => console.warn("[Bot] Spawn safety error:", e));
 
     // Camp breaker: after 3+ deaths inside 5 minutes, the first move on
