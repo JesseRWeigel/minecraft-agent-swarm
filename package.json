@@ -39,6 +39,7 @@
     "dotenv": "^16.4.0",
     "express": "^5.2.1",
     "minecraft-data": "^3.117.0",
+    "minecraft-protocol": "^1.68.0",
     "mineflayer": "https://codeload.github.com/PrismarineJS/mineflayer/tar.gz/7b4bb8d2b56be9cdb832474af873acd37e609746",
     "mineflayer-auto-eat": "^5.0.3",
     "mineflayer-collectblock": "^1.4.1",
