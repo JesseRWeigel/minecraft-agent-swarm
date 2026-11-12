@@ -643,7 +643,11 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
       if (stallDelayTimer) clearTimeout(stallDelayTimer);
       console.log(navDiag(bot, goal, "timed out")); // before stop(): stop clears the keys
       offPath();
-      bot.pathfinder.setGoal(null);
+      // While the drown reflex owns the keys this walk has no goal in the
+      // pathfinder (the takeover cleared it and attempt() will not set one),
+      // so a reset here would only clear the rescue's jump, or its own retreat
+      // goal. The walk still times out.
+      if (!drownRescueActive(bot)) bot.pathfinder.setGoal(null);
       reject(new Error("Navigation timed out — goal may be unreachable."));
     };
     let timeout = setTimeout(onTimeout, timeoutMs);
@@ -666,6 +670,14 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
 
     const stallCheck = setInterval(() => {
       if (!stallActive) return;
+      // A walk waiting out a drown rescue is not stalled, and its recovery
+      // (setGoal(null), the nudge hop) would release the rescue's jump. The
+      // stall count restarts once the rescue lets go; the timeout still runs.
+      if (drownRescueActive(bot)) {
+        stallTicks = 0;
+        lastPos = bot.entity.position.clone();
+        return;
+      }
       // Digging IS progress. The pathfinder stands still while it breaks each
       // block of a dig-through route, so a stall detector that only watches
       // position aborts every path that has to tunnel — which is why every
@@ -835,7 +847,10 @@ export async function safeGoto(bot: Bot, goal: any, timeoutMs = 15000, stallStar
       // the rescue and the outer timeout still bounds it.
       // < 16 matches the reflex's takeover threshold: run 633 still logged
       // 15 attempts setting goals at air 13 to 15 while the rescue ran.
-      if (headUnderWater(bot) && (bot.oxygenLevel ?? 20) < 16) {
+      // drownRescueActive: the head leaves the water at the top of each bob
+      // with air still at 8, and restarting there reset the path and released
+      // the rescue's jump (DrownKeys trace: clearControlStates <- setGoal here).
+      if (drownRescueActive(bot) || (headUnderWater(bot) && (bot.oxygenLevel ?? 20) < 16)) {
         if (!rescueWaitLogged) {
           rescueWaitLogged = true;
           console.log(`[Nav] ${bot.username} walk waits for the drown rescue (air ${bot.oxygenLevel})`);
@@ -1353,6 +1368,83 @@ const rescueDigUntil = new WeakMap<Bot, number>();
 export function rescueDigging(bot: Bot): boolean {
   return (rescueDigUntil.get(bot) ?? 0) > Date.now();
 }
+
+/**
+ * Who owns the movement keys while the drown reflex runs. The reflex holds
+ * jump, but safeGoto's own cleanup kept taking it away mid-rescue:
+ *
+ *   [DrownKeys] jump released by bot.clearControlStates (navigation.ts) <-
+ *     resetPath <- setGoal (safeGoto attempt)
+ *
+ * The walk's "wait for the rescue" gate read only headUnderWater(), which
+ * goes false at the top of every bob (air 8, y 61.49 -> 62.85, eye in air),
+ * so a waiting walk restarted there, reset the path (clearing jump) and
+ * handed the keys back to the pathfinder. Its stall check also kept counting
+ * while it waited and "recovered" with another setGoal(null).
+ *
+ * The claim is taken at the takeover and held until the reflex returns
+ * (however it returns), then for a short grace while air is still short, so
+ * it spans the gap until the next 3s reflex tick. Both phases are capped in
+ * time, so a stuck rescue can never lock the walk out for good.
+ */
+export const DROWN_RESCUE_MAX_MS = 30_000;
+export const DROWN_RESCUE_GRACE_MS = 3_500;
+type DrownRescueClaim = { inFlight: boolean; until: number };
+const drownRescueClaim = new WeakMap<Bot, DrownRescueClaim>();
+/** One per escapeWaterIfDrowning call: the claim that call took, if any. */
+type DrownRescueOwner = { claim: DrownRescueClaim | null };
+function claimDrownRescue(bot: Bot, owner: DrownRescueOwner): void {
+  const claim = { inFlight: true, until: Date.now() + DROWN_RESCUE_MAX_MS };
+  owner.claim = claim;
+  drownRescueClaim.set(bot, claim);
+}
+/**
+ * Settle only the claim this call took, and only while it is still current.
+ * A call that returned early (head dry) never claimed and must not release a
+ * rescue still running; an older call finishing late must not settle a newer
+ * call's claim.
+ */
+function settleDrownRescue(bot: Bot, owner: DrownRescueOwner): void {
+  const claim = owner.claim;
+  owner.claim = null;
+  if (!claim || drownRescueClaim.get(bot) !== claim || !claim.inFlight) return;
+  let short = true;
+  try {
+    short = headUnderWater(bot) || (bot.oxygenLevel ?? 20) < 16;
+  } catch {
+    short = true; // the grace is time-capped either way
+  }
+  if (short) drownRescueClaim.set(bot, { inFlight: false, until: Date.now() + DROWN_RESCUE_GRACE_MS });
+  else drownRescueClaim.delete(bot);
+}
+/**
+ * True when a live claim other than this call's own is current: another
+ * rescue owns the keys. That covers a claimed call a newer rescue replaced
+ * and an unclaimed call (air >= 16 when it started) that a later low-air
+ * rescue overtook mid-swim. Liveness is drownRescueActive's, so an expired
+ * claim (time cap, or a grace ended by breathing) protects nothing and a
+ * call with no live rival cleans up as before.
+ */
+function drownRescueSuperseded(bot: Bot, owner: DrownRescueOwner): boolean {
+  if (!drownRescueActive(bot)) return false;
+  return drownRescueClaim.get(bot) !== owner.claim;
+}
+/** True while the drown reflex owns the keys; walks must not reset the path then. */
+export function drownRescueActive(bot: Bot): boolean {
+  const claim = drownRescueClaim.get(bot);
+  if (!claim) return false;
+  if (Date.now() >= claim.until) {
+    drownRescueClaim.delete(bot);
+    return false;
+  }
+  if (claim.inFlight) return true;
+  // Grace ends early when the bot is breathing again.
+  if (!headUnderWater(bot) && (bot.oxygenLevel ?? 20) >= 16) {
+    drownRescueClaim.delete(bot);
+    return false;
+  }
+  return true;
+}
 /** Bots whose control-key setters already carry the drown key trace. */
 const keyTraceInstalled = new WeakSet<Bot>();
 /**
@@ -1438,6 +1530,16 @@ export function openHeadroomNeighbour(pos: Vec3, blockAt: BlockLookup): Vec3 | n
 }
 
 export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
+  const owner: DrownRescueOwner = { claim: null };
+  try {
+    return await runDrownRescue(bot, owner);
+  } finally {
+    // Success or a throw: the claim this call took (if any) always ends.
+    settleDrownRescue(bot, owner);
+  }
+}
+
+async function runDrownRescue(bot: Bot, owner: DrownRescueOwner): Promise<boolean> {
   if (!headUnderWater(bot)) {
     lastAirPos.set(bot, bot.entity.position.clone());
     submergedSince.delete(bot);
@@ -1525,17 +1627,19 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
     // bot back under. Run 560: Atlas (air=7, surface one block up), Forge x3
     // and Flora all drowned inside "goto interrupted externally — retry 1/2".
     bumpNavGeneration(bot);
+    claimDrownRescue(bot, owner);
     // Swim from the first instant. Run 576's trace: Forge sank for a whole
-    // three-second period with no keys held, because setGoal(null) below
-    // runs resetPath, which clears every control state, and the keys only
-    // came back after the shore scan and the dig race. Reset only when a
-    // goal is actually set, and hold jump before anything else.
-    bot.setControlState("jump", true);
+    // three-second period with no keys held, because setGoal(null) runs
+    // resetPath, which clears every control state, and the keys only came
+    // back after the shore scan and the dig race. Reset only when a goal is
+    // actually set, and press jump AFTER the reset: pressed before it, the
+    // reset released it again at once and the bot sank until the swim loop.
     try {
       if (bot.pathfinder.goal) bot.pathfinder.setGoal(null);
     } catch {
       /* best effort */
     }
+    bot.setControlState("jump", true);
     try {
       bot.stopDigging();
     } catch {
@@ -1870,7 +1974,9 @@ export async function escapeWaterIfDrowning(bot: Bot): Promise<boolean> {
   } finally {
     // Keep swimming while the head is still under: clearing the keys for the
     // last second of every 3s period let the bot sink back each time.
-    if (!headUnderWater(bot)) {
+    // While another rescue's claim is live this call does not own the keys
+    // (claimed and replaced, or never claimed), so it leaves them alone.
+    if (!headUnderWater(bot) && !drownRescueSuperseded(bot, owner)) {
       bot.setControlState("forward", false);
       bot.setControlState("jump", false);
       bot.setControlState("sprint", false);
