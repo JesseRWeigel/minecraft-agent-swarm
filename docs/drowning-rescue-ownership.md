@@ -1,0 +1,9 @@
+# Drowning rescue and navigation ownership
+
+A November 12 baseline recorded navigation retries clearing jump during an active drowning rescue when a bot briefly bobbed into air at low oxygen. The same walk could also run its stall recovery or timeout cleanup while waiting for rescue.
+
+The rescue now claims navigation control for its invocation. `safeGoto` waits while that claim is live, pauses its stall accounting, and still rejects on timeout without resetting the rescue controls. Claims are capped at 30 seconds, with up to 3.5 seconds of short-air grace after return. Breathing ends grace early. Per-invocation identity prevents old or unclaimed concurrent calls from releasing a newer rescue's claim or movement keys. Takeover resets the previous path before asserting jump.
+
+Nine tests exercise the real rescue/navigation functions against a fake pathfinder with key-clearing semantics, including bobbing, timeout, overlap, exceptions, expiration, and ordinary non-rescue navigation. Reverting the new retry gate to the old head-only check causes three regression failures.
+
+Node 22 validation: 1,081 tests, typecheck, build and scoped lint pass. One protected real Paper water fixture passed the targeted control race: 16 samples showed head in air, oxygen below 16, active rescue and jump held during a concurrent 180 ms navigation timeout. Navigation issued no path reset or control clear; rescue returned true and server health stayed 20. Its own dry-head completion released jump normally. This scripted fixture does not validate every overlap in real gameplay. This is a targeted control-race fix, not evidence of improved overall survival or advancement rate. Direct skill/pathfinder calls and already-running nudge hops are not globally intercepted. No world edits, respawn resets, teleports, inventory grants, or gamerule changes are introduced by production code.
