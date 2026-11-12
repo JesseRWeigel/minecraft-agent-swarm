@@ -110,3 +110,36 @@ checks passed. Further gameplay tuning stopped after the planned bounded pass.
 A useful next experiment is better feedback about dropped items and recoverable
 action errors, with a frozen prompt/tool version and a declared trial budget.
 Do not increase model size, retry indefinitely or publish cherry-picked wins.
+
+## Frozen feedback follow-up
+
+The [predeclared plan](feedback-trial-plan-2026-11-12.json) froze source,
+prompt, model/runtime pins and a maximum of two trials. The second was allowed
+only after clean acquisition on the first. [Results](feedback-trial-results-2026-11-12.json):
+one trial ran, failed, and the batch stopped without tuning or retry.
+
+Dropped-item feedback worked: after digging, the model saw a nearby oak-log
+entity with its position. It then moved right, observed that it had moved away,
+and moved right again into the wall. It exhausted eight calls without collecting.
+An independent failure-path observation reported no log; this is not a clean
+finalized successful episode. All owned processes and storage were cleaned up;
+resource limits held without violations.
+
+Expected pre-dispatch dig failures now return one of four strict recoverable
+codes. No dig is executed for a rejection. Unsafe/malformed commands,
+unexpected API errors, disconnects and deadlines remain fatal. This recovery
+path passed protocol tests; this particular live trial did not exercise a
+rejected dig.
+
+Reproduction can reuse an existing private, read-only model snapshot with
+`--reuse-model-snapshot "$VERIFIED_SNAPSHOT"`. The launcher rehashes it,
+validates ownership/mode/ancestors and mounts it read-only. No old evidence is
+deleted. GPU preflight checks idle compute, utilization and available VRAM;
+this is a point-in-time check, not exclusive reservation.
+
+Updated verification: 317 Python pilot tests (no skips), 1,063 npm tests and
+standard checks passed. The user-facing autonomous collection goal is still
+unfinished; the draft remains unmerged. The next bounded design question is
+how to expose safe target-directed movement rather than require reliable
+low-level spatial control from the model. Larger models or more retries are
+not established solutions.
