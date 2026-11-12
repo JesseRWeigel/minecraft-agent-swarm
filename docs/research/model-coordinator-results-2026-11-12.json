@@ -1,0 +1,33 @@
+{
+  "scope": "Real isolated Minecraft, synthetic HTTP provider; no real-model inference",
+  "runs": [
+    {
+      "control": "forward",
+      "status": "qualified",
+      "source_manifest_sha256": "d7b3f7a77e48e221f83cb5839fd02f08ca6df1c366d15863773debff4cc0a2f0",
+      "evidence_sha256": "13b0212511af7a5f8c06c3d0d9227e18579aa5dc411663f435216f9e3a9618ef",
+      "action_seconds": 4.311880631999998,
+      "fake_calls": 6,
+      "acquired": true,
+      "normal_exits": true,
+      "action_output_eof": true,
+      "provider_stopped": true,
+      "resource_scope_valid": true,
+      "storage_valid": true
+    },
+    {
+      "control": "stationary",
+      "status": "qualified",
+      "source_manifest_sha256": "d7b3f7a77e48e221f83cb5839fd02f08ca6df1c366d15863773debff4cc0a2f0",
+      "evidence_sha256": "c635e8da2a663a2977bb05b5be8036117a57180265b5f46ef8cfcba098811fe4",
+      "action_seconds": 0.16995642799997768,
+      "fake_calls": 1,
+      "acquired": false,
+      "normal_exits": true,
+      "action_output_eof": true,
+      "provider_stopped": true,
+      "resource_scope_valid": true,
+      "storage_valid": true
+    }
+  ]
+}
