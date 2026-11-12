@@ -12,6 +12,7 @@ import sys
 import uuid
 
 PROFILES = {
+    "local_model": {"memory": 16*1024**3, "tasks": 256, "cpu_percent": 200},
     "game": {"memory": 4*1024**3, "tasks": 256, "cpu_percent": 200},
     "memory_failure": {"memory": 128*1024**2, "tasks": 256, "cpu_percent": 200},
 }

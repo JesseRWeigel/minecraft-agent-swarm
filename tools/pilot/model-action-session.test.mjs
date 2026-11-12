@@ -220,3 +220,29 @@ test("finished session may relinquish shutdown to the trusted lifecycle owner", 
   assert.throws(() => active.close({ disconnect: false }));
   active.close();
 });
+
+test("look_at faces arbitrary block centers from current standing eyes only", async () => {
+  for (const [x,y,z] of [[0,200,3],[4,202,0],[-3,197,2],[0,205,0]]) {
+    const b=bot(), s=createModelActionSession({bot:b});
+    try {
+      await s.execute(req(1,{kind:"look_at",x,y,z}));
+      const calls=b.calls.filter(c=>c[0]==="look");
+      assert.equal(calls.length,1);
+      const [,yaw,pitch,force]=calls[0];
+      const dx=x,dy=y+.5-201.62,dz=z;
+      assert.ok(Math.abs(yaw-Math.atan2(-dx,-dz))<1e-12);
+      assert.ok(Math.abs(pitch-Math.atan2(dy,Math.hypot(dx,dz)))<1e-12);
+      assert.equal(force,true);
+      assert.equal(b.calls.some(c=>c[0]==="dig" || c[0]==="control"),false);
+      assert.deepEqual({x:b.entity.position.x,y:b.entity.position.y,z:b.entity.position.z},{x:.5,y:200,z:.5});
+    } finally {s.close();}
+  }
+});
+test("look_at rejects invalid bot position without issuing look", async () => {
+  const b=bot();b.entity.position.x=NaN;
+  const s=createModelActionSession({bot:b});
+  try {
+    await assert.rejects(s.execute(req(1,{kind:"look_at",x:1,y:200,z:2})));
+    assert.equal(b.calls.some(c=>c[0]==="look"),false);
+  } finally {s.close();}
+});

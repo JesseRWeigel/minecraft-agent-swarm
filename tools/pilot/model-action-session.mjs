@@ -81,6 +81,20 @@ export function createModelActionSession({
       await bot.look(action.yaw, action.pitch, true);
       return {};
     }
+    if (action.kind === "look_at") {
+      const p = bot.entity?.position;
+      if (!p || ![p.x, p.y, p.z].every(Number.isFinite)) throw failure();
+      // Same fixed standing-eye convention as dig; no movement or target selection.
+      const dx = action.x + 0.5 - p.x;
+      const dy = action.y + 0.5 - (p.y + 1.62);
+      const dz = action.z + 0.5 - p.z;
+      const horizontal = Math.hypot(dx, dz);
+      if (!Number.isFinite(horizontal) || !Number.isFinite(dy) || Math.hypot(horizontal, dy) === 0) throw failure();
+      const yaw = Math.atan2(-dx, -dz);
+      const pitch = Math.atan2(dy, horizontal);
+      await bot.look(yaw, pitch, true);
+      return {};
+    }
     if (action.kind === "move") {
       bot.setControlState(action.direction, true);
       try {

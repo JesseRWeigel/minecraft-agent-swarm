@@ -77,7 +77,7 @@ function validateAction(action) {
       invalid();
     return;
   }
-  if (action.kind === "dig") {
+  if (action.kind === "dig" || action.kind === "look_at") {
     if (
       !exactKeys(action, ["kind", "x", "y", "z"]) ||
       ![action.x, action.y, action.z].every(Number.isInteger) ||

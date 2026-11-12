@@ -8,6 +8,9 @@ from tools.pilot.action_descriptors import ActionDescriptors, spawn_action_sandb
 from tools.pilot.action_coordinator import run_action_script, audit_action_eof
 from tools.pilot.oak_script import scripted_actions, script_receipt_valid
 from tools.pilot.fake_model_driver import run_fake_model, fake_model_receipt_valid
+from tools.pilot.real_model_driver import run_real_model, real_model_receipt_valid, response_valid
+from tools.pilot.llama_backend import OwnedLlamaBackend
+from tools.pilot.local_model_config import backend_cleanup_valid
 
 TRIAL="collect-oak-log-v1"
 ACTION="collect-01"
@@ -24,6 +27,7 @@ def fault_mode_valid(fault, mode):
 
 def action_driver_valid(driver, mode, fault):
     if not fault_mode_valid(fault,mode):return False
+    if driver=='local_model':return mode=='forward' and fault=='none'
     if driver=='fixed':return fault!='scripted_deadline'
     if driver=='fake_model':return mode in ('forward','stationary') and fault=='none'
     return driver=='scripted' and mode in ('forward','stationary') and fault in ('none','scripted_deadline')
@@ -134,15 +138,27 @@ def main():
     result={'schema_version':1,'status':'failed','control_mode':mode,'trial_id':TRIAL,'action_id':ACTION,'failure_case':fault,'injection':None,
         'independent_observer_process':False,'network_policy':'game_only_unix_v1','game_bridge':None,'participant_returncode':None,'java_returncode':None,
         'stop_sent':False,'term_sent':False,'kill_sent':False,'participant_forced_cleanup':False,'before':None,'during':None,'terminal':None,'fixture':None,'score':None,'error':None,'stage':'server_start','action_finished_received':False}
-    result.update(action_driver=driver,action_script=None,action_output_eof=False)
-    server=participant=transport=bridge=descriptors=None
+    result.update(action_driver=driver,action_script=None,action_output_eof=False,local_backend=None,local_backend_start=None)
+    server=participant=transport=bridge=descriptors=backend=None
     try:
+        if driver=='local_model':
+            config=json.loads(Path('/observer-code/local-model-config.json').read_text())
+            socket_dir=Path('/tmp/backend');socket_dir.mkdir(mode=0o700)
+            backend=OwnedLlamaBackend(Path(config['runtime']),Path(config['model']['path']),socket_dir/'model.sock',
+                env=config['environment'],require_gpu=True)
+            result['stage']='model_start'
+            result['local_backend_start']=backend.start(time.monotonic()+30)
+            warmup='<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\nReply only with JSON: {"ready":true}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n'
+            if config['prompt_format']=='qwen-chatml-v1':
+                warmup='<|im_start|>user\nReply only with JSON: {"ready":true}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n'
+            result['local_backend_warmup']=backend.complete(warmup,time.monotonic()+20,output_limit=32)
+            if not response_valid(result['local_backend_warmup'],output_limit=32):raise RuntimeError('backend warmup failed')
         server=subprocess.Popen(['/usr/bin/java','-Xms512M','-Xmx2G','-Djava.awt.headless=true','-jar','server.jar','--nogui'],stdin=subprocess.PIPE,close_fds=True,env={'PATH':'/usr/bin:/bin','LANG':'C.UTF-8','HOME':str(Path.cwd())})
         deadline=time.monotonic()+60
         if not (wait_port(25585,deadline,server) and wait_port(25595,deadline,server)):raise RuntimeError('server readiness')
         bridge=GameBridge(Path.cwd()/'game-bridge')
         args=participant_argv('forward' if mode in ('mine_only','blocked') else mode);args[-1]=mode;args[args.index('/participant-code/game_bridge_client.py')]='/participant-code/oak_bridge_client.py'
-        if driver in ('scripted','fake_model'):
+        if driver in ('scripted','fake_model','local_model'):
             args[-1]='model';descriptors=ActionDescriptors.create()
             participant=spawn_action_sandbox(args,descriptors,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,bufsize=0,env={'PATH':'/usr/bin:/bin'})
         else:
@@ -154,13 +170,22 @@ def main():
         if not baseline_valid(result['before']):raise RuntimeError('baseline invalid')
         result['stage']='action';result['action_started_monotonic']=time.monotonic();transport.send_begin()
         result['action_begin_sent_monotonic']=time.monotonic()
-        if driver in ('scripted','fake_model'):
+        if driver in ('scripted','fake_model','local_model'):
             allowance=20-(time.monotonic()-result['action_started_monotonic'])
             if allowance<=0:raise RuntimeError('action budget exhausted before dispatch')
-            if driver=='fake_model':result['action_script']=run_fake_model(descriptors,mode,allowance)
+            if driver=='local_model':result['action_script']=run_real_model(descriptors,backend,allowance,prompt_format=config['prompt_format'],preserve_failed_channel=True)
+            elif driver=='fake_model':result['action_script']=run_fake_model(descriptors,mode,allowance)
             else:run_scripted_actions(descriptors,mode,fault,allowance,result)
-            validator=fake_model_receipt_valid if driver=='fake_model' else script_receipt_valid
-            if not validator(result['action_script'],mode):raise RuntimeError('action driver failed')
+            validator=(lambda value,_mode:real_model_receipt_valid(value,config['prompt_format'])) if driver=='local_model' else fake_model_receipt_valid if driver=='fake_model' else script_receipt_valid
+            if not validator(result['action_script'],mode):
+                if driver=='local_model':
+                    result['stage']='failed_action_observation'
+                    result['failed_observation_quiescent']=False
+                    try:
+                        result['terminal']=observe('terminal',password)
+                        result['score']=score_files(Path('/pilot-tools/bin/node'),Path('/observer-code'),Path.cwd())
+                    except Exception:pass
+                raise RuntimeError('action driver failed')
         if fault=='mid_action_disconnect':
             time.sleep(.2)
             result['during']=observe('during',password)
@@ -187,12 +212,21 @@ def main():
         result['stage']='terminal';result['terminal']=observe('terminal',password,suspend_for_test=fault=='observer_timeout')
         result['score']=score_files(Path('/pilot-tools/bin/node'),Path('/observer-code'),Path.cwd())
         result['stage']='finalize';transport.send_finalize();transport.wait_exit()
-        if driver in ('scripted','fake_model'):
+        if driver in ('scripted','fake_model','local_model'):
             result['action_output_audit']=audit_action_eof(descriptors)
             result['action_output_eof']=result['action_output_audit']=={'schema_version':1,'status':'verified','error':None}
             if result['action_output_eof'] is not True:raise RuntimeError('action output not closed cleanly')
     except Exception:result['error']='oak_qualification_failed'
     finally:
+        if backend is not None:
+            result['local_backend']=backend.close()
+            try:
+                fd=os.open('model-backend.log',os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
+                with os.fdopen(fd,'wb') as log:log.write(bytes(backend.log))
+                fd=os.open('model-backend-tail.log',os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
+                with os.fdopen(fd,'wb') as log:log.write(bytes(backend.log_tail))
+            except Exception:result['error']='backend_log_failed'
+            if not backend_cleanup_valid(result['local_backend'],require_gpu=False):result['error']='backend_cleanup_uncertain'
         if result['action_script'] is not None:
             try:write_result('action-script.json',result['action_script'])
             except Exception:result['error']='action_record_write_failed'
@@ -213,7 +247,16 @@ def main():
         except Exception:result['error']='server_cleanup_uncertain'
         clean=result['error'] is None and result['participant_returncode']==0 and result['java_returncode']==0 and result['stop_sent'] and not any(result[k] for k in ('term_sent','kill_sent','participant_forced_cleanup'))
         accepted=endpoint_valid(result['score'],mode,result['before'],result['terminal'])
-        if driver in ('scripted','fake_model'):accepted=accepted and result['action_output_eof'] is True and (fake_model_receipt_valid if driver=='fake_model' else script_receipt_valid)(result['action_script'],mode)
+        if driver=='local_model':
+            endpoint=result['score'].get('endpoint') if isinstance(result['score'],dict) else None
+            accepted=(isinstance(result['score'],dict) and isinstance(result['score'].get('baselineVerification'),dict)
+                and result['score']['baselineVerification'].get('status')=='verified'
+                and isinstance(endpoint,dict) and endpoint.get('status')=='observed'
+                and type(endpoint.get('acquired')) is bool and endpoint.get('gameplayQualified') is False
+                and backend_cleanup_valid(result['local_backend']) and isinstance(result['local_backend_start'],dict)
+                and result['local_backend_start'].get('gpu_verified') is True)
+            result['task_acquired']=endpoint.get('acquired') if isinstance(endpoint,dict) else None
+        if driver in ('scripted','fake_model','local_model'):accepted=accepted and result['action_output_eof'] is True and ((lambda value,_mode:real_model_receipt_valid(value,config['prompt_format'])) if driver=='local_model' else fake_model_receipt_valid if driver=='fake_model' else script_receipt_valid)(result['action_script'],mode)
         result['status']='qualified' if fault=='none' and clean and accepted else 'failed'
         write_result('protected-result.json',result)
     return 0 if result['status']=='qualified' else 1

@@ -26,6 +26,7 @@ test("parses each fixed offline action schema", () => {
     { kind: "look", yaw: Math.PI, pitch: -Math.PI / 2 },
     { kind: "move", direction: "left", ticks: 20 },
     { kind: "dig", x: 0, y: 200, z: 3 },
+    { kind: "look_at", x: -30000000, y: -64, z: 30000000 },
   ])
     assert.equal(parseModelActionRequest(request(action)).action.kind, action.kind);
 });
@@ -41,6 +42,10 @@ test("rejects wrong IDs, coercion, nonfinite JSON numbers, and out-of-budget val
     request({ kind: "look", yaw: 1e999, pitch: 0 }),
     request({ kind: "dig", x: 30000001, y: 200, z: 3 }),
     request({ kind: "dig", x: 0, y: 320, z: 3 }),
+    request({ kind: "look_at", x: true, y: 200, z: 3 }),
+    request({ kind: "look_at", x: 0.5, y: 200, z: 3 }),
+    request({ kind: "look_at", x: 0, y: 320, z: 3 }),
+    request({ kind: "look_at", x: 30000001, y: 200, z: 3 }),
   ])
     assert.throws(() => parseModelActionRequest(body), /invalid model action request/);
 });
@@ -50,6 +55,8 @@ test("requires exact root and action keys", () => {
     request({ kind: "observe", note: "extra" }),
     request({ kind: "finish" }, { extra: true }),
     request({ kind: "dig", x: 0, y: 200 }),
+    request({ kind: "look_at", x: 0, y: 200 }),
+    request({ kind: "look_at", x: 0, y: 200, z: 3, dig: true }),
     request({ kind: "look", yaw: 0, pitch: 0, ticks: 1 }),
     JSON.stringify({ schema_version: 1, trial_id: "collect-oak-log-v1", action_id: "collect-01", sequence: 1, action: [] }),
   ])
