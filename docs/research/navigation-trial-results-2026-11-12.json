@@ -1,0 +1,212 @@
+{
+  "actions": [
+    {
+      "action": {
+        "kind": "observe"
+      },
+      "reply": {
+        "observation": {
+          "health": 20,
+          "inventory": [],
+          "nearbyDroppedItems": [],
+          "nearbyDroppedItemsTruncated": false,
+          "pitch": 0,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 0.5
+          },
+          "schema_version": 1,
+          "source": "participant_bot",
+          "visibleBlocks": [],
+          "yaw": 3.141592653589793
+        },
+        "schema_version": 1,
+        "sequence": 1,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "kind": "move_to",
+        "ticks": 20,
+        "x": 0,
+        "y": 200,
+        "z": 3
+      },
+      "reply": {
+        "error": {
+          "code": "navigation_blocked",
+          "recoverable": true
+        },
+        "schema_version": 1,
+        "sequence": 2,
+        "status": "rejected"
+      }
+    },
+    {
+      "action": {
+        "kind": "look",
+        "pitch": 0,
+        "yaw": 0.7853981633974483
+      },
+      "reply": {
+        "schema_version": 1,
+        "sequence": 3,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "kind": "look",
+        "pitch": -0.5,
+        "yaw": 0.7853981633974483
+      },
+      "reply": {
+        "schema_version": 1,
+        "sequence": 4,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "kind": "move_to",
+        "ticks": 20,
+        "x": 0,
+        "y": 200,
+        "z": 3
+      },
+      "reply": {
+        "error": {
+          "code": "navigation_blocked",
+          "recoverable": true
+        },
+        "schema_version": 1,
+        "sequence": 5,
+        "status": "rejected"
+      }
+    },
+    {
+      "action": {
+        "kind": "look",
+        "pitch": -0.5,
+        "yaw": 0.7853981633974483
+      },
+      "reply": {
+        "schema_version": 1,
+        "sequence": 6,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "kind": "look",
+        "pitch": -0.5,
+        "yaw": 0.7853981633974483
+      },
+      "reply": {
+        "schema_version": 1,
+        "sequence": 7,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "kind": "look",
+        "pitch": -0.5,
+        "yaw": 0.7853981633974483
+      },
+      "reply": {
+        "schema_version": 1,
+        "sequence": 8,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "kind": "look",
+        "pitch": -0.5,
+        "yaw": 0.7853981633974483
+      },
+      "reply": {
+        "schema_version": 1,
+        "sequence": 9,
+        "status": "completed"
+      }
+    }
+  ],
+  "backend_cleanup": {
+    "backend_reaped": true,
+    "gpu_device_seen": true,
+    "gpu_offload_evidence": "offloaded 34/34 layers to GPU",
+    "gpu_verified": true,
+    "group_gone": true,
+    "kill_sent": false,
+    "log_bytes": 508654,
+    "log_reader_stopped": true,
+    "log_sha256": "3d8e1786328f7b5500494a34d3fbfa5b9c38622dbf4e0a5cb9612ab7c0ef3f79",
+    "log_truncated": true,
+    "process_group_gone": true,
+    "returncode": 0,
+    "status": "closed",
+    "term_sent": true
+  },
+  "call_seconds": 3.1757877289998646,
+  "calls": 8,
+  "child_returncode": 1,
+  "evidence_sha256": "29b29e7eb16899003cc1b8c217ce848933bb73f1cd078386da42079b7b7cf914",
+  "frozen_revision": "1f9ea114ea96245742c589b4e49342f2b656b8f0",
+  "gpu_window": {
+    "free_mib": 30987,
+    "name": "NVIDIA GeForce RTX 5090",
+    "other_compute_processes": 0,
+    "utilization_percent": 0
+  },
+  "independent_score": {
+    "baselineVerification": {
+      "status": "verified"
+    },
+    "endpoint": {
+      "acquired": false,
+      "gameplayQualified": false,
+      "status": "observed"
+    }
+  },
+  "infrastructure": "failed",
+  "input_tokens": 9739,
+  "interpretation": "Model attempted movement into the still-solid log twice; recoverable navigation_blocked was returned. It then repeated look actions, never dug or collected. No successful movement path was exercised in this game; unit tests are not a real-game success claim.",
+  "loop_status": "budget_exhausted",
+  "no_limit_violations": true,
+  "observation_caveat": "Failure-path observer, not clean finalized episode.",
+  "output_tokens": 248,
+  "plan": "navigation-trial-plan-2026-11-12.json",
+  "resource_limits_verified": true,
+  "schema_version": 1,
+  "scope_cleanup_confirmed": true,
+  "second_trial_run": false,
+  "source_manifest_sha256": "67a01d66e9eaa05743da76122b0ca011029d4cc85b213257c848f2f7f4edff65",
+  "stop_reason": "First trial did not qualify/acquire; predeclared rule stopped batch.",
+  "storage_valid": true,
+  "task_acquired": false,
+  "tests": {
+    "npm": 1072,
+    "python_pilot": 319,
+    "python_skips": 0,
+    "standard_checks": "passed"
+  },
+  "trials_run": 1,
+  "warmup": {
+    "content": "{\"ready\":true}",
+    "elapsed_seconds": 14.389623006000022,
+    "input_tokens": 22,
+    "output_tokens": 6,
+    "prompt_sha256": "cb02be0a7fbd2560a8a992fcd2d33a37129593b25cffaa5fe73f057b8679cedc",
+    "reserved_output_tokens": 32,
+    "schema_version": 1,
+    "status": "completed",
+    "stop_type": "eos",
+    "tokens_evaluated": 22,
+    "truncated": false,
+    "worker_reaped": true
+  }
+}

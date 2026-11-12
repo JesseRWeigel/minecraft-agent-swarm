@@ -164,3 +164,24 @@ commands, unexpected API failures, cancellation and deadlines remain fatal.
 A new frozen trial plan will retain the existing model, token/time/GPU/storage
 limits. Earlier failures remain in their original ledgers. Interface changes
 mean this is development evidence, not a controlled model comparison.
+
+
+### Frozen navigation outcome
+
+[Plan](navigation-trial-plan-2026-11-12.json) and
+[complete derived result](navigation-trial-results-2026-11-12.json): one trial
+ran and failed; the declared stopping rule prevented a second run. The model
+tried moving into the still-solid target log twice, received recoverable
+`navigation_blocked` replies, then repeated look actions until the eight-call
+limit. It never dug or collected. This does not demonstrate successful movement
+in the real game; it demonstrates rejection/recovery without disconnecting.
+The independent failure-path observer reported no acquired log, not a clean
+finalized successful episode.
+
+All owned processes/storage cleaned up; 34/34 model layers were offloaded to
+GPU and configured resource limits held. Final code checks passed: 319 Python
+pilot tests with zero skips, 1,072 npm tests, lint/typecheck/format/build, plus
+independent code review. The task goal remains unfinished and PR39 remains
+draft/unmerged. A next experiment would need to address repeated unproductive
+model choices rather than assume that another movement primitive is sufficient.
+No further tuning or retries were performed within this frozen batch.
