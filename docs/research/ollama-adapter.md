@@ -73,3 +73,10 @@ align the full lifecycle deadlines with the proposed 120-second episode, preserv
 transcripts, and verify that no cancelled/late output can start an action. Then
 freeze model/runtime/tokenizer/prompt identities and arrange the logged GPU window
 specified by the [first model pilot protocol](first-model-pilot-protocol.md).
+
+## Synthetic coordinator seam
+
+The local model/action loop and its real-HTTP/fake-bot integration tests are
+described in [model-coordinator.md](model-coordinator.md), including protected
+real-game qualification with an explicitly fake provider. Real-backend
+qualification remains outstanding; this adds no real-model pilot result.

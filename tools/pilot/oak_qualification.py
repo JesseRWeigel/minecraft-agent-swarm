@@ -1,7 +1,7 @@
 """Explicit isolated oak-log qualification with a protected observer.
 
 No host game endpoint is used. Every launch restores a new private world,
-records source hashes, and preserves failed attempts. This is not a model runner.
+records source hashes, and preserves failed attempts. The fake_model driver exercises synthetic responses, not real model inference.
 """
 import hashlib
 import json
@@ -17,10 +17,11 @@ from tools.pilot.oak_worker import fixture_valid, FAILURE_CASES, score_files, en
 from tools.pilot.server import _build_sandbox_argv, _validate_executable, run_owned
 from tools.pilot.scoped_trial import run_scoped, PROFILES
 from tools.pilot.oak_script import script_receipt_valid
+from tools.pilot.fake_model_driver import fake_model_receipt_valid
 
 PARTICIPANT_FILES = ("action_descriptors.py", "model-action-session.mjs", "model-action-channel.mjs", "model-action-schema.mjs", "model-action-observation.mjs", "oak-participant-cli.mjs", "oak-participant.mjs", "oak_bridge_client.py", "protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs", "game_bridge.py", "game_bridge_client.py")
 OBSERVER_FILES = ("oak-fault-cli.mjs", "oak-blocked-fixture.mjs", "oak-blocked-observer-cli.mjs", "oak-observer-cli.mjs", "oak-fixture.mjs", "oak-task.mjs", "oak-inventory.mjs", "oak-score-cli.mjs", "protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
-PYTHON_FILES = ("action_coordinator.py", "oak_script.py", "action_descriptors.py", "oak_worker.py", "protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py", "login_identity.py", "rcon_stall.py")
+PYTHON_FILES = ("fake_model_driver.py", "model_coordinator.py", "ollama_adapter.py", "inference_budget.py", "action_coordinator.py", "oak_script.py", "action_descriptors.py", "oak_worker.py", "protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py", "login_identity.py", "rcon_stall.py")
 
 
 def capture_sources(workspace):
@@ -83,8 +84,8 @@ def capture_action_record(runtime, result, driver):
 def validate_result(value, mode, recomputed, *, action_driver='fixed'):
     if not isinstance(value, dict) or type(value.get("schema_version")) is not int or value["schema_version"] != 1:
         return False
-    if action_driver not in ('fixed','scripted') or value.get('action_driver','fixed')!=action_driver:return False
-    if action_driver=='scripted' and (value.get('action_output_eof') is not True or not script_receipt_valid(value.get('action_script'),mode)):return False
+    if action_driver not in ('fixed','scripted','fake_model') or value.get('action_driver','fixed')!=action_driver:return False
+    if action_driver in ('scripted','fake_model') and (value.get('action_output_eof') is not True or not (fake_model_receipt_valid if action_driver=='fake_model' else script_receipt_valid)(value.get('action_script'),mode)):return False
     if action_driver=='fixed' and value.get('action_script') is not None:return False
     if value.get("failure_case", "none") != "none" or value.get("injection") is not None:
         return False

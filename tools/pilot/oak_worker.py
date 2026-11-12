@@ -7,6 +7,7 @@ from tools.pilot.game_bridge import GameBridge
 from tools.pilot.action_descriptors import ActionDescriptors, spawn_action_sandbox
 from tools.pilot.action_coordinator import run_action_script, audit_action_eof
 from tools.pilot.oak_script import scripted_actions, script_receipt_valid
+from tools.pilot.fake_model_driver import run_fake_model, fake_model_receipt_valid
 
 TRIAL="collect-oak-log-v1"
 ACTION="collect-01"
@@ -24,6 +25,7 @@ def fault_mode_valid(fault, mode):
 def action_driver_valid(driver, mode, fault):
     if not fault_mode_valid(fault,mode):return False
     if driver=='fixed':return fault!='scripted_deadline'
+    if driver=='fake_model':return mode in ('forward','stationary') and fault=='none'
     return driver=='scripted' and mode in ('forward','stationary') and fault in ('none','scripted_deadline')
 
 
@@ -140,7 +142,7 @@ def main():
         if not (wait_port(25585,deadline,server) and wait_port(25595,deadline,server)):raise RuntimeError('server readiness')
         bridge=GameBridge(Path.cwd()/'game-bridge')
         args=participant_argv('forward' if mode in ('mine_only','blocked') else mode);args[-1]=mode;args[args.index('/participant-code/game_bridge_client.py')]='/participant-code/oak_bridge_client.py'
-        if driver=='scripted':
+        if driver in ('scripted','fake_model'):
             args[-1]='model';descriptors=ActionDescriptors.create()
             participant=spawn_action_sandbox(args,descriptors,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,bufsize=0,env={'PATH':'/usr/bin:/bin'})
         else:
@@ -152,10 +154,13 @@ def main():
         if not baseline_valid(result['before']):raise RuntimeError('baseline invalid')
         result['stage']='action';result['action_started_monotonic']=time.monotonic();transport.send_begin()
         result['action_begin_sent_monotonic']=time.monotonic()
-        if driver=='scripted':
-            allowance=max(.001,20-(time.monotonic()-result['action_started_monotonic']))
-            run_scripted_actions(descriptors,mode,fault,allowance,result)
-            if not script_receipt_valid(result['action_script'],mode):raise RuntimeError('scripted actions failed')
+        if driver in ('scripted','fake_model'):
+            allowance=20-(time.monotonic()-result['action_started_monotonic'])
+            if allowance<=0:raise RuntimeError('action budget exhausted before dispatch')
+            if driver=='fake_model':result['action_script']=run_fake_model(descriptors,mode,allowance)
+            else:run_scripted_actions(descriptors,mode,fault,allowance,result)
+            validator=fake_model_receipt_valid if driver=='fake_model' else script_receipt_valid
+            if not validator(result['action_script'],mode):raise RuntimeError('action driver failed')
         if fault=='mid_action_disconnect':
             time.sleep(.2)
             result['during']=observe('during',password)
@@ -182,7 +187,7 @@ def main():
         result['stage']='terminal';result['terminal']=observe('terminal',password,suspend_for_test=fault=='observer_timeout')
         result['score']=score_files(Path('/pilot-tools/bin/node'),Path('/observer-code'),Path.cwd())
         result['stage']='finalize';transport.send_finalize();transport.wait_exit()
-        if driver=='scripted':
+        if driver in ('scripted','fake_model'):
             result['action_output_audit']=audit_action_eof(descriptors)
             result['action_output_eof']=result['action_output_audit']=={'schema_version':1,'status':'verified','error':None}
             if result['action_output_eof'] is not True:raise RuntimeError('action output not closed cleanly')
@@ -208,7 +213,7 @@ def main():
         except Exception:result['error']='server_cleanup_uncertain'
         clean=result['error'] is None and result['participant_returncode']==0 and result['java_returncode']==0 and result['stop_sent'] and not any(result[k] for k in ('term_sent','kill_sent','participant_forced_cleanup'))
         accepted=endpoint_valid(result['score'],mode,result['before'],result['terminal'])
-        if driver=='scripted':accepted=accepted and result['action_output_eof'] is True and script_receipt_valid(result['action_script'],mode)
+        if driver in ('scripted','fake_model'):accepted=accepted and result['action_output_eof'] is True and (fake_model_receipt_valid if driver=='fake_model' else script_receipt_valid)(result['action_script'],mode)
         result['status']='qualified' if fault=='none' and clean and accepted else 'failed'
         write_result('protected-result.json',result)
     return 0 if result['status']=='qualified' else 1
