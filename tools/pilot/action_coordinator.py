@@ -16,6 +16,8 @@ MAX_REPLY_BYTES = 20480
 MAX_TIMEOUT_SECONDS = 20
 TRIAL_ID = "collect-oak-log-v1"
 ACTION_ID = "collect-01"
+DIG_REJECTION_CODES = frozenset({"target_missing", "target_out_of_reach", "target_not_visible", "target_not_diggable"})
+MOVE_TO_REJECTION_CODES = frozenset({"navigation_out_of_range", "navigation_blocked", "no_progress", "not_arrived"})
 
 
 def _invalid_constant(_value: str) -> None:
@@ -41,14 +43,14 @@ def _finite_json(value: Any) -> bool:
     return value is None or type(value) in (bool, int, str)
 
 
-def _decode_reply(raw: bytes, sequence: int, expect_finished: bool, expect_observation: bool, *, allow_rejected: bool = False) -> dict[str, Any]:
+def _decode_reply(raw: bytes, sequence: int, expect_finished: bool, expect_observation: bool, *, allow_rejected: bool = False, rejection_codes: frozenset[str] = DIG_REJECTION_CODES) -> dict[str, Any]:
     if not raw or len(raw) >= MAX_REPLY_BYTES:
         raise ValueError
     try:
         reply = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_duplicates, parse_constant=_invalid_constant)
     except (UnicodeDecodeError, ValueError, json.JSONDecodeError):
         raise ValueError from None
-    if type(allow_rejected) is not bool:
+    if type(allow_rejected) is not bool or rejection_codes not in (DIG_REJECTION_CODES, MOVE_TO_REJECTION_CODES):
         raise ValueError
     rejected = type(reply) is dict and reply.get("status") == "rejected"
     if rejected and (not allow_rejected or expect_finished or expect_observation):
@@ -62,7 +64,7 @@ def _decode_reply(raw: bytes, sequence: int, expect_finished: bool, expect_obser
         error = reply["error"]
         if (type(error) is not dict or set(error) != {"code", "recoverable"}
                 or error["recoverable"] is not True or type(error["code"]) is not str
-                or error["code"] not in {"target_missing", "target_out_of_reach", "target_not_visible", "target_not_diggable"}):
+                or error["code"] not in rejection_codes):
             raise ValueError
         return reply
     if reply["status"] not in {"completed", "finished"} or (reply["status"] == "finished") != expect_finished:

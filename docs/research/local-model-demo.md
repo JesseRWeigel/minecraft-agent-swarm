@@ -143,3 +143,24 @@ unfinished; the draft remains unmerged. The next bounded design question is
 how to expose safe target-directed movement rather than require reliable
 low-level spatial control from the model. Larger models or more retries are
 not established solutions.
+
+
+## Bounded target-directed movement experiment
+
+`move_to` accepts a model-chosen world position and a maximum of 1–20 movement
+ticks. It steers toward that position on nearby level ground, checking standing
+clearance and ground support. It does not choose an item, plan a path around an
+obstacle, break/place blocks, jump, teleport, or inject a task solution. The
+model still selects when and where to move and must verify inventory afterward.
+This is a deliberately narrow control primitive, not general safe navigation.
+
+The target must be within four horizontal blocks and within 0.25 blocks of the
+current feet height. Dropped items can bob above the ground: their entity Y is
+not automatically an appropriate feet target. Arrival tolerance is 0.3 blocks.
+Expected navigation failures are recoverable but may follow partial movement;
+they are not a guarantee that the bot stayed at its starting point. Invalid
+commands, unexpected API failures, cancellation and deadlines remain fatal.
+
+A new frozen trial plan will retain the existing model, token/time/GPU/storage
+limits. Earlier failures remain in their original ledgers. Interface changes
+mean this is development evidence, not a controlled model comparison.

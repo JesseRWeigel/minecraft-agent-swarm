@@ -54,6 +54,18 @@ class RealModelDriverTests(unittest.TestCase):
                                       "error":{"code":"target_missing","recoverable":True}}
         self.assertFalse(real_model_receipt_valid(changed))
 
+    def test_generic_move_to_rejection_and_continuation_are_bound(self):
+        backend=Backend([{"kind":"move_to","x":1.25,"y":200.0,"z":1.75,"ticks":8},{"kind":"finish"}])
+        result=run_real_model(self.d,backend,3)
+        self.assertEqual(result["status"],"finished",result)
+        self.assertTrue(real_model_receipt_valid(result),result)
+        self.assertEqual(result["records"][1]["request"]["action"]["x"],1.25)
+        self.assertEqual(result["records"][1]["reply"]["error"]["code"],"navigation_blocked")
+        self.assertIn("navigation_blocked",backend.calls[1][0])
+        changed=copy.deepcopy(result)
+        changed["records"][1]["reply"]["error"]["code"]="target_missing"
+        self.assertFalse(real_model_receipt_valid(changed))
+
     def test_receipt_tampering(self):
         result=run_real_model(self.d,Backend([{"kind":"finish"}]),3)
         self.assertTrue(real_model_receipt_valid(result))
@@ -145,11 +157,19 @@ class SchemaTests(unittest.TestCase):
                        {"kind":"dig","x":0,"y":320,"z":3},
                        {"kind":"finish","extra":1},
                        {"kind":"look_at","x":True,"y":200,"z":3},
-                       {"kind":"look_at","x":0,"y":320,"z":3}):
+                       {"kind":"look_at","x":0,"y":320,"z":3},
+                       {"kind":"move_to","x":True,"y":200,"z":3,"ticks":5},
+                       {"kind":"move_to","x":0,"y":200,"z":3,"ticks":True},
+                       {"kind":"move_to","x":float("inf"),"y":200,"z":3,"ticks":5},
+                       {"kind":"move_to","x":0,"y":319,"z":3,"ticks":5},
+                       {"kind":"move_to","x":0,"y":-64,"z":3,"ticks":5},
+                       {"kind":"move_to","x":0,"y":200,"z":3,"ticks":21},
+                       {"kind":"move_to","x":0,"y":200,"z":3,"ticks":5,"extra":1}):
             self.assertFalse(action_valid(action))
         for action in ({"kind":"finish"},{"kind":"look","yaw":0,"pitch":0},
                        {"kind":"move","direction":"back","ticks":20},
-                       {"kind":"look_at","x":0,"y":200,"z":3}):
+                       {"kind":"look_at","x":0,"y":200,"z":3},
+                       {"kind":"move_to","x":.5,"y":200.0,"z":3.2,"ticks":20}):
             self.assertTrue(action_valid(action))
 
 

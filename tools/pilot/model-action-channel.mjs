@@ -96,14 +96,20 @@ export function runModelActionChannel({ input, output, session, signal, timeoutM
       if (result.status === "rejected") {
         const request = parseModelActionRequest(raw);
         const error = result.error;
+        const codes =
+          request.action.kind === "dig"
+            ? ["target_missing", "target_out_of_reach", "target_not_visible", "target_not_diggable"]
+            : request.action.kind === "move_to"
+              ? ["navigation_out_of_range", "navigation_blocked", "no_progress", "not_arrived"]
+              : [];
         if (
-          request.action.kind !== "dig" ||
+          codes.length === 0 ||
           Object.keys(result).sort().join(",") !== "error,schema_version,sequence,status" ||
           !error ||
           Object.getPrototypeOf(error) !== Object.prototype ||
           Object.keys(error).sort().join(",") !== "code,recoverable" ||
           error.recoverable !== true ||
-          !["target_missing", "target_out_of_reach", "target_not_visible", "target_not_diggable"].includes(error.code)
+          !codes.includes(error.code)
         )
           throw new Error();
       } else if ("error" in result) throw new Error();

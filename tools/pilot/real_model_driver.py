@@ -4,7 +4,7 @@ import math
 import os
 import time
 
-from tools.pilot.action_coordinator import _request, _decode_reply
+from tools.pilot.action_coordinator import _request, _decode_reply, DIG_REJECTION_CODES, MOVE_TO_REJECTION_CODES
 from tools.pilot.action_descriptors import ActionDescriptors
 from tools.pilot.model_coordinator import _exchange, _guard, Stopped
 from tools.pilot.ollama_adapter import _json
@@ -21,6 +21,17 @@ yaw 0 faces -Z, pi faces +Z, pi/2 faces -X, -pi/2 faces +X.
 Pitch between -pi/2 and pi/2, positive looks up, negative down.
 {"kind":"move","direction":"forward"|"back"|"left"|"right","ticks":integer 1..20}.
 Movement is relative to facing; one tick is 50 ms.
+{"kind":"move_to","x":number,"y":number,"z":number,"ticks":integer 1..20}:
+steer toward a model-chosen target for at most ticks*50 ms, without pathfinding,
+jumping, digging, or placing. Target must be within four horizontal blocks and
+within 0.25 of current feet Y. Use current feet Y, not a dropped item's bobbing Y.
+Coordinates are finite, x/z within +/-30000000 and y within -63..318.
+The action checks a supported clear straight path and stops within 0.3 blocks
+when possible. Completion does not promise arrival; observe to verify position.
+You may choose x/z from observations, including a nearby dropped-item position.
+move_to may return recoverable rejection navigation_out_of_range,
+navigation_blocked, no_progress, or not_arrived. It stops controls on rejection;
+some movement may already have occurred. Observe before choosing another target.
 {"kind":"look_at","x":integer,"y":integer,"z":integer}: face the center of
 a chosen block from the standing eyes. Same coordinate bounds as dig. It only
 changes orientation, never digs or moves, and does not select a target for you.
@@ -80,6 +91,12 @@ def action_valid(action):
     if kind == "move":
         return (set(action) == {"kind", "direction", "ticks"}
                 and action["direction"] in ("forward", "back", "left", "right")
+                and type(action["ticks"]) is int and 1 <= action["ticks"] <= 20)
+    if kind == "move_to":
+        return (set(action) == {"kind", "x", "y", "z", "ticks"}
+                and all(number(action[k]) for k in ("x", "y", "z"))
+                and abs(action["x"]) <= 30000000 and abs(action["z"]) <= 30000000
+                and -63 <= action["y"] <= 318
                 and type(action["ticks"]) is int and 1 <= action["ticks"] <= 20)
     if kind in ("dig", "look_at"):
         return (set(action) == {"kind", "x", "y", "z"}
@@ -201,7 +218,8 @@ def real_model_receipt_valid(value, prompt_format=None):
             if (index == 0 and action != {"kind":"observe"}) or (action["kind"] == "finish") != (index == len(records)-1):
                 return False
             raw = canonical(row["reply"]).encode()
-            _decode_reply(raw,index+1,action["kind"]=="finish",action["kind"]=="observe",allow_rejected=action["kind"]=="dig")
+            _decode_reply(raw,index+1,action["kind"]=="finish",action["kind"]=="observe",allow_rejected=action["kind"] in ("dig","move_to"),
+                          rejection_codes=MOVE_TO_REJECTION_CODES if action["kind"]=="move_to" else DIG_REJECTION_CODES)
             if index:
                 call = calls[index-1]
                 if not isinstance(call, dict) or type(call.get("output_limit")) is not int or call["output_limit"] != 256:

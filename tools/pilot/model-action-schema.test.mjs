@@ -23,6 +23,7 @@ test("parses each fixed offline action schema", () => {
   });
   for (const action of [
     { kind: "finish" },
+    { kind: "move_to", x: 1.5, y: 200, z: -1.25, ticks: 20 },
     { kind: "look", yaw: Math.PI, pitch: -Math.PI / 2 },
     { kind: "move", direction: "left", ticks: 20 },
     { kind: "dig", x: 0, y: 200, z: 3 },
@@ -37,6 +38,10 @@ test("rejects wrong IDs, coercion, nonfinite JSON numbers, and out-of-budget val
     request({ kind: "observe" }, { sequence: "1" }),
     request({ kind: "observe" }, { sequence: 0 }),
     request({ kind: "move", direction: "up", ticks: 1 }),
+    request({ kind: "move_to", x: true, y: 200, z: 1, ticks: 1 }),
+    request({ kind: "move_to", x: 1, y: 200, z: 1, ticks: 21 }),
+    request({ kind: "move_to", x: 1, y: -64, z: 1, ticks: 1 }),
+    request({ kind: "move_to", x: 1e99, y: 200, z: 1, ticks: 1 }),
     request({ kind: "move", direction: "forward", ticks: 21 }),
     request({ kind: "look", yaw: 3.15, pitch: 0 }),
     request({ kind: "look", yaw: 1e999, pitch: 0 }),
@@ -53,12 +58,19 @@ test("rejects wrong IDs, coercion, nonfinite JSON numbers, and out-of-budget val
 test("requires exact root and action keys", () => {
   for (const body of [
     request({ kind: "observe", note: "extra" }),
+    request({ kind: "move_to", x: 1, y: 200, z: 1, ticks: 1, jump: true }),
     request({ kind: "finish" }, { extra: true }),
     request({ kind: "dig", x: 0, y: 200 }),
     request({ kind: "look_at", x: 0, y: 200 }),
     request({ kind: "look_at", x: 0, y: 200, z: 3, dig: true }),
     request({ kind: "look", yaw: 0, pitch: 0, ticks: 1 }),
-    JSON.stringify({ schema_version: 1, trial_id: "collect-oak-log-v1", action_id: "collect-01", sequence: 1, action: [] }),
+    JSON.stringify({
+      schema_version: 1,
+      trial_id: "collect-oak-log-v1",
+      action_id: "collect-01",
+      sequence: 1,
+      action: [],
+    }),
   ])
     assert.throws(() => parseModelActionRequest(body), /invalid model action request/);
 });

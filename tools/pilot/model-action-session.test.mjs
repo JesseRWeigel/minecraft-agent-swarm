@@ -314,3 +314,207 @@ test("look_at rejects invalid bot position without issuing look", async () => {
     s.close();
   }
 });
+
+function navigationBot() {
+  const b = bot();
+  b.entity.onGround = true;
+  b.entity.velocity = { x: 0, y: 0, z: 0 };
+  b.blockAt = (p) =>
+    p.y === 199
+      ? { name: "stone", boundingBox: "block", shapes: [[0, 0, 0, 1, 1, 1]] }
+      : { name: "air", boundingBox: "empty" };
+  b.look = async (yaw, pitch, force) => {
+    b.calls.push(["look", yaw, pitch, force]);
+    b.entity.yaw = yaw;
+  };
+  return b;
+}
+const moveTo = (x, z, ticks = 20, y = 200) => ({ kind: "move_to", x, y, z, ticks });
+test("move_to arrives by bounded ground steering without jump dig or place", async () => {
+  const b = navigationBot();
+  let sleeps = 0;
+  const s = createModelActionSession({
+    bot: b,
+    sleep: async (ms) => {
+      assert.equal(ms, 50);
+      sleeps++;
+      b.entity.position.x -= Math.sin(b.entity.yaw) * 0.2;
+      b.entity.position.z -= Math.cos(b.entity.yaw) * 0.2;
+    },
+  });
+  try {
+    assert.equal((await s.execute(req(1, moveTo(1.5, 1.5)))).status, "completed");
+    assert.ok(Math.hypot(b.entity.position.x - 1.5, b.entity.position.z - 1.5) <= 0.3);
+    assert.ok(sleeps <= 20);
+    assert.ok(b.calls.filter((c) => c[0] === "control").every((c) => c[1] === "forward"));
+    assert.equal(
+      b.calls.some((c) => c[0] === "dig"),
+      false,
+    );
+    assert.equal(b.calls.at(-1)[0], "clear");
+  } finally {
+    s.close();
+  }
+});
+test("move_to rejects out of local range or height without moving", async () => {
+  for (const action of [moveTo(5, 0), moveTo(1, 1, 20, 201)]) {
+    const b = navigationBot(),
+      s = createModelActionSession({ bot: b });
+    try {
+      const result = await s.execute(req(1, action));
+      assert.equal(result.error.code, "navigation_out_of_range");
+      assert.equal(
+        b.calls.some((c) => c[0] === "control"),
+        false,
+      );
+      assert.equal(s.status, "active");
+    } finally {
+      s.close();
+    }
+  }
+});
+test("move_to blocks walls gaps hazards and side footprint cliffs before movement", async () => {
+  for (const obstacle of ["wall", "gap", "lava", "slab", "side"]) {
+    const b = navigationBot(),
+      original = b.blockAt;
+    b.blockAt = (p) => {
+      if (obstacle === "wall" && p.y === 201) return { name: "stone", boundingBox: "block" };
+      if (obstacle === "gap" && p.y === 199) return null;
+      if (obstacle === "lava" && p.y === 200) return { name: "lava", boundingBox: "empty" };
+      if (obstacle === "slab" && p.y === 199)
+        return { name: "stone_slab", boundingBox: "block", shapes: [[0, 0, 0, 1, 0.5, 1]] };
+      if (obstacle === "side" && p.x === -1) return null;
+      return original(p);
+    };
+    const s = createModelActionSession({ bot: b });
+    try {
+      const result = await s.execute(req(1, moveTo(obstacle === "side" ? 0.1 : 1.5, 0.5)));
+      assert.equal(result.error.code, "navigation_blocked", obstacle);
+      assert.equal(
+        b.calls.some((c) => c[0] === "control"),
+        false,
+      );
+    } finally {
+      s.close();
+    }
+  }
+});
+test("move_to no-progress and tick-cap produce bounded recoverable replies", async () => {
+  for (const [ticks, code, count] of [
+    [20, "no_progress", 4],
+    [2, "not_arrived", 2],
+  ]) {
+    const b = navigationBot();
+    let calls = 0;
+    const s = createModelActionSession({
+      bot: b,
+      sleep: async () => {
+        calls++;
+      },
+    });
+    try {
+      const result = await s.execute(req(1, moveTo(1.5, 0.5, ticks)));
+      assert.equal(result.error.code, code);
+      assert.equal(calls, count);
+      assert.equal(b.calls.at(-1)[0], "clear");
+    } finally {
+      s.close();
+    }
+  }
+});
+test("move_to cancellation stops controls and late sleep cannot resume", async () => {
+  const b = navigationBot();
+  let resolveSleep;
+  const s = createModelActionSession({ bot: b, sleep: () => new Promise((r) => (resolveSleep = r)) });
+  const pending = s.execute(req(1, moveTo(1.5, 0.5)));
+  await new Promise((r) => setImmediate(r));
+  s.close();
+  await assert.rejects(pending);
+  const count = b.calls.length;
+  resolveSleep();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(b.calls.length, count);
+  assert.ok(b.calls.some((c) => c[0] === "clear"));
+});
+test("move_to unexpected vertical displacement remains fatal", async () => {
+  const b = navigationBot();
+  const s = createModelActionSession({
+    bot: b,
+    sleep: async () => {
+      b.entity.position.y = 190;
+    },
+  });
+  try {
+    await assert.rejects(s.execute(req(1, moveTo(1.5, 0.5, 1))));
+    assert.equal(s.status, "failed");
+  } finally {
+    s.close();
+  }
+});
+
+test("move_to refuses slippery or slowing floors and excessive momentum", async () => {
+  for (const floor of ["ice", "packed_ice", "blue_ice", "slime_block", "honey_block", "soul_sand", "soul_soil"]) {
+    const b = navigationBot(),
+      original = b.blockAt;
+    b.blockAt = (p) =>
+      p.y === 199 ? { name: floor, boundingBox: "block", shapes: [[0, 0, 0, 1, 1, 1]] } : original(p);
+    const s = createModelActionSession({ bot: b });
+    try {
+      assert.equal((await s.execute(req(1, moveTo(1.5, 0.5)))).error.code, "navigation_blocked");
+      assert.equal(
+        b.calls.some((c) => c[0] === "control"),
+        false,
+      );
+    } finally {
+      s.close();
+    }
+  }
+  for (const mutate of [
+    (b) => {
+      b.entity.onGround = false;
+    },
+    (b) => {
+      b.entity.velocity.x = 0.5;
+    },
+    (b) => {
+      delete b.entity.velocity;
+    },
+  ]) {
+    const b = navigationBot();
+    mutate(b);
+    const s = createModelActionSession({ bot: b });
+    try {
+      assert.equal((await s.execute(req(1, moveTo(1.5, 0.5)))).error.code, "navigation_blocked");
+      assert.equal(
+        b.calls.some((c) => c[0] === "control"),
+        false,
+      );
+    } finally {
+      s.close();
+    }
+  }
+});
+
+test("move_to final tick cannot report arrival after footing disappears", async () => {
+  for (const change of ["airborne", "missing_ground"]) {
+    const b = navigationBot();
+    const original = b.blockAt;
+    const s = createModelActionSession({
+      bot: b,
+      sleep: async () => {
+        b.entity.position.x = 1.3;
+        if (change === "airborne") b.entity.onGround = false;
+        else b.blockAt = (p) => (p.y === 199 ? null : original(p));
+      },
+    });
+    try {
+      const result = await s.execute(req(1, moveTo(1.5, 0.5, 1)));
+      assert.equal(result.status, "rejected", change);
+      assert.equal(result.error.code, "navigation_blocked", change);
+      assert.equal(s.status, "active");
+      assert.equal(b.calls.at(-1)[0], "clear");
+    } finally {
+      s.close();
+    }
+  }
+});
