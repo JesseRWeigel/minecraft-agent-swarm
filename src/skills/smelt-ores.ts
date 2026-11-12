@@ -1,13 +1,13 @@
 import type { Block } from "prismarine-block";
 import type { Bot } from "mineflayer";
 import type { Skill, SkillResult } from "./types.js";
-import { Vec3 } from "vec3";
 import pkg from "mineflayer-pathfinder";
-const { goals, Movements } = pkg;
+const { goals } = pkg;
 import mcDataLoader from "minecraft-data";
 import { withdrawStash } from "./stash.js";
 import { classifyWithdraw, nothingToSmeltMessage, type WithdrawOutcome } from "./smelt-advice.js";
 import { baseMoves } from "../bot/navigation.js";
+import { placeFurnaceNearBot } from "./furnace-table.js";
 
 /** Items that can be smelted: input → output name. */
 const SMELT_RECIPES: Record<string, string> = {
@@ -47,7 +47,7 @@ const FUEL_ITEMS = [
 export const smeltOresSkill: Skill = {
   name: "smelt_ores",
   description:
-    "Smelt raw ores into ingots using a furnace. Crafts and places a furnace if needed (8 cobblestone). Uses coal or wood as fuel.",
+    "Smelt raw ores into ingots using a furnace. Crafts and places a furnace if needed (8 cobblestone, plus a crafting table: a nearby one, a carried one, or 4 planks). Uses coal or wood as fuel.",
   params: {},
 
   estimateMaterials(_bot, _params) {
@@ -155,83 +155,29 @@ export const smeltOresSkill: Skill = {
       maxDistance: 32,
     });
 
-    // Craft a furnace from pack cobblestone and stand it beside the bot.
-    // Returns the failure to hand back, or null once a furnace is within
-    // reach. Used when no furnace is near and again when the one that is
-    // near cannot be walked to.
-    const placeFurnaceHere = async (): Promise<Block | { success: false; message: string }> => {
-      const cobble = countItem(bot, "cobblestone");
-      if (cobble < 8) {
-        return {
-          success: false,
-          message: "No furnace nearby and need 8 cobblestone to craft one. Mine some stone first!",
-        };
-      }
-
-      onProgress({
-        skillName: "smelt_ores",
-        phase: "Crafting furnace",
-        progress: 0.05,
-        message: "Making a furnace...",
-        active: true,
+    // Craft a furnace from pack cobblestone and stand it beside the bot,
+    // getting a reachable crafting table first (existing, held, or crafted
+    // from planks — see furnace-table.ts). Used when no furnace is near and
+    // again when the one that is near cannot be walked to.
+    const placeFurnaceHere = (): Promise<Block | { success: false; message: string }> =>
+      placeFurnaceNearBot(bot, {
+        mcData,
+        signal,
+        // Planks/logs are fuel too: don't let the table eat the only fuel.
+        woodIsOnlyFuel: countItem(bot, "coal") + countItem(bot, "charcoal") === 0,
+        walk: async (pos, range, ms) => {
+          setMovements(bot);
+          await gotoTimed(bot, new goals.GoalNear(pos.x, pos.y, pos.z, range), ms);
+        },
+        onPhase: () =>
+          onProgress({
+            skillName: "smelt_ores",
+            phase: "Crafting furnace",
+            progress: 0.05,
+            message: "Making a furnace...",
+            active: true,
+          }),
       });
-
-      // Craft furnace at crafting table
-      const furnaceItemDef = mcData.itemsByName["furnace"];
-      if (furnaceItemDef) {
-        const table = bot.findBlock({ matching: (b) => b.name === "crafting_table", maxDistance: 32 });
-        let recipe = table ? bot.recipesFor(furnaceItemDef.id, null, 1, table)[0] : null;
-        if (!recipe) recipe = bot.recipesFor(furnaceItemDef.id, null, 1, null)[0];
-        if (recipe) {
-          if (table) {
-            setMovements(bot);
-            try {
-              await gotoTimed(bot, new goals.GoalNear(table.position.x, table.position.y, table.position.z, 2), 20000);
-            } catch {
-              /* best-effort */
-            }
-          }
-          try {
-            await bot.craft(recipe, 1, table || undefined);
-          } catch {
-            /* best-effort */
-          }
-        }
-      }
-
-      // Place furnace
-      const fItem = bot.inventory.items().find((i) => i.name === "furnace");
-      if (!fItem) {
-        return { success: false, message: "Couldn't craft a furnace. Need 8 cobblestone and a crafting table." };
-      }
-
-      await bot.equip(fItem, "hand");
-      const pos = bot.entity.position.floored();
-      for (const offset of [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-      ] as const) {
-        const below = bot.blockAt(new Vec3(pos.x + offset[0], pos.y - 1, pos.z + offset[1]));
-        const target = bot.blockAt(new Vec3(pos.x + offset[0], pos.y, pos.z + offset[1]));
-        if (below && below.name !== "air" && target && target.name === "air") {
-          try {
-            await bot.placeBlock(below, new Vec3(0, 1, 0));
-            console.log("[Skill] Placed furnace");
-            break;
-          } catch {
-            continue;
-          }
-        }
-      }
-
-      const placed = bot.findBlock({ matching: (b) => b.name === "furnace", maxDistance: 8 });
-      if (!placed) {
-        return { success: false, message: "Couldn't place furnace. Try in a flatter area." };
-      }
-      return placed;
-    };
 
     if (!furnaceBlock) {
       const placed = await placeFurnaceHere();
