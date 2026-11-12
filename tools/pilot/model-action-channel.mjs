@@ -1,3 +1,5 @@
+import { parseModelActionRequest } from "./model-action-schema.mjs";
+
 // Dedicated action streams only. Never connect these to lifecycle stdin/stdout.
 export function runModelActionChannel({ input, output, session, signal, timeoutMs = 20000 } = {}) {
   if (
@@ -87,10 +89,24 @@ export function runModelActionChannel({ input, output, session, signal, timeoutM
         Object.getPrototypeOf(result) !== Object.prototype ||
         result.schema_version !== 1 ||
         result.sequence !== requests ||
-        !["completed", "finished"].includes(result.status) ||
-        Object.keys(result).some((k) => !["schema_version", "sequence", "status", "observation"].includes(k))
+        !["completed", "finished", "rejected"].includes(result.status) ||
+        Object.keys(result).some((k) => !["schema_version", "sequence", "status", "observation", "error"].includes(k))
       )
         throw new Error();
+      if (result.status === "rejected") {
+        const request = parseModelActionRequest(raw);
+        const error = result.error;
+        if (
+          request.action.kind !== "dig" ||
+          Object.keys(result).sort().join(",") !== "error,schema_version,sequence,status" ||
+          !error ||
+          Object.getPrototypeOf(error) !== Object.prototype ||
+          Object.keys(error).sort().join(",") !== "code,recoverable" ||
+          error.recoverable !== true ||
+          !["target_missing", "target_out_of_reach", "target_not_visible", "target_not_diggable"].includes(error.code)
+        )
+          throw new Error();
+      } else if ("error" in result) throw new Error();
       if ("observation" in result && (!result.observation || result.observation.source !== "participant_bot"))
         throw new Error();
       finish = result.status === "finished";

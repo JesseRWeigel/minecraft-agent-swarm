@@ -28,6 +28,13 @@ changes orientation, never digs or moves, and does not select a target for you.
 y -64..319. Target must be in reach (4.5 blocks from eyes), visible under
 crosshair and diggable. Dig does not automatically collect a dropped item.
 Observe returns bot position/orientation/inventory and local information.
+nearbyDroppedItems reports nearby dropped-item entities, not inventory;
+a dropped item must be picked up before it counts as collected. Pickup occurs
+automatically when the bot moves close enough; there is no separate pickup action.
+A dig can return status "rejected" with recoverable true and one error code:
+target_missing, target_out_of_reach, target_not_visible, or target_not_diggable.
+These mean no dig was dispatched. Use the error and a fresh observation to
+choose another allowed action; do not assume the rejected dig changed the world.
 After an action, use observe when you need updated visible state; old observations
 do not reflect later actions. Use observed outcomes to decide whether to change approach.
 Finish ends actions, not proof of success. Independent server observations
@@ -194,7 +201,7 @@ def real_model_receipt_valid(value, prompt_format=None):
             if (index == 0 and action != {"kind":"observe"}) or (action["kind"] == "finish") != (index == len(records)-1):
                 return False
             raw = canonical(row["reply"]).encode()
-            _decode_reply(raw,index+1,action["kind"]=="finish",action["kind"]=="observe")
+            _decode_reply(raw,index+1,action["kind"]=="finish",action["kind"]=="observe",allow_rejected=action["kind"]=="dig")
             if index:
                 call = calls[index-1]
                 if not isinstance(call, dict) or type(call.get("output_limit")) is not int or call["output_limit"] != 256:

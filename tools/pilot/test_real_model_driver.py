@@ -39,6 +39,21 @@ class RealModelDriverTests(unittest.TestCase):
         self.assertIn("participant_bot", b.calls[0][0])
         self.assertEqual(b.calls[0][2],256)
 
+    def test_recoverable_missing_dig_is_bound_and_next_prompt_includes_error(self):
+        backend=Backend([{"kind":"dig","x":0,"y":200,"z":3},{"kind":"finish"}])
+        result=run_real_model(self.d,backend,3)
+        self.assertEqual(result["status"],"finished",result)
+        self.assertTrue(real_model_receipt_valid(result),result)
+        self.assertEqual(result["records"][1]["reply"]["status"],"rejected")
+        self.assertIn("target_missing",backend.calls[1][0])
+        changed=copy.deepcopy(result)
+        changed["records"][1]["reply"]["error"]["code"]="unknown"
+        self.assertFalse(real_model_receipt_valid(changed))
+        changed=copy.deepcopy(result)
+        changed["records"][2]["reply"]={"schema_version":1,"sequence":3,"status":"rejected",
+                                      "error":{"code":"target_missing","recoverable":True}}
+        self.assertFalse(real_model_receipt_valid(changed))
+
     def test_receipt_tampering(self):
         result=run_real_model(self.d,Backend([{"kind":"finish"}]),3)
         self.assertTrue(real_model_receipt_valid(result))

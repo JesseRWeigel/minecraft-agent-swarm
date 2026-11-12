@@ -14,6 +14,7 @@ def main(argv=None):
     for name in ("archive-sha256","paper-sha256","client-manifest-sha256"):
         parser.add_argument("--"+name,required=True)
     parser.add_argument("--model",choices=("llama3.2:3b","qwen3.5:9b"),default="llama3.2:3b")
+    parser.add_argument("--reuse-model-snapshot",type=Path,help="existing private0400 snapshot, rehashed before read-only mount")
     args=parser.parse_args(argv)
     if not args.launch:
         parser.error("--launch is required; no work started")
@@ -24,7 +25,7 @@ def main(argv=None):
         tool_snapshot=args.client_tools,tool_manifest_sha256=args.client_manifest_sha256,
         control_mode="forward",action_driver="local_model",resource_profile="local_model",
         storage_tool_root=args.storage_tools,bwrap_path=args.bwrap,
-        local_model_config=pin_local_model(args.model))
+        local_model_config=pin_local_model(args.model),model_snapshot=args.reuse_model_snapshot)
     worker=result.get("result") or {}
     print(json.dumps({"infrastructure":result["status"],"task_acquired":worker.get("task_acquired"),
         "stage":result.get("stage"),"error":result.get("error"),

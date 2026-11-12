@@ -73,7 +73,7 @@ def _exchange(descriptors, action, sequence, deadline, cancel, records):
         if newline >= 0:
             if newline != len(buffer)-1:
                 raise ValueError()
-            reply = _decode_reply(bytes(buffer[:newline]), sequence, finished, action.get("kind") == "observe")
+            reply = _decode_reply(bytes(buffer[:newline]), sequence, finished, action.get("kind") == "observe", allow_rejected=action.get("kind") == "dig")
             _guard(deadline, cancel)
             record["reply"] = reply
             record["finished_monotonic"] = time.monotonic()

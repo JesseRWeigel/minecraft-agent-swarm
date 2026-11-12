@@ -12,7 +12,7 @@ MODEL = Path("/usr/share/ollama/.ollama/models/blobs/sha256-dde5aa3fc5ffc17176b5
 MODEL_SHA256 = "dde5aa3fc5ffc17176b5e8bdc82f587b24b2678c6c66101bf7da77af9f7ccdff"
 ENV = {"PATH":"/usr/bin:/bin", "LANG":"C.UTF-8",
        "LD_LIBRARY_PATH":"/usr/local/lib/ollama:/usr/local/lib/ollama/cuda_v13:/usr/lib/wsl/lib",
-       "GGML_BACKEND_PATH":"/usr/local/lib/ollama/cuda_v13/libggml-cuda.so"}
+       "GGML_BACKEND_PATH":"/usr/local/lib/ollama/cuda_v13/libggml-cuda.so","CUDA_VISIBLE_DEVICES":"0"}
 
 
 def _hash_file(path, *, service_model=False):
@@ -89,8 +89,47 @@ def capture_model(config, destination):
         raise ValueError("model snapshot mismatch")
     return {"bytes":count,"sha256":digest.hexdigest()}
 
-def preflight_model_space(directory, config, storage_capacity_bytes):
+def preflight_model_space(directory, config, storage_capacity_bytes, *, reuse=False):
     from tools.pilot.bounded_storage import HOST_FREE_RESERVE_BYTES
-    needed=HOST_FREE_RESERVE_BYTES + storage_capacity_bytes + config["model"]["bytes"] + 16*1024**2
+    needed=HOST_FREE_RESERVE_BYTES + storage_capacity_bytes + (0 if reuse else config["model"]["bytes"]) + 16*1024**2
     if shutil.disk_usage(directory).free < needed:
         raise ValueError("insufficient reserve for model snapshot plus game storage")
+
+def verify_model_snapshot(path, config):
+    """Reuse only a private immutable-by-permission snapshot with the exact pinned bytes."""
+    path=Path(path)
+    if not path.is_absolute() or path.is_symlink() or path.resolve(strict=True)!=path:
+        raise ValueError("canonical model snapshot required")
+    info=path.stat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid!=os.getuid()
+            or stat.S_IMODE(info.st_mode)!=0o400 or info.st_size!=config["model"]["bytes"]):
+        raise ValueError("private read-only model snapshot required")
+    for parent in path.parents:
+        entry=parent.stat()
+        if entry.st_uid not in (0,os.getuid()) or entry.st_mode & 0o022:
+            raise ValueError("unprotected snapshot ancestor")
+    digest=hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda:stream.read(1024*1024),b""):
+            digest.update(chunk)
+    if digest.hexdigest()!=config["model"]["sha256"]:
+        raise ValueError("model snapshot hash mismatch")
+    return {"bytes":info.st_size,"sha256":digest.hexdigest(),"reused":True}
+
+def verify_gpu_window(model_bytes):
+    """Fail closed rather than compete with another compute workload."""
+    import subprocess
+    binary="/usr/lib/wsl/lib/nvidia-smi"
+    gpu=subprocess.run([binary,"--query-gpu=name,memory.free,utilization.gpu",
+        "--format=csv,noheader,nounits"],capture_output=True,text=True,timeout=5,check=True)
+    rows=[line.strip() for line in gpu.stdout.splitlines() if line.strip()]
+    if len(rows)!=1:raise ValueError("one explicitly qualified GPU required")
+    parts=[item.strip() for item in rows[0].split(",")]
+    if len(parts)!=3 or parts[0]!="NVIDIA GeForce RTX 5090":
+        raise ValueError("unqualified GPU")
+    free_mib,utilization=int(parts[1]),int(parts[2])
+    processes=subprocess.run([binary,"--query-compute-apps=pid","--format=csv,noheader,nounits"],
+        capture_output=True,text=True,timeout=5,check=True)
+    if processes.stdout.strip() or not 0<=utilization<=5 or free_mib*1024**2 < model_bytes+4*1024**3:
+        raise ValueError("GPU window is not idle or has insufficient memory")
+    return {"name":parts[0],"free_mib":free_mib,"utilization_percent":utilization,"other_compute_processes":0}

@@ -3,6 +3,7 @@ import { parseModelActionRequest } from "./model-action-schema.mjs";
 import { snapshotModelObservation } from "./model-action-observation.mjs";
 
 const failure = () => new Error("model action session failed");
+const rejected = (code) => ({ error: { code, recoverable: true } });
 const samePoint = (p, a) => p && p.x === a.x && p.y === a.y && p.z === a.z;
 
 // Owns an already connected, isolated bot. It does not launch a process, run a
@@ -110,16 +111,17 @@ export function createModelActionSession({
       // The initial adapter supports the fixed standing survival actor; alternate
       // poses need separately qualified eye-height handling before this is reused.
       const distance = Math.hypot(action.x + 0.5 - p.x, action.y + 0.5 - (p.y + 1.62), action.z + 0.5 - p.z);
-      if (distance > 4.5) throw failure();
+      if (!Number.isFinite(distance)) throw failure();
+      if (distance > 4.5) return rejected("target_out_of_reach");
       const block = bot.blockAt(p.clone().set(action.x, action.y, action.z));
+      if (!block || !samePoint(block.position, action) || ["air", "cave_air", "void_air"].includes(block.name))
+        return rejected("target_missing");
+      if (typeof block.name !== "string" || !block.name) throw failure();
       const visible = bot.blockAtCursor(4.5);
-      if (
-        !samePoint(block?.position, action) ||
-        !samePoint(visible?.position, action) ||
-        block.name !== visible.name ||
-        bot.canDigBlock(block) !== true
-      )
-        throw failure();
+      if (!samePoint(visible?.position, action) || block.name !== visible.name) return rejected("target_not_visible");
+      const diggable = bot.canDigBlock(block);
+      if (diggable === false) return rejected("target_not_diggable");
+      if (diggable !== true) throw failure();
       await bot.dig(block);
       return {};
     }
@@ -167,7 +169,8 @@ export function createModelActionSession({
         active();
         const ended = clock();
         if (ended - began >= cap) throw failure();
-        record.status = "completed";
+        record.status = value.error ? "rejected" : "completed";
+        if (value.error) record.error = { ...value.error };
         record.finishedMonotonicMs = ended;
         if (request.action.kind === "finish") {
           state = "finished";
@@ -176,7 +179,7 @@ export function createModelActionSession({
         return {
           schema_version: 1,
           sequence: request.sequence,
-          status: state === "finished" ? "finished" : "completed",
+          status: state === "finished" ? "finished" : value.error ? "rejected" : "completed",
           ...value,
         };
       } catch {

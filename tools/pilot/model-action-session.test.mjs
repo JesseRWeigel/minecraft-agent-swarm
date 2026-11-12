@@ -75,23 +75,69 @@ test("wrong sequence or malformed input permanently stops execution", async () =
     s.close();
   }
 });
-test("dig rejects unseen, undiggable, distant or stale coordinates before dig", async () => {
+test("expected dig rejections preserve session and dispatch no dig", async () => {
+  for (const [mutate, code] of [
+    [(b) => (b.blockAt = () => null), "target_missing"],
+    [(b) => (b.block.name = "air"), "target_missing"],
+    [(b) => (b.blockAtCursor = () => null), "target_not_visible"],
+    [(b) => (b.canDigBlock = () => false), "target_not_diggable"],
+    [(b) => (b.entity.position.z = -10), "target_out_of_reach"],
+    [(b) => (b.block.position.z = 4), "target_missing"],
+  ]) {
+    const b = bot();
+    mutate(b);
+    const s = createModelActionSession({ bot: b });
+    try {
+      assert.deepEqual(await s.execute(req(1, { kind: "dig", x: 0, y: 200, z: 3 })), {
+        schema_version: 1,
+        sequence: 1,
+        status: "rejected",
+        error: { code, recoverable: true },
+      });
+      assert.equal(s.status, "active");
+      assert.equal(s.transcript[0].status, "rejected");
+      assert.equal(
+        b.calls.some((x) => x[0] === "dig" || x[0] === "end"),
+        false,
+      );
+      assert.equal((await s.execute(req(2, { kind: "finish" }))).status, "finished");
+    } finally {
+      s.close();
+    }
+  }
+});
+test("unexpected dig exceptions and malformed coordinates remain fatal", async () => {
   for (const mutate of [
-    (b) => (b.blockAtCursor = () => null),
-    (b) => (b.canDigBlock = () => false),
-    (b) => (b.entity.position.z = -10),
-    (b) => (b.block.position.z = 4),
+    (b) => {
+      b.blockAt = () => {
+        throw new Error("unexpected");
+      };
+    },
+    (b) => {
+      b.dig = async () => {
+        throw new Error("unexpected");
+      };
+    },
+    (b) => {
+      b.canDigBlock = () => undefined;
+    },
   ]) {
     const b = bot();
     mutate(b);
     const s = createModelActionSession({ bot: b });
     await assert.rejects(s.execute(req(1, { kind: "dig", x: 0, y: 200, z: 3 })));
-    assert.equal(
-      b.calls.some((x) => x[0] == "dig"),
-      false,
-    );
+    assert.equal(s.status, "failed");
     s.close();
   }
+  const b = bot(),
+    s = createModelActionSession({ bot: b });
+  await assert.rejects(s.execute(req(1, { kind: "dig", x: 0, y: 500, z: 3 })));
+  assert.equal(s.status, "failed");
+  assert.equal(
+    b.calls.some((x) => x[0] === "dig"),
+    false,
+  );
+  s.close();
 });
 test("overlapping action cancels pending work and late completion cannot resume", async () => {
   const b = bot();
@@ -222,27 +268,49 @@ test("finished session may relinquish shutdown to the trusted lifecycle owner", 
 });
 
 test("look_at faces arbitrary block centers from current standing eyes only", async () => {
-  for (const [x,y,z] of [[0,200,3],[4,202,0],[-3,197,2],[0,205,0]]) {
-    const b=bot(), s=createModelActionSession({bot:b});
+  for (const [x, y, z] of [
+    [0, 200, 3],
+    [4, 202, 0],
+    [-3, 197, 2],
+    [0, 205, 0],
+  ]) {
+    const b = bot(),
+      s = createModelActionSession({ bot: b });
     try {
-      await s.execute(req(1,{kind:"look_at",x,y,z}));
-      const calls=b.calls.filter(c=>c[0]==="look");
-      assert.equal(calls.length,1);
-      const [,yaw,pitch,force]=calls[0];
-      const dx=x,dy=y+.5-201.62,dz=z;
-      assert.ok(Math.abs(yaw-Math.atan2(-dx,-dz))<1e-12);
-      assert.ok(Math.abs(pitch-Math.atan2(dy,Math.hypot(dx,dz)))<1e-12);
-      assert.equal(force,true);
-      assert.equal(b.calls.some(c=>c[0]==="dig" || c[0]==="control"),false);
-      assert.deepEqual({x:b.entity.position.x,y:b.entity.position.y,z:b.entity.position.z},{x:.5,y:200,z:.5});
-    } finally {s.close();}
+      await s.execute(req(1, { kind: "look_at", x, y, z }));
+      const calls = b.calls.filter((c) => c[0] === "look");
+      assert.equal(calls.length, 1);
+      const [, yaw, pitch, force] = calls[0];
+      const dx = x,
+        dy = y + 0.5 - 201.62,
+        dz = z;
+      assert.ok(Math.abs(yaw - Math.atan2(-dx, -dz)) < 1e-12);
+      assert.ok(Math.abs(pitch - Math.atan2(dy, Math.hypot(dx, dz))) < 1e-12);
+      assert.equal(force, true);
+      assert.equal(
+        b.calls.some((c) => c[0] === "dig" || c[0] === "control"),
+        false,
+      );
+      assert.deepEqual(
+        { x: b.entity.position.x, y: b.entity.position.y, z: b.entity.position.z },
+        { x: 0.5, y: 200, z: 0.5 },
+      );
+    } finally {
+      s.close();
+    }
   }
 });
 test("look_at rejects invalid bot position without issuing look", async () => {
-  const b=bot();b.entity.position.x=NaN;
-  const s=createModelActionSession({bot:b});
+  const b = bot();
+  b.entity.position.x = NaN;
+  const s = createModelActionSession({ bot: b });
   try {
-    await assert.rejects(s.execute(req(1,{kind:"look_at",x:1,y:200,z:2})));
-    assert.equal(b.calls.some(c=>c[0]==="look"),false);
-  } finally {s.close();}
+    await assert.rejects(s.execute(req(1, { kind: "look_at", x: 1, y: 200, z: 2 })));
+    assert.equal(
+      b.calls.some((c) => c[0] === "look"),
+      false,
+    );
+  } finally {
+    s.close();
+  }
 });

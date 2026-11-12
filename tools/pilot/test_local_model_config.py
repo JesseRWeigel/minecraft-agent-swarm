@@ -149,5 +149,41 @@ class LocalModelConfigTests(unittest.TestCase):
         self.assertTrue(config.backend_cleanup_valid(receipt,require_gpu=False))
         self.assertFalse(config.backend_cleanup_valid(receipt))
 
+    def test_reuse_verifies_private_snapshot_and_exact_hash(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()) as name:
+            root=Path(name);snapshot=root/"weights"
+            raw=b"small pinned fixture";snapshot.write_bytes(raw);snapshot.chmod(0o400)
+            model={"model":{"bytes":len(raw),"sha256":hashlib.sha256(raw).hexdigest()}}
+            self.assertTrue(config.verify_model_snapshot(snapshot,model)["reused"])
+            bad=copy.deepcopy(model);bad["model"]["sha256"]="0"*64
+            with self.assertRaises(ValueError):config.verify_model_snapshot(snapshot,bad)
+            link=root/"link";link.symlink_to(snapshot)
+            with self.assertRaises(ValueError):config.verify_model_snapshot(link,model)
+            snapshot.chmod(0o600)
+            with self.assertRaises(ValueError):config.verify_model_snapshot(snapshot,model)
+
+    def test_reuse_space_does_not_reserve_another_model_copy(self):
+        from types import SimpleNamespace
+        from tools.pilot.bounded_storage import HOST_FREE_RESERVE_BYTES
+        model={"model":{"bytes":6*1024**3}};capacity=2*1024**3
+        free=HOST_FREE_RESERVE_BYTES+capacity+16*1024**2
+        with patch("tools.pilot.local_model_config.shutil.disk_usage",return_value=SimpleNamespace(free=free)):
+            config.preflight_model_space("/unused",model,capacity,reuse=True)
+            with self.assertRaises(ValueError):config.preflight_model_space("/unused",model,capacity)
+
+    def test_gpu_window_rejects_competing_compute_and_small_or_busy_gpu(self):
+        from types import SimpleNamespace
+        def check(row,pids=""):
+            with patch("subprocess.run",side_effect=[SimpleNamespace(stdout=row),SimpleNamespace(stdout=pids)]):
+                return config.verify_gpu_window(6*1024**3)
+        self.assertEqual(check("NVIDIA GeForce RTX 5090, 31000, 0")["other_compute_processes"],0)
+        for row,pids in [("NVIDIA GeForce RTX 5090, 31000, 0","123"),
+                         ("NVIDIA GeForce RTX 5090, 9000, 0",""),
+                         ("NVIDIA GeForce RTX 5090, 31000, 90",""),
+                         ("NVIDIA GeForce RTX 5090, 31000, -1","")]:
+            with self.assertRaises(ValueError):check(row,pids)
+        with patch("subprocess.run",return_value=SimpleNamespace(stdout="Other GPU, 31000, 0")):
+            with self.assertRaises(ValueError):config.verify_gpu_window(6*1024**3)
+
 if __name__=="__main__":
     unittest.main()

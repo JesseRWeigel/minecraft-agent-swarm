@@ -48,6 +48,63 @@ function inventoryProjection(slots) {
   return inventory;
 }
 
+// Optional local entities are untrusted observation data, never serialized whole.
+function droppedItemsProjection(entities, origin) {
+  const candidates = [];
+  let scanned = 0,
+    truncated = false;
+  if (!entities || typeof entities !== "object" || Array.isArray(entities))
+    return { nearbyDroppedItems: [], nearbyDroppedItemsTruncated: false };
+  // Mineflayer uses a plain entity map. Do not traverse arbitrary prototypes.
+  const prototype = Object.getPrototypeOf(entities);
+  if (prototype !== Object.prototype && prototype !== null)
+    return { nearbyDroppedItems: [], nearbyDroppedItemsTruncated: false };
+  for (const key in entities) {
+    if (!Object.hasOwn(entities, key)) continue;
+    if (scanned >= 256) {
+      truncated = true;
+      break;
+    }
+    scanned += 1;
+    try {
+      const entity = entities[key];
+      if (!entity || typeof entity !== "object" || typeof entity.getDroppedItem !== "function") continue;
+      const position = worldPosition(entity.position);
+      const distance = Math.hypot(position.x - origin.x, position.y - origin.y, position.z - origin.z);
+      if (distance > 8) continue;
+      const item = entity.getDroppedItem();
+      if (
+        !item ||
+        typeof item !== "object" ||
+        Array.isArray(item) ||
+        typeof item.name !== "string" ||
+        !ITEM_NAME.test(item.name) ||
+        !Number.isInteger(item.count) ||
+        item.count < 1 ||
+        item.count > 64
+      )
+        continue;
+      candidates.push({ name: item.name, count: item.count, position, distance });
+    } catch {
+      /* Malformed optional entity cannot invalidate the core observation. */
+    }
+  }
+  candidates.sort(
+    (a, b) =>
+      a.distance - b.distance ||
+      (a.name < b.name ? -1 : a.name > b.name ? 1 : 0) ||
+      a.position.x - b.position.x ||
+      a.position.y - b.position.y ||
+      a.position.z - b.position.z ||
+      a.count - b.count,
+  );
+  if (candidates.length > 16) truncated = true;
+  return {
+    nearbyDroppedItems: candidates.slice(0, 16).map(({ name, count, position }) => ({ name, count, position })),
+    nearbyDroppedItemsTruncated: truncated,
+  };
+}
+
 export function snapshotModelObservation(bot) {
   try {
     if (!bot || typeof bot !== "object" || !bot.entity || typeof bot.entity !== "object") invalid();
@@ -73,6 +130,12 @@ export function snapshotModelObservation(bot) {
             const point = worldPosition(block.position, true);
             return [{ name: block.name, x: point.x, y: point.y, z: point.z }];
           })();
+    let dropped = { nearbyDroppedItems: [], nearbyDroppedItemsTruncated: false };
+    try {
+      dropped = droppedItemsProjection(bot.entities, position);
+    } catch {
+      /* optional map */
+    }
     const result = {
       schema_version: 1,
       source: "participant_bot",
@@ -82,6 +145,7 @@ export function snapshotModelObservation(bot) {
       health: bot.health,
       inventory,
       visibleBlocks,
+      ...dropped,
     };
     if (Buffer.byteLength(JSON.stringify(result), "utf8") > MAX_OBSERVATION_BYTES) invalid();
     return result;

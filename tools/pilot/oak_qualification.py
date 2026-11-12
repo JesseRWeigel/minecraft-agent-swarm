@@ -19,7 +19,7 @@ from tools.pilot.scoped_trial import run_scoped, PROFILES
 from tools.pilot.oak_script import script_receipt_valid
 from tools.pilot.fake_model_driver import fake_model_receipt_valid
 from tools.pilot.real_model_driver import real_model_receipt_valid, response_valid
-from tools.pilot.local_model_config import verify_config, backend_cleanup_valid, capture_model, preflight_model_space
+from tools.pilot.local_model_config import verify_config, backend_cleanup_valid, capture_model, preflight_model_space, verify_model_snapshot, verify_gpu_window
 
 PARTICIPANT_FILES = ("action_descriptors.py", "model-action-session.mjs", "model-action-channel.mjs", "model-action-schema.mjs", "model-action-observation.mjs", "oak-participant-cli.mjs", "oak-participant.mjs", "oak_bridge_client.py", "protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs", "game_bridge.py", "game_bridge_client.py")
 OBSERVER_FILES = ("oak-fault-cli.mjs", "oak-blocked-fixture.mjs", "oak-blocked-observer-cli.mjs", "oak-observer-cli.mjs", "oak-fixture.mjs", "oak-task.mjs", "oak-inventory.mjs", "oak-score-cli.mjs", "protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
@@ -134,7 +134,7 @@ def validate_result(value, mode, recomputed, *, action_driver='fixed', prompt_fo
 def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snapshot,
                                  tool_manifest_sha256, control_mode="forward", failure_case="none", action_driver="fixed", resource_profile="game",
                                  storage_tool_root=None, storage_capacity_bytes=2 * 1024**3,
-                                 bwrap_path=Path("/usr/bin/bwrap"), runner=run_owned, local_model_config=None):
+                                 bwrap_path=Path("/usr/bin/bwrap"), runner=run_owned, local_model_config=None, model_snapshot=None):
     if launch is not True:
         raise ValueError("explicit launch=True required")
     if not action_driver_valid(action_driver,control_mode,failure_case):
@@ -142,7 +142,7 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
     if action_driver=='local_model':
         if resource_profile!='local_model' or local_model_config is None:raise ValueError('explicit local-model profile/config required')
         verify_config(local_model_config)
-    elif local_model_config is not None or resource_profile=='local_model':
+    elif local_model_config is not None or model_snapshot is not None or resource_profile=='local_model':
         raise ValueError('local-model configuration only for local-model driver')
     if resource_profile not in PROFILES:
         raise ValueError("invalid resource profile")
@@ -172,8 +172,13 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
         captured_config=local_model_config
         if local_model_config is not None:
             summary['stage']='capture_model'
-            preflight_model_space(workspace,local_model_config,storage_capacity_bytes)
-            summary['model_snapshot']=capture_model(local_model_config,workspace/'local-model.gguf')
+            preflight_model_space(workspace,local_model_config,storage_capacity_bytes,reuse=model_snapshot is not None)
+            if model_snapshot is None:
+                model_snapshot=workspace/'local-model.gguf'
+                summary['model_snapshot']=capture_model(local_model_config,model_snapshot)
+            else:
+                model_snapshot=Path(model_snapshot)
+                summary['model_snapshot']=verify_model_snapshot(model_snapshot,local_model_config)
             captured_config=json.loads(json.dumps(local_model_config))
             captured_config['model']['path']='/local-model.gguf'
         source_hash = capture_sources(workspace,captured_config)
@@ -199,7 +204,7 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
         args = _build_sandbox_argv(runtime, bwrap_path=bwrap, command=command)
         if action_driver=='local_model':
             index=args.index("--tmpfs")
-            args[index:index]=["--dev-bind","/dev/dxg","/dev/dxg","--ro-bind",str(workspace/"local-model.gguf"),"/local-model.gguf"]
+            args[index:index]=["--dev-bind","/dev/dxg","/dev/dxg","--ro-bind",str(model_snapshot),"/local-model.gguf"]
             summary['local_model_config']=local_model_config
             summary['claim_limit']="Bounded local-model fixture trial; infrastructure qualification and independently observed task outcome are separate."
         tmp_index = args.index("--tmpfs")
@@ -210,6 +215,9 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
                              "--ro-bind", str(workspace / "participant-code"), "/participant-code",
                              "--ro-bind", str(bwrap), "/pilot-bwrap",
                              "--setenv", "PYTHONPATH", "/observer-code"]
+        if action_driver=="local_model":
+            summary["stage"]="gpu_preflight"
+            summary["gpu_window"]=verify_gpu_window(local_model_config["model"]["bytes"])
         summary["stage"] = "launch"
         process, resources = run_scoped(args, workspace=workspace, cwd=runtime,
             env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}, profile=resource_profile, runner=runner)
