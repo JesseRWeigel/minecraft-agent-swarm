@@ -51,7 +51,12 @@ function parseRaw(raw) {
 }
 
 function validateAction(action) {
-  if (!action || typeof action !== "object" || Array.isArray(action) || Object.getPrototypeOf(action) !== Object.prototype)
+  if (
+    !action ||
+    typeof action !== "object" ||
+    Array.isArray(action) ||
+    Object.getPrototypeOf(action) !== Object.prototype
+  )
     invalid();
   if (action.kind === "observe" || action.kind === "finish") {
     if (!exactKeys(action, ["kind"])) invalid();
@@ -72,12 +77,33 @@ function validateAction(action) {
       invalid();
     return;
   }
-  if (action.kind === "move") {
-    if (!exactKeys(action, ["direction", "kind", "ticks"]) || !DIRECTION.has(action.direction) || !Number.isInteger(action.ticks) || action.ticks < 1 || action.ticks > 20)
+  if (action.kind === "move_to") {
+    if (
+      !exactKeys(action, ["kind", "ticks", "x", "y", "z"]) ||
+      ![action.x, action.y, action.z].every((v) => typeof v === "number" && Number.isFinite(v)) ||
+      Math.abs(action.x) > MAX_WORLD_COORDINATE ||
+      Math.abs(action.z) > MAX_WORLD_COORDINATE ||
+      action.y < -63 ||
+      action.y > 318 ||
+      !Number.isInteger(action.ticks) ||
+      action.ticks < 1 ||
+      action.ticks > 20
+    )
       invalid();
     return;
   }
-  if (action.kind === "dig") {
+  if (action.kind === "move") {
+    if (
+      !exactKeys(action, ["direction", "kind", "ticks"]) ||
+      !DIRECTION.has(action.direction) ||
+      !Number.isInteger(action.ticks) ||
+      action.ticks < 1 ||
+      action.ticks > 20
+    )
+      invalid();
+    return;
+  }
+  if (action.kind === "dig" || action.kind === "look_at") {
     if (
       !exactKeys(action, ["kind", "x", "y", "z"]) ||
       ![action.x, action.y, action.z].every(Number.isInteger) ||

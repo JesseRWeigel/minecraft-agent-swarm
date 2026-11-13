@@ -4,7 +4,7 @@ import subprocess
 import sys
 import unittest
 
-from tools.pilot.action_coordinator import audit_action_eof, run_action_script
+from tools.pilot.action_coordinator import audit_action_eof, run_action_script, _decode_reply, MOVE_TO_REJECTION_CODES
 from tools.pilot.action_descriptors import ActionDescriptors
 
 DESCRIPTOR_ADAPTER = os.path.join(os.path.dirname(__file__), "action_descriptors.py")
@@ -38,6 +38,33 @@ if mode == "trailing":
 
 
 class CoordinatorTests(unittest.TestCase):
+    def test_rejected_reply_is_explicit_dig_only_and_strict(self):
+        reply={"schema_version":1,"sequence":2,"status":"rejected",
+               "error":{"code":"target_missing","recoverable":True}}
+        raw=json.dumps(reply).encode()
+        self.assertEqual(_decode_reply(raw,2,False,False,allow_rejected=True),reply)
+        for kwargs in ({},{"allow_rejected":False},{"allow_rejected":1}):
+            with self.assertRaises(ValueError):_decode_reply(raw,2,False,False,**kwargs)
+        for finished,observed in ((True,False),(False,True)):
+            with self.assertRaises(ValueError):_decode_reply(raw,2,finished,observed,allow_rejected=True)
+        for error in ({"code":"other","recoverable":True},{"code":"target_missing","recoverable":1},
+                      {"code":"target_missing","recoverable":True,"extra":0}):
+            changed={**reply,"error":error}
+            with self.assertRaises(ValueError):
+                _decode_reply(json.dumps(changed).encode(),2,False,False,allow_rejected=True)
+
+    def test_navigation_rejections_cannot_be_used_as_dig_replies(self):
+        navigation={"schema_version":1,"sequence":1,"status":"rejected",
+                    "error":{"code":"navigation_blocked","recoverable":True}}
+        raw=json.dumps(navigation).encode()
+        self.assertEqual(_decode_reply(raw,1,False,False,allow_rejected=True,
+            rejection_codes=MOVE_TO_REJECTION_CODES),navigation)
+        with self.assertRaises(ValueError):_decode_reply(raw,1,False,False,allow_rejected=True)
+        dig={**navigation,"error":{"code":"target_missing","recoverable":True}}
+        with self.assertRaises(ValueError):
+            _decode_reply(json.dumps(dig).encode(),1,False,False,allow_rejected=True,
+                          rejection_codes=MOVE_TO_REJECTION_CODES)
+
     def start(self, mode):
         descriptors = ActionDescriptors.create()
         process = subprocess.Popen([

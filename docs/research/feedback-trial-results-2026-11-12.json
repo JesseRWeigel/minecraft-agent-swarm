@@ -1,0 +1,279 @@
+{
+  "actions": [
+    {
+      "action": {
+        "kind": "observe"
+      },
+      "reply": {
+        "observation": {
+          "health": 20,
+          "inventory": [],
+          "nearbyDroppedItems": [],
+          "nearbyDroppedItemsTruncated": false,
+          "pitch": 0,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 0.5
+          },
+          "schema_version": 1,
+          "source": "participant_bot",
+          "visibleBlocks": [],
+          "yaw": 3.141592653589793
+        },
+        "schema_version": 1,
+        "sequence": 1,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "kind": "look",
+        "pitch": 0,
+        "yaw": 0
+      },
+      "reply": {
+        "schema_version": 1,
+        "sequence": 2,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "kind": "look_at",
+        "x": 0,
+        "y": 200,
+        "z": 3
+      },
+      "reply": {
+        "schema_version": 1,
+        "sequence": 3,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "kind": "dig",
+        "x": 0,
+        "y": 200,
+        "z": 3
+      },
+      "reply": {
+        "schema_version": 1,
+        "sequence": 4,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "kind": "observe"
+      },
+      "reply": {
+        "observation": {
+          "health": 20,
+          "inventory": [],
+          "nearbyDroppedItems": [
+            {
+              "count": 1,
+              "name": "oak_log",
+              "position": {
+                "x": 0.6591796875,
+                "y": 200.5029296875,
+                "z": 3.43994140625
+              }
+            }
+          ],
+          "nearbyDroppedItemsTruncated": false,
+          "pitch": -0.3560471674068211,
+          "position": {
+            "x": 0.5,
+            "y": 200,
+            "z": 0.5
+          },
+          "schema_version": 1,
+          "source": "participant_bot",
+          "visibleBlocks": [],
+          "yaw": -3.1415926535894023
+        },
+        "schema_version": 1,
+        "sequence": 5,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "direction": "right",
+        "kind": "move",
+        "ticks": 20
+      },
+      "reply": {
+        "schema_version": 1,
+        "sequence": 6,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "kind": "observe"
+      },
+      "reply": {
+        "observation": {
+          "health": 20,
+          "inventory": [],
+          "nearbyDroppedItems": [
+            {
+              "count": 1,
+              "name": "oak_log",
+              "position": {
+                "x": -0.185791015625,
+                "y": 200,
+                "z": 2.65771484375
+              }
+            }
+          ],
+          "nearbyDroppedItemsTruncated": false,
+          "pitch": -0.3560471674068211,
+          "position": {
+            "x": -2.7,
+            "y": 200,
+            "z": 0.500000000000766
+          },
+          "schema_version": 1,
+          "source": "participant_bot",
+          "visibleBlocks": [],
+          "yaw": -3.1415926535894023
+        },
+        "schema_version": 1,
+        "sequence": 7,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "direction": "right",
+        "kind": "move",
+        "ticks": 20
+      },
+      "reply": {
+        "schema_version": 1,
+        "sequence": 8,
+        "status": "completed"
+      }
+    },
+    {
+      "action": {
+        "kind": "observe"
+      },
+      "reply": {
+        "observation": {
+          "health": 20,
+          "inventory": [],
+          "nearbyDroppedItems": [
+            {
+              "count": 1,
+              "name": "oak_log",
+              "position": {
+                "x": -0.185791015625,
+                "y": 200,
+                "z": 2.65771484375
+              }
+            }
+          ],
+          "nearbyDroppedItemsTruncated": false,
+          "pitch": -0.3560471674068211,
+          "position": {
+            "x": -2.7,
+            "y": 200,
+            "z": 0.5000000000015321
+          },
+          "schema_version": 1,
+          "source": "participant_bot",
+          "visibleBlocks": [],
+          "yaw": -3.1415926535894023
+        },
+        "schema_version": 1,
+        "sequence": 9,
+        "status": "completed"
+      }
+    }
+  ],
+  "backend_cleanup": {
+    "backend_reaped": true,
+    "gpu_device_seen": true,
+    "gpu_offload_evidence": "offloaded 34/34 layers to GPU",
+    "gpu_verified": true,
+    "group_gone": true,
+    "kill_sent": false,
+    "log_bytes": 382245,
+    "log_reader_stopped": true,
+    "log_sha256": "4b2ce29dec553b09f50b2a2a4c8a88b0c2a9554a1805da88309c49a595e47f96",
+    "log_truncated": true,
+    "process_group_gone": true,
+    "returncode": 0,
+    "status": "closed",
+    "term_sent": true
+  },
+  "call_seconds": 2.4026282720000154,
+  "calls": 8,
+  "child_returncode": 1,
+  "evidence_sha256": "914da6a8f2b9aa5b908f7ee1501563f6d0368aaa09df11d310e7d8aeca2f79de",
+  "frozen_revision": "9ca68bd",
+  "gpu_window": {
+    "free_mib": 30984,
+    "name": "NVIDIA GeForce RTX 5090",
+    "other_compute_processes": 0,
+    "utilization_percent": 0
+  },
+  "independent_score": {
+    "baselineVerification": {
+      "status": "verified"
+    },
+    "endpoint": {
+      "acquired": false,
+      "gameplayQualified": false,
+      "status": "observed"
+    }
+  },
+  "infrastructure": "failed",
+  "input_tokens": 8460,
+  "interpretation": "Dropped-item feedback was observed working. The model chose movement away from the item and failed to collect. No success or general performance claim.",
+  "loop_status": "budget_exhausted",
+  "model_snapshot": {
+    "bytes": 6594462816,
+    "reused": true,
+    "sha256": "dec52a44569a2a25341c4e4d3fee25846eed4f6f0b936278e3a3c900bb99d37c"
+  },
+  "no_limit_violations": true,
+  "observation_caveat": "Failure-path observer, not clean finalized episode.",
+  "output_tokens": 103,
+  "plan": "feedback-trial-plan-2026-11-12.json",
+  "resource_limits_verified": true,
+  "schema_version": 1,
+  "scope_cleanup_confirmed": true,
+  "second_trial_run": false,
+  "source_manifest_sha256": "91d89f45f30d3631583be1417d54fbcc7ffe127732ef6860ec71637837aafb3e",
+  "stop_reason": "First trial did not qualify/acquire; predeclared rule stopped the batch.",
+  "storage_valid": true,
+  "task_acquired": false,
+  "tests": {
+    "npm": 1063,
+    "python_pilot": 317,
+    "python_skips": 0,
+    "standard_checks": "passed"
+  },
+  "trials_run": 1,
+  "warmup": {
+    "content": "{\"ready\":true}",
+    "elapsed_seconds": 14.56649381300008,
+    "input_tokens": 22,
+    "output_tokens": 6,
+    "prompt_sha256": "cb02be0a7fbd2560a8a992fcd2d33a37129593b25cffaa5fe73f057b8679cedc",
+    "reserved_output_tokens": 32,
+    "schema_version": 1,
+    "status": "completed",
+    "stop_type": "eos",
+    "tokens_evaluated": 22,
+    "truncated": false,
+    "worker_reaped": true
+  }
+}

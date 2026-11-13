@@ -11,7 +11,7 @@ import os
 import selectors
 import time
 
-from tools.pilot.action_coordinator import _request, _decode_reply, MAX_REPLY_BYTES
+from tools.pilot.action_coordinator import _request, _decode_reply, MAX_REPLY_BYTES, DIG_REJECTION_CODES, MOVE_TO_REJECTION_CODES
 from tools.pilot.action_descriptors import ActionDescriptors
 from tools.pilot.inference_budget import InferenceBudget
 from tools.pilot.ollama_adapter import call_ollama, _json, _request as _inference_request
@@ -73,7 +73,8 @@ def _exchange(descriptors, action, sequence, deadline, cancel, records):
         if newline >= 0:
             if newline != len(buffer)-1:
                 raise ValueError()
-            reply = _decode_reply(bytes(buffer[:newline]), sequence, finished, action.get("kind") == "observe")
+            reply = _decode_reply(bytes(buffer[:newline]), sequence, finished, action.get("kind") == "observe", allow_rejected=action.get("kind") in ("dig", "move_to"),
+                rejection_codes=MOVE_TO_REJECTION_CODES if action.get("kind") == "move_to" else DIG_REJECTION_CODES)
             _guard(deadline, cancel)
             record["reply"] = reply
             record["finished_monotonic"] = time.monotonic()

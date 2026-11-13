@@ -183,3 +183,7 @@ The [stateful action executor](model-action-session.md) now enforces ordering,
 concurrency, target checks, action/session deadlines and cancellation in offline
 tests. Its bounded observations are advisory. Game/pipe integration remains next;
 no model calls or new gameplay results are claimed.
+
+## Bounded local-model demo
+
+See [local-model-demo.md](local-model-demo.md) for the explicitly launched GPU/game fixture, native-token accounting, owned-backend cancellation, reproducible command and honest attempt ledger. This is not a live-world deployment or general agent benchmark.

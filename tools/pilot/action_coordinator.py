@@ -16,6 +16,8 @@ MAX_REPLY_BYTES = 20480
 MAX_TIMEOUT_SECONDS = 20
 TRIAL_ID = "collect-oak-log-v1"
 ACTION_ID = "collect-01"
+DIG_REJECTION_CODES = frozenset({"target_missing", "target_out_of_reach", "target_not_visible", "target_not_diggable"})
+MOVE_TO_REJECTION_CODES = frozenset({"navigation_out_of_range", "navigation_blocked", "no_progress", "not_arrived"})
 
 
 def _invalid_constant(_value: str) -> None:
@@ -41,18 +43,30 @@ def _finite_json(value: Any) -> bool:
     return value is None or type(value) in (bool, int, str)
 
 
-def _decode_reply(raw: bytes, sequence: int, expect_finished: bool, expect_observation: bool) -> dict[str, Any]:
+def _decode_reply(raw: bytes, sequence: int, expect_finished: bool, expect_observation: bool, *, allow_rejected: bool = False, rejection_codes: frozenset[str] = DIG_REJECTION_CODES) -> dict[str, Any]:
     if not raw or len(raw) >= MAX_REPLY_BYTES:
         raise ValueError
     try:
         reply = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_duplicates, parse_constant=_invalid_constant)
     except (UnicodeDecodeError, ValueError, json.JSONDecodeError):
         raise ValueError from None
-    keys = {"schema_version", "sequence", "status"} | ({"observation"} if expect_observation else set())
+    if type(allow_rejected) is not bool or rejection_codes not in (DIG_REJECTION_CODES, MOVE_TO_REJECTION_CODES):
+        raise ValueError
+    rejected = type(reply) is dict and reply.get("status") == "rejected"
+    if rejected and (not allow_rejected or expect_finished or expect_observation):
+        raise ValueError
+    keys = {"schema_version", "sequence", "status"} | ({"error"} if rejected else {"observation"} if expect_observation else set())
     if not _finite_json(reply) or type(reply) is not dict or set(reply) != keys:
         raise ValueError
     if type(reply["schema_version"]) is not int or reply["schema_version"] != 1 or type(reply["sequence"]) is not int or reply["sequence"] != sequence:
         raise ValueError
+    if rejected:
+        error = reply["error"]
+        if (type(error) is not dict or set(error) != {"code", "recoverable"}
+                or error["recoverable"] is not True or type(error["code"]) is not str
+                or error["code"] not in rejection_codes):
+            raise ValueError
+        return reply
     if reply["status"] not in {"completed", "finished"} or (reply["status"] == "finished") != expect_finished:
         raise ValueError
     if expect_observation:

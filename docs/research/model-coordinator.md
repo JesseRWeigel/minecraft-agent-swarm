@@ -124,3 +124,5 @@ A trusted full-prompt tokenizer/chat-template binding, real-backend cancellation
 qualification, and a narrow backend transport compatible with the isolated game
 namespace still need implementation. Do not replace these with approximate token
 counts or expose the participant to the host network merely to start a model.
+
+Subsequent real-backend work is tracked separately in [the bounded local-model demo](local-model-demo.md); the results above remain synthetic-provider results.
