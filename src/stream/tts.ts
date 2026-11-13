@@ -100,6 +100,8 @@ let lastSynthesisAt = 0;
  * Files are saved to overlay/audio/ and served via the overlay HTTP server.
  */
 export async function generateSpeech(text: string): Promise<string | null> {
+  // Local-only operation must never send bot thoughts to an external speech service.
+  if (process.env.TTS_ENABLED === "false") return null;
   // Thoughts are ephemeral livestream flavour. Dropping one while another is
   // mid-flight beats queueing a backlog that never drains.
   if (synthesizing) return null;

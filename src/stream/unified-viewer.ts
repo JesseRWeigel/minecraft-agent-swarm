@@ -33,7 +33,7 @@ function isPortAvailable(port: number): Promise<boolean> {
       server.close();
       resolve(true);
     });
-    server.listen(port);
+    server.listen(port, process.env.SWARM_BIND_HOST || undefined);
   });
 }
 
@@ -182,7 +182,7 @@ export async function startUnifiedViewer(): Promise<boolean> {
     // ------------------------------------------------------------------
     setupRelayNamespace();
 
-    httpServer.listen(UNIFIED_PORT, () => {
+    httpServer.listen(UNIFIED_PORT, process.env.SWARM_BIND_HOST || undefined, () => {
       console.log(`[UnifiedViewer] Viewer at http://localhost:${UNIFIED_PORT}`);
     });
 
