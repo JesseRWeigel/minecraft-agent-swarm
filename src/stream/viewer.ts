@@ -16,7 +16,7 @@ function isPortAvailable(port: number): Promise<boolean> {
       server.close();
       resolve(true);
     });
-    server.listen(port);
+    server.listen(port, process.env.SWARM_BIND_HOST || undefined);
   });
 }
 
@@ -102,7 +102,7 @@ export async function startViewer(bot: Bot, port = 3000) {
       });
     });
 
-    httpServer.listen(port, () => {
+    httpServer.listen(port, process.env.SWARM_BIND_HOST || undefined, () => {
       console.log(`[Viewer] Follow-camera viewer at http://localhost:${port}`);
       console.log(`[Viewer] Controls: click button or press C to cycle cameras`);
     });
