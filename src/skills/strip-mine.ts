@@ -3,7 +3,7 @@ import type { Skill, SkillResult } from "./types.js";
 import { Vec3 } from "vec3";
 import pkg from "mineflayer-pathfinder";
 const { goals, Movements } = pkg;
-import { baseMoves, collectNearbyDrops, safeGoto, shedJunk } from "../bot/navigation.js";
+import { baseMoves, collectNearbyDrops, drownRescueActive, safeGoto, shedJunk } from "../bot/navigation.js";
 import { digDownTo } from "./descend.js";
 
 const TUNNEL_LENGTH = 40;
@@ -761,7 +761,15 @@ export const stripMineSkill: Skill = {
         }
         console.log(`[Skill] strip_mine bridged a void under the next cell at step ${step} with ${filler!.name}`);
       }
-      await moveToPosition(bot, targetPos);
+      // A drowning rescue owns the keys: stop here instead of digging on from
+      // a cell the bot never reached while it swims for air.
+      if ((await moveToPosition(bot, targetPos)) === "rescue") {
+        return {
+          success: false,
+          message: `Tunnel stopped at step ${step} — a drowning rescue took over the controls before the step forward. Mined ${mined} blocks. ${formatOres(oresFound)} Once breathing, run strip_mine again to continue.`,
+          stats: { blocksMined: mined, oresFound: oresFound.length },
+        };
+      }
 
       // Place torch every N blocks
       if (step > 0 && step % TORCH_INTERVAL === 0) {
@@ -1042,33 +1050,100 @@ async function followVein(bot: Bot, start: Vec3, oreName: string, ores: string[]
   return extra;
 }
 
-async function moveToPosition(bot: Bot, targetPos: Vec3): Promise<void> {
+/**
+ * How a tunnel step's walk ended. "arrived": the pathfinder reached the cell.
+ * "fallback": the pathfinder failed or timed out and the manual nudge ran.
+ * "rescue": a drowning rescue owns the movement keys — nothing further was
+ * pressed or released here, and the caller must stop rather than dig on.
+ */
+export type MoveToPositionOutcome = "arrived" | "fallback" | "rescue";
+
+export interface MoveToPositionOptions {
+  /** Pathfinder budget before the walk is stopped. Default 8000ms. */
+  timeoutMs?: number;
+  /** Movement setup before goto. Default: baseMoves with canDig off. Injectable for tests. */
+  prepareMovements?: (bot: Bot) => void;
+}
+
+const MOVE_TO_POSITION_TIMEOUT_MS = 8000;
+
+function prepareTunnelMovements(bot: Bot): void {
+  const moves = baseMoves(bot);
+  moves.canDig = false;
+  bot.pathfinder.setMovements(moves);
+}
+
+/**
+ * One tunnel step's walk. The drown reflex resets the pathfinder goal and
+ * then holds jump (and later a shore heading); its own setGoal(null) is what
+ * rejects a goto in flight here. The old version then ran its manual
+ * fallback (forward on, forward off) and its never-cleared 8s timer later
+ * called setGoal(null) — which clears EVERY control state — so it released
+ * the rescue's keys mid-swim, and on a successful step that leaked timer
+ * also killed whatever walk was live 8s later. Every new press, release and
+ * path reset here is now gated on drownRescueActive, including after each
+ * await, and the timer is cleared in finally.
+ */
+export async function moveToPosition(
+  bot: Bot,
+  targetPos: Vec3,
+  opts: MoveToPositionOptions = {},
+): Promise<MoveToPositionOutcome> {
+  if (drownRescueActive(bot)) return "rescue";
+  const timeoutMs = opts.timeoutMs ?? MOVE_TO_POSITION_TIMEOUT_MS;
+  const prepare = opts.prepareMovements ?? prepareTunnelMovements;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const moves = baseMoves(bot);
-    moves.canDig = false;
-    bot.pathfinder.setMovements(moves);
+    prepare(bot);
     // Bounded: an unreachable GoalBlock here hung strip_mine (and the whole
     // bot) for ~13h. Race against a timeout that stops the pathfinder.
     await Promise.race([
       bot.pathfinder.goto(new goals.GoalBlock(targetPos.x, targetPos.y, targetPos.z)),
-      new Promise<void>((_, rej) =>
-        setTimeout(() => {
-          bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
+      new Promise<void>((_, rej) => {
+        timer = setTimeout(() => {
+          timer = undefined;
+          // A rescue has already reset the goal it took over; a second
+          // reset would only clear its jump key.
+          if (!drownRescueActive(bot)) bot.pathfinder.setGoal(null); // synchronous reset; stop() only raises a flag that kills the NEXT walk
           rej(new Error("moveToPosition timeout"));
-        }, 8000),
-      ),
+        }, timeoutMs);
+      }),
     ]);
+    return drownRescueActive(bot) ? "rescue" : "arrived";
   } catch {
-    // Fallback: manual walk
-    try {
-      await bot.lookAt(targetPos.offset(0.5, 1, 0.5));
-      bot.setControlState("forward", true);
-      await bot.waitForTicks(8);
-      bot.setControlState("forward", false);
-    } catch {
-      /* ok */
-    }
+    /* fall through to the rescue gate and manual fallback */
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = undefined;
   }
+
+  // The goto usually rejects BECAUSE the rescue reset it: it claims first,
+  // then calls setGoal(null), so the claim is visible here.
+  if (drownRescueActive(bot)) return "rescue";
+  // Fallback: manual walk
+  let pressed = false;
+  try {
+    await bot.lookAt(targetPos.offset(0.5, 1, 0.5));
+    if (drownRescueActive(bot)) return "rescue";
+    bot.setControlState("forward", true);
+    pressed = true;
+    await bot.waitForTicks(8);
+    // A rescue that began during the nudge owns forward now (shore swim);
+    // releasing it would stall the swim.
+    if (drownRescueActive(bot)) return "rescue";
+    bot.setControlState("forward", false);
+    pressed = false;
+  } catch {
+    if (pressed && !drownRescueActive(bot)) {
+      try {
+        bot.setControlState("forward", false);
+      } catch {
+        /* ok */
+      }
+    }
+    if (drownRescueActive(bot)) return "rescue";
+  }
+  return "fallback";
 }
 
 async function placeTorchOnWall(bot: Bot, forward: Vec3): Promise<void> {
