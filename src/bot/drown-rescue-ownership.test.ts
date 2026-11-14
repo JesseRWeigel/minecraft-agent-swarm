@@ -21,6 +21,7 @@ import {
   escapeWaterIfDrowning,
   safeGoto,
 } from "./navigation.js";
+import { moveToPosition } from "../skills/strip-mine.js";
 
 const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 
@@ -436,5 +437,167 @@ test(
     assert.equal(t.state, "rejected");
     assert.match(String((t.error as Error)?.message), /Navigation timed out/);
     assert.equal(timed.calls.setGoal, 2, "the timeout resets the path");
+  }),
+);
+
+// --- strip_mine's tunnel-step walk (moveToPosition) ---
+// The fake bot has no registry for baseMoves, so the movement setup is
+// stubbed; everything else is the real helper.
+const noMoves = { prepareMovements: () => {} };
+const stepCell = () => new Vec3(1, 61, 0);
+
+function dryWorld() {
+  const w = fakeWorld();
+  w.state.submerged = false;
+  w.bot.oxygenLevel = 20;
+  return w;
+}
+
+test(
+  "strip_mine step: a successful goto leaves no timer to reset a later walk",
+  withClock(async () => {
+    const w = dryWorld();
+    const step = moveToPosition(w.asBot, stepCell(), noMoves);
+    await flush();
+    assert.equal(w.calls.goto, 1);
+    w.finishGoto();
+    assert.equal(await step, "arrived");
+
+    // The next walk (or a rescue) owns the pathfinder and keys afterwards.
+    const later = track(w.bot.pathfinder.goto(goal()));
+    w.bot.controlState.jump = true;
+    w.bot.controlState.forward = true;
+    await advance(10_000);
+    assert.equal(w.calls.setGoal, 0, "the 8s timer must not fire after the step arrived");
+    assert.equal(later.state, "pending", "a later walk is not killed by the old step's timer");
+    assert.equal(w.bot.controlState.jump, true);
+    assert.equal(w.bot.controlState.forward, true);
+  }),
+);
+
+test(
+  "strip_mine step: a rescue already running at entry gets no walk, reset or keys",
+  withClock(async () => {
+    const w = fakeWorld(); // submerged, air 8
+    void escapeWaterIfDrowning(w.asBot);
+    await flush();
+    assert.equal(drownRescueActive(w.asBot), true);
+    assert.equal(w.bot.controlState.jump, true);
+
+    assert.equal(await moveToPosition(w.asBot, stepCell(), noMoves), "rescue");
+    assert.equal(w.calls.goto, 0, "no goto while the rescue owns the keys");
+    assert.equal(w.calls.setGoal, 0);
+    assert.equal(w.bot.controlState.forward, false, "no manual nudge");
+    await advance(10_000);
+    assert.equal(w.calls.setGoal, 0, "no timer was armed");
+    assert.equal(w.bot.controlState.jump, true, "the rescue's jump survives");
+  }),
+);
+
+test(
+  "strip_mine step: a rescue that rejects the goto gets no manual fallback and no late reset",
+  withClock(async () => {
+    const w = dryWorld();
+    const step = moveToPosition(w.asBot, stepCell(), noMoves);
+    await flush();
+    assert.equal(w.calls.goto, 1);
+
+    // Air runs short mid-step: the reflex claims, resets the live goal (which
+    // rejects the step's goto) and holds jump.
+    w.state.submerged = true;
+    w.bot.oxygenLevel = 8;
+    void escapeWaterIfDrowning(w.asBot);
+    assert.equal(await step, "rescue");
+    assert.equal(w.calls.setGoal, 1, "only the rescue's own reset");
+    assert.equal(w.bot.controlState.jump, true);
+    assert.equal(w.bot.controlState.forward, false, "the manual fallback did not run");
+
+    await advance(10_000);
+    assert.equal(w.calls.setGoal, 1, "the cleared timer never resets the rescue");
+    assert.equal(w.bot.controlState.jump, true, "jump survives past the old 8s mark");
+  }),
+);
+
+test(
+  "strip_mine step: a rescue starting during the fallback's lookAt gets no forward press",
+  withClock(async () => {
+    const w = dryWorld();
+    const look: { release?: () => void } = {};
+    w.bot.lookAt = () => new Promise<void>((resolve) => (look.release = resolve));
+    const p = moveToPosition(w.asBot, stepCell(), noMoves);
+    const step = track(p);
+    await advance(8_050); // pathfinder budget spent: fallback starts
+    assert.equal(w.calls.setGoal, 1, "no rescue yet: the timeout still resets the path");
+    assert.ok(look.release, "the fallback is aiming");
+
+    w.bot.lookAt = async () => {};
+    w.state.submerged = true;
+    w.bot.oxygenLevel = 8;
+    void escapeWaterIfDrowning(w.asBot);
+    await flush();
+    assert.equal(w.bot.controlState.jump, true);
+    look.release!();
+    await flush();
+    assert.equal(step.state, "resolved");
+    assert.equal(await p, "rescue");
+    assert.equal(w.bot.controlState.forward, false, "forward never pressed under the rescue");
+    assert.equal(w.bot.controlState.jump, true);
+    assert.equal(w.calls.setGoal, 1);
+  }),
+);
+
+test(
+  "strip_mine step: a rescue starting during the fallback's tick wait keeps its forward key",
+  withClock(async () => {
+    const w = dryWorld();
+    const step = moveToPosition(w.asBot, stepCell(), noMoves);
+    await advance(8_050);
+    assert.equal(w.calls.setGoal, 1);
+    assert.equal(w.bot.controlState.forward, true, "the nudge is pressing forward");
+
+    w.state.submerged = true;
+    w.bot.oxygenLevel = 8;
+    void escapeWaterIfDrowning(w.asBot);
+    await flush();
+    w.bot.controlState.forward = true; // the rescue's shore heading
+    w.releaseOldestTick(); // the step's 8-tick wait was queued first
+    assert.equal(await step, "rescue");
+    assert.equal(w.bot.controlState.forward, true, "the step must not release the rescue's heading");
+    assert.equal(w.bot.controlState.jump, true);
+    assert.equal(w.calls.setGoal, 1);
+  }),
+);
+
+test(
+  "strip_mine step: with no rescue, a stuck goto is still bounded and cleaned up",
+  withClock(async () => {
+    const w = dryWorld();
+    w.state.ticks = "auto";
+    const p = moveToPosition(w.asBot, stepCell(), noMoves);
+    const step = track(p);
+    await advance(7_900);
+    assert.equal(step.state, "pending");
+    assert.equal(w.calls.setGoal, 0);
+    await advance(200);
+    assert.equal(step.state, "resolved", "the step ends on schedule");
+    assert.equal(await p, "fallback");
+    assert.equal(w.calls.setGoal, 1, "the timeout resets the path");
+    assert.equal(w.bot.controlState.forward, false, "the manual nudge released forward");
+  }),
+);
+
+test(
+  "strip_mine step: rescue claimed before successful goto continuation wins",
+  withClock(async () => {
+    const w = dryWorld();
+    const step = moveToPosition(w.asBot, stepCell(), noMoves);
+    await flush();
+    w.finishGoto();
+    // Before the resolved goto's continuation runs, the reflex takes ownership.
+    w.state.submerged = true;
+    w.bot.oxygenLevel = 8;
+    void escapeWaterIfDrowning(w.asBot);
+    assert.equal(await step, "rescue");
+    assert.equal(w.bot.controlState.jump, true);
   }),
 );
