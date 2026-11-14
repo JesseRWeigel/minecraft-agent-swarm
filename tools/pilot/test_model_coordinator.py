@@ -51,7 +51,7 @@ class ModelLoopTests(unittest.TestCase):
     def setUp(self):
         module=(Path(__file__).parent/"oak-participant-cli.mjs").resolve().as_uri()
         source="""import {EventEmitter} from 'node:events';import {runParticipantProcess} from MODULE;
-const b=new EventEmitter();b.entity={position:{x:.5,y:200,z:.5},yaw:0,pitch:0};b.health=20;b.inventory={slots:[]};
+const b=new EventEmitter();b.entity={position:{x:.5,y:200,z:.5,clone(){return {set(x,y,z){return {x,y,z};}};}},yaw:0,pitch:0};b.health=20;b.inventory={slots:[]};
 b._client={write(){}};b.waitForTicks=b.look=b.dig=async()=>{};b.blockAt=b.blockAtCursor=()=>null;b.canDigBlock=()=>false;
 b.setControlState=b.clearControlStates=b.stopDigging=()=>{};b.end=()=>b.emit('end');b.quit=async()=>b.emit('end');
 const code=await runParticipantProcess({argv:['--trial-id','collect-oak-log-v1','--action-id','collect-01','--movement','model'],loadMineflayer:async()=>({createBot:()=>b}),hardExitOnWatchdog:true,watchdogMs:8000});process.exit(code);
