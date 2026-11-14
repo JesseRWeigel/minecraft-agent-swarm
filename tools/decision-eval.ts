@@ -1,45 +1,40 @@
 /**
- * Decision-quality eval for the Minecraft swarm brain.
+ * Bounded, repeatable local decision-quality eval for the Minecraft swarm brain.
  *
- * Rebuilt 2026-08-13. The previous harness hand-wrote its own system prompt,
- * which meant it graded a prompt the bots never actually see. This one imports
- * buildStrategicPrompt and FORGE_CONFIG directly, and replicates the exact
- * request options from src/llm/index.ts (temperature 0.8, repeat_penalty 1.15,
- * num_predict 1024, format:"json", and the model-aware `think` value) so a
- * score here means something about live behaviour.
+ * Grades the prompt the bots actually see: it imports buildStrategicPrompt and
+ * FORGE_CONFIG directly and replicates queryStrategic()'s request options from
+ * src/llm/index.ts (temperature 0.8, repeat_penalty 1.15, format:"json", the
+ * model-aware `think` value). num_predict defaults to production's 1024.
  *
  * Scenarios are drawn from real logged swarm failures. Each has a predicate
- * over the parsed decision rather than a string match, so "picked mine_block"
- * is not scored as correct when it mined the wrong thing.
+ * over the parsed decision rather than a string match.
  *
- * Usage: npx tsx decision-eval.ts <model> [samples]
+ * Safety: loopback http only, local models only (name + /api/show check), no
+ * pulls, no warmup, ≤12 chat requests validated before any call, per-request
+ * timeout, redirects refused, keep_alive:0. Model output is parsed as data and
+ * never executed; no Minecraft world is touched.
+ *
+ * Usage: npx tsx tools/decision-eval.ts <model> --out <new.jsonl>
+ *          [--samples 1..3] [--scenario <name>]... [--num-predict 128..2048] [--timeout-ms ≤120000]
+ * See docs/decision-evaluation.md.
  */
 
+import { closeSync, openSync, writeSync } from "node:fs";
 import { buildStrategicPrompt } from "../src/llm/prompts.js";
 import { FORGE_CONFIG } from "../src/bot/role.js";
-
-const HOST = process.env.OLLAMA_HOST || "http://localhost:11434";
-const MODEL = process.argv[2];
-const SAMPLES = Number(process.argv[3] || 5);
-
-if (!MODEL) {
-  console.error("usage: npx tsx decision-eval.ts <model> [samples]");
-  process.exit(1);
-}
-
-/** Mirrors thinkFor() in src/llm/index.ts — gpt-oss is reasoning-native and
- *  returns EMPTY content under think:false + format:"json". Getting this wrong
- *  would score gpt-oss on blank responses. */
-function thinkFor(model: string): boolean | "low" {
-  return model.includes("gpt-oss") ? "low" : false;
-}
-
-interface Decision {
-  thought?: string;
-  action?: string;
-  params?: Record<string, unknown>;
-  goal?: string;
-}
+import {
+  buildChatRequest,
+  buildUserPrompt,
+  classifyChatResponse,
+  MAX_CHAT_REQUESTS,
+  parseEvalArgs,
+  postJson,
+  scoreResponse,
+  tally,
+  verifyLocalModel,
+  type Decision,
+  type RequestRecord,
+} from "../src/eval/decision-metrics.js";
 
 interface Scenario {
   name: string;
@@ -148,54 +143,15 @@ It's night — hostile mobs spawn in the dark. Consider shelter or a bed.`,
   },
 ];
 
-async function ask(system: string, user: string): Promise<{ raw: string; ms: number }> {
-  const t0 = process.hrtime.bigint();
-  const res = await fetch(`${HOST}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      stream: false,
-      think: thinkFor(MODEL),
-      format: "json",
-      options: { temperature: 0.8, repeat_penalty: 1.15, num_predict: 1024 },
-    }),
-  });
-  const json = (await res.json()) as { message?: { content?: string }; error?: string };
-  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-  if (json.error) throw new Error(json.error);
-  return { raw: json.message?.content ?? "", ms };
-}
+async function main(): Promise<void> {
+  // Everything below up to openSync is validation; no network has happened yet.
+  const cfg = parseEvalArgs(
+    process.argv.slice(2),
+    SCENARIOS.map((s) => s.name),
+    { OLLAMA_HOST: process.env.OLLAMA_HOST },
+  );
+  const selected = cfg.scenarioNames.map((n) => SCENARIOS.find((s) => s.name === n)!);
 
-/** Same tolerance the bot has: strip think tags, pull the first JSON object. */
-function parse(raw: string): Decision | null {
-  const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-  const start = cleaned.indexOf("{");
-  if (start === -1) return null;
-  let depth = 0;
-  for (let i = start; i < cleaned.length; i++) {
-    if (cleaned[i] === "{") depth++;
-    else if (cleaned[i] === "}" && --depth === 0) {
-      try {
-        return JSON.parse(cleaned.slice(start, i + 1)) as Decision;
-      } catch {
-        return null;
-      }
-    }
-  }
-  return null;
-}
-
-function median(xs: number[]): number {
-  const s = [...xs].sort((a, b) => a - b);
-  return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
-}
-
-async function main() {
   const system = buildStrategicPrompt({
     name: FORGE_CONFIG.name,
     personality: FORGE_CONFIG.personality,
@@ -205,45 +161,106 @@ async function main() {
     priorities: FORGE_CONFIG.priorities,
   });
 
-  console.log(`\n════════ ${MODEL}  (${SAMPLES} samples × ${SCENARIOS.length} scenarios)`);
-  console.log(`system prompt: ${system.length} chars\n`);
+  // "wx" = O_CREAT|O_EXCL: refuses an existing file or symlink at the path.
+  const fd = openSync(cfg.outPath, "wx", 0o644);
+  const emit = (record: Record<string, unknown>) => writeSync(fd, JSON.stringify(record) + "\n");
 
-  // Warm the model so the first scenario is not scored on a cold load.
-  await ask(system, "CURRENT STATE:\nHealth: 20/20\n\nWhat should you do next? Respond with JSON.");
+  try {
+    const show = await verifyLocalModel(fetch, cfg.host, cfg.model, cfg.timeoutMs);
+    const template = buildChatRequest(cfg.model, system, "", cfg.numPredict);
+    emit({
+      type: "run",
+      started_at: new Date().toISOString(),
+      model: cfg.model,
+      model_details: show.details,
+      host: cfg.host,
+      samples: cfg.samples,
+      scenarios: cfg.scenarioNames,
+      chat_requests_planned: cfg.chatRequests,
+      chat_requests_cap: MAX_CHAT_REQUESTS,
+      timeout_ms: cfg.timeoutMs,
+      request_options: {
+        think: template.think,
+        format: template.format,
+        keep_alive: template.keep_alive,
+        stream: template.stream,
+        options: template.options,
+      },
+      system_prompt: system,
+    });
 
-  const latencies: number[] = [];
-  let total = 0;
-  let badJson = 0;
-  const failLog: string[] = [];
+    console.log(`${cfg.model}: ${cfg.samples} sample(s) × ${selected.length} scenario(s) → ${cfg.outPath}`);
 
-  for (const sc of SCENARIOS) {
-    const user = `CURRENT STATE:\n${sc.state}\n\nWhat should you do next? Respond with JSON.`;
-    let hits = 0;
-    for (let i = 0; i < SAMPLES; i++) {
-      const { raw, ms } = await ask(system, user);
-      latencies.push(ms);
-      const d = parse(raw);
-      if (!d) {
-        badJson++;
-        failLog.push(`  ${sc.name}: UNPARSEABLE ${JSON.stringify(raw.slice(0, 120))}`);
-        continue;
+    const records: RequestRecord[] = [];
+    let sent = 0;
+    for (const sc of selected) {
+      const user = buildUserPrompt(sc.state);
+      for (let i = 0; i < cfg.samples; i++) {
+        if (++sent > MAX_CHAT_REQUESTS) throw new Error("request cap reached (should be unreachable)");
+        const body = buildChatRequest(cfg.model, system, user, cfg.numPredict);
+        const r = await postJson(fetch, `${cfg.host}/api/chat`, body, cfg.timeoutMs);
+        const base = { type: "request", scenario: sc.name, sample: i, user_prompt: user, elapsed_ms: r.elapsedMs };
+
+        if (!r.ok) {
+          const rec: RequestRecord = {
+            scenario: sc.name,
+            transport: r.kind,
+            answer_status: null,
+            budget_exhausted: null,
+            scenario_accepts: null,
+            counted_success: false,
+          };
+          records.push(rec);
+          emit({ ...base, ...rec, error: r.error });
+          console.log(`  ${sc.name}#${i}: ${r.kind}`);
+          continue;
+        }
+
+        const c = classifyChatResponse(r.body, cfg.numPredict);
+        const s = scoreResponse(c, sc.accept);
+        const rec: RequestRecord = {
+          scenario: sc.name,
+          transport: "ok",
+          answer_status: c.answer.status,
+          budget_exhausted: c.budget_exhausted,
+          scenario_accepts: s.scenario_accepts,
+          counted_success: s.counted_success,
+        };
+        records.push(rec);
+        emit({
+          ...base,
+          ...rec,
+          content: c.content,
+          reasoning: c.reasoning,
+          decision: c.answer.decision,
+          parse_error: c.answer.error,
+          ...c.metrics,
+        });
+        console.log(
+          `  ${sc.name}#${i}: answer=${c.answer.status} budget_exhausted=${c.budget_exhausted} ` +
+            `accepts=${s.scenario_accepts} counted=${s.counted_success} done=${c.metrics.done_reason} ${r.elapsedMs}ms`,
+        );
       }
-      if (sc.accept(d)) hits++;
-      else failLog.push(`  ${sc.name}: ${d.action} ${JSON.stringify(d.params ?? {})}`);
     }
-    total += hits;
-    console.log(`  [${hits}/${SAMPLES}] ${sc.name}`);
-  }
 
-  const max = SAMPLES * SCENARIOS.length;
-  console.log(`\n  ──> SCORE ${total}/${max} | bad JSON ${badJson} | warm median ${median(latencies).toFixed(0)}ms`);
-  if (failLog.length) {
-    console.log(`\n  misses:`);
-    console.log(failLog.slice(0, 25).join("\n"));
+    const counts = tally(records);
+    emit({ type: "summary", finished_at: new Date().toISOString(), chat_requests_sent: sent, per_scenario: counts });
+    console.log("\nRaw counts only (tiny n; not a benchmark win rate):");
+    for (const [name, t] of Object.entries(counts)) {
+      console.log(
+        `  ${name}: counted ${t.counted_success}/${t.requests}, valid ${t.valid}, malformed ${t.malformed}, ` +
+          `empty ${t.empty}, budget_exhausted ${t.budget_exhausted}, transport_errors ${t.transport_errors}`,
+      );
+    }
+  } catch (err) {
+    emit({ type: "aborted", at: new Date().toISOString(), error: (err as Error).message });
+    throw err;
+  } finally {
+    closeSync(fd);
   }
 }
 
-main().catch((e) => {
-  console.error(`FAILED: ${e.message}`);
+main().catch((e: unknown) => {
+  console.error(`FAILED: ${(e as Error).message}`);
   process.exit(1);
 });
