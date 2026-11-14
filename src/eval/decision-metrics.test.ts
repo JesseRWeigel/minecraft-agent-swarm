@@ -5,8 +5,14 @@ import { readFileSync } from "node:fs";
 import {
   assertLocalModelName,
   assessShowResponse,
+  assessTagsResponse,
   buildChatRequest,
+  canonicalModelTag,
   classifyChatResponse,
+  compareModelIdentity,
+  getJson,
+  recheckModelIdentity,
+  resolveModelIdentity,
   findFirstJsonObject,
   MAX_CHAT_REQUESTS,
   parseEvalArgs,
@@ -175,6 +181,122 @@ test("verifyLocalModel posts only to /api/show with redirect:error and a timeout
   await assert.rejects(verifyLocalModel(remote.fn, "http://127.0.0.1:11434", "m", 5000), /remote/);
   const missing = mockFetch(() => new Response('{"error":"model \'m\' not found"}', { status: 404 }));
   await assert.rejects(verifyLocalModel(missing.fn, "http://127.0.0.1:11434", "m", 5000), /http_error/);
+});
+
+// ─── model identity via /api/tags ───────────────────────────────────────────
+
+const HEX_A = "a".repeat(64);
+const HEX_B = "b".repeat(64);
+const tags = (...models: unknown[]) => ({ models });
+const entry = (name: string, digest: unknown = HEX_A, extra: Record<string, unknown> = {}) => ({
+  name,
+  model: name,
+  digest,
+  ...extra,
+});
+
+test("canonicalModelTag makes the implicit :latest explicit", () => {
+  assert.equal(canonicalModelTag("qwen3"), "qwen3:latest");
+  assert.equal(canonicalModelTag("qwen3:8b"), "qwen3:8b");
+  assert.equal(canonicalModelTag("hf.co/org/model"), "hf.co/org/model:latest");
+  assert.equal(canonicalModelTag("hf.co/org/model:Q4_K_M"), "hf.co/org/model:Q4_K_M");
+  assert.equal(canonicalModelTag("host:5000/m"), "host:5000/m:latest");
+  assert.throws(() => canonicalModelTag("qwen3:"), /empty tag/);
+});
+
+test("tags: exact match records canonical tag and normalized sha256 digest", () => {
+  const body = tags(entry("qwen3:8b"), entry("qwen3:8b-q8", HEX_B), entry("qwen3:latest", HEX_B));
+  assert.deepEqual(assessTagsResponse(body, "qwen3:8b"), { canonical_tag: "qwen3:8b", digest: `sha256:${HEX_A}` });
+  assert.deepEqual(assessTagsResponse(tags(entry("m:1", `sha256:${HEX_B}`)), "m:1").digest, `sha256:${HEX_B}`);
+});
+
+test("tags: untagged request matches :latest, not other tags", () => {
+  const body = tags(entry("qwen3:8b", HEX_B), entry("qwen3:latest"));
+  assert.deepEqual(assessTagsResponse(body, "qwen3"), { canonical_tag: "qwen3:latest", digest: `sha256:${HEX_A}` });
+  assert.throws(() => assessTagsResponse(tags(entry("qwen3:8b")), "qwen3"), /not installed/);
+  assert.throws(() => assessTagsResponse(tags(entry("qwen3:latest")), "qwen3:8b"), /not installed/);
+});
+
+test("tags: match is exact (no prefix or case folding)", () => {
+  assert.throws(() => assessTagsResponse(tags(entry("qwen3:8b-instruct")), "qwen3:8b"), /not installed/);
+  assert.throws(() => assessTagsResponse(tags(entry("Qwen3:8b")), "qwen3:8b"), /not installed/);
+});
+
+test("tags: malformed bodies and entries fail closed", () => {
+  for (const body of [null, [], "x", {}, { models: {} }, { models: null }, tags(null), tags({ digest: HEX_A })]) {
+    assert.throws(() => assessTagsResponse(body, "qwen3:8b"), /malformed/, JSON.stringify(body));
+  }
+  const badDigests = [
+    "",
+    "abc",
+    HEX_A.toUpperCase(),
+    `sha512:${HEX_A}`,
+    `${HEX_A}0`,
+    7,
+    null,
+    `sha256:${"g".repeat(64)}`,
+  ];
+  for (const digest of badDigests) {
+    assert.throws(() => assessTagsResponse(tags(entry("m:1", digest)), "m:1"), /sha256 digest/, String(digest));
+  }
+  assert.throws(() => assessTagsResponse(tags({ name: "m:1" }), "m:1"), /sha256 digest/);
+  assert.throws(() => assessTagsResponse(tags(entry("m:1", HEX_A, { model: "other:1" })), "m:1"), /inconsistent/);
+  assert.throws(() => assessTagsResponse(tags(entry("m:1", HEX_A, { remote_host: "https://x" })), "m:1"), /remote/);
+});
+
+test("tags: missing and ambiguous models are refused", () => {
+  assert.throws(() => assessTagsResponse(tags(), "qwen3:8b"), /not installed/);
+  assert.throws(() => assessTagsResponse(tags(entry("qwen3:latest"), entry("qwen3", HEX_B)), "qwen3"), /ambiguous/);
+  assert.throws(() => assessTagsResponse(tags(entry("m:1"), entry("m:1")), "m:1"), /ambiguous/);
+});
+
+test("resolveModelIdentity GETs only /api/tags with redirect:error, a timeout, and no body", async () => {
+  const { fn, calls } = mockFetch(() => new Response(JSON.stringify(tags(entry("qwen3:8b")))));
+  const id = await resolveModelIdentity(fn, "http://127.0.0.1:11434", "qwen3:8b", 5000);
+  assert.equal(id.digest, `sha256:${HEX_A}`);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://127.0.0.1:11434/api/tags");
+  assert.equal(calls[0].init.method, "GET");
+  assert.equal(calls[0].init.body, undefined);
+  assert.equal(calls[0].init.redirect, "error");
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+
+  const down = mockFetch(() => new Response("boom", { status: 500 }));
+  await assert.rejects(resolveModelIdentity(down.fn, "http://127.0.0.1:11434", "m:1", 5000), /http_error/);
+  const big = mockFetch(() => new Response("x".repeat(1_000_001)));
+  assert.equal(((await getJson(big.fn, "u", 1000)) as { kind: string }).kind, "bad_body");
+});
+
+test("identity recheck: unchanged, changed, unknown", async () => {
+  const start = { canonical_tag: "qwen3:8b", digest: `sha256:${HEX_A}` };
+  assert.deepEqual(compareModelIdentity(start, { ...start }), {
+    status: "unchanged",
+    end: start,
+    error: null,
+    identity_snapshots_match: true,
+  });
+
+  const host = "http://127.0.0.1:11434";
+  const same = mockFetch(() => new Response(JSON.stringify(tags(entry("qwen3:8b")))));
+  assert.equal((await recheckModelIdentity(same.fn, host, "qwen3:8b", start, 5000)).status, "unchanged");
+
+  const retagged = mockFetch(() => new Response(JSON.stringify(tags(entry("qwen3:8b", HEX_B)))));
+  const changed = await recheckModelIdentity(retagged.fn, host, "qwen3:8b", start, 5000);
+  assert.equal(changed.status, "changed");
+  assert.equal(changed.identity_snapshots_match, false);
+  assert.equal(changed.end?.digest, `sha256:${HEX_B}`);
+
+  for (const respond of [
+    () => new Response(JSON.stringify(tags())),
+    () => new Response("{}"),
+    () => Promise.reject(new DOMException("timed out", "TimeoutError")),
+  ]) {
+    const r = await recheckModelIdentity(mockFetch(respond).fn, host, "qwen3:8b", start, 5000);
+    assert.equal(r.status, "unknown");
+    assert.equal(r.identity_snapshots_match, false);
+    assert.equal(r.end, null);
+    assert.ok(r.error);
+  }
 });
 
 // ─── transport ──────────────────────────────────────────────────────────────
