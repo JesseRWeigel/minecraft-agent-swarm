@@ -12,7 +12,8 @@
  * Safety: loopback http only, local models only (name + /api/show check), no
  * pulls, no warmup, ≤12 chat requests validated before any call, per-request
  * timeout, redirects refused, keep_alive:0. Model output is parsed as data and
- * never executed; no Minecraft world is touched.
+ * never executed; no Minecraft world is touched. Exact model identity (canonical
+ * tag + sha256 digest) is snapshotted from GET /api/tags before and after.
  *
  * Usage: npx tsx tools/decision-eval.ts <model> --out <new.jsonl>
  *          [--samples 1..3] [--scenario <name>]... [--num-predict 128..2048] [--timeout-ms ≤120000]
@@ -29,12 +30,19 @@ import {
   MAX_CHAT_REQUESTS,
   parseEvalArgs,
   postJson,
+  recheckModelIdentity,
+  resolveModelIdentity,
   scoreResponse,
   tally,
   verifyLocalModel,
   type Decision,
   type RequestRecord,
 } from "../src/eval/decision-metrics.js";
+import {
+  acceptLowHealthUnderAttack,
+  LOW_HEALTH_UNDER_ATTACK_PREDICATE,
+  type PredicateInfo,
+} from "../src/eval/scenario-predicates.js";
 
 interface Scenario {
   name: string;
@@ -42,14 +50,26 @@ interface Scenario {
   state: string;
   /** True when the decision is a defensible response to the state. */
   accept: (d: Decision) => boolean;
+  /** Recorded in the artifact; bump the version whenever `accept` changes. */
+  predicate: PredicateInfo;
   /** What we are actually testing. */
   why: string;
 }
 
+/** Predicates not yet extracted/revised; version 1 = unchanged since introduction. */
+const inline = (name: string): PredicateInfo => ({
+  id: `${name}/inline`,
+  version: 1,
+  rule: "see tools/decision-eval.ts",
+});
+
 const SCENARIOS: Scenario[] = [
   {
     name: "low-health-under-attack",
-    why: "Survival must preempt the mining loop. Logged: bot kept mining at 6hp and died.",
+    why:
+      "Survival must preempt the mining loop. Logged: bot kept mining at 6hp and died. " +
+      "6/20 HP, 3 zombies, no food: only flee {} is accepted (predicate v2; v1 accepted attack/eat/go_to blindly).",
+    predicate: LOW_HEALTH_UNDER_ATTACK_PREDICATE,
     state: `Position: 291, 42, -318
 Health: 6/20, Hunger: 11/20
 Time: nighttime (16400)
@@ -58,10 +78,11 @@ DANGER - Hostile mobs nearby: zombie (4 blocks away), zombie (6 blocks away), zo
 Nearby notable blocks: stone, coal_ore, iron_ore
 WARNING: Low health! Be careful.
 It's night — hostile mobs spawn in the dark. Consider shelter or a bed.`,
-    accept: (d) => ["flee", "eat", "attack", "neural_combat", "go_to"].includes(d.action ?? ""),
+    accept: acceptLowHealthUnderAttack,
   },
   {
     name: "ore-backlog-should-smelt",
+    predicate: inline("ore-backlog-should-smelt"),
     why: "Forge priority 5. Logged: bot kept mining raw ore it never converted to ingots.",
     state: `Position: 288, 39, -316
 Health: 20/20, Hunger: 17/20
@@ -76,6 +97,7 @@ Nearby notable blocks: stone, andesite`,
   },
   {
     name: "wooden-pickaxe-cannot-mine-iron",
+    predicate: inline("wooden-pickaxe-cannot-mine-iron"),
     why: "THE known gap. Iron needs stone tier. Every model tested has failed this; the action-layer guard catches it but a decision cycle burns each time.",
     state: `Position: 294, 63, -321
 Health: 20/20, Hunger: 18/20
@@ -96,6 +118,7 @@ MINING REACH: can mine now — stone, coal_ore, oak_log. NEEDS stone_pickaxe: ir
   },
   {
     name: "inventory-full-must-deposit",
+    predicate: inline("inventory-full-must-deposit"),
     why: "Forge priority 6. Logged: bot mined into a full inventory, dropping everything it collected.",
     state: `Position: 285, 45, -315
 Health: 18/20, Hunger: 15/20
@@ -108,6 +131,7 @@ THE STASH: Shared chest area at (286, 70, -314).`,
   },
   {
     name: "stranded-on-dirt-pillar",
+    predicate: inline("stranded-on-dirt-pillar"),
     why: "Logged: bots pillar up chasing a target and then keep placing blocks, stranding themselves at build height.",
     state: `Position: 302, 122, -309
 Health: 20/20, Hunger: 12/20
@@ -126,6 +150,7 @@ You are standing on a 1x1 pillar of dirt. The ground is 58 blocks below.`,
   },
   {
     name: "night-in-unlit-hut",
+    predicate: inline("night-in-unlit-hut"),
     why: "Logged: bots leave shelter at night into mob spawns instead of sleeping or lighting up.",
     state: `Position: 287, 71, -313
 Health: 20/20, Hunger: 16/20
@@ -166,16 +191,21 @@ async function main(): Promise<void> {
   const emit = (record: Record<string, unknown>) => writeSync(fd, JSON.stringify(record) + "\n");
 
   try {
+    // Metadata only: neither call loads, pulls, or generates.
+    const identity = await resolveModelIdentity(fetch, cfg.host, cfg.model, cfg.timeoutMs);
     const show = await verifyLocalModel(fetch, cfg.host, cfg.model, cfg.timeoutMs);
     const template = buildChatRequest(cfg.model, system, "", cfg.numPredict);
     emit({
       type: "run",
       started_at: new Date().toISOString(),
       model: cfg.model,
+      model_canonical_tag: identity.canonical_tag,
+      model_digest: identity.digest,
       model_details: show.details,
       host: cfg.host,
       samples: cfg.samples,
       scenarios: cfg.scenarioNames,
+      scenario_predicates: Object.fromEntries(selected.map((s) => [s.name, { ...s.predicate, why: s.why }])),
       chat_requests_planned: cfg.chatRequests,
       chat_requests_cap: MAX_CHAT_REQUESTS,
       timeout_ms: cfg.timeoutMs,
@@ -199,7 +229,15 @@ async function main(): Promise<void> {
         if (++sent > MAX_CHAT_REQUESTS) throw new Error("request cap reached (should be unreachable)");
         const body = buildChatRequest(cfg.model, system, user, cfg.numPredict);
         const r = await postJson(fetch, `${cfg.host}/api/chat`, body, cfg.timeoutMs);
-        const base = { type: "request", scenario: sc.name, sample: i, user_prompt: user, elapsed_ms: r.elapsedMs };
+        const base = {
+          type: "request",
+          scenario: sc.name,
+          predicate_id: sc.predicate.id,
+          predicate_version: sc.predicate.version,
+          sample: i,
+          user_prompt: user,
+          elapsed_ms: r.elapsedMs,
+        };
 
         if (!r.ok) {
           const rec: RequestRecord = {
@@ -243,8 +281,21 @@ async function main(): Promise<void> {
       }
     }
 
+    const idCheck = await recheckModelIdentity(fetch, cfg.host, cfg.model, identity, cfg.timeoutMs);
     const counts = tally(records);
-    emit({ type: "summary", finished_at: new Date().toISOString(), chat_requests_sent: sent, per_scenario: counts });
+    emit({
+      type: "summary",
+      finished_at: new Date().toISOString(),
+      chat_requests_sent: sent,
+      model_identity_end: idCheck,
+      per_scenario: counts,
+    });
+    if (!idCheck.identity_snapshots_match) {
+      console.log(
+        `\nWARNING: model identity ${idCheck.status} at end (${idCheck.error ?? `${identity.digest} → ${idCheck.end?.digest}`}); ` +
+          "model identity could not be confirmed stable at both endpoints.",
+      );
+    }
     console.log("\nRaw counts only (tiny n; not a benchmark win rate):");
     for (const [name, t] of Object.entries(counts)) {
       console.log(

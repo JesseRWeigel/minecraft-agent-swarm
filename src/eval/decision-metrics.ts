@@ -242,10 +242,25 @@ export type TransportResult =
   | { ok: false; kind: "timeout" | "transport_error" | "http_error" | "bad_body"; error: string; elapsedMs: number };
 
 /** POSTs JSON with redirects refused and a hard per-request timeout. */
-export async function postJson(
+export function postJson(
   fetchImpl: FetchLike,
   url: string,
   payload: unknown,
+  timeoutMs: number,
+): Promise<TransportResult> {
+  const init = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) };
+  return requestJson(fetchImpl, url, init, timeoutMs);
+}
+
+/** GETs JSON with the same redirect refusal, timeout, and size limit as postJson. */
+export function getJson(fetchImpl: FetchLike, url: string, timeoutMs: number): Promise<TransportResult> {
+  return requestJson(fetchImpl, url, { method: "GET" }, timeoutMs);
+}
+
+async function requestJson(
+  fetchImpl: FetchLike,
+  url: string,
+  init: RequestInit,
   timeoutMs: number,
 ): Promise<TransportResult> {
   const t0 = performance.now();
@@ -253,13 +268,7 @@ export async function postJson(
   let res: Response;
   let text: string;
   try {
-    res = await fetchImpl(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      redirect: "error",
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    res = await fetchImpl(url, { ...init, redirect: "error", signal: AbortSignal.timeout(timeoutMs) });
     text = await res.text();
   } catch (err) {
     const e = err as { name?: string; message?: string };
@@ -314,6 +323,95 @@ export async function verifyLocalModel(
   const r = await postJson(fetchImpl, `${host}/api/show`, { model }, timeoutMs);
   if (!r.ok) throw new Error(`/api/show failed (${r.kind}): ${r.error}`);
   return assessShowResponse(r.body);
+}
+
+// ─── Model identity (/api/tags snapshot) ────────────────────────────────────
+
+export interface ModelIdentity {
+  /** Model reference with Ollama's implicit ":latest" made explicit. */
+  canonical_tag: string;
+  /** "sha256:<64 lowercase hex>" as listed by /api/tags. */
+  digest: string;
+}
+
+/**
+ * Appends ":latest" when the reference has no tag. A ":" only counts as a tag
+ * separator after the last "/", so "host:5000/m" is untagged. Empty tags throw.
+ */
+export function canonicalModelTag(name: string): string {
+  const colon = name.lastIndexOf(":");
+  if (colon <= name.lastIndexOf("/")) return `${name}:latest`;
+  if (colon === name.length - 1) throw new Error(`empty tag in model reference ${JSON.stringify(name)}`);
+  return name;
+}
+
+const SHA256_DIGEST = /^(?:sha256:)?([0-9a-f]{64})$/;
+
+/**
+ * Finds exactly one /api/tags entry whose canonical name equals the requested
+ * model's canonical name (case-sensitive), and requires a valid sha256 digest.
+ * Fails closed on malformed bodies/entries, no match, multiple matches, an
+ * entry whose `model` field disagrees with its `name`, or a remote entry.
+ */
+export function assessTagsResponse(body: unknown, model: string): ModelIdentity {
+  const want = canonicalModelTag(model);
+  if (!isRecord(body) || !Array.isArray(body.models)) throw new Error("/api/tags: malformed body (no models array)");
+  const matches: Record<string, unknown>[] = [];
+  for (const m of body.models) {
+    if (!isRecord(m) || typeof m.name !== "string") throw new Error("/api/tags: malformed entry (no string name)");
+    if (canonicalModelTag(m.name) !== want) continue;
+    if (m.model !== undefined && (typeof m.model !== "string" || canonicalModelTag(m.model) !== want)) {
+      throw new Error(`/api/tags: entry for ${want} has inconsistent name/model fields`);
+    }
+    matches.push(m);
+  }
+  if (matches.length === 0) throw new Error(`/api/tags: ${want} is not installed locally (this tool never pulls)`);
+  if (matches.length > 1) throw new Error(`/api/tags: ${matches.length} entries match ${want}; ambiguous identity`);
+  const m = matches[0];
+  if ("remote_host" in m || "remote_model" in m) throw new Error(`/api/tags: ${want} is remote; refusing`);
+  const hex = typeof m.digest === "string" ? SHA256_DIGEST.exec(m.digest)?.[1] : undefined;
+  if (!hex) throw new Error(`/api/tags: ${want} has no valid sha256 digest`);
+  return { canonical_tag: want, digest: `sha256:${hex}` };
+}
+
+/** GET /api/tags (metadata only; does not load or pull) and resolve the exact identity. */
+export async function resolveModelIdentity(
+  fetchImpl: FetchLike,
+  host: string,
+  model: string,
+  timeoutMs: number,
+): Promise<ModelIdentity> {
+  const r = await getJson(fetchImpl, `${host}/api/tags`, timeoutMs);
+  if (!r.ok) throw new Error(`/api/tags failed (${r.kind}): ${r.error}`);
+  return assessTagsResponse(r.body, model);
+}
+
+export interface IdentityCheck {
+  status: "unchanged" | "changed" | "unknown";
+  end: ModelIdentity | null;
+  error: string | null;
+  /** True only when the end snapshot matches the start snapshot exactly. */
+  identity_snapshots_match: boolean;
+}
+
+export function compareModelIdentity(start: ModelIdentity, end: ModelIdentity): IdentityCheck {
+  const same = start.canonical_tag === end.canonical_tag && start.digest === end.digest;
+  return { status: same ? "unchanged" : "changed", end, error: null, identity_snapshots_match: same };
+}
+
+/** Re-resolves identity at run end. Never throws: failures are reported as "unknown". */
+export async function recheckModelIdentity(
+  fetchImpl: FetchLike,
+  host: string,
+  model: string,
+  start: ModelIdentity,
+  timeoutMs: number,
+): Promise<IdentityCheck> {
+  try {
+    return compareModelIdentity(start, await resolveModelIdentity(fetchImpl, host, model, timeoutMs));
+  } catch (err) {
+    return { status: "unknown", end: null, error: (err as Error).message, identity_snapshots_match: false };
+  }
 }
 
 // ─── Response classification ────────────────────────────────────────────────
