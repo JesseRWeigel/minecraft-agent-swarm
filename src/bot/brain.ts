@@ -28,6 +28,7 @@ import { getWorldContext, isHostile } from "./perception.js";
 import { executeAction, FOOD_PRIORITY } from "./actions.js";
 import {
   digOutIfStuck,
+  drownRescueActive,
   escapeWaterIfDrowning,
   headUnderWater,
   safeGoto,
@@ -165,6 +166,8 @@ export class BotBrain {
   private speechGenerator = generateSpeech;
   private overlayUpdater = updateOverlay;
   private skillOutcomeReader = takeSkillOutcome;
+  private skillRunning = isSkillRunning;
+  private skillAborter = abortActiveSkill;
   private interruptionGeneration = 0;
   private interruptionHistory: Array<{ generation: number; reason: string }> = [];
 
@@ -1210,6 +1213,10 @@ export class BotBrain {
   private async handleReactive(event: BrainEvent): Promise<void> {
     this.lastReactiveMs = Date.now();
     const { reason, entities, health, food } = event.data ?? {};
+    // Food is read with the eat action's own list, so the prompt, the menu and
+    // the post-query check agree on what "eat" can actually consume.
+    const foodNow = this.hasEdibleAboard();
+    const foodLine = `Food available: ${foodNow ? "yes" : "NONE (eat is impossible)"}`;
 
     // Build a tiny situation description
     let situation: string;
@@ -1234,9 +1241,9 @@ export class BotBrain {
           .join(", ") || "none";
       situation = `THREAT: ${hostileList}\nHealth: ${this.bot.health}/20, Food: ${this.bot.food}/20\nEquipment: ${equipment}\nFood items: ${foodItems}`;
     } else if (reason === "took_damage") {
-      situation = `TOOK DAMAGE! Health: ${this.bot.health}/20. Check for nearby threats and react.`;
+      situation = `TOOK DAMAGE! Health: ${this.bot.health}/20. Check for nearby threats and react.\n${foodLine}`;
     } else if (reason === "low_health") {
-      situation = `LOW HEALTH: ${this.bot.health}/20. Eat food or flee to safety.`;
+      situation = `LOW HEALTH: ${this.bot.health}/20. ${foodNow ? "Eat food or flee to safety." : "No food to eat: flee to safety or idle."}\n${foodLine}`;
     } else if (reason === "low_hunger") {
       situation = `LOW HUNGER: ${this.bot.food}/20. Eat something before starving.`;
     } else {
@@ -1247,18 +1254,31 @@ export class BotBrain {
     // 74 times in an hour. Say so, and the model can pick eat or idle.
     const threatNear = reason === "hostile_nearby" || this.hostileWithin(16);
     if (!threatNear) {
-      situation += `\nNo hostile within 16 blocks (food ${this.bot.food}/20): fleeing is pointless; eat if you can, otherwise idle or keep working.`;
+      situation += `\nNo hostile within 16 blocks (food ${this.bot.food}/20): fleeing is pointless; ${foodNow ? "eat if you can, otherwise " : ""}idle or keep working.`;
     }
 
     // Run 621: 38 of 73 blocked "eat" picks came from this prompt, which
-    // still listed eat while the strategic menu had dropped it.
+    // still listed eat while the strategic menu had dropped it. With no food
+    // aboard eat leaves the menu, and no fallback may put it back: an empty
+    // list makes buildReactivePrompt show its full default menu, eat included.
     this.purgeExpiredFailures();
-    const reactiveMenu = this.roleConfig.allowedActions.filter((a) => !this.recentFailures.has(a));
-    const decision = await queryReactive(
-      this.roleConfig.name,
-      situation,
-      reactiveMenu.length ? reactiveMenu : this.roleConfig.allowedActions,
-    );
+    const roleMenu = this.roleConfig.allowedActions.filter((a) => foodNow || a !== "eat");
+    const freshMenu = roleMenu.filter((a) => !this.recentFailures.has(a));
+    const reactiveMenu = freshMenu.length ? freshMenu : roleMenu.length ? roleMenu : ["idle"];
+    let decision = await queryReactive(this.roleConfig.name, situation, reactiveMenu);
+    // The query awaited a model; the world moved on. A pause, stop or live
+    // drown rescue (which owns the keys) means no new action at all.
+    const halted = () => this.stopped || this.paused || drownRescueActive(this.bot);
+    if (halted()) return;
+    // The parser does not enforce the menu, and food can be eaten, dropped or
+    // stashed during the query. Recheck now: an impossible eat becomes a flee
+    // only when a hostile is near right now and the role may flee; else idle.
+    const hostileNow = this.hostileWithin(16);
+    if (decision.action === "eat" && !this.hasEdibleAboard()) {
+      const flee = hostileNow && this.roleConfig.allowedActions.includes("flee");
+      this.log.info("Brain", `Reactive eat with no food aboard — ${flee ? "fleeing" : "idling"} instead`);
+      decision = { ...decision, action: flee ? "flee" : "idle", params: {} };
+    }
     // A reactive MOVE while a skill is walking steals the pathfinder: the
     // skill's goto rejects with "goal was changed", and run 500 logged 324
     // such interruptions for Blade and 130 for Flora in one hour, killing
@@ -1266,17 +1286,20 @@ export class BotBrain {
     // abort the skill first so the flee owns the controls; otherwise let the
     // skill finish and only allow actions that do not move.
     const MOVING = new Set(["flee", "attack", "go_to", "explore", "hunt", "gather_wood", "mine_block"]);
-    if (isSkillRunning(this.bot) && MOVING.has(decision.action)) {
+    if (this.skillRunning(this.bot) && MOVING.has(decision.action)) {
       // A flee with no hostile in sight must never abort a skill (run 675).
+      // The threat is the live one, not the event's: a hostile_nearby queued
+      // seconds ago may be gone, and that must not abort the skill.
       const critical =
-        this.bot.health <= 8 && threatNear && (decision.action === "flee" || decision.action === "attack");
+        this.bot.health <= 8 && hostileNow && (decision.action === "flee" || decision.action === "attack");
       if (critical) {
         this.log.info(
           "Brain",
           `Reactive ${decision.action} at ${this.bot.health}/20 — aborting ${getActiveSkillName(this.bot)} first`,
         );
-        abortActiveSkill(this.bot);
+        this.skillAborter(this.bot);
         await new Promise((r) => setTimeout(r, 300));
+        if (halted()) return;
       } else {
         this.log.info("Brain", `Reactive ${decision.action} deferred — ${getActiveSkillName(this.bot)} is walking`);
         return;
