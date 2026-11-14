@@ -41,3 +41,30 @@ Validation: all 1,130 tests and TypeScript passed. Mutation-disabling the post-q
 - The `hostile_nearby` prompt still lists food from its own short hardcoded list, not `FOOD_PRIORITY`. The menu and the post-query check use the correct list, so a wrong prompt line cannot lead to an impossible eat.
 - Only `eat` is checked for feasibility after the query. Other off-menu replies (such as a role-forbidden action) still go to `executeDecision` as before.
 - This has not been validated on a live server. It is a targeted feasibility fix, not evidence of better survival.
+
+## Reproduce the asynchronous emergency boundary
+
+Run `node scripts/test-runner.mjs src/bot/reactive-food.test.ts` with the
+repository's Node 22 and installed dependencies. This is a CPU-only synthetic
+validation: no model service, Minecraft server, world, or paid API is needed.
+
+The fixture now runs the real drowning-rescue routine at two boundaries:
+
+- Before the model reply: rescue already owns jump, so no skill abort or new
+  decision occurs.
+- Inside the skill-abort callback: the first guard has already passed, then
+  rescue acquires ownership during the handler's actual 300 ms abort wait.
+  The second guard must suppress the stale flee decision while jump stays held.
+
+A separate case pauses or stops the brain at that same abort boundary. Both
+must suppress execution. The original live-threat case is the positive control:
+without an interruption, one abort is followed by one flee decision.
+
+The world, model reply, and final action executor are controlled fixtures. The
+handler and rescue ownership logic are production code. These assertions prove
+control arbitration, not successful physical escape or improved survival rates.
+The fixture releases rescue ownership in a finally block.
+
+Mutation check: removing only the post-abort `halted()` guard caused the two new
+boundary tests to fail (9 passed, 2 failed). The production source was restored
+byte-for-byte before final checks. No production code changed for this addition.

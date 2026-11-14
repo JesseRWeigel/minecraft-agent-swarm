@@ -160,47 +160,73 @@ test("paused or stopped while the query was pending: no action starts", async ()
   }
 });
 
-test("a live drowning rescue retains controls when a model reply arrives", async () => {
-  const w = reactiveBrain({ hostile: true, skill: true });
-  let wet = true;
-  let release: (() => void) | undefined;
-  Object.assign(w.brain.bot, {
-    oxygenLevel: 7,
-    controlState: {},
-    blockAt: (p: Vec3) => ({ name: wet ? "water" : "air", boundingBox: "empty", position: p }),
-    pathfinder: { goal: null, isMoving: () => false },
-    setControlState(this: any, key: string, value: boolean) {
-      this.controlState[key] = value;
-    },
-    getControlState(this: any, key: string) {
-      return this.controlState[key] ?? false;
-    },
-    clearControlStates() {},
-    stopDigging() {},
-    on() {},
-    removeListener() {},
-    lookAt: async () => {},
-    canDigBlock: () => false,
-    waitForTicks: () =>
-      new Promise<void>((resolve) => {
-        release = resolve;
-      }),
+for (const stage of ["model-reply", "skill-abort-wait"] as const) {
+  test(`a live drowning rescue retains controls at ${stage}`, async () => {
+    const w = reactiveBrain({ hostile: true, skill: true });
+    let wet = true;
+    let release: (() => void) | undefined;
+    Object.assign(w.brain.bot, {
+      oxygenLevel: 7,
+      controlState: {},
+      blockAt: (p: Vec3) => ({ name: wet ? "water" : "air", boundingBox: "empty", position: p }),
+      pathfinder: { goal: null, isMoving: () => false },
+      setControlState(this: any, key: string, value: boolean) {
+        this.controlState[key] = value;
+      },
+      getControlState(this: any, key: string) {
+        return this.controlState[key] ?? false;
+      },
+      clearControlStates() {},
+      stopDigging() {},
+      on() {},
+      removeListener() {},
+      lookAt: async () => {},
+      canDigBlock: () => false,
+      waitForTicks: () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    });
+    w.brain.bot.entity.height = 1.62;
+    w.brain.bot.entity.velocity = new Vec3(0, 0, 0);
+    let rescue: ReturnType<typeof escapeWaterIfDrowning> | undefined;
+    if (stage === "model-reply") {
+      rescue = escapeWaterIfDrowning(w.brain.bot);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    } else {
+      w.brain.skillAborter = () => {
+        w.aborted.push("abort");
+        // Ownership begins only after the first post-model guard passed.
+        rescue = escapeWaterIfDrowning(w.brain.bot);
+      };
+    }
+    try {
+      if (stage === "model-reply") assert.equal(drownRescueActive(w.brain.bot), true);
+      model("eat");
+      await w.brain.handleReactive(lowHealth);
+      assert.deepEqual(w.executed, []);
+      assert.deepEqual(w.aborted, stage === "model-reply" ? [] : ["abort"]);
+      assert.equal(drownRescueActive(w.brain.bot), true);
+      assert.equal(w.brain.bot.controlState.jump, true);
+    } finally {
+      wet = false;
+      w.brain.bot.oxygenLevel = 20;
+      release?.();
+      await rescue;
+    }
   });
-  w.brain.bot.entity.height = 1.62;
-  w.brain.bot.entity.velocity = new Vec3(0, 0, 0);
-  const rescue = escapeWaterIfDrowning(w.brain.bot);
-  await new Promise<void>((resolve) => setImmediate(resolve));
-  try {
-    assert.equal(drownRescueActive(w.brain.bot), true);
-    model("eat");
+}
+
+test("pause or stop during the skill-abort wait suppresses the stale emergency action", async () => {
+  for (const flag of ["paused", "stopped"]) {
+    const w = reactiveBrain({ hostile: true, skill: true });
+    model("flee");
+    w.brain.skillAborter = () => {
+      w.aborted.push("abort");
+      w.brain[flag] = true;
+    };
     await w.brain.handleReactive(lowHealth);
-    assert.deepEqual(w.executed, []);
-    assert.deepEqual(w.aborted, []);
-    assert.equal(w.brain.bot.controlState.jump, true);
-  } finally {
-    wet = false;
-    w.brain.bot.oxygenLevel = 20;
-    release?.();
-    await rescue;
+    assert.deepEqual(w.aborted, ["abort"], flag);
+    assert.deepEqual(w.executed, [], flag);
   }
 });
