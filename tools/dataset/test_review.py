@@ -145,6 +145,50 @@ class ReviewToolTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "tool source"):
             create_scaffold(tampered_path, "reviewer-a", "model-a", self.root / "bad.json")
 
+    def test_packet_validation_enforces_frozen_evidence_layout(self):
+        self.build_fixture()
+        original = self.extract(limit=1)
+
+        def check(case, edit, message):
+            packet = copy.deepcopy(original)
+            edit(packet["candidates"][0])
+            packet["packet_sha256"] = review._hash_value(
+                {**packet, "packet_sha256": ""}
+            )
+            path = self.root / "layout-case.json"
+            path.write_text(json.dumps(packet), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, message):
+                create_scaffold(path, "a", "m", self.root / f"unused-{case}.json")
+
+        def shorten_initial(candidate):
+            candidate["initial_window"]["end_line"] -= 1
+            candidate["evidence_lines"].pop()
+
+        def shorten_extension(candidate):
+            segment = candidate["extension_segments"][0]
+            segment["end_line"] -= 1
+            segment["evidence_lines"].pop()
+
+        def remove_main_evidence(candidate):
+            line = next(line for line in candidate["evidence_lines"]
+                        if line["line_no"] == candidate["line_no"])
+            line.update(availability="invalid_json", record=None)
+            candidate["initial_window_censored"] = True
+
+        for case, (edit, message) in enumerate((
+            (shorten_initial, "initial window.*frozen"),
+            (shorten_extension, "extension layout.*frozen"),
+            (lambda c: c["extension_segments"].pop(), "extension layout.*frozen"),
+            (lambda c: c["extension_segments"].reverse(), "extension layout.*frozen"),
+            (lambda c: c.update(initial_window_censored=not c["initial_window_censored"]),
+             "initial censor flag"),
+            (lambda c: c["extension_segments"][0].update(
+                censored=not c["extension_segments"][0]["censored"]), "extension censor flag"),
+            (remove_main_evidence, "main line is unavailable"),
+        )):
+            with self.subTest(message=message, edit=edit):
+                check(case, edit, message)
+
     def test_packet_validation_enforces_utf8_result_byte_limit(self):
         self.build_fixture()
         packet = self.extract(limit=1)

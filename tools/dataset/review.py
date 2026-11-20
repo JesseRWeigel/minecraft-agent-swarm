@@ -637,6 +637,18 @@ def _validate_packet_line(line, where):
         _string(record["timestamp"], f"{where} timestamp", maximum=1000)
 
 
+def _validate_evidence_window(lines, start, end, censored, kind):
+    _boolean(censored, f"packet {kind} censor flag")
+    if not isinstance(lines, list) or len(lines) != end - start + 1:
+        raise ValueError(f"packet {kind} evidence coverage is invalid")
+    for number, line in enumerate(lines, start):
+        _validate_packet_line(line, f"packet {kind} evidence")
+        if line["line_no"] != number:
+            raise ValueError(f"packet {kind} evidence coverage is invalid")
+    if censored != any(line["availability"] != "available" for line in lines):
+        raise ValueError(f"packet {kind} censor flag does not match evidence")
+
+
 def _validate_packet(packet):
     _exact(packet, PACKET_KEYS, "packet")
     _exact(packet["protocol"], PROTOCOL_KEYS, "packet protocol")
@@ -688,34 +700,37 @@ def _validate_packet(packet):
         for key in ("source_relpath", "session_id", "bot", "timestamp", "action"):
             _string(candidate[key], f"packet candidate {key}", maximum=2000)
         _hex_hash(candidate["source_sha256"], "packet source hash")
-        _integer(candidate["line_no"], "packet line_no")
+        line_no = _integer(candidate["line_no"], "packet line_no")
+        expected_start = max(1, line_no - CONTINUATION_PROTOCOL["initial_before_lines"])
+        expected_end = line_no + CONTINUATION_PROTOCOL["initial_after_lines"]
         _exact(candidate["initial_window"], {"start_line", "end_line"}, "packet initial_window")
         start_line = _integer(candidate["initial_window"]["start_line"], "packet initial start")
         end_line = _integer(candidate["initial_window"]["end_line"], "packet initial end")
-        _boolean(candidate["initial_window_censored"], "packet initial_window_censored")
-        if not isinstance(candidate["evidence_lines"], list):
-            raise ValueError("packet evidence_lines must be a list")
-        if [line.get("line_no") for line in candidate["evidence_lines"] if isinstance(line, dict)] != list(range(start_line, end_line + 1)):
-            raise ValueError("packet initial evidence coverage is invalid")
-        for line in candidate["evidence_lines"]:
-            _validate_packet_line(line, "packet initial evidence")
-        if not isinstance(candidate["extension_segments"], list):
-            raise ValueError("packet extension_segments must be a list")
-        segment_ids = set()
-        for segment in candidate["extension_segments"]:
+        if (start_line, end_line) != (expected_start, expected_end):
+            raise ValueError("packet initial window does not match frozen continuation protocol")
+        _validate_evidence_window(
+            candidate["evidence_lines"], start_line, end_line,
+            candidate["initial_window_censored"], "initial",
+        )
+        if candidate["evidence_lines"][line_no - start_line]["availability"] != "available":
+            raise ValueError("packet candidate main line is unavailable")
+
+        _, expected_segments = _ranges({
+            "window_start_line": expected_start, "window_end_line": expected_end,
+        })
+        segments = candidate["extension_segments"]
+        if not isinstance(segments, list) or len(segments) != len(expected_segments):
+            raise ValueError("packet extension layout does not match frozen continuation protocol")
+        for segment, expected in zip(segments, expected_segments):
             _exact(segment, PACKET_SEGMENT_KEYS, "packet extension segment")
-            segment_id = _string(segment["segment_id"], "packet segment_id", maximum=80)
-            if segment_id in segment_ids:
-                raise ValueError("packet segment IDs must be unique")
-            segment_ids.add(segment_id)
-            _enum(segment["direction"], ("before", "after"), "packet segment direction")
             segment_start = _integer(segment["start_line"], "packet segment start")
             segment_end = _integer(segment["end_line"], "packet segment end")
-            _boolean(segment["censored"], "packet segment censored")
-            if not isinstance(segment["evidence_lines"], list) or [line.get("line_no") for line in segment["evidence_lines"] if isinstance(line, dict)] != list(range(segment_start, segment_end + 1)):
-                raise ValueError("packet extension evidence coverage is invalid")
-            for line in segment["evidence_lines"]:
-                _validate_packet_line(line, "packet extension evidence")
+            if any(segment[key] != value for key, value in expected.items()):
+                raise ValueError("packet extension layout does not match frozen continuation protocol")
+            _validate_evidence_window(
+                segment["evidence_lines"], segment_start, segment_end,
+                segment["censored"], "extension",
+            )
     return packet
 
 
