@@ -218,8 +218,8 @@ def _classify(
         return "missing_telemetry", "budget_measurement_missing", predicate, metrics
     if predicate.reason == "missing_observation":
         return "missing_telemetry", "predicate_observation_missing", predicate, metrics
-    if predicate.reason == "goal_already_met":
-        return "invalid_initial", "goal_already_met", predicate, metrics
+    if predicate.reason in {"goal_already_met", "craft_output_present_at_reset"}:
+        return "invalid_initial", predicate.reason, predicate, metrics
     if execution_status == "timed_out":
         return "timed_out", "execution_timed_out", predicate, metrics
     if execution_status in {"interrupted", "cancelled"}:

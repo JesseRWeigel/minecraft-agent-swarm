@@ -82,6 +82,26 @@ roster. Permissions and other failure timings remain pending; the combined box s
   generation and both controls with fresh dependencies. Host prerequisite setup
   and independent-machine portability remain unverified, so this gate stays open.
 
+### Offline crafting gate
+
+The replay evaluator accepts a `craft_item` goal such as an iron pickaxe
+(`actor: atlas`, `item: iron_pickaxe`, `recipe: minecraft:iron_pickaxe`,
+`count: 1`, and a pinned `observer_id`). The reset must not already contain that
+output. In addition to the final inventory, the independent producer must
+supply a complete, trial-scoped `final_state.observed_crafts` array. Each event
+includes a unique `event_id`, `observer_id`, `actor`, `recipe`, `item`, and
+positive integer output `count`. An empty array observes no crafts; a missing
+array is missing telemetry. A participant's action request or text claim is not
+an observation. Matching events must account for the goal quantity and that
+quantity must still be in the actor's final inventory.
+
+The synthetic replay integration test includes a clean craft, matching
+inventory with the wrong observer, pre-owned output and missing observation.
+This checks scorer wiring only: a server-side event producer and its trust
+boundary still need to be qualified before use in live Minecraft. The observer
+label by itself does not authenticate a source. No crafting, diamond acquisition
+or model performance in Minecraft was measured.
+
 ## 3. Prespecify the model comparison
 
 - [ ] Freeze local-only, frontier-assisted, and retained-improvement-without-

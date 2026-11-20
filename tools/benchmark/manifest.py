@@ -248,6 +248,7 @@ def _validate_scenarios(scenarios: dict[str, Any]) -> None:
         if task not in {
             "navigate_to_region",
             "acquire_item",
+            "craft_item",
             "shared_resource_handoff",
             "recover_after_injected_failure",
         }:

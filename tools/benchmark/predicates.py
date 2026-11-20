@@ -210,6 +210,61 @@ def _acquire(scenario: dict[str, Any], initial: Any, final: Any) -> PredicateRes
     )
 
 
+def _craft(scenario: dict[str, Any], initial: Any, final: Any) -> PredicateResult:
+    goal = _goal(scenario)
+    actor = _name(goal, "actor")
+    item = _name(goal, "item")
+    recipe = _name(goal, "recipe")
+    observer_id = _name(goal, "observer_id")
+    count = _count(goal)
+    before = _inventory_count(initial, actor, item)
+    after = _inventory_count(final, actor, item)
+    evidence = {
+        "actor": actor,
+        "item": item,
+        "recipe": recipe,
+        "observer_id": observer_id,
+        "target_count": count,
+        "initial_count": before,
+        "final_count": after,
+    }
+    if before is None or after is None:
+        return PredicateResult(False, "missing_observation", evidence)
+    if before != 0:
+        return PredicateResult(False, "craft_output_present_at_reset", evidence)
+    crafts = final.get("observed_crafts")
+    if crafts is None:
+        return PredicateResult(False, "missing_observation", evidence)
+    if not isinstance(crafts, list):
+        raise PredicateError("observed_crafts must be an array")
+    seen: set[str] = set()
+    matching: list[str] = []
+    crafted_count = 0
+    for index, event in enumerate(crafts):
+        label = f"observed_crafts[{index}]"
+        if not isinstance(event, dict):
+            raise PredicateError(f"{label} must be an object")
+        event_id = _name(event, "event_id", label)
+        if event_id in seen:
+            raise PredicateError(f"duplicate observed craft event_id: {event_id}")
+        seen.add(event_id)
+        event_count = _positive_integer(event, "count", label)
+        key = tuple(
+            _name(event, field, label)
+            for field in ("observer_id", "actor", "recipe", "item")
+        )
+        if key == (observer_id, actor, recipe, item):
+            matching.append(event_id)
+            crafted_count += event_count
+    evidence["matching_event_ids"] = sorted(matching)
+    evidence["observed_crafted_count"] = crafted_count
+    if crafted_count < count:
+        return PredicateResult(False, "craft_evidence_missing", evidence)
+    if after < count:
+        return PredicateResult(False, "predicate_not_met", evidence)
+    return PredicateResult(True, "observed_recipe_completion", evidence)
+
+
 def _observed_transfer_count(
     final: Any,
     donor: str,
@@ -449,6 +504,8 @@ def evaluate_goal(
         return _navigate(scenario, initial_state, final_state)
     if task == "acquire_item":
         return _acquire(scenario, initial_state, final_state)
+    if task == "craft_item":
+        return _craft(scenario, initial_state, final_state)
     if task == "shared_resource_handoff":
         return _handoff(scenario, initial_state, final_state)
     if task == "recover_after_injected_failure":
