@@ -15,6 +15,74 @@ FIXTURE = ROOT / "tools" / "benchmark" / "fixtures" / "mock-pilot" / "experiment
 
 
 class RunnerTests(unittest.TestCase):
+    def test_iron_pickaxe_replay_requires_independent_craft_and_fresh_inventory(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.copy_fixture(root)
+            experiment_path = root / "experiment.json"
+            experiment = json.loads(experiment_path.read_text())
+            scenario_path = root / "scenarios.json"
+            scenarios = json.loads(scenario_path.read_text())
+            scenarios["scenarios"].append({
+                "id": "iron-pickaxe",
+                "task": "craft_item",
+                "goal": {
+                    "actor": "atlas",
+                    "item": "iron_pickaxe",
+                    "recipe": "minecraft:iron_pickaxe",
+                    "observer_id": "synthetic-evaluator",
+                    "count": 1,
+                },
+            })
+            self.write_json(scenario_path, scenarios)
+            observations_path = root / "observations.json"
+            observations = json.loads(observations_path.read_text())
+            craft = {
+                "event_id": "server-craft-1",
+                "observer_id": "synthetic-evaluator",
+                "actor": "atlas",
+                "item": "iron_pickaxe",
+                "recipe": "minecraft:iron_pickaxe",
+                "count": 1,
+            }
+            for source in list(observations["runs"]):
+                if source["scenario_id"] != "acquire":
+                    continue
+                row = copy.deepcopy(source)
+                row["scenario_id"] = "iron-pickaxe"
+                row["run_id"] = f'iron-pickaxe-{row["condition_id"]}-{row["seed"]}'
+                row["model_self_report"] = "I crafted the iron pickaxe."
+                row["telemetry_complete"] = True
+                row["execution_status"] = "completed"
+                before = 1 if row["seed"] == 33 else 0
+                row["initial_state"] = {"actors": {"atlas": {"inventory": {"iron_pickaxe": before}}}}
+                row["final_state"] = {"actors": {"atlas": {"inventory": {"iron_pickaxe": 1}}}}
+                if row["seed"] != 44:
+                    observer = "participant" if row["seed"] == 22 else craft["observer_id"]
+                    row["final_state"]["observed_crafts"] = [dict(craft, observer_id=observer)]
+                observations["runs"].append(row)
+            self.write_json(observations_path, observations)
+            for key, path in (("scenario_manifest", scenario_path), ("observation_manifest", observations_path)):
+                experiment[key]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+            self.write_json(experiment_path, experiment)
+
+            report = run_benchmark(experiment_path)
+            self.assertEqual(report["evidence_class"], "synthetic_mock")
+            self.assertEqual(report["summary"]["trial_count"], 60)
+            rows = {r["run_id"]: r for r in report["runs"]}
+            for seed, (status, reason) in {
+                11: ("completed", "observed_recipe_completion"),
+                22: ("failed", "craft_evidence_missing"),
+                33: ("invalid_initial", "craft_output_present_at_reset"),
+                44: ("missing_telemetry", "predicate_observation_missing"),
+            }.items():
+                row = rows[f"iron-pickaxe-baseline-{seed}"]
+                self.assertEqual((row["status"], row["reason_code"]), (status, reason))
+            self.assertEqual(
+                rows["iron-pickaxe-baseline-11"]["predicate"]["evidence"]["matching_event_ids"],
+                ["server-craft-1"],
+            )
+
     def test_mock_fixture_is_complete_deterministic_and_explicit(self):
         first = run_benchmark(FIXTURE)
         second = run_benchmark(FIXTURE)

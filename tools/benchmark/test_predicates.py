@@ -95,6 +95,37 @@ class PredicateTests(unittest.TestCase):
         self.assertTrue(result.passed)
         self.assertEqual(result.evidence["delta"], 5)
 
+    def test_crafting_rejects_wrong_recipe_wrong_actor_and_dropped_output(self):
+        goal = {
+            "actor": "atlas", "recipe": "minecraft:iron_pickaxe",
+            "item": "iron_pickaxe", "observer_id": "judge", "count": 1,
+        }
+        scenario = {"id": "craft-iron", "task": "craft_item", "goal": goal}
+        event = dict(goal, event_id="evt-1")
+        initial = {"actors": {"atlas": {"inventory": {}}}}
+        final = {"actors": {"atlas": {"inventory": {"iron_pickaxe": 1}}}}
+        for field, value in (
+            ("recipe", "minecraft:stone_pickaxe"),
+            ("actor", "nova"),
+            ("item", "stone_pickaxe"),
+        ):
+            with self.subTest(field=field):
+                result = evaluate_goal(
+                    scenario, initial, dict(final, observed_crafts=[dict(event, **{field: value})])
+                )
+                self.assertEqual((result.passed, result.reason), (False, "craft_evidence_missing"))
+        dropped = {"actors": {"atlas": {"inventory": {}}}, "observed_crafts": [event]}
+        result = evaluate_goal(scenario, initial, dropped)
+        self.assertEqual((result.passed, result.reason), (False, "predicate_not_met"))
+        with self.assertRaisesRegex(PredicateError, "duplicate observed craft event_id"):
+            evaluate_goal(scenario, initial, dict(final, observed_crafts=[event, event]))
+        with self.assertRaisesRegex(PredicateError, "count must be a positive integer"):
+            evaluate_goal(
+                scenario, initial, dict(final, observed_crafts=[dict(event, count=True)])
+            )
+        result = evaluate_goal(scenario, initial, dict(final, observed_crafts=[]))
+        self.assertEqual((result.passed, result.reason), (False, "craft_evidence_missing"))
+
     def test_handoff_requires_observer_evidence_and_matching_inventory(self):
         scenario = {
             "id": "handoff",

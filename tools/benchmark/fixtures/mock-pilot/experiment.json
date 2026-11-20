@@ -21,15 +21,15 @@
       "files": [
         {
           "path": "tools/benchmark/manifest.py",
-          "sha256": "285529ad5c2bbb28563a7f2de512904a01c3b13f06ab460fef5ff63fcfc6f5dd"
+          "sha256": "51e269d592aaf05a9ee70c76c31eac8c797b7b761f4b39185d37b23d7c5d7ff6"
         },
         {
           "path": "tools/benchmark/predicates.py",
-          "sha256": "b60a935c0b9a66113555395ee1c46732d9d68770187edce17a0f241640e72346"
+          "sha256": "26b2f514874196b5d85eca3c4bbd5e17bda5ad13663783ca02c7e59e5c521b30"
         },
         {
           "path": "tools/benchmark/runner.py",
-          "sha256": "b537b949d6697f34f4a954051e314891a641f7e3011222fa03dd090dc0dd0689"
+          "sha256": "dfe9e9ebaa43eb1b2040915139b0f997f7aa491f0009ae97ecdebfd661ede5af"
         }
       ],
       "kind": "content_sha256"
