@@ -4453,9 +4453,11 @@ export class BotBrain {
       priorities: this.roleConfig.priorities,
     };
 
-    const decision = await queryStrategic(context, this.recentHistory, memoryCtx, role);
-    const outcome = await this.executeDecision(decision);
+    const { decision, outcome } = await this.dispatchStrategicDecision(context, memoryCtx, role);
+    if (!outcome) return;
 
+    // Keep the original model proposal here; the action outcome describes
+    // the action actually dispatched by the live-state guard.
     // Exact provider messages and raw responses live in episode-events-v1.
     // The compact v2 trajectory joins them by requestId and the local outcome by actionId.
     recordTrajectory({
@@ -4468,6 +4470,33 @@ export class BotBrain {
       model: trajectoryModelMetadata(decision),
       timestamp: new Date().toISOString(),
     });
+  }
+
+  private async dispatchStrategicDecision(
+    context: string,
+    memoryCtx: string,
+    role: RoleContext,
+  ): Promise<{ decision: BrainDecision; outcome: ActionOutcome | null }> {
+    const decision = await queryStrategic(context, this.recentHistory, memoryCtx, role);
+    // The planner cannot see changes during its query; the reactive event
+    // queue also waits for this strategic turn. Don't start a generic walk
+    // at critical HP with a live hostile when the route is not threat-aware.
+    const liveThreat =
+      decision.action === "go_to" && this.bot.health > 0 && this.bot.health <= 6 && this.hostileWithin(16);
+    if (!liveThreat) return { decision, outcome: await this.executeDecision(decision) };
+    if (
+      this.stopped ||
+      this.paused ||
+      drownRescueActive(this.bot) ||
+      handsBusy(this.bot) ||
+      this.skillRunning(this.bot) ||
+      !this.roleConfig.allowedActions.includes("flee")
+    ) {
+      return { decision, outcome: null };
+    }
+    this.log.info("Brain", `Strategic go_to at ${this.bot.health}/20 with a live hostile — fleeing instead`);
+    const flee = { ...decision, action: "flee", params: {}, goal: undefined, goalSteps: undefined };
+    return { decision, outcome: await this.executeDecision(flee) };
   }
 
   private async handleCritic(event: BrainEvent): Promise<void> {

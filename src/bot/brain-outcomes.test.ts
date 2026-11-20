@@ -418,3 +418,98 @@ test("ungated deterministic reflexes preserve their direct action behavior and a
   assert.equal(terminal.event.actionId, start.event.actionId);
   assert.equal(terminal.payload.outcome.status, "unknown");
 });
+
+test("strategic risk guard changes actual production pathfinder route in a flat synthetic scene", async () => {
+  const { EventEmitter } = await import("node:events");
+  const { default: registryFor } = await import("prismarine-registry");
+  const { default: blockFor } = await import("prismarine-block");
+  const { default: pathfinderPkg } = await import("mineflayer-pathfinder");
+  const { executeAction } = await import("./actions.js");
+  const { setChatClientForTests } = await import("../llm/index.js");
+  const registry = registryFor("1.21.4");
+  const Block = blockFor(registry);
+  for (const mode of ["danger", "safe", "not-allowed"]) {
+    const { brain } = setup();
+    brain.roleConfig.allowedActions = mode === "not-allowed" ? ["go_to"] : ["go_to", "flee"];
+    brain.skillRunning = () => false;
+    brain.actionExecutor = executeAction;
+    const bot = Object.assign(new EventEmitter(), brain.bot, {
+      registry,
+      entities: {},
+      version: "1.21.4",
+      clearControlStates() {},
+      world: {
+        getSkyLight() {
+          return 15;
+        },
+      },
+    });
+    brain.bot = bot;
+    const zombie = { name: "zombie", position: new Vec3(4, 64, 0) };
+    let hostile = false;
+    bot.nearestEntity = (pred: (e: unknown) => boolean) => (hostile && pred(zombie) ? zombie : null);
+    bot.blockAt = (p: Vec3) => {
+      const b = Block.fromStateId((p.y < 64 ? registry.blocksByName.stone : registry.blocksByName.air).minStateId, 0);
+      b.position = p.floored();
+      return b;
+    };
+    pathfinderPkg.pathfinder(bot);
+    const paths: Array<{ goalX: number; endX: number }> = [];
+    // Only the physical walking is simulated. The genuine pathfinder plugin
+    // supplies Movements and computes the resulting route through actual A*.
+    bot.pathfinder.goto = async (goal: InstanceType<typeof pathfinderPkg.goals.GoalNear>) => {
+      const route = bot.pathfinder
+        .getPathFromTo(bot.pathfinder.movements, bot.entity.position, goal, {
+          timeout: 1_000,
+          tickTimeout: 1_000,
+          searchRadius: 32,
+          optimizePath: false,
+        })
+        .next().value.result;
+      assert.equal(route.status, "success");
+      const end = route.path.at(-1);
+      assert.ok(end, "A* returned an empty route");
+      paths.push({ goalX: goal.x, endX: end.x });
+      bot.entity.position = new Vec3(end.x, end.y, end.z);
+    };
+    const pending = deferred<void>();
+    const queried = deferred<void>();
+    setChatClientForTests(async () => {
+      queried.resolve();
+      await pending.promise;
+      return {
+        message: { content: JSON.stringify({ thought: "walk east", action: "go_to", params: { x: 12, y: 64, z: 0 } }) },
+        metadata: {
+          requestId: "pathfinder-fixture",
+          provider: "ollama",
+          model: "stub",
+          providerModel: "stub",
+          providerRequestId: null,
+          durationMs: 1,
+          usage: { inputTokens: null, outputTokens: null, totalTokens: null, costUsd: null },
+          origin: "provider",
+        },
+      };
+    });
+    try {
+      const done = brain.dispatchStrategicDecision("previous state", "", { name: "Atlas", personality: "miner" });
+      await queried.promise;
+      bot.health = 6;
+      hostile = mode !== "safe";
+      pending.resolve();
+      const { decision, outcome } = await done;
+      assert.equal(decision.action, "go_to", mode);
+      if (mode === "not-allowed") {
+        assert.equal(outcome, null);
+        assert.equal(paths.length, 0);
+      } else {
+        assert.ok(outcome);
+        assert.equal(paths.length, 1, JSON.stringify({ mode, outcome, result: brain.lastResult }));
+        assert.equal(paths[0].goalX, mode === "danger" ? -20 : 12);
+        assert.ok(mode === "danger" ? paths[0].endX <= -17 : paths[0].endX >= 10);
+      }
+    } finally {
+      setChatClientForTests(null);
+    }
+  }
+});
