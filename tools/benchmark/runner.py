@@ -395,8 +395,12 @@ def _build_case_study(
     )
     if before["condition_id"] != baseline_id or after["condition_id"] == baseline_id:
         raise BenchmarkError("case study must compare baseline before to non-baseline after")
-    if before["status"] == "completed" or after["status"] != "completed":
-        raise BenchmarkError("case study must link an observed failure to an observed fix")
+    if before["status"] not in {"failed", "timed_out"}:
+        raise BenchmarkError(
+            f"case study baseline must be an observed failure or timeout, got {before['status']}"
+        )
+    if after["status"] != "completed":
+        raise BenchmarkError("case study after run must be an observed completion")
     fields = (
         "run_id",
         "scenario_id",

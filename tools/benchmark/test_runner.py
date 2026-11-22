@@ -179,6 +179,50 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(case["before"]["scenario_id"], case["after"]["scenario_id"])
         self.assertEqual(case["before"]["seed"], case["after"]["seed"])
 
+    def test_case_study_requires_an_observed_baseline_failure(self):
+        cases = (
+            ("navigate", 22, "missing_telemetry"),
+            ("handoff", 22, "invalid_initial"),
+            ("navigate", 11, "interrupted"),
+            ("acquire", 33, "timed_out"),
+        )
+        for scenario, seed, status in cases:
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                self.copy_fixture(root)
+                if status == "interrupted":
+                    path = root / "observations.json"
+                    observations = json.loads(path.read_text())
+                    baseline = next(
+                        row for row in observations["runs"]
+                        if row["run_id"] == "navigate-baseline-11"
+                    )
+                    baseline["execution_status"] = "cancelled"
+                    self.write_json(path, observations)
+                    self.rehash_observations(root)
+                path = root / "case-study.json"
+                case = json.loads(path.read_text())
+                case.update(
+                    scenario_id=scenario,
+                    seed=seed,
+                    before_run_id=f"{scenario}-baseline-{seed}",
+                    after_run_id=f"{scenario}-coordination-{seed}",
+                )
+                self.write_json(path, case)
+                experiment_path = root / "experiment.json"
+                experiment = json.loads(experiment_path.read_text())
+                experiment["case_study_manifest"]["sha256"] = hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
+                self.write_json(experiment_path, experiment)
+                if status == "timed_out":
+                    report = run_benchmark(experiment_path)
+                    self.assertEqual(report["case_study"]["before"]["status"], status)
+                    self.assertEqual(report["case_study"]["after"]["status"], "completed")
+                else:
+                    with self.assertRaisesRegex(BenchmarkError, status):
+                        run_benchmark(experiment_path)
+
     def test_missing_telemetry_and_terminal_status_take_precedence(self):
         report = run_benchmark(FIXTURE)
         missing = next(item for item in report["runs"] if item["run_id"] == "acquire-coaching-22")
@@ -231,12 +275,12 @@ class RunnerTests(unittest.TestCase):
             root = Path(raw)
             self.copy_fixture(root)
             observations = json.loads((root / "observations.json").read_text())
-            target = next(row for row in observations["runs"] if row["run_id"] == "navigate-baseline-11")
+            target = next(row for row in observations["runs"] if row["run_id"] == "navigate-baseline-33")
             del target["final_state"]["actors"]["atlas"]["dimension"]
             self.write_json(root / "observations.json", observations)
             self.rehash_observations(root)
             report = run_benchmark(root / "experiment.json")
-            row = next(item for item in report["runs"] if item["run_id"] == "navigate-baseline-11")
+            row = next(item for item in report["runs"] if item["run_id"] == "navigate-baseline-33")
             self.assertEqual(row["status"], "missing_telemetry")
             self.assertEqual(row["reason_code"], "predicate_observation_missing")
 
