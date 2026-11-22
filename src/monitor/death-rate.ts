@@ -30,9 +30,11 @@ export interface RecentDeathRate {
   bot: string;
   /** Deaths in the window, not in the session. */
   deaths: number;
+  /** Elapsed time for exact comparisons, before display rounding. */
+  elapsedSeconds: number;
   /** Whole deaths per hour, for display. */
   perHour: number;
-  /** Tenths of a death per hour, for comparison. See below. */
+  /** Rounded tenths of a death per hour, for display only. */
   perHourTenths: number;
 }
 
@@ -79,11 +81,10 @@ export function worstRecentDeathRate(
     // coming back to life, and a negative delta must not read as a calm rate.
     if (deaths < 0) return null;
 
-    // Tenths, because integer truncation withheld a real alert once already:
-    // at a 6h gap 10.3 deaths/hr floored to 10 and lost to a "> 10" test.
-    const perHourTenths = Math.round((deaths * 36_000) / elapsedSeconds);
-    if (!worst || perHourTenths > worst.perHourTenths) {
-      worst = { bot, deaths, perHour: Math.floor(perHourTenths / 10), perHourTenths };
+    // Every bot has the same window; comparing counts compares exact rates.
+    if (!worst || deaths > worst.deaths) {
+      const perHourTenths = Math.round((deaths * 36_000) / elapsedSeconds);
+      worst = { bot, deaths, elapsedSeconds, perHour: Math.floor(perHourTenths / 10), perHourTenths };
     }
   }
   return worst;
@@ -91,5 +92,6 @@ export function worstRecentDeathRate(
 
 /** True when this rate is worth an ALERT rather than a line of output. */
 export function exceedsDeathRateAlert(rate: RecentDeathRate): boolean {
-  return rate.perHourTenths > RECENT_DEATH_RATE_ALERT * 10;
+  // Compare without division so a rounded display cannot change the alert.
+  return rate.deaths * 3600 > RECENT_DEATH_RATE_ALERT * rate.elapsedSeconds;
 }
