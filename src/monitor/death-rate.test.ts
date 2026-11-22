@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   parseBotDeaths,
   formatBotDeaths,
+  exceedsDeathRateAlert,
   worstRecentDeathRate,
   RECENT_DEATH_RATE_ALERT,
   MIN_ELAPSED_S,
@@ -86,6 +87,31 @@ test("a rate just over the threshold is not truncated away", () => {
   const worst = worstRecentDeathRate(prev, curr, 2 * HOUR);
   assert.equal(worst?.perHourTenths, 45);
   assert.ok(worst!.perHourTenths > RECENT_DEATH_RATE_ALERT * 10, "4.5/hr must fire against a 4/hr bar");
+});
+
+test("rounding the display to 4.0 does not hide a rate above the alert threshold", () => {
+  const previous = parseBotDeaths("Atlas:0");
+  const current = parseBotDeaths("Atlas:5");
+  const above = worstRecentDeathRate(previous, current, 4470)!;
+  assert.equal(above.perHourTenths, 40);
+  assert.equal(exceedsDeathRateAlert(above), true, "5 deaths in 74m30s is over 4/hr");
+
+  const equal = worstRecentDeathRate(previous, current, 4500)!;
+  const below = worstRecentDeathRate(previous, current, 4530)!;
+  assert.equal(equal.perHourTenths, 40);
+  assert.equal(below.perHourTenths, 40);
+  assert.equal(exceedsDeathRateAlert(equal), false, "exactly 4/hr is not over the threshold");
+  assert.equal(exceedsDeathRateAlert(below), false, "the rounded display can also be above the actual rate");
+});
+
+test("selects the higher rate even when both bots round to the same tenth", () => {
+  const previous = parseBotDeaths("Atlas:0,Flora:0");
+  const current = parseBotDeaths("Atlas:100,Flora:101");
+  const worst = worstRecentDeathRate(previous, current, 25 * HOUR)!;
+  assert.equal(worst.perHourTenths, 40);
+  assert.equal(worst.bot, "Flora");
+  assert.equal(worst.deaths, 101);
+  assert.equal(exceedsDeathRateAlert(worst), true);
 });
 
 test("too short a gap carries no signal", () => {

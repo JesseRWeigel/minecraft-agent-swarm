@@ -22,6 +22,12 @@ const worst = worstRecentDeathRate(
 if (worst) {
   console.log(`WORST_BOT_DEATHS_PER_HR=${worst.bot}:${worst.perHour}`);
   if (exceedsDeathRateAlert(worst)) {
-    console.log(`ALERT=one_bot_dying_${worst.bot}_${worst.perHour}_per_hr_over_${RECENT_DEATH_RATE_ALERT}`);
+    // When the whole-number display equals the threshold, show the measured
+    // count and elapsed time instead of claiming that e.g. 4 exceeds 4.
+    const alert =
+      worst.perHour <= RECENT_DEATH_RATE_ALERT
+        ? `${worst.deaths}_deaths_in_${worst.elapsedSeconds}s_over_${RECENT_DEATH_RATE_ALERT}_per_hr`
+        : `${worst.perHour}_per_hr_over_${RECENT_DEATH_RATE_ALERT}`;
+    console.log(`ALERT=one_bot_dying_${worst.bot}_${alert}`);
   }
 }
