@@ -97,7 +97,7 @@ case-study.json must identify:
 }
 ~~~
 
-The runner verifies that both run IDs exist, share a scenario and seed, use baseline before and a non-baseline condition after, and link a non-completion to an independently verified completion. The committed example is a simulator wiring demonstration only.
+The runner verifies that both run IDs exist, share a scenario and seed, use baseline before and a non-baseline condition after, and link a recorded failure or timeout to an independently verified completion. Missing telemetry, invalid initial states, and interruptions cannot serve as the baseline evidence for this claim, but remain visible in the trial results and summaries. The committed example is a simulator wiring demonstration only.
 
 ## Requirements for a future live adapter
 
