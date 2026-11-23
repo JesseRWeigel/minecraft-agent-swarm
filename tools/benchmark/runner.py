@@ -315,6 +315,34 @@ def _condition_seed_summary(
     }
 
 
+def _condition_scenario_summaries(
+    rows: list[dict[str, Any]], condition_ids: list[str], scenario_ids: list[str]
+) -> list[dict[str, Any]]:
+    counts_by_pair: dict[tuple[str, str], Counter[str]] = {}
+    for row in rows:
+        pair = (row["condition_id"], row["scenario_id"])
+        counts_by_pair.setdefault(pair, Counter())[row["status"]] += 1
+
+    summaries = []
+    for condition_id in condition_ids:
+        for scenario_id in scenario_ids:
+            counts = counts_by_pair[(condition_id, scenario_id)]
+            trials = sum(counts.values())
+            completed = counts["completed"]
+            scored = completed + counts["failed"] + counts["timed_out"]
+            summaries.append({
+                "condition_id": condition_id,
+                "scenario_id": scenario_id,
+                "trials": trials,
+                "completed": completed,
+                "completion_rate": round(completed / trials, 6),
+                "scored_trials": scored,
+                "scored_completion_rate": round(completed / scored, 6) if scored else None,
+                "status_counts": dict(sorted(counts.items())),
+            })
+    return summaries
+
+
 def _percentile(sorted_values: list[float], fraction: float) -> float:
     if not sorted_values:
         return 0.0
@@ -438,6 +466,9 @@ def _summarize(rows: list[dict[str, Any]], experiment: LoadedExperiment) -> dict
             for condition_id in condition_ids
             for seed in experiment.manifest["seeds"]
         ],
+        "condition_scenario": _condition_scenario_summaries(
+            rows, condition_ids, [scenario["id"] for scenario in experiment.scenarios["scenarios"]]
+        ),
         "paired_comparisons": [
             _paired_comparison(
                 rows, baseline, condition_id, experiment.manifest["benchmark_id"]

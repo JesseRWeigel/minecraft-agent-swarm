@@ -95,6 +95,67 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(first["summary"]["trial_count"], 48)
         self.assertIn("paired_comparisons", first["summary"])
 
+    def test_task_breakdown_preserves_failed_and_unverified_trials(self):
+        report = run_benchmark(FIXTURE)
+        rows = report["runs"]
+        groups = report["summary"]["condition_scenario"]
+        combinations = {(row["condition_id"], row["scenario_id"]) for row in rows}
+        self.assertEqual(len(groups), len(combinations))
+        self.assertEqual(
+            {(group["condition_id"], group["scenario_id"]) for group in groups},
+            combinations,
+        )
+        self.assertEqual(sum(group["trials"] for group in groups), len(rows))
+        for group in groups:
+            matching = [
+                row for row in rows
+                if (row["condition_id"], row["scenario_id"]) ==
+                (group["condition_id"], group["scenario_id"])
+            ]
+            expected = {
+                status: sum(row["status"] == status for row in matching)
+                for status in {row["status"] for row in matching}
+            }
+            self.assertEqual(group["status_counts"], expected)
+            scored = sum(expected.get(status, 0) for status in ("completed", "failed", "timed_out"))
+            self.assertEqual(group["scored_trials"], scored)
+            self.assertEqual(group["trials"], len(matching))
+            self.assertEqual(group["completed"], expected.get("completed", 0))
+            self.assertEqual(
+                group["scored_completion_rate"],
+                round(group["completed"] / scored, 6) if scored else None,
+            )
+            self.assertEqual(
+                group["completion_rate"], round(group["completed"] / group["trials"], 6)
+            )
+
+    def test_task_breakdown_does_not_fabricate_rate_when_nothing_scored(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.copy_fixture(root)
+            observations_path = root / "observations.json"
+            observations = json.loads(observations_path.read_text())
+            for row in observations["runs"]:
+                if row["scenario_id"] == "acquire" and row["condition_id"] == "baseline":
+                    row["telemetry_complete"] = False
+            self.write_json(observations_path, observations)
+            experiment_path = root / "experiment.json"
+            experiment = json.loads(experiment_path.read_text())
+            experiment["observation_manifest"]["sha256"] = hashlib.sha256(
+                observations_path.read_bytes()
+            ).hexdigest()
+            self.write_json(experiment_path, experiment)
+            report = run_benchmark(root / "experiment.json")
+            group = next(
+                group for group in report["summary"]["condition_scenario"]
+                if group["scenario_id"] == "acquire" and group["condition_id"] == "baseline"
+            )
+            self.assertEqual(group["trials"], 4)
+            self.assertEqual(group["scored_trials"], 0)
+            self.assertEqual(group["status_counts"], {"missing_telemetry": 4})
+            self.assertEqual(group["completion_rate"], 0.0)
+            self.assertIsNone(group["scored_completion_rate"])
+
     def test_report_records_checked_evaluator_fingerprints_without_fake_controller_commit(self):
         report = run_benchmark(FIXTURE)
         code = report["provenance"]["code"]
