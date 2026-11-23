@@ -200,3 +200,17 @@ test("malformed successful OpenAI response is captured before JSON parsing fails
   assert.equal(records[1].payload.raw.bodyText, "{not-json");
   setEpisodeEventRecorderForTests(null);
 });
+
+test("openAITransport aborts a request that never answers", async () => {
+  let receivedSignal: AbortSignal | undefined;
+  const stalledFetch = ((_url: string, init?: RequestInit) => {
+    receivedSignal = init?.signal ?? undefined;
+    return new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+    });
+  }) as typeof fetch;
+
+  await assert.rejects(openAITransport(BASE, stalledFetch, 50), /timed out after 50ms/);
+  assert.ok(receivedSignal, "the request must carry an abort signal");
+  assert.equal(receivedSignal.aborted, true);
+});

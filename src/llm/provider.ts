@@ -217,6 +217,14 @@ export async function chatWithTransport(
 
 const MAX_PROVIDER_RESPONSE_BYTES = 1024 * 1024;
 
+/**
+ * Upper bound for one OpenAI-compatible request. Without it a stalled gateway
+ * keeps the caller's brain in `processing` forever: the event queue never
+ * drains and the idle timer is never re-armed, so the bot stands still with
+ * no error in the log.
+ */
+export const OPENAI_REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_REQUEST_TIMEOUT_MS || 60_000);
+
 async function readBoundedResponse(response: Response): Promise<{ bodyText: string; truncated: boolean }> {
   if (!response.body) return { bodyText: "", truncated: false };
   const reader = response.body.getReader();
@@ -240,16 +248,26 @@ async function readBoundedResponse(response: Response): Promise<{ bodyText: stri
 export async function openAITransport(
   req: ChatRequest,
   fetchImpl: typeof fetch = fetch,
+  timeoutMs = OPENAI_REQUEST_TIMEOUT_MS,
 ): Promise<ProviderTransportResult> {
   const { baseUrl, apiKey } = config.openai;
-  const res = await fetchImpl(baseUrl.replace(/\/+$/, "") + "/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + apiKey,
-    },
-    body: JSON.stringify(toOpenAIRequest(req)),
-  });
+  let res: Response;
+  try {
+    res = await fetchImpl(baseUrl.replace(/\/+$/, "") + "/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + apiKey,
+      },
+      body: JSON.stringify(toOpenAIRequest(req)),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    if ((error as Error)?.name === "TimeoutError") {
+      throw new ProviderTransportError(`OpenAI request timed out after ${timeoutMs}ms`, null, { cause: error });
+    }
+    throw error;
+  }
   const wire = await readBoundedResponse(res);
   const rawResponse = {
     status: res.status,
