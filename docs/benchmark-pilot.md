@@ -75,6 +75,8 @@ Trial wall time is not engineering labor. Each aggregate reports known and missi
 
 The report includes condition totals and condition-by-seed totals. Each completion rate has a descriptive Wilson 95% interval over all recorded trials, including failures, timeouts, interruptions, missing telemetry, and invalid initial states in the denominator.
 
+The `condition_scenario` breakdown also shows each task's status counts within each condition, so a hard task cannot be hidden in a pooled score. Its primary completion rate uses every trial. The separate `scored_completion_rate` is a diagnostic conditional on an adjudicated result (completed, failed or timed out); it excludes interruptions, missing telemetry and invalid starts. It is null if none could be scored, and is not a replacement for the all-trial rate.
+
 Condition differences use matched scenario_id plus seed pairs. They report wins, losses, ties, mean paired completion delta, and a deterministic paired bootstrap percentile interval. They do not calculate a difference from two independent-binomial standard errors. These intervals describe fixture variability; the mock report labels itself synthetic_mock and says it does not claim live Minecraft outcomes.
 
 A real pilot needs enough prespecified seeds for useful uncertainty. Four synthetic seeds verify the machinery and are not a power analysis.
