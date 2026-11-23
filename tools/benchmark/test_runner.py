@@ -248,6 +248,28 @@ class RunnerTests(unittest.TestCase):
         self.assertGreater(baseline["metrics"]["inference"]["input_tokens"]["missing"], 0)
         self.assertIsNone(baseline["metrics"]["inference"]["estimated_cost_usd"]["mean"])
 
+    def test_report_mean_stays_finite_when_valid_measurements_overflow_their_sum(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.copy_fixture(root)
+            path = root / "observations.json"
+            observations = json.loads(path.read_text())
+            baseline_rows = [row for row in observations["runs"] if row["condition_id"] == "baseline"]
+            for row in baseline_rows[:2]:
+                row.setdefault("metrics", {}).setdefault("engineering", {})[
+                    "infrastructure_cost_usd"
+                ] = 1e308
+            self.write_json(path, observations)
+            self.rehash_observations(root)
+
+            report = run_benchmark(root / "experiment.json")
+            # The report should be usable by standard JSON parsers, not just
+            # Python's permissive decoder of Infinity and NaN.
+            json.dumps(report, allow_nan=False)
+            baseline = next(row for row in report["summary"]["conditions"] if row["condition_id"] == "baseline")
+            metric = baseline["metrics"]["engineering"]["infrastructure_cost_usd"]
+            self.assertEqual(metric, {"known": 2, "missing": len(baseline_rows) - 2, "mean": 1e308})
+
     def test_paired_comparison_uses_matching_scenario_seed_units(self):
         report = run_benchmark(FIXTURE)
         comparison = next(

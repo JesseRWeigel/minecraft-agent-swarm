@@ -11,6 +11,7 @@ import math
 import os
 from pathlib import Path
 import random
+from statistics import mean
 import tempfile
 from typing import Any, Iterable
 
@@ -268,7 +269,7 @@ def _metric_summary(
         result[field] = {
             "known": len(values),
             "missing": len(rows) - len(values),
-            "mean": round(sum(values) / len(values), 6) if values else None,
+            "mean": round(mean(values), 6) if values else None,
         }
     return result
 
