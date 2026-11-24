@@ -436,6 +436,36 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(row["status"], "missing_telemetry")
             self.assertEqual(row["reason_code"], "predicate_observation_missing")
 
+    def test_recovery_cannot_score_an_injection_beyond_the_reported_steps(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.copy_fixture(root)
+            observations_path = root / "observations.json"
+            observations = json.loads(observations_path.read_text())
+            impossible = "recover-coordination-11"
+            exact_boundary = "recover-coordination-22"
+            for run in observations["runs"]:
+                if run["run_id"] == impossible:
+                    run["steps"] = 2
+                elif run["run_id"] == exact_boundary:
+                    run["steps"] = 3
+            self.write_json(observations_path, observations)
+            self.rehash_observations(root)
+
+            report = run_benchmark(root / "experiment.json")
+            rows = {row["run_id"]: row for row in report["runs"]}
+            self.assertEqual(
+                (rows[impossible]["status"], rows[impossible]["reason_code"]),
+                ("missing_telemetry", "recovery_injection_beyond_reported_steps"),
+            )
+            self.assertEqual(rows[exact_boundary]["status"], "completed")
+            summary = next(
+                row for row in report["summary"]["condition_scenario"]
+                if row["condition_id"] == "coordination" and row["scenario_id"] == "recover"
+            )
+            self.assertEqual((summary["trials"], summary["scored_trials"], summary["completed"]),
+                             (4, 3, 3))
+
     def test_malformed_steps_are_rejected_even_on_a_timed_out_run(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

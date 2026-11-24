@@ -219,6 +219,15 @@ def _classify(
         return "missing_telemetry", "budget_measurement_missing", predicate, metrics
     if predicate.reason == "missing_observation":
         return "missing_telemetry", "predicate_observation_missing", predicate, metrics
+    # Recovery can only claim an observed injection at a step this trial
+    # actually reached. The predicate itself does not have the run step count.
+    injection_step = predicate.evidence.get("injection_step")
+    if (
+        scenario["task"] == "recover_after_injected_failure"
+        and predicate.passed
+        and injection_step > steps
+    ):
+        return "missing_telemetry", "recovery_injection_beyond_reported_steps", predicate, metrics
     if predicate.reason in {"goal_already_met", "craft_output_present_at_reset"}:
         return "invalid_initial", predicate.reason, predicate, metrics
     if execution_status == "timed_out":
