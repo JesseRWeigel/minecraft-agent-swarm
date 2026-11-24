@@ -72,11 +72,15 @@ def _nonnegative_number(value: Any, label: str) -> int | float | None:
 def _normalize_metrics(raw: Any, label: str) -> dict[str, dict[str, int | float | None]]:
     metrics = {} if raw is None else _object(raw, label)
     result: dict[str, dict[str, int | float | None]] = {}
-    for group, fields in (
+    groups = (
         ("inference", _INFERENCE_METRICS),
         ("runtime_resources", _RUNTIME_RESOURCE_METRICS),
         ("engineering", _ENGINEERING_METRICS),
-    ):
+    )
+    unknown_groups = set(metrics) - {group for group, _ in groups}
+    if unknown_groups:
+        raise BenchmarkError(f"{label} has unknown groups: {sorted(unknown_groups)}")
+    for group, fields in groups:
         source = metrics.get(group)
         source = {} if source is None else _object(source, f"{label}.{group}")
         unknown = set(source) - set(fields)
