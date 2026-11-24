@@ -315,6 +315,9 @@ def _condition_seed_summary(
     }
 
 
+_SCORED_STATUSES = ("completed", "failed", "timed_out")
+
+
 def _condition_scenario_summaries(
     rows: list[dict[str, Any]], condition_ids: list[str], scenario_ids: list[str]
 ) -> list[dict[str, Any]]:
@@ -329,7 +332,7 @@ def _condition_scenario_summaries(
             counts = counts_by_pair[(condition_id, scenario_id)]
             trials = sum(counts.values())
             completed = counts["completed"]
-            scored = completed + counts["failed"] + counts["timed_out"]
+            scored = sum(counts[status] for status in _SCORED_STATUSES)
             summaries.append({
                 "condition_id": condition_id,
                 "scenario_id": scenario_id,
@@ -356,24 +359,36 @@ def _paired_comparison(
     candidate: str,
     benchmark_id: str,
 ) -> dict[str, Any]:
-    indicators = {
-        (row["scenario_id"], row["seed"], row["condition_id"]): int(
-            row["status"] == "completed"
-        )
+    statuses = {
+        (row["scenario_id"], row["seed"], row["condition_id"]): row["status"]
         for row in rows
     }
     units = sorted(
-        {
-            (row["scenario_id"], row["seed"])
-            for row in rows
-            if row["condition_id"] == baseline
-        }
+        (scenario_id, seed)
+        for scenario_id, seed, condition in statuses
+        if condition == baseline
     )
-    deltas = [
-        indicators[(scenario_id, seed, candidate)]
-        - indicators[(scenario_id, seed, baseline)]
-        for scenario_id, seed in units
-    ]
+    coverage = {
+        "both_scored": 0,
+        "baseline_only_scored": 0,
+        "candidate_only_scored": 0,
+        "neither_scored": 0,
+    }
+    deltas, scored_deltas = [], []
+    for scenario_id, seed in units:
+        before = statuses[scenario_id, seed, baseline]
+        after = statuses[scenario_id, seed, candidate]
+        delta = int(after == "completed") - int(before == "completed")
+        deltas.append(delta)
+        if before in _SCORED_STATUSES and after in _SCORED_STATUSES:
+            coverage["both_scored"] += 1
+            scored_deltas.append(delta)
+        elif before in _SCORED_STATUSES:
+            coverage["baseline_only_scored"] += 1
+        elif after in _SCORED_STATUSES:
+            coverage["candidate_only_scored"] += 1
+        else:
+            coverage["neither_scored"] += 1
     seed_bytes = hashlib.sha256(f"{benchmark_id}|{baseline}|{candidate}".encode()).digest()
     generator = random.Random(int.from_bytes(seed_bytes[:8], "big"))
     samples = []
@@ -386,6 +401,10 @@ def _paired_comparison(
         "candidate_condition": candidate,
         "pair_unit": "scenario_id+seed",
         "pair_count": len(deltas),
+        "pair_coverage": coverage,
+        "scored_pair_completion_delta": (
+            round(sum(scored_deltas) / len(scored_deltas), 6) if scored_deltas else None
+        ),
         "wins": sum(delta > 0 for delta in deltas),
         "losses": sum(delta < 0 for delta in deltas),
         "ties": sum(delta == 0 for delta in deltas),
