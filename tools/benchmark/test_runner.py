@@ -378,6 +378,19 @@ class RunnerTests(unittest.TestCase):
         self.assertGreater(baseline["metrics"]["inference"]["input_tokens"]["missing"], 0)
         self.assertIsNone(baseline["metrics"]["inference"]["estimated_cost_usd"]["mean"])
 
+    def test_rejects_unrecognized_metric_groups_instead_of_dropping_measurements(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.copy_fixture(root)
+            path = root / "observations.json"
+            observations = json.loads(path.read_text())
+            observations["runs"][0]["metrics"]["runtime_resource"] = {"peak_rss_bytes": 64}
+            self.write_json(path, observations)
+            self.rehash_observations(root)
+
+            with self.assertRaisesRegex(BenchmarkError, r"run\.metrics has unknown groups: .*runtime_resource"):
+                run_benchmark(root / "experiment.json")
+
     def test_report_mean_stays_finite_when_valid_measurements_overflow_their_sum(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
