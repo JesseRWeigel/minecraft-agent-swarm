@@ -95,6 +95,75 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(first["summary"]["trial_count"], 48)
         self.assertIn("paired_comparisons", first["summary"])
 
+    def test_paired_coverage_distinguishes_observed_from_unscored_pairs(self):
+        report = run_benchmark(FIXTURE)
+        rows = {
+            (row["condition_id"], row["scenario_id"], row["seed"]): row["status"]
+            for row in report["runs"]
+        }
+        scored = {"completed", "failed", "timed_out"}
+        for comparison in report["summary"]["paired_comparisons"]:
+            baseline = comparison["baseline_condition"]
+            candidate = comparison["candidate_condition"]
+            coverage = {
+                "both_scored": 0,
+                "baseline_only_scored": 0,
+                "candidate_only_scored": 0,
+                "neither_scored": 0,
+            }
+            all_deltas, scored_deltas = [], []
+            for (condition, scenario, seed), first in rows.items():
+                if condition != baseline:
+                    continue
+                second = rows[candidate, scenario, seed]
+                delta = int(second == "completed") - int(first == "completed")
+                all_deltas.append(delta)
+                if first in scored and second in scored:
+                    category = "both_scored"
+                    scored_deltas.append(delta)
+                elif first in scored:
+                    category = "baseline_only_scored"
+                elif second in scored:
+                    category = "candidate_only_scored"
+                else:
+                    category = "neither_scored"
+                coverage[category] += 1
+            self.assertGreater(coverage["both_scored"], 0)
+            self.assertGreater(sum(coverage.values()) - coverage["both_scored"], 0)
+            self.assertEqual(comparison["pair_coverage"], coverage)
+            self.assertEqual(comparison["pair_count"], sum(coverage.values()))
+            self.assertEqual(comparison["mean_paired_completion_delta"],
+                             round(sum(all_deltas) / len(all_deltas), 6))
+            self.assertEqual(comparison["scored_pair_completion_delta"],
+                             round(sum(scored_deltas) / len(scored_deltas), 6))
+
+    def test_paired_coverage_is_explicit_when_no_pair_can_be_scored(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.copy_fixture(root)
+            observations_path = root / "observations.json"
+            observations = json.loads(observations_path.read_text())
+            for row in observations["runs"]:
+                if row["condition_id"] == "coaching":
+                    row["telemetry_complete"] = False
+            self.write_json(observations_path, observations)
+            self.rehash_observations(root)
+            report = run_benchmark(root / "experiment.json")
+            comparison = next(
+                item for item in report["summary"]["paired_comparisons"]
+                if item["candidate_condition"] == "coaching"
+            )
+            self.assertEqual(comparison["pair_count"], 16)
+            self.assertEqual(comparison["pair_coverage"], {
+                "both_scored": 0,
+                "baseline_only_scored": 14,
+                "candidate_only_scored": 0,
+                "neither_scored": 2,
+            })
+            self.assertIsNone(comparison["scored_pair_completion_delta"])
+            self.assertEqual(comparison["wins"], 0)
+            self.assertLess(comparison["mean_paired_completion_delta"], 0)
+
     def test_task_breakdown_preserves_failed_and_unverified_trials(self):
         report = run_benchmark(FIXTURE)
         rows = report["runs"]

@@ -29,7 +29,7 @@
         },
         {
           "path": "tools/benchmark/runner.py",
-          "sha256": "9cf726869ed1058468623621f5633693c3ba9e21a20cbfb80b60c013de1a05b3"
+          "sha256": "0a8620b76fbaf2afc4d54a0a385e95403fe3ae56953fe2212ad52a1435b3564b"
         }
       ],
       "kind": "content_sha256"
