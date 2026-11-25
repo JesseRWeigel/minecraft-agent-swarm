@@ -217,6 +217,23 @@ export async function chatWithTransport(
 
 const MAX_PROVIDER_RESPONSE_BYTES = 1024 * 1024;
 
+/**
+ * Upper bound for one OpenAI-compatible request. Without it a stalled gateway
+ * keeps the caller's brain in `processing` forever: the event queue never
+ * drains and the idle timer is never re-armed, so the bot stands still with
+ * no error in the log.
+ */
+export const OPENAI_REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_REQUEST_TIMEOUT_MS || 60_000);
+const MAX_OPENAI_REQUEST_TIMEOUT_MS = 2_147_483_647;
+
+function validateOpenAIRequestTimeout(timeoutMs: number): void {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_OPENAI_REQUEST_TIMEOUT_MS) {
+    throw new RangeError(
+      `OPENAI_REQUEST_TIMEOUT_MS must be an integer from 1 to ${MAX_OPENAI_REQUEST_TIMEOUT_MS} milliseconds`,
+    );
+  }
+}
+
 async function readBoundedResponse(response: Response): Promise<{ bodyText: string; truncated: boolean }> {
   if (!response.body) return { bodyText: "", truncated: false };
   const reader = response.body.getReader();
@@ -240,17 +257,31 @@ async function readBoundedResponse(response: Response): Promise<{ bodyText: stri
 export async function openAITransport(
   req: ChatRequest,
   fetchImpl: typeof fetch = fetch,
+  timeoutMs = OPENAI_REQUEST_TIMEOUT_MS,
 ): Promise<ProviderTransportResult> {
   const { baseUrl, apiKey } = config.openai;
-  const res = await fetchImpl(baseUrl.replace(/\/+$/, "") + "/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + apiKey,
-    },
-    body: JSON.stringify(toOpenAIRequest(req)),
-  });
-  const wire = await readBoundedResponse(res);
+  validateOpenAIRequestTimeout(timeoutMs);
+  const signal = AbortSignal.timeout(timeoutMs);
+  let res: Response;
+  let wire: Awaited<ReturnType<typeof readBoundedResponse>>;
+  try {
+    res = await fetchImpl(baseUrl.replace(/\/+$/, "") + "/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + apiKey,
+      },
+      body: JSON.stringify(toOpenAIRequest(req)),
+      signal,
+    });
+    wire = await readBoundedResponse(res);
+  } catch (error) {
+    const name = (error as Error)?.name;
+    if (signal.aborted && (error === signal.reason || name === "TimeoutError" || name === "AbortError")) {
+      throw new ProviderTransportError(`OpenAI request timed out after ${timeoutMs}ms`, null, { cause: error });
+    }
+    throw error;
+  }
   const rawResponse = {
     status: res.status,
     statusText: res.statusText,
@@ -289,6 +320,7 @@ export async function chat(req: ChatRequest): Promise<ChatResponse> {
 /** Fail at startup, not on the first decision. */
 export function assertProviderConfigured(): void {
   if (config.llm.provider !== "openai") return;
+  validateOpenAIRequestTimeout(OPENAI_REQUEST_TIMEOUT_MS);
   if (!config.openai.apiKey) {
     throw new Error(
       "LLM_PROVIDER=openai but OPENAI_API_KEY is not set. " +
