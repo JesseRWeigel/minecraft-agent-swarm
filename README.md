@@ -238,6 +238,12 @@ The IDs above were current in August 2026 (`gpt-5.6` is an alias for
 `gpt-5.6-sol`; `terra` is the balanced tier, `luna` the cheap high-volume one).
 Check the list before copying them.
 
+For `LLM_PROVIDER=openai`, each request has a 60-second timeout, including
+reading the response body. If your gateway legitimately needs longer, set
+`OPENAI_REQUEST_TIMEOUT_MS=120000` in `.env` and restart the swarm. The value is
+in milliseconds and must be a positive whole number. This setting does not
+apply to the native Ollama backend.
+
 Any OpenAI-compatible gateway works; only the base URL and model name change:
 
 | Provider | `OPENAI_BASE_URL` |
