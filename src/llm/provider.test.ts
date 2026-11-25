@@ -201,7 +201,17 @@ test("malformed successful OpenAI response is captured before JSON parsing fails
   setEpisodeEventRecorderForTests(null);
 });
 
-test("openAITransport aborts a request that never answers", async () => {
+// AbortSignal.timeout() does not keep an otherwise idle Node process alive.
+async function withReferencedTimer(assertTimeout: () => Promise<void>): Promise<void> {
+  const keepAlive = setTimeout(() => {}, 1_000);
+  try {
+    await assertTimeout();
+  } finally {
+    clearTimeout(keepAlive);
+  }
+}
+
+test("openAITransport aborts a request that never answers", { timeout: 1_000 }, async () => {
   let receivedSignal: AbortSignal | undefined;
   const stalledFetch = ((_url: string, init?: RequestInit) => {
     receivedSignal = init?.signal ?? undefined;
@@ -210,7 +220,53 @@ test("openAITransport aborts a request that never answers", async () => {
     });
   }) as typeof fetch;
 
-  await assert.rejects(openAITransport(BASE, stalledFetch, 50), /timed out after 50ms/);
+  await withReferencedTimer(() =>
+    assert.rejects(openAITransport(BASE, stalledFetch, 50), {
+      name: "ProviderTransportError",
+      message: "OpenAI request timed out after 50ms",
+    }),
+  );
   assert.ok(receivedSignal, "the request must carry an abort signal");
   assert.equal(receivedSignal.aborted, true);
+});
+
+test("openAITransport reports a timeout for a stalled response body after headers", { timeout: 1_000 }, async () => {
+  const stalledBodyFetch: typeof fetch = async (_input, init) => {
+    const signal = init?.signal;
+    assert.ok(signal);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        signal.addEventListener(
+          "abort",
+          () => {
+            controller.error(new DOMException("Body read was aborted", "AbortError"));
+          },
+          { once: true },
+        );
+      },
+    });
+    return new Response(body, { status: 200 });
+  };
+
+  await withReferencedTimer(() =>
+    assert.rejects(openAITransport(BASE, stalledBodyFetch, 50), {
+      name: "ProviderTransportError",
+      message: "OpenAI request timed out after 50ms",
+    }),
+  );
+});
+
+test("openAITransport rejects invalid timeouts before sending a request", async () => {
+  let fetchCalls = 0;
+  const unusedFetch: typeof fetch = async () => {
+    fetchCalls += 1;
+    return new Response("{}");
+  };
+  for (const timeoutMs of [0, -1, 1.5, NaN, Infinity, 2_147_483_648]) {
+    await assert.rejects(openAITransport(BASE, unusedFetch, timeoutMs), {
+      name: "RangeError",
+      message: /OPENAI_REQUEST_TIMEOUT_MS must be an integer/,
+    });
+  }
+  assert.equal(fetchCalls, 0);
 });

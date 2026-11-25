@@ -224,6 +224,15 @@ const MAX_PROVIDER_RESPONSE_BYTES = 1024 * 1024;
  * no error in the log.
  */
 export const OPENAI_REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_REQUEST_TIMEOUT_MS || 60_000);
+const MAX_OPENAI_REQUEST_TIMEOUT_MS = 2_147_483_647;
+
+function validateOpenAIRequestTimeout(timeoutMs: number): void {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_OPENAI_REQUEST_TIMEOUT_MS) {
+    throw new RangeError(
+      `OPENAI_REQUEST_TIMEOUT_MS must be an integer from 1 to ${MAX_OPENAI_REQUEST_TIMEOUT_MS} milliseconds`,
+    );
+  }
+}
 
 async function readBoundedResponse(response: Response): Promise<{ bodyText: string; truncated: boolean }> {
   if (!response.body) return { bodyText: "", truncated: false };
@@ -251,7 +260,10 @@ export async function openAITransport(
   timeoutMs = OPENAI_REQUEST_TIMEOUT_MS,
 ): Promise<ProviderTransportResult> {
   const { baseUrl, apiKey } = config.openai;
+  validateOpenAIRequestTimeout(timeoutMs);
+  const signal = AbortSignal.timeout(timeoutMs);
   let res: Response;
+  let wire: Awaited<ReturnType<typeof readBoundedResponse>>;
   try {
     res = await fetchImpl(baseUrl.replace(/\/+$/, "") + "/chat/completions", {
       method: "POST",
@@ -260,15 +272,16 @@ export async function openAITransport(
         Authorization: "Bearer " + apiKey,
       },
       body: JSON.stringify(toOpenAIRequest(req)),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal,
     });
+    wire = await readBoundedResponse(res);
   } catch (error) {
-    if ((error as Error)?.name === "TimeoutError") {
+    const name = (error as Error)?.name;
+    if (signal.aborted && (error === signal.reason || name === "TimeoutError" || name === "AbortError")) {
       throw new ProviderTransportError(`OpenAI request timed out after ${timeoutMs}ms`, null, { cause: error });
     }
     throw error;
   }
-  const wire = await readBoundedResponse(res);
   const rawResponse = {
     status: res.status,
     statusText: res.statusText,
@@ -307,6 +320,7 @@ export async function chat(req: ChatRequest): Promise<ChatResponse> {
 /** Fail at startup, not on the first decision. */
 export function assertProviderConfigured(): void {
   if (config.llm.provider !== "openai") return;
+  validateOpenAIRequestTimeout(OPENAI_REQUEST_TIMEOUT_MS);
   if (!config.openai.apiKey) {
     throw new Error(
       "LLM_PROVIDER=openai but OPENAI_API_KEY is not set. " +
