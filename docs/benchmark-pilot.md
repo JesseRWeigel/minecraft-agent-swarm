@@ -61,7 +61,7 @@ Missing telemetry, unavailable enforced-budget measurements, terminal execution 
 
 ## Budgets and measurements
 
-Every experiment records positive limits for steps, wall time, provider requests, input tokens, and output tokens. A reported overrun cannot count as completion. Steps are validated for every terminal state. Missing wall-time, request, input-token, or output-token measurements make the trial budget unverifiable and therefore missing_telemetry. Otherwise successful recovery evidence that places the injection beyond the reported run step count is also classified as missing_telemetry: these records disagree about how far the trial ran.
+Every experiment records positive limits for steps, wall time, provider requests, input tokens, and output tokens. A reported overrun cannot count as completion. Steps are validated for every terminal state. Missing wall-time, request, input-token, or output-token measurements make the trial budget unverifiable and therefore missing_telemetry. Otherwise successful recovery evidence that places the injection beyond the reported run step count is also classified as missing_telemetry: these records disagree about how far the trial ran. A recovery latency longer than the entire reported trial wall time is likewise missing telemetry. The comparison uses elapsed durations, so observer and runner timestamps do not need a common origin.
 
 Other unknown quantities remain JSON null; the runner does not replace them with zero or estimate them. Measurements stay in three groups:
 

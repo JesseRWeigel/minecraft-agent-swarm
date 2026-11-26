@@ -29,7 +29,7 @@
         },
         {
           "path": "tools/benchmark/runner.py",
-          "sha256": "b1ac98a11327b16ad5dd679a372e53964fd33597bb9e0664aa1096d3f350dc49"
+          "sha256": "664e4291fca21957a8a9206558ec5860e6679bf59a92568124816654650fdbea"
         }
       ],
       "kind": "content_sha256"
@@ -73,7 +73,7 @@
   },
   "observation_manifest": {
     "path": "observations.json",
-    "sha256": "22c06d0d073ae57cd3cf7851d23ea0cd72497eb5c4743ee1726122f2c7cd72be"
+    "sha256": "7bc3ba066ee93b597ceaa058d25d9ebee2085ab94044fbf21e8777f977fdfedd"
   },
   "reset_manifest": {
     "path": "reset.json",
