@@ -2051,7 +2051,7 @@
           "cpu_time_ms": 161,
           "energy_joules": null,
           "peak_rss_bytes": 64000000,
-          "wall_time_ms": 1211
+          "wall_time_ms": 4211
         }
       },
       "model_self_report": "I recovered from the obstruction.",
@@ -2113,7 +2113,7 @@
           "cpu_time_ms": 172,
           "energy_joules": null,
           "peak_rss_bytes": 64000000,
-          "wall_time_ms": 1222
+          "wall_time_ms": 4222
         }
       },
       "model_self_report": "Recovered after the observed obstruction.",
@@ -2175,7 +2175,7 @@
           "cpu_time_ms": 183,
           "energy_joules": null,
           "peak_rss_bytes": 64000000,
-          "wall_time_ms": 1233
+          "wall_time_ms": 8233
         }
       },
       "model_self_report": "Recovered after the observed obstruction.",
@@ -2237,7 +2237,7 @@
           "cpu_time_ms": 194,
           "energy_joules": null,
           "peak_rss_bytes": 64000000,
-          "wall_time_ms": 1244
+          "wall_time_ms": 4244
         }
       },
       "model_self_report": "Recovered after the observed obstruction.",
@@ -2299,7 +2299,7 @@
           "cpu_time_ms": 161,
           "energy_joules": null,
           "peak_rss_bytes": 64000000,
-          "wall_time_ms": 1211
+          "wall_time_ms": 4211
         }
       },
       "model_self_report": "Recovered after the observed obstruction.",
@@ -2361,7 +2361,7 @@
           "cpu_time_ms": 172,
           "energy_joules": null,
           "peak_rss_bytes": 64000000,
-          "wall_time_ms": 1222
+          "wall_time_ms": 4222
         }
       },
       "model_self_report": "Recovered after the observed obstruction.",
@@ -2423,7 +2423,7 @@
           "cpu_time_ms": 183,
           "energy_joules": null,
           "peak_rss_bytes": 64000000,
-          "wall_time_ms": 1233
+          "wall_time_ms": 4233
         }
       },
       "model_self_report": "Recovered after the observed obstruction.",
@@ -2485,7 +2485,7 @@
           "cpu_time_ms": 194,
           "energy_joules": null,
           "peak_rss_bytes": 64000000,
-          "wall_time_ms": 1244
+          "wall_time_ms": 4244
         }
       },
       "model_self_report": "Recovered after the observed obstruction.",
@@ -2547,7 +2547,7 @@
           "cpu_time_ms": 161,
           "energy_joules": null,
           "peak_rss_bytes": 64000000,
-          "wall_time_ms": 1211
+          "wall_time_ms": 4211
         }
       },
       "model_self_report": "Recovered after the observed obstruction.",
@@ -2609,7 +2609,7 @@
           "cpu_time_ms": 172,
           "energy_joules": null,
           "peak_rss_bytes": 64000000,
-          "wall_time_ms": 1222
+          "wall_time_ms": 4222
         }
       },
       "model_self_report": "Recovered after the observed obstruction.",
@@ -2671,7 +2671,7 @@
           "cpu_time_ms": 183,
           "energy_joules": null,
           "peak_rss_bytes": 64000000,
-          "wall_time_ms": 1233
+          "wall_time_ms": 4233
         }
       },
       "model_self_report": "Recovered after the observed obstruction.",
@@ -2733,7 +2733,7 @@
           "cpu_time_ms": 194,
           "energy_joules": null,
           "peak_rss_bytes": 64000000,
-          "wall_time_ms": 1244
+          "wall_time_ms": 4244
         }
       },
       "model_self_report": "Recovered after the observed obstruction.",

@@ -479,6 +479,29 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual((summary["trials"], summary["scored_trials"], summary["completed"]),
                              (4, 3, 3))
 
+    def test_recovery_latency_cannot_exceed_entire_trial_duration(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.copy_fixture(root)
+            path = root / "observations.json"
+            observations = json.loads(path.read_text())
+            too_short = "recover-coordination-11"
+            boundary = "recover-coordination-22"
+            for row in observations["runs"]:
+                duration = {too_short: 2199, boundary: 2200}.get(row["run_id"])
+                if duration is not None:
+                    row["metrics"]["runtime_resources"]["wall_time_ms"] = duration
+            self.write_json(path, observations)
+            self.rehash_observations(root)
+
+            report = run_benchmark(root / "experiment.json")
+            rows = {row["run_id"]: row for row in report["runs"]}
+            self.assertEqual(
+                (rows[too_short]["status"], rows[too_short]["reason_code"]),
+                ("missing_telemetry", "recovery_latency_beyond_trial_duration"),
+            )
+            self.assertEqual(rows[boundary]["status"], "completed")
+
     def test_malformed_steps_are_rejected_even_on_a_timed_out_run(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
