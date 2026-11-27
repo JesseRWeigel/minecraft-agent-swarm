@@ -7,13 +7,14 @@ import fs from "node:fs";
 import { Vec3 } from "vec3";
 import { marchToward } from "./loot-bastion.js";
 import { type Sighting, parseBank, pickSighting, addSighting, recordApproach, dropSighting } from "./fortress-bank.js";
+import { resolveModulePath } from "../module-path.js";
 
 // Run 711: the east sweep saw nether bricks at (535, 52, -17), Mason died on
 // the 100-block approach, and the skill forgot the sighting because it only
 // recorded a location on success; the next trip would have swept southeast.
 // A sighting is banked the moment it is made, and the next trip marches
 // straight to it before sweeping anything.
-const SIGHTING_FILE = new URL("../../logs/fortress-sighting.json", import.meta.url).pathname;
+const SIGHTING_FILE = resolveModulePath(import.meta.url, "../../logs/fortress-sighting.json");
 
 function readBank(): Sighting[] {
   try {

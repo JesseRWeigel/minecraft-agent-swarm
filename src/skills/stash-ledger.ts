@@ -9,6 +9,8 @@
 
 import fs from "node:fs";
 
+import { resolveModulePath } from "../module-path.js";
+
 export interface ChestSnapshot {
   /** "x,y,z" */
   pos: string;
@@ -28,7 +30,7 @@ const chests = new Map<string, ChestSnapshot>();
 // and unfindable while Forge logged "0/1 diamond_pickaxe" scan after scan.
 // Entries can go stale (contents change while unobserved); the withdraw
 // verifies on open, so a stale hint still beats no hint.
-const LEDGER_FILE = new URL("../../logs/stash-ledger.json", import.meta.url).pathname;
+const LEDGER_FILE = resolveModulePath(import.meta.url, "../../logs/stash-ledger.json");
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function persistLedger(): Promise<void> {

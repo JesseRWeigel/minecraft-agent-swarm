@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { PassThrough } from "node:stream";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { runParticipantProcess } from "./protected-participant-cli.mjs";
 
 const argv = ["--trial-id", "trial-01", "--action-id", "walk-01", "--movement", "stationary"];
@@ -103,7 +104,7 @@ test("real CLI process reserves stdout and rejects arguments before dependency l
   const child = spawn(
     process.execPath,
     [
-      new URL("./protected-participant-cli.mjs", import.meta.url).pathname,
+      fileURLToPath(new URL("./protected-participant-cli.mjs", import.meta.url)),
       "--trial-id",
       "bad/id",
       "--action-id",
