@@ -73,7 +73,7 @@
   },
   "observation_manifest": {
     "path": "observations.json",
-    "sha256": "7bc3ba066ee93b597ceaa058d25d9ebee2085ab94044fbf21e8777f977fdfedd"
+    "sha256": "68914dc3780eff4d11de60dd02e5ff4b4b591c3b945cba404e409e324b5dae56"
   },
   "reset_manifest": {
     "path": "reset.json",
@@ -81,7 +81,7 @@
   },
   "scenario_manifest": {
     "path": "scenarios.json",
-    "sha256": "f71fcaa737a18d42fad0f5cc01987aab4f37a0830200867e305f8c9114402ea1"
+    "sha256": "697f86c5e6eaf526138add499c87456addc276ab215d0e3762b540ee1d4ee878"
   },
   "schema_version": 1,
   "seeds": [

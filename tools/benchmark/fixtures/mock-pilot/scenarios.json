@@ -53,6 +53,18 @@
       },
       "id": "recover",
       "task": "recover_after_injected_failure"
+    },
+    {
+      "description": "Craft and retain one iron pickaxe, with independent recipe evidence and no pickaxe at reset.",
+      "goal": {
+        "actor": "atlas",
+        "count": 1,
+        "item": "iron_pickaxe",
+        "observer_id": "synthetic-evaluator",
+        "recipe": "minecraft:iron_pickaxe"
+      },
+      "id": "iron-pickaxe",
+      "task": "craft_item"
     }
   ],
   "schema_version": 1

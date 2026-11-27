@@ -33,16 +33,17 @@ experiment.json uses schema version 1 and pins every input by a relative path an
 
 References must stay within the bundle, must be regular files rather than symlinks, and must match their declared hash. A changed reset, condition, model, scenario, case-study, or observation file invalidates the experiment. The manifest accepts only mock and replay; live is rejected.
 
-The fixture covers baseline, coordination, and coaching with the same four seeds. The runner requires exactly one observation for every scenario-condition-seed tuple and rejects missing, duplicate, or extra runs.
+The fixture covers baseline, coordination, and coaching with the same four seeds for five scenarios (60 synthetic trials). The runner requires exactly one observation for every scenario-condition-seed tuple and rejects missing, duplicate, or extra runs.
 
 ## Independent completion predicates
 
 The evaluator ignores model_self_report when assigning status. The report retains that field so contradictory claims remain inspectable.
 
-Four bounded predicates operate only on observed initial and final state:
+Five bounded predicates operate only on observed initial and final state:
 
 - navigate_to_region requires a named actor to start outside and finish inside a closed XYZ region in the declared Minecraft dimension. Missing or wrong dimension cannot satisfy the goal.
 - acquire_item treats count as the target final inventory. The actor must start below that count, finish at or above it, and have a positive observed gain.
+- craft_item requires no target item at reset, independently observed recipe events matching the declared observer, actor, recipe, and item, and enough output in final inventory. Pickup, the wrong recipe, and a participant’s claim cannot substitute for recipe evidence. An absent observation stream is different from an observed stream with no matching events.
 - shared_resource_handoff requires distinct donor and recipient actors, matching inventory movement for the named item, and an independently observed transfer event bound to donor, recipient, item, observer, and count. Duplicate transfer event IDs are invalid. Coincidental inventory changes or moving a different item cannot satisfy the goal.
 - recover_after_injected_failure requires one independently observed injection with the declared actor, kind, step, and interruption outcome; a separately observed recovery attempt linked to that injection; a recovered outcome; the declared final operational state; and recovery latency within the fixed limit. Missing observer streams are missing telemetry. An empty stream, an unlinked attempt, a failed outcome, or a late recovery fails the predicate.
 
