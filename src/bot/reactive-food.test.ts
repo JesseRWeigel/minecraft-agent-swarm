@@ -56,17 +56,18 @@ function reactiveBrain(opts: Opts = {}) {
   brain.skillAborter = () => aborted.push("abort");
   brain.executeDecision = async (d: { action: string; params: unknown }) => {
     executed.push({ action: d.action, params: d.params });
+    return { actionId: "synthetic-action" };
   };
   return { brain, items, world, zombie, executed, aborted };
 }
 
 /** Model replies `action`; `during` runs while the query is pending. */
-function model(action: string, during: () => void = () => {}) {
+function model(action: string, during: () => void = () => {}, params: Record<string, unknown> = {}) {
   const seen: { system: string; user: string }[] = [];
   setChatClientForTests((async (req: { messages: Array<{ content: string }> }) => {
     seen.push({ system: req.messages[0].content, user: req.messages[1].content });
     during();
-    return { message: { content: JSON.stringify({ thought: "t", action, params: {} }) }, metadata };
+    return { message: { content: JSON.stringify({ thought: "t", action, params }) }, metadata };
   }) as any);
   return seen;
 }
@@ -228,5 +229,66 @@ test("pause or stop during the skill-abort wait suppresses the stale emergency a
     await w.brain.handleReactive(lowHealth);
     assert.deepEqual(w.aborted, ["abort"], flag);
     assert.deepEqual(w.executed, [], flag);
+  }
+});
+
+const strategicRole = { name: "Atlas", personality: "miner" };
+const arbitraryTarget = { x: 0, y: 64, z: 0 };
+
+test("strategic go_to offered before a live emergency is dispatched as parameterless flee", async () => {
+  const w = reactiveBrain({ hostile: false, health: 16 });
+  w.brain.recentHistory = [];
+  model(
+    "go_to",
+    () => {
+      w.world.hostile = true;
+      w.brain.bot.health = 6;
+    },
+    arbitraryTarget,
+  );
+  const { decision, outcome } = await w.brain.dispatchStrategicDecision("previous state", "", strategicRole);
+  assert.equal(decision.action, "go_to");
+  assert.deepEqual(decision.params, arbitraryTarget, "retain the model proposal for the trajectory");
+  assert.ok(outcome);
+  assert.deepEqual(w.executed, [{ action: "flee", params: {} }], "do not carry the original target into flee");
+});
+
+test("ordinary strategic navigation stays intact when the threat is gone or health is not critical", async () => {
+  for (const health of [6, 7]) {
+    const w = reactiveBrain({ hostile: true, health });
+    w.brain.recentHistory = [];
+    model(
+      "go_to",
+      () => {
+        if (health === 6) w.world.hostile = false;
+      },
+      arbitraryTarget,
+    );
+    const { decision, outcome } = await w.brain.dispatchStrategicDecision("previous state", "", strategicRole);
+    assert.equal(decision.action, "go_to");
+    assert.ok(outcome);
+    assert.deepEqual(w.executed, [{ action: "go_to", params: arbitraryTarget }]);
+  }
+});
+
+test("strategic emergency does not invent movement for a paused or stopped brain, active skill, or role without flee", async () => {
+  for (const mode of ["paused", "stopped", "skill", "role"] as const) {
+    const w = reactiveBrain({
+      hostile: true,
+      skill: mode === "skill",
+      allowed: mode === "role" ? ["go_to"] : undefined,
+    });
+    w.brain.recentHistory = [];
+    model(
+      "go_to",
+      () => {
+        if (mode === "paused" || mode === "stopped") w.brain[mode] = true;
+      },
+      arbitraryTarget,
+    );
+    const { decision, outcome } = await w.brain.dispatchStrategicDecision("stale state", "", strategicRole);
+    assert.equal(decision.action, "go_to", mode);
+    assert.equal(outcome, null, mode);
+    assert.deepEqual(w.executed, [], mode);
   }
 });
