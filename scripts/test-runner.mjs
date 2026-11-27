@@ -30,6 +30,21 @@ export function discoverTestFiles() {
   ].sort();
 }
 
+function lstatOrThrowChanged(scratchDir) {
+  try {
+    return lstatSync(scratchDir, { bigint: true });
+  } catch (error) {
+    // A scratch root that is already gone has been changed by something else;
+    // say that instead of surfacing a bare ENOENT that hides the refusal. The
+    // child in the symlink fixture leaves this state behind on hosts where
+    // creating a symlink needs a privilege Node does not have.
+    if (error?.code === "ENOENT") {
+      throw new Error(`test telemetry directory changed before cleanup: ${scratchDir} no longer exists`);
+    }
+    throw error;
+  }
+}
+
 function removeOwnedScratchDirectory(scratchDir, initialIdentity) {
   const temporaryRoot = realpathSync(tmpdir());
   const absoluteScratch = path.resolve(scratchDir);
@@ -40,7 +55,7 @@ function removeOwnedScratchDirectory(scratchDir, initialIdentity) {
     throw new Error(`refusing to remove unowned test telemetry directory: ${absoluteScratch}`);
   }
 
-  const current = lstatSync(absoluteScratch, { bigint: true });
+  const current = lstatOrThrowChanged(absoluteScratch);
   if (current.isSymbolicLink()) {
     rmSync(absoluteScratch);
     throw new Error(`test telemetry directory was replaced by a symlink: ${absoluteScratch}`);
