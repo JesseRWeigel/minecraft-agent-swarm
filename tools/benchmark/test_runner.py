@@ -15,84 +15,47 @@ FIXTURE = ROOT / "tools" / "benchmark" / "fixtures" / "mock-pilot" / "experiment
 
 
 class RunnerTests(unittest.TestCase):
-    def test_iron_pickaxe_replay_requires_independent_craft_and_fresh_inventory(self):
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw)
-            self.copy_fixture(root)
-            experiment_path = root / "experiment.json"
-            experiment = json.loads(experiment_path.read_text())
-            scenario_path = root / "scenarios.json"
-            scenarios = json.loads(scenario_path.read_text())
-            scenarios["scenarios"].append({
-                "id": "iron-pickaxe",
-                "task": "craft_item",
-                "goal": {
-                    "actor": "atlas",
-                    "item": "iron_pickaxe",
-                    "recipe": "minecraft:iron_pickaxe",
-                    "observer_id": "synthetic-evaluator",
-                    "count": 1,
-                },
-            })
-            self.write_json(scenario_path, scenarios)
-            observations_path = root / "observations.json"
-            observations = json.loads(observations_path.read_text())
-            craft = {
-                "event_id": "server-craft-1",
-                "observer_id": "synthetic-evaluator",
-                "actor": "atlas",
-                "item": "iron_pickaxe",
-                "recipe": "minecraft:iron_pickaxe",
-                "count": 1,
-            }
-            for source in list(observations["runs"]):
-                if source["scenario_id"] != "acquire":
-                    continue
-                row = copy.deepcopy(source)
-                row["scenario_id"] = "iron-pickaxe"
-                row["run_id"] = f'iron-pickaxe-{row["condition_id"]}-{row["seed"]}'
-                row["model_self_report"] = "I crafted the iron pickaxe."
-                row["telemetry_complete"] = True
-                row["execution_status"] = "completed"
-                before = 1 if row["seed"] == 33 else 0
-                row["initial_state"] = {"actors": {"atlas": {"inventory": {"iron_pickaxe": before}}}}
-                row["final_state"] = {"actors": {"atlas": {"inventory": {"iron_pickaxe": 1}}}}
-                if row["seed"] != 44:
-                    observer = "participant" if row["seed"] == 22 else craft["observer_id"]
-                    row["final_state"]["observed_crafts"] = [dict(craft, observer_id=observer)]
-                observations["runs"].append(row)
-            self.write_json(observations_path, observations)
-            for key, path in (("scenario_manifest", scenario_path), ("observation_manifest", observations_path)):
-                experiment[key]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
-            self.write_json(experiment_path, experiment)
-
-            report = run_benchmark(experiment_path)
-            self.assertEqual(report["evidence_class"], "synthetic_mock")
-            self.assertEqual(report["summary"]["trial_count"], 60)
-            rows = {r["run_id"]: r for r in report["runs"]}
-            for seed, (status, reason) in {
-                11: ("completed", "observed_recipe_completion"),
-                22: ("failed", "craft_evidence_missing"),
-                33: ("invalid_initial", "craft_output_present_at_reset"),
-                44: ("missing_telemetry", "predicate_observation_missing"),
-            }.items():
-                row = rows[f"iron-pickaxe-baseline-{seed}"]
-                self.assertEqual((row["status"], row["reason_code"]), (status, reason))
-            self.assertEqual(
-                rows["iron-pickaxe-baseline-11"]["predicate"]["evidence"]["matching_event_ids"],
-                ["server-craft-1"],
-            )
+    def test_frozen_iron_pickaxe_trials_require_independent_craft_and_fresh_inventory(self):
+        report = run_benchmark(FIXTURE)
+        self.assertEqual(report["evidence_class"], "synthetic_mock")
+        rows = {
+            (row["condition_id"], row["seed"]): row
+            for row in report["runs"] if row["scenario_id"] == "iron-pickaxe"
+        }
+        expected = {
+            "baseline": ("crafted", "unproven", "preloaded", "missing"),
+            "coordination": ("crafted", "unproven", "crafted", "missing"),
+            "coaching": ("crafted", "unproven", "crafted", "not_retained"),
+        }
+        outcomes = {
+            "crafted": ("completed", "observed_recipe_completion"),
+            "unproven": ("failed", "craft_evidence_missing"),
+            "preloaded": ("invalid_initial", "craft_output_present_at_reset"),
+            "missing": ("missing_telemetry", "predicate_observation_missing"),
+            "not_retained": ("failed", "predicate_not_met"),
+        }
+        self.assertEqual(len(rows), 12)
+        for condition, cases in expected.items():
+            for seed, case in zip((11, 22, 33, 44), cases):
+                with self.subTest(condition=condition, seed=seed):
+                    row = rows[condition, seed]
+                    self.assertEqual((row["status"], row["reason_code"]), outcomes[case])
+                    if case == "crafted":
+                        self.assertEqual(
+                            row["predicate"]["evidence"]["matching_event_ids"],
+                            [f'{row["run_id"]}-craft-1'],
+                        )
 
     def test_mock_fixture_is_complete_deterministic_and_explicit(self):
         first = run_benchmark(FIXTURE)
         second = run_benchmark(FIXTURE)
         self.assertEqual(first, second)
         self.assertEqual(first["evidence_class"], "synthetic_mock")
-        self.assertEqual(len(first["runs"]), 48)
+        self.assertEqual(len(first["runs"]), 60)
         statuses = {row["status"] for row in first["runs"]}
         self.assertTrue({"completed", "failed", "timed_out", "interrupted", "missing_telemetry"} <= statuses)
         self.assertTrue(all(row["model_self_report"] is not None for row in first["runs"]))
-        self.assertEqual(first["summary"]["trial_count"], 48)
+        self.assertEqual(first["summary"]["trial_count"], 60)
         self.assertIn("paired_comparisons", first["summary"])
 
     def test_paired_coverage_distinguishes_observed_from_unscored_pairs(self):
@@ -153,12 +116,12 @@ class RunnerTests(unittest.TestCase):
                 item for item in report["summary"]["paired_comparisons"]
                 if item["candidate_condition"] == "coaching"
             )
-            self.assertEqual(comparison["pair_count"], 16)
+            self.assertEqual(comparison["pair_count"], 20)
             self.assertEqual(comparison["pair_coverage"], {
                 "both_scored": 0,
-                "baseline_only_scored": 14,
+                "baseline_only_scored": 16,
                 "candidate_only_scored": 0,
-                "neither_scored": 2,
+                "neither_scored": 4,
             })
             self.assertIsNone(comparison["scored_pair_completion_delta"])
             self.assertEqual(comparison["wins"], 0)
@@ -421,7 +384,7 @@ class RunnerTests(unittest.TestCase):
             if item["candidate_condition"] == "coordination"
         )
         self.assertEqual(comparison["baseline_condition"], "baseline")
-        self.assertEqual(comparison["pair_count"], 16)
+        self.assertEqual(comparison["pair_count"], 20)
         self.assertEqual(
             comparison["wins"] + comparison["losses"] + comparison["ties"],
             comparison["pair_count"],
