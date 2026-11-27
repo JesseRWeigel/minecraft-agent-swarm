@@ -113,3 +113,33 @@ test("stop() without a start() clears nothing and does not throw", () => {
   assert.deepEqual(recorder.created, []);
   assert.equal(brain.stopped, true);
 });
+
+test("spawn safety completion cannot start a brain that has been stopped", async () => {
+  const brain = bareBrain();
+  const recorder = startRecordingIntervals();
+  let armorCalls = 0;
+  let listeners = 0;
+  let finishSpawnSafety!: () => void;
+  const spawnSafety = new Promise<void>((resolve) => {
+    finishSpawnSafety = resolve;
+  });
+  const delayedStart = spawnSafety.then(() => brain.start());
+  brain.equipBestArmor = async () => {
+    armorCalls++;
+  };
+  brain.bot.on = () => {
+    listeners++;
+  };
+
+  try {
+    brain.stop();
+    finishSpawnSafety();
+    await delayedStart;
+  } finally {
+    recorder.restore();
+  }
+
+  assert.equal(recorder.created.length, 0, "a stopped brain must not schedule intervals");
+  assert.equal(listeners, 0, "a stopped brain must not register listeners");
+  assert.equal(armorCalls, 0, "a stopped brain must not attempt to equip armor");
+});

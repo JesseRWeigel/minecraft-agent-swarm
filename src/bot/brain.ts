@@ -547,6 +547,9 @@ export class BotBrain {
 
   /** Start the event-driven brain. Call after spawn safety completes. */
   start(): void {
+    // First-spawn safety can finish after a kick or explicit teardown.
+    if (this.stopped) return;
+
     this.log.info("Brain", `Starting (idle interval: ${this.IDLE_INTERVAL_MS}ms)`);
 
     // Guard against a double run: clear any intervals left by a previous
