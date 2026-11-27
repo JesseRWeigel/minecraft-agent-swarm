@@ -182,6 +182,11 @@ export class BotBrain {
   private idleTimer: NodeJS.Timeout | null = null;
   private hostileScanner: NodeJS.Timeout | null = null;
   private overlayInterval: NodeJS.Timeout | null = null;
+  private armorTimer: NodeJS.Timeout | null = null;
+  private treeTimer: NodeJS.Timeout | null = null;
+  private deflectTimer: NodeJS.Timeout | null = null;
+  private unstickTimer: NodeJS.Timeout | null = null;
+  private drownTimer: NodeJS.Timeout | null = null;
 
   // Decision state (migrated from the old decide() function)
   private currentGoal = "";
@@ -544,22 +549,43 @@ export class BotBrain {
   start(): void {
     this.log.info("Brain", `Starting (idle interval: ${this.IDLE_INTERVAL_MS}ms)`);
 
+    // Guard against a double run: clear any intervals left by a previous
+    // start() so re-running start() cannot leak timers whose references are
+    // about to be overwritten. stop() clears the same set. All fields are
+    // nulled after clearing, matching the pause() pattern.
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+    if (this.hostileScanner) clearInterval(this.hostileScanner);
+    this.hostileScanner = null;
+    if (this.overlayInterval) clearInterval(this.overlayInterval);
+    this.overlayInterval = null;
+    if (this.armorTimer) clearInterval(this.armorTimer);
+    this.armorTimer = null;
+    if (this.treeTimer) clearInterval(this.treeTimer);
+    this.treeTimer = null;
+    if (this.deflectTimer) clearInterval(this.deflectTimer);
+    this.deflectTimer = null;
+    if (this.unstickTimer) clearInterval(this.unstickTimer);
+    this.unstickTimer = null;
+    if (this.drownTimer) clearInterval(this.drownTimer);
+    this.drownTimer = null;
+
     // 1. Idle timer — triggers strategic planning when nothing else is happening
     this.resetIdleTimer();
 
     // 0. Auto-equip armor on spawn and every 20s thereafter
     this.equipBestArmor().catch((e) => this.log.warn("Armor", `equipBestArmor threw: ${e?.message || e}`));
-    const armorTimer = setInterval(() => {
+    this.armorTimer = setInterval(() => {
       if (!this.paused)
         this.equipBestArmor().catch((e) => this.log.warn("Armor", `equipBestArmor threw: ${e?.message || e}`));
     }, 20_000);
-    armorTimer.unref?.();
+    this.armorTimer.unref?.();
 
     // Tree memory on its own timer. Run 839: zero standing_tree sightings in
     // an hour, because the scan sat in the decision pass behind early returns
     // and bots spend most of their time inside skills. Scan every three
     // minutes regardless of skill state, like the armour pass above.
-    const treeTimer = setInterval(() => {
+    this.treeTimer = setInterval(() => {
       if (this.paused || !/overworld/.test(String(this.bot.game?.dimension))) return;
       import("../skills/wood-run.js").then(({ scanTrees }) => scanTrees(this.bot)).catch(() => 0);
       // Brown mushrooms for Zombie Doctor's fermented spider eye. The
@@ -577,7 +603,7 @@ export class BotBrain {
         /* chunk not loaded */
       }
     }, 180_000);
-    treeTimer.unref?.();
+    this.treeTimer.unref?.();
 
     // 0a. Ghast-fireball deflect — a FAST tick handler, not a brain override.
     // The old override was gated on !isSkillRunning and the fortress hunters
@@ -587,7 +613,7 @@ export class BotBrain {
     // regardless of skill state: when a ghast fireball is within reach and
     // return_to_sender is unearned, it looks at the shot and swings, batting
     // it back along its vector into the ghast that fired it.
-    const deflectTimer = setInterval(() => {
+    this.deflectTimer = setInterval(() => {
       if (this.paused) return;
       try {
         const earned = readTeamEarned(BOT_ROSTER.map((b) => b.name));
@@ -619,7 +645,7 @@ export class BotBrain {
         /* entity vanished mid-check */
       }
     }, 200);
-    deflectTimer.unref?.();
+    this.deflectTimer.unref?.();
 
     // 0b. Self-unstick: if boxed into a hole, dig out (own hands, not a TP).
     //
@@ -640,7 +666,7 @@ export class BotBrain {
     const STUCK_MS = 90_000;
     let stuckState = freshState(this.bot.entity?.position ?? { x: 0, y: 0, z: 0 }, Date.now());
 
-    const unstickTimer = setInterval(() => {
+    this.unstickTimer = setInterval(() => {
       if (this.paused) return;
       const pos = this.bot.entity?.position;
       if (!pos) return;
@@ -666,12 +692,12 @@ export class BotBrain {
         digOutIfStuck(this.bot).catch(() => {});
       }
     }, 25_000);
-    unstickTimer.unref?.();
+    this.unstickTimer.unref?.();
 
     // 0c. Anti-drown: ~90% of all deaths were bots drowning in the stash water
     // pit. Drowning kills in ~15s, so check often and swim out even mid-action
     // (this overrides whatever the bot is doing — staying alive comes first).
-    const drownTimer = setInterval(() => {
+    this.drownTimer = setInterval(() => {
       if (this.paused) return;
       if (this.rescuingFromWater) return;
       this.rescuingFromWater = true;
@@ -681,7 +707,7 @@ export class BotBrain {
           this.rescuingFromWater = false;
         });
     }, 3000);
-    drownTimer.unref?.();
+    this.drownTimer.unref?.();
 
     // 2. Hostile scanner — checks for nearby threats every 2s
     this.hostileScanner = setInterval(() => this.scanHostiles(), this.HOSTILE_CHECK_MS);
@@ -733,8 +759,21 @@ export class BotBrain {
     this.markInterruption("brain_stopped_during_action");
     this.stopped = true;
     if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
     if (this.hostileScanner) clearInterval(this.hostileScanner);
+    this.hostileScanner = null;
     if (this.overlayInterval) clearInterval(this.overlayInterval);
+    this.overlayInterval = null;
+    if (this.armorTimer) clearInterval(this.armorTimer);
+    this.armorTimer = null;
+    if (this.treeTimer) clearInterval(this.treeTimer);
+    this.treeTimer = null;
+    if (this.deflectTimer) clearInterval(this.deflectTimer);
+    this.deflectTimer = null;
+    if (this.unstickTimer) clearInterval(this.unstickTimer);
+    this.unstickTimer = null;
+    if (this.drownTimer) clearInterval(this.drownTimer);
+    this.drownTimer = null;
   }
 
   /** Pause autonomous decisions and discard queued work that has not started. */
