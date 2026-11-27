@@ -111,3 +111,33 @@ test("refuses a replaced scratch root without deleting its symlink target", () =
     rmSync(auditDir, { recursive: true, force: true });
   }
 });
+
+test("refuses a scratch root removed during the run without a symlink", () => {
+  const otherDatasetDir = mkdtempSync(path.join(tmpdir(), "minecraft-agent-swarm-tests-other-"));
+  const auditDir = mkdtempSync(path.join(tmpdir(), "test-runner-audit-"));
+  const sentinel = path.join(otherDatasetDir, "must-survive.txt");
+  const auditFile = path.join(auditDir, "scratch-path.txt");
+  writeFileSync(sentinel, "preserve me");
+
+  try {
+    assert.throws(
+      () =>
+        runTestProcess({
+          testFiles: [fixture],
+          env: {
+            ...process.env,
+            CHILD_EXPECT_PARENT_DATASET_DIR: otherDatasetDir,
+            CHILD_REMOVE_SCRATCH_WITHOUT_SYMLINK: "1",
+            CHILD_SCRATCH_AUDIT_FILE: auditFile,
+          },
+          stdio: "pipe",
+        }),
+      /changed|removed/i,
+    );
+    assert.equal(readFileSync(sentinel, "utf8"), "preserve me");
+    assert.equal(existsSync(readFileSync(auditFile, "utf8")), false);
+  } finally {
+    rmSync(otherDatasetDir, { recursive: true, force: true });
+    rmSync(auditDir, { recursive: true, force: true });
+  }
+});

@@ -39,6 +39,13 @@ test("default telemetry recorder uses the test runner scratch directory", () => 
     symlinkSync(process.env.CHILD_SYMLINK_TARGET, isolatedDir, "dir");
   }
 
+  // Same disruption without needing symlink privileges, so the removed-root
+  // path is reachable on every platform.
+  if (process.env.CHILD_REMOVE_SCRATCH_WITHOUT_SYMLINK === "1") {
+    writeFileSync(process.env.CHILD_SCRATCH_AUDIT_FILE, isolatedDir);
+    rmSync(isolatedDir, { recursive: true });
+  }
+
   if (process.env.CHILD_SHOULD_FAIL === "1") {
     assert.fail("intentional child failure after telemetry write");
   }
