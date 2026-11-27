@@ -95,7 +95,10 @@ test("stop() clears every interval that start() created", () => {
     [],
     `stop() left ${outstanding.length} of ${recorder.created.length} intervals running`,
   );
-  assert.ok(recorder.created.length >= 7, `expected start() to create the brain's timers, created ${recorder.created.length}`);
+  assert.ok(
+    recorder.created.length >= 7,
+    `expected start() to create the brain's timers, created ${recorder.created.length}`,
+  );
 });
 
 test("stop() without a start() clears nothing and does not throw", () => {
