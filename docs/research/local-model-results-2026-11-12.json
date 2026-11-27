@@ -1,0 +1,653 @@
+{
+  "all_attempts_retained": true,
+  "attempts": [
+    {
+      "actions": [
+        {
+          "action": {
+            "kind": "observe"
+          },
+          "reply": {
+            "observation": {
+              "health": 20,
+              "inventory": [],
+              "pitch": 0,
+              "position": {
+                "x": 0.5,
+                "y": 200,
+                "z": 0.5
+              },
+              "schema_version": 1,
+              "source": "participant_bot",
+              "visibleBlocks": [],
+              "yaw": 3.141592653589793
+            },
+            "schema_version": 1,
+            "sequence": 1,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": 0,
+            "yaw": 3.141592653589793
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 2,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": 0,
+            "yaw": 3.141592653589793
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 3,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": 0,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 4,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": 0,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 5,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": 0,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 6,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": 0,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 7,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": 0,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 8,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": 0,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 9,
+            "status": "completed"
+          }
+        }
+      ],
+      "attempt": "real-model-20261112-forward-001",
+      "backend_cleanup": {
+        "backend_reaped": true,
+        "gpu_device_seen": true,
+        "gpu_offload_evidence": "offloaded 29/29 layers to GPU",
+        "gpu_verified": true,
+        "group_gone": true,
+        "kill_sent": false,
+        "log_bytes": 394508,
+        "log_reader_stopped": true,
+        "log_sha256": "b9e02efee935df5f1a0324355212fc403cf9816b13c997cb7a277d5052fbdf7a",
+        "log_truncated": true,
+        "process_group_gone": true,
+        "returncode": 0,
+        "status": "closed",
+        "term_sent": true
+      },
+      "evidence_sha256": "e52da243408edc6cc5adfcc3a319da234e164351a2061cc0ebd5c4182b89454b",
+      "failed_observation_quiescent": null,
+      "independent_score": null,
+      "infrastructure": "failed",
+      "input_tokens": 6042,
+      "label": "Llama 3.2 3B; original prompt",
+      "loop_status": "budget_exhausted",
+      "model_call_count": 8,
+      "model_call_seconds": 1.3380769229999032,
+      "model_snapshot": {
+        "bytes": 2019377376,
+        "sha256": "dde5aa3fc5ffc17176b5e8bdc82f587b24b2678c6c66101bf7da77af9f7ccdff"
+      },
+      "output_tokens": 124,
+      "resource_scope_valid": false,
+      "source_manifest_sha256": "259337c48b35d98d0d48dbe1317abc4ff7a2ee009307fb2633fde5ed382ccab2",
+      "stage": "validate",
+      "startup": {
+        "gpu_device_seen": true,
+        "gpu_offload_evidence": "offloaded 29/29 layers to GPU",
+        "gpu_verified": true,
+        "log_bytes": 210832,
+        "log_sha256": "0a4d5ac9f44650b0c481f069979cd8c71f88924e1ec9b9689ad43b05af211aff",
+        "log_truncated": true,
+        "startup_seconds": 13.365111522999996,
+        "status": "ready"
+      },
+      "storage_helper_returncode": 0,
+      "storage_valid": true,
+      "task_acquired": null,
+      "warmup": {
+        "content": "{\"ready\":true}",
+        "elapsed_seconds": 11.386536557999989,
+        "input_tokens": 20,
+        "output_tokens": 6,
+        "prompt_sha256": "9479903970ed6bcd72ece52f2783e9aa42d9b90c33279517ada3951fa927d141",
+        "reserved_output_tokens": 32,
+        "schema_version": 1,
+        "status": "completed",
+        "stop_type": "eos",
+        "tokens_evaluated": 20,
+        "truncated": false,
+        "worker_reaped": true
+      },
+      "worker_stage": "action"
+    },
+    {
+      "actions": [],
+      "attempt": "real-model-20261112-qwen-001",
+      "backend_cleanup": null,
+      "evidence_sha256": null,
+      "failed_observation_quiescent": null,
+      "independent_score": null,
+      "infrastructure": "failed",
+      "input_tokens": 0,
+      "label": "Qwen 3.5 9B; preparation only",
+      "loop_status": null,
+      "model_call_count": 0,
+      "model_call_seconds": 0,
+      "model_snapshot": {
+        "bytes": 6594462816,
+        "sha256": "dec52a44569a2a25341c4e4d3fee25846eed4f6f0b936278e3a3c900bb99d37c"
+      },
+      "output_tokens": 0,
+      "resource_scope_valid": null,
+      "source_manifest_sha256": "afa0436895dc4eef5a920f3fc87de68a1466bafa189c976f1e0f7b38d3c53e8d",
+      "stage": "mount_storage",
+      "startup": null,
+      "storage_helper_returncode": 3,
+      "storage_valid": false,
+      "task_acquired": null,
+      "warmup": null,
+      "worker_stage": null
+    },
+    {
+      "actions": [
+        {
+          "action": {
+            "kind": "observe"
+          },
+          "reply": {
+            "observation": {
+              "health": 20,
+              "inventory": [],
+              "pitch": 0,
+              "position": {
+                "x": 0.5,
+                "y": 200,
+                "z": 0.5
+              },
+              "schema_version": 1,
+              "source": "participant_bot",
+              "visibleBlocks": [],
+              "yaw": 3.141592653589793
+            },
+            "schema_version": 1,
+            "sequence": 1,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": 0,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 2,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "direction": "forward",
+            "kind": "move",
+            "ticks": 20
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 3,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "observe"
+          },
+          "reply": {
+            "observation": {
+              "health": 20,
+              "inventory": [],
+              "pitch": 0,
+              "position": {
+                "x": 0.499999999999617,
+                "y": 200,
+                "z": -2.7
+              },
+              "schema_version": 1,
+              "source": "participant_bot",
+              "visibleBlocks": [],
+              "yaw": 1.9539925233402755e-13
+            },
+            "schema_version": 1,
+            "sequence": 4,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": 0,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 5,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": -0.5,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 6,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": -0.5,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 7,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": -0.5,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 8,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": -0.5,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 9,
+            "status": "completed"
+          }
+        }
+      ],
+      "attempt": "real-model-20261112-qwen-002",
+      "backend_cleanup": {
+        "backend_reaped": true,
+        "gpu_device_seen": true,
+        "gpu_offload_evidence": "offloaded 34/34 layers to GPU",
+        "gpu_verified": true,
+        "group_gone": true,
+        "kill_sent": false,
+        "log_bytes": 383767,
+        "log_reader_stopped": true,
+        "log_sha256": "f89be58723c4029e376b1f7ccdad7a5b5339637194817903d737a7b5bb7abfa5",
+        "log_truncated": true,
+        "process_group_gone": true,
+        "returncode": 0,
+        "status": "closed",
+        "term_sent": true
+      },
+      "evidence_sha256": "b54bb6098da35ca8457bdd6fa547cdff8ce3ef26e3e9a89f0ccda660096fd2f9",
+      "failed_observation_quiescent": false,
+      "independent_score": {
+        "baselineVerification": {
+          "status": "verified"
+        },
+        "endpoint": {
+          "acquired": false,
+          "gameplayQualified": false,
+          "status": "observed"
+        }
+      },
+      "infrastructure": "failed",
+      "input_tokens": 6305,
+      "label": "Qwen 3.5 9B; projected history",
+      "loop_status": "budget_exhausted",
+      "model_call_count": 8,
+      "model_call_seconds": 2.1737859120003122,
+      "model_snapshot": {
+        "bytes": 6594462816,
+        "sha256": "dec52a44569a2a25341c4e4d3fee25846eed4f6f0b936278e3a3c900bb99d37c"
+      },
+      "output_tokens": 113,
+      "resource_scope_valid": false,
+      "source_manifest_sha256": "c86c7abc707c253a940e68a001fddaa3c6b333fae6d9832a6186c17aefa0c3fd",
+      "stage": "validate",
+      "startup": {
+        "gpu_device_seen": true,
+        "gpu_offload_evidence": "offloaded 34/34 layers to GPU",
+        "gpu_verified": true,
+        "log_bytes": 191295,
+        "log_sha256": "d2db15866be12446a4c25eaed1a2e579e2a120bf66d65c55ebc60cc45dd41c70",
+        "log_truncated": true,
+        "startup_seconds": 18.38674530100002,
+        "status": "ready"
+      },
+      "storage_helper_returncode": 0,
+      "storage_valid": true,
+      "task_acquired": false,
+      "warmup": {
+        "content": "{\"ready\":true}",
+        "elapsed_seconds": 14.631968039999947,
+        "input_tokens": 22,
+        "output_tokens": 6,
+        "prompt_sha256": "cb02be0a7fbd2560a8a992fcd2d33a37129593b25cffaa5fe73f057b8679cedc",
+        "reserved_output_tokens": 32,
+        "schema_version": 1,
+        "status": "completed",
+        "stop_type": "eos",
+        "tokens_evaluated": 22,
+        "truncated": false,
+        "worker_reaped": true
+      },
+      "worker_stage": "failed_action_observation"
+    },
+    {
+      "actions": [
+        {
+          "action": {
+            "kind": "observe"
+          },
+          "reply": {
+            "observation": {
+              "health": 20,
+              "inventory": [],
+              "pitch": 0,
+              "position": {
+                "x": 0.5,
+                "y": 200,
+                "z": 0.5
+              },
+              "schema_version": 1,
+              "source": "participant_bot",
+              "visibleBlocks": [],
+              "yaw": 3.141592653589793
+            },
+            "schema_version": 1,
+            "sequence": 1,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": 0,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 2,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look_at",
+            "x": 0,
+            "y": 200,
+            "z": 3
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 3,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "dig",
+            "x": 0,
+            "y": 200,
+            "z": 3
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 4,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "observe"
+          },
+          "reply": {
+            "observation": {
+              "health": 20,
+              "inventory": [],
+              "pitch": -0.3560471674068211,
+              "position": {
+                "x": 0.5,
+                "y": 200,
+                "z": 0.5
+              },
+              "schema_version": 1,
+              "source": "participant_bot",
+              "visibleBlocks": [],
+              "yaw": -3.1415926535894023
+            },
+            "schema_version": 1,
+            "sequence": 5,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "observe"
+          },
+          "reply": {
+            "observation": {
+              "health": 20,
+              "inventory": [],
+              "pitch": -0.3560471674068211,
+              "position": {
+                "x": 0.5,
+                "y": 200,
+                "z": 0.5
+              },
+              "schema_version": 1,
+              "source": "participant_bot",
+              "visibleBlocks": [],
+              "yaw": -3.1415926535894023
+            },
+            "schema_version": 1,
+            "sequence": 6,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look",
+            "pitch": 0,
+            "yaw": 0
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 7,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "look_at",
+            "x": 0,
+            "y": 200,
+            "z": 3
+          },
+          "reply": {
+            "schema_version": 1,
+            "sequence": 8,
+            "status": "completed"
+          }
+        },
+        {
+          "action": {
+            "kind": "dig",
+            "x": 0,
+            "y": 200,
+            "z": 3
+          },
+          "reply": null
+        }
+      ],
+      "attempt": "real-model-20261112-qwen-003",
+      "backend_cleanup": {
+        "backend_reaped": true,
+        "gpu_device_seen": true,
+        "gpu_offload_evidence": "offloaded 34/34 layers to GPU",
+        "gpu_verified": true,
+        "group_gone": true,
+        "kill_sent": false,
+        "log_bytes": 393093,
+        "log_reader_stopped": true,
+        "log_sha256": "e0d7b8f178aaf46a09f906208d5bcd43a1304547534e6642bb5b9f9360b1cc68",
+        "log_truncated": true,
+        "process_group_gone": true,
+        "returncode": 0,
+        "status": "closed",
+        "term_sent": true
+      },
+      "evidence_sha256": "66a870d5c135b1495e003659b3191123a490051de60a53acb55fbabe2694dd55",
+      "failed_observation_quiescent": false,
+      "independent_score": null,
+      "infrastructure": "failed",
+      "input_tokens": 6981,
+      "label": "Qwen 3.5 9B; generic look_at available",
+      "loop_status": "failed",
+      "model_call_count": 8,
+      "model_call_seconds": 2.3859377750002295,
+      "model_snapshot": {
+        "bytes": 6594462816,
+        "sha256": "dec52a44569a2a25341c4e4d3fee25846eed4f6f0b936278e3a3c900bb99d37c"
+      },
+      "output_tokens": 122,
+      "resource_scope_valid": false,
+      "source_manifest_sha256": "497462caf52def7a3fb9870cd30ff810e890b4ff3bb4378f36b075816e51bc61",
+      "stage": "validate",
+      "startup": {
+        "gpu_device_seen": true,
+        "gpu_offload_evidence": "offloaded 34/34 layers to GPU",
+        "gpu_verified": true,
+        "log_bytes": 191374,
+        "log_sha256": "f8d02b643370a8a33716890ccdafbfab10ba75048b6c6b041c57359c1fd853ec",
+        "log_truncated": true,
+        "startup_seconds": 18.438026274999856,
+        "status": "ready"
+      },
+      "storage_helper_returncode": 0,
+      "storage_valid": true,
+      "task_acquired": null,
+      "warmup": {
+        "content": "{\"ready\":true}",
+        "elapsed_seconds": 14.43848498500006,
+        "input_tokens": 22,
+        "output_tokens": 6,
+        "prompt_sha256": "cb02be0a7fbd2560a8a992fcd2d33a37129593b25cffaa5fe73f057b8679cedc",
+        "reserved_output_tokens": 32,
+        "schema_version": 1,
+        "status": "completed",
+        "stop_type": "eos",
+        "tokens_evaluated": 22,
+        "truncated": false,
+        "worker_reaped": true
+      },
+      "worker_stage": "failed_action_observation"
+    }
+  ],
+  "cancellation_qualification": {
+    "active_slot_observed_before_cancel": true,
+    "backend_terminated": true,
+    "forced_kill_needed": true,
+    "gpu_idle_afterward": true,
+    "http_worker_reaped": true,
+    "model": "Llama 3.2 3B",
+    "offloaded_layers": "29/29",
+    "process_group_gone": true
+  },
+  "scope": "Exploratory development attempts, not controlled model comparisons. No successful collection endpoint established.",
+  "tests": {
+    "lint_typecheck_format_build": "passed",
+    "npm": 1054,
+    "python_pilot": 312,
+    "python_skips": 0
+  }
+}

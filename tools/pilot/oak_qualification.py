@@ -18,13 +18,15 @@ from tools.pilot.server import _build_sandbox_argv, _validate_executable, run_ow
 from tools.pilot.scoped_trial import run_scoped, PROFILES
 from tools.pilot.oak_script import script_receipt_valid
 from tools.pilot.fake_model_driver import fake_model_receipt_valid
+from tools.pilot.real_model_driver import real_model_receipt_valid, response_valid
+from tools.pilot.local_model_config import verify_config, backend_cleanup_valid, capture_model, preflight_model_space, verify_model_snapshot, verify_gpu_window
 
 PARTICIPANT_FILES = ("action_descriptors.py", "model-action-session.mjs", "model-action-channel.mjs", "model-action-schema.mjs", "model-action-observation.mjs", "oak-participant-cli.mjs", "oak-participant.mjs", "oak_bridge_client.py", "protected-participant-cli.mjs", "protected-participant.mjs", "participant-pipes.mjs", "game_bridge.py", "game_bridge_client.py")
 OBSERVER_FILES = ("oak-fault-cli.mjs", "oak-blocked-fixture.mjs", "oak-blocked-observer-cli.mjs", "oak-observer-cli.mjs", "oak-fixture.mjs", "oak-task.mjs", "oak-inventory.mjs", "oak-score-cli.mjs", "protected-observer-cli.mjs", "protected-observer.mjs", "movement-fixture.mjs")
-PYTHON_FILES = ("fake_model_driver.py", "model_coordinator.py", "ollama_adapter.py", "inference_budget.py", "action_coordinator.py", "oak_script.py", "action_descriptors.py", "oak_worker.py", "protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py", "login_identity.py", "rcon_stall.py")
+PYTHON_FILES = ("llama_backend.py", "real_model_driver.py", "local_model_config.py", "fake_model_driver.py", "model_coordinator.py", "ollama_adapter.py", "inference_budget.py", "action_coordinator.py", "oak_script.py", "action_descriptors.py", "oak_worker.py", "protected_worker.py", "participant_protocol.py", "participant_transport.py", "game_bridge.py", "storage_fault.py", "login_identity.py", "rcon_stall.py")
 
 
-def capture_sources(workspace):
+def capture_sources(workspace, local_model_config=None):
     source = Path(__file__).parent
     inventory = {}
     for name, files in (("participant-code", PARTICIPANT_FILES), ("observer-code", OBSERVER_FILES)):
@@ -53,6 +55,9 @@ def capture_sources(workspace):
         generated[relative] = {"type": "file", "sha256": _sha(workspace / relative)}
     for relative in ("participant-code/node_modules", "observer-code/node_modules"):
         generated[relative] = {"type": "symlink", "target": os.readlink(workspace / relative)}
+    if local_model_config is not None:
+        _write(outer / "local-model-config.json",json.dumps(local_model_config,sort_keys=True).encode())
+        generated["observer-code/local-model-config.json"]={"type":"file","sha256":_sha(outer/"local-model-config.json")}
     canonical = json.dumps({"files": inventory, "generated": generated}, sort_keys=True, separators=(",", ":")).encode()
     digest = hashlib.sha256(canonical).hexdigest()
     _write(workspace / "source-manifest.json", json.dumps({"files": inventory, "generated": generated, "sha256": digest}, indent=2).encode())
@@ -81,11 +86,11 @@ def capture_action_record(runtime, result, driver):
     return bool(pin and isinstance(value,dict) and isinstance(result,dict) and value==result.get('action_script')),pin
 
 
-def validate_result(value, mode, recomputed, *, action_driver='fixed'):
+def validate_result(value, mode, recomputed, *, action_driver='fixed', prompt_format=None):
     if not isinstance(value, dict) or type(value.get("schema_version")) is not int or value["schema_version"] != 1:
         return False
-    if action_driver not in ('fixed','scripted','fake_model') or value.get('action_driver','fixed')!=action_driver:return False
-    if action_driver in ('scripted','fake_model') and (value.get('action_output_eof') is not True or not (fake_model_receipt_valid if action_driver=='fake_model' else script_receipt_valid)(value.get('action_script'),mode)):return False
+    if action_driver not in ('fixed','scripted','fake_model','local_model') or value.get('action_driver','fixed')!=action_driver:return False
+    if action_driver in ('scripted','fake_model','local_model') and (value.get('action_output_eof') is not True or not ((lambda receipt,_mode:real_model_receipt_valid(receipt,prompt_format)) if action_driver=='local_model' else fake_model_receipt_valid if action_driver=='fake_model' else script_receipt_valid)(value.get('action_script'),mode)):return False
     if action_driver=='fixed' and value.get('action_script') is not None:return False
     if value.get("failure_case", "none") != "none" or value.get("injection") is not None:
         return False
@@ -112,17 +117,33 @@ def validate_result(value, mode, recomputed, *, action_driver='fixed'):
     start,end=value.get('action_started_monotonic'),value.get('action_finished_monotonic')
     import math
     if any(type(x) not in (int,float) or not math.isfinite(x) for x in (start,end)) or not 0 <= end-start <= 20:return False
+    if action_driver=='local_model':
+        endpoint=recomputed.get('endpoint') if isinstance(recomputed,dict) else None
+        startup=value.get('local_backend_start')
+        return (mode=='forward' and isinstance(recomputed,dict) and isinstance(recomputed.get('baselineVerification'),dict)
+            and recomputed['baselineVerification'].get('status')=='verified'
+            and isinstance(startup,dict) and startup.get('status')=='ready' and startup.get('gpu_verified') is True
+            and backend_cleanup_valid(value.get('local_backend'))
+            and response_valid(value.get('local_backend_warmup'),output_limit=32)
+            and isinstance(endpoint,dict) and endpoint.get('status')=='observed'
+            and type(endpoint.get('acquired')) is bool and endpoint.get('gameplayQualified') is False
+            and value.get('task_acquired') is endpoint['acquired'])
     return endpoint_valid(recomputed,mode,value.get('before'),value.get('terminal'))
 
 
 def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snapshot,
                                  tool_manifest_sha256, control_mode="forward", failure_case="none", action_driver="fixed", resource_profile="game",
                                  storage_tool_root=None, storage_capacity_bytes=2 * 1024**3,
-                                 bwrap_path=Path("/usr/bin/bwrap"), runner=run_owned):
+                                 bwrap_path=Path("/usr/bin/bwrap"), runner=run_owned, local_model_config=None, model_snapshot=None):
     if launch is not True:
         raise ValueError("explicit launch=True required")
     if not action_driver_valid(action_driver,control_mode,failure_case):
         raise ValueError('invalid action driver/control combination')
+    if action_driver=='local_model':
+        if resource_profile!='local_model' or local_model_config is None:raise ValueError('explicit local-model profile/config required')
+        verify_config(local_model_config)
+    elif local_model_config is not None or model_snapshot is not None or resource_profile=='local_model':
+        raise ValueError('local-model configuration only for local-model driver')
     if resource_profile not in PROFILES:
         raise ValueError("invalid resource profile")
     if failure_case not in FAILURE_CASES or not fault_mode_valid(failure_case, control_mode):
@@ -148,7 +169,19 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
     try:
         summary["stage"] = "capture_sources"
         summary["controller_sha256"] = prepare._capture_file(Path(__file__), "protected host controller", 1024*1024).sha256
-        source_hash = capture_sources(workspace)
+        captured_config=local_model_config
+        if local_model_config is not None:
+            summary['stage']='capture_model'
+            preflight_model_space(workspace,local_model_config,storage_capacity_bytes,reuse=model_snapshot is not None)
+            if model_snapshot is None:
+                model_snapshot=workspace/'local-model.gguf'
+                summary['model_snapshot']=capture_model(local_model_config,model_snapshot)
+            else:
+                model_snapshot=Path(model_snapshot)
+                summary['model_snapshot']=verify_model_snapshot(model_snapshot,local_model_config)
+            captured_config=json.loads(json.dumps(local_model_config))
+            captured_config['model']['path']='/local-model.gguf'
+        source_hash = capture_sources(workspace,captured_config)
         summary["source_manifest_sha256"] = source_hash
         summary["source_manifest_file_sha256"] = _sha(workspace / "source-manifest.json")
         summary["stage"] = "mount_storage"
@@ -169,6 +202,11 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
         _write(secret_path, (secret + "\n").encode())
         command = [str(python), "-m", "tools.pilot.oak_worker", control_mode, failure_case, action_driver]
         args = _build_sandbox_argv(runtime, bwrap_path=bwrap, command=command)
+        if action_driver=='local_model':
+            index=args.index("--tmpfs")
+            args[index:index]=["--dev-bind","/dev/dxg","/dev/dxg","--ro-bind",str(model_snapshot),"/local-model.gguf"]
+            summary['local_model_config']=local_model_config
+            summary['claim_limit']="Bounded local-model fixture trial; infrastructure qualification and independently observed task outcome are separate."
         tmp_index = args.index("--tmpfs")
         args[tmp_index:tmp_index] = ["--size", str(64 * 1024**2)]
         index = args.index("--proc")
@@ -177,6 +215,9 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
                              "--ro-bind", str(workspace / "participant-code"), "/participant-code",
                              "--ro-bind", str(bwrap), "/pilot-bwrap",
                              "--setenv", "PYTHONPATH", "/observer-code"]
+        if action_driver=="local_model":
+            summary["stage"]="gpu_preflight"
+            summary["gpu_window"]=verify_gpu_window(local_model_config["model"]["bytes"])
         summary["stage"] = "launch"
         process, resources = run_scoped(args, workspace=workspace, cwd=runtime,
             env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}, profile=resource_profile, runner=runner)
@@ -200,10 +241,10 @@ def run_oak_qualification(*, launch=False, workspace, restore_kwargs, tool_snaps
         summary["fault_injection_sha256"] = injection_pin
         action_record_valid,summary["action_script_sha256"] = capture_action_record(runtime,result,action_driver)
         summary["action_script_record_valid"] = action_record_valid
-        summary["evidence_valid"] = action_record_valid and failure_case == "none" and not (runtime / "fault-injection.json").exists() and records_match and validate_result(result, control_mode, summary["host_score"],action_driver=action_driver)
+        summary["evidence_valid"] = action_record_valid and failure_case == "none" and not (runtime / "fault-injection.json").exists() and records_match and validate_result(result, control_mode, summary["host_score"],action_driver=action_driver,prompt_format=local_model_config["prompt_format"] if local_model_config else None)
         summary["independent_observer_process"] = bool(isinstance(result, dict) and result.get("independent_observer_process") is True)
         clean = process.returncode == 0 and not any((process.timed_out, process.cleanup_uncertain, process.stdout_truncated, process.stderr_truncated))
-        summary["status"] = "qualified" if clean and summary["evidence_valid"] and resources["valid"] and resource_profile == "game" else "failed"
+        summary["status"] = "qualified" if clean and summary["evidence_valid"] and resources["valid"] and resource_profile == ("local_model" if action_driver=="local_model" else "game") else "failed"
     except Exception:
         summary["error"] = "protected_preparation_or_launch_failed"
     finally:

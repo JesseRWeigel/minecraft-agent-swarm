@@ -257,3 +257,114 @@ test("outer cancellation rejects idle channel and suppresses subsequent input", 
   await assert.rejects(runModelActionChannel({ ...g, signal: controller.signal }));
   assert.equal(g.closed, 1);
 });
+
+test("recoverable dig reply keeps channel open for subsequent finish", async () => {
+  const f = fixture((raw) => {
+    const request = JSON.parse(raw);
+    return request.action.kind === "dig"
+      ? {
+          schema_version: 1,
+          sequence: request.sequence,
+          status: "rejected",
+          error: { code: "target_missing", recoverable: true },
+        }
+      : { schema_version: 1, sequence: request.sequence, status: "finished" };
+  });
+  const replies = [];
+  f.output.on("data", (raw) => {
+    const reply = JSON.parse(raw);
+    replies.push(reply);
+    if (reply.status === "rejected") f.input.end(line("finish", 2));
+  });
+  const done = runModelActionChannel({ ...f, timeoutMs: 500 });
+  f.input.write(
+    Buffer.from(
+      JSON.stringify({
+        schema_version: 1,
+        trial_id: "collect-oak-log-v1",
+        action_id: "collect-01",
+        sequence: 1,
+        action: { kind: "dig", x: 0, y: 200, z: 3 },
+      }) + "\n",
+    ),
+  );
+  assert.equal((await done).status, "finished");
+  assert.equal(replies[0].status, "rejected");
+  assert.equal(f.closed, 0);
+});
+test("rejections with wrong action, unknown code or extra fields fail closed", async () => {
+  for (const [kind, error, extra] of [
+    ["observe", { code: "target_missing", recoverable: true }, {}],
+    ["dig", { code: "unknown", recoverable: true }, {}],
+    ["dig", { code: "target_missing", recoverable: false }, {}],
+    ["dig", { code: "target_missing", recoverable: true, detail: "x" }, {}],
+    ["dig", { code: "target_missing", recoverable: true }, { observation: { source: "participant_bot" } }],
+  ]) {
+    const f = fixture(() => ({ schema_version: 1, sequence: 1, status: "rejected", error, ...extra }));
+    const rejected = assert.rejects(runModelActionChannel({ ...f, timeoutMs: 500 }));
+    f.input.write(
+      Buffer.from(
+        JSON.stringify({
+          schema_version: 1,
+          trial_id: "collect-oak-log-v1",
+          action_id: "collect-01",
+          sequence: 1,
+          action: kind === "dig" ? { kind, x: 0, y: 200, z: 3 } : { kind },
+        }) + "\n",
+      ),
+    );
+    await rejected;
+    assert.equal(f.closed, 1);
+  }
+});
+
+test("move_to rejection has its own strict recoverable code set", async () => {
+  for (const code of ["navigation_out_of_range", "navigation_blocked", "no_progress", "not_arrived"]) {
+    const f = fixture((raw) => {
+      const request = JSON.parse(raw);
+      return request.action.kind === "move_to"
+        ? { schema_version: 1, sequence: request.sequence, status: "rejected", error: { code, recoverable: true } }
+        : { schema_version: 1, sequence: request.sequence, status: "finished" };
+    });
+    f.output.on("data", (raw) => {
+      if (JSON.parse(raw).status === "rejected") f.input.end(line("finish", 2));
+    });
+    const done = runModelActionChannel({ ...f, timeoutMs: 500 });
+    f.input.write(
+      Buffer.from(
+        JSON.stringify({
+          schema_version: 1,
+          trial_id: "collect-oak-log-v1",
+          action_id: "collect-01",
+          sequence: 1,
+          action: { kind: "move_to", x: 1.25, y: 200, z: 2.75, ticks: 8 },
+        }) + "\n",
+      ),
+    );
+    assert.equal((await done).status, "finished");
+  }
+  for (const [action, code] of [
+    [{ kind: "move_to", x: 1, y: 200, z: 2, ticks: 8 }, "target_missing"],
+    [{ kind: "dig", x: 0, y: 200, z: 3 }, "navigation_blocked"],
+  ]) {
+    const f = fixture(() => ({
+      schema_version: 1,
+      sequence: 1,
+      status: "rejected",
+      error: { code, recoverable: true },
+    }));
+    const failed = assert.rejects(runModelActionChannel({ ...f, timeoutMs: 500 }));
+    f.input.end(
+      Buffer.from(
+        JSON.stringify({
+          schema_version: 1,
+          trial_id: "collect-oak-log-v1",
+          action_id: "collect-01",
+          sequence: 1,
+          action,
+        }) + "\n",
+      ),
+    );
+    await failed;
+  }
+});
