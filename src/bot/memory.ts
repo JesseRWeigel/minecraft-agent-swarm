@@ -52,7 +52,8 @@ export interface BotMemory {
   seasonGoal?: string;
 }
 
-const defaultMemory: BotMemory = {
+// Each bot and failed load needs its own mutable collections.
+const createDefaultMemory = (): BotMemory => ({
   structures: [],
   deaths: [],
   oreDiscoveries: [],
@@ -61,7 +62,7 @@ const defaultMemory: BotMemory = {
   lastUpdated: new Date().toISOString(),
   brokenSkillNames: [],
   seasonGoal: undefined,
-};
+});
 
 /**
  * A skill that THREW is a broken skill, whatever the exception happened to say.
@@ -176,7 +177,7 @@ export class BotMemoryStore {
 
   constructor(memoryFileName = "memory.json") {
     this.memoryFile = path.join(__dirname, "../../", memoryFileName);
-    this.memory = { ...defaultMemory };
+    this.memory = createDefaultMemory();
   }
 
   // Static skills are TypeScript source files that developers can fix.
@@ -242,7 +243,7 @@ export class BotMemoryStore {
       }
     } catch (err) {
       console.error("[Memory] Failed to load:", err);
-      this.memory = { ...defaultMemory };
+      this.memory = createDefaultMemory();
     }
     return this.memory;
   }
