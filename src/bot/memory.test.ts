@@ -14,18 +14,6 @@ function tmpStore(): { store: BotMemoryStore; file: string; cleanup: () => void 
   const store = new BotMemoryStore("test-memory.json");
   // Override the private memoryFile to point to our temp location
   (store as any).memoryFile = file;
-  // Deep-initialize the internal memory to avoid shared-reference issues
-  // with defaultMemory's arrays (shallow spread in constructor).
-  (store as any).memory = {
-    structures: [],
-    deaths: [],
-    oreDiscoveries: [],
-    skillHistory: [],
-    lessons: [],
-    lastUpdated: new Date().toISOString(),
-    brokenSkillNames: [],
-    seasonGoal: undefined,
-  };
   return {
     store,
     file,
@@ -52,7 +40,7 @@ test("memory: save and load round-trip", () => {
     store.addStructure("house", 10, 64, 20, "cozy cabin");
     assert.ok(fs.existsSync(file), "Memory file should exist after save");
 
-    const { store: store2 } = tmpStore();
+    const store2 = new BotMemoryStore();
     (store2 as any).memoryFile = file;
     const loaded = store2.load();
     assert.equal(loaded.structures.length, 1);
@@ -491,4 +479,53 @@ test("no lava nearby is the world's shortage, never the skill's defect", () => {
     ),
     true,
   );
+});
+
+test("memory: two new bots do not inherit each other's local observations", () => {
+  const first = tmpStore();
+  const second = tmpStore();
+  try {
+    first.store.addLesson("fictional-private-lesson");
+    first.store.addStructure("farm", 50, 63, 100);
+    first.store.recordDeath(1, 60, 1, "fictional cause");
+    first.store.recordOre("iron_ore", 5, 12, 5);
+    first.store.recordSkillAttempt("example", true, 1, "done");
+    assert.deepEqual(second.store.getStats(), { structures: 0, deaths: 0, ores: 0, skills: 0 });
+    assert.equal(second.store.getMemoryContext(), "No memory yet.");
+    second.store.setSeasonGoal("fictional second goal");
+    assert.doesNotMatch(fs.readFileSync(second.file, "utf8"), /fictional-private-lesson|fictional cause/);
+  } finally {
+    first.cleanup();
+    second.cleanup();
+  }
+});
+
+test("memory: recovering from an invalid file starts empty without importing a peer's memories", () => {
+  const first = tmpStore();
+  const second = tmpStore();
+  try {
+    first.store.addLesson("fictional-canary");
+    fs.writeFileSync(second.file, "not-json");
+    assert.deepEqual(second.store.load().lessons, []);
+    assert.equal(second.store.getMemoryContext(), "No memory yet.");
+    assert.match(first.store.getMemoryContext(), /fictional-canary/);
+  } finally {
+    first.cleanup();
+    second.cleanup();
+  }
+});
+
+test("memory: a correction is recalled after restart and does not revive the previous value", () => {
+  const { store, file, cleanup } = tmpStore();
+  try {
+    store.setSeasonGoal("Collect red wool");
+    store.setSeasonGoal("Collect blue wool");
+    const reopened = new BotMemoryStore();
+    (reopened as any).memoryFile = file;
+    reopened.load();
+    assert.equal(reopened.getSeasonGoal(), "Collect blue wool");
+    assert.doesNotMatch(fs.readFileSync(file, "utf8"), /red wool/);
+  } finally {
+    cleanup();
+  }
 });
